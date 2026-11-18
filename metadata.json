@@ -1,0 +1,6 @@
+{
+  "name": "Lumina Studio",
+  "description": "Ứng dụng SSA quản lý thư viện ảnh, trích xuất liên kết ảnh từ HTML và tạo mã nhúng trực quan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
