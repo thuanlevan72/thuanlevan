@@ -12,17 +12,17 @@ export function HeroSection({ onOpenGalleryScreen }: HeroSectionProps) {
         {/* Left Typographic Engineering Profile Column */}
         <div className="lg:col-span-7 flex flex-col justify-between space-y-8 py-2">
           <div className="space-y-6">
-            <p className="text-xs sm:text-sm font-medium text-[#9F1239] dark:text-[#FB7185] tracking-wide">
+            <p className="text-xs sm:text-sm font-medium text-[#0369A1] dark:text-[#38BDF8] tracking-wide">
               Lê Văn Thuận · Nhâm Ngọ 2002 · Hoài Đức, Hà Nội
             </p>
 
-            <h1 className="font-display font-bold text-4xl sm:text-5xl lg:text-[56px] leading-[1.08] tracking-tight text-[#181615] dark:text-[#F4F1EC] max-w-2xl text-balance">
+            <h1 className="font-display font-bold text-4xl sm:text-5xl lg:text-[56px] leading-[1.08] tracking-tight text-[#070B14] dark:text-[#F1F5F9] max-w-2xl text-balance">
               Kỹ Sư Hệ Thống .NET &amp; Kiến Trúc Doanh Nghiệp.
             </h1>
 
-            <p className="text-base sm:text-lg text-[#5E5852] dark:text-[#A8A29E] leading-relaxed max-w-xl text-pretty">
+            <p className="text-base sm:text-lg text-[#475569] dark:text-[#94A3B8] leading-relaxed max-w-xl text-pretty">
               Tôi là{' '}
-              <strong className="text-[#181615] dark:text-[#F4F1EC] font-semibold">
+              <strong className="text-[#070B14] dark:text-[#F1F5F9] font-semibold">
                 {PORTFOLIO_PROFILE.fullName}
               </strong>{' '}
               — kỹ sư Backend C# .NET với gần 4 năm trực tiếp xây dựng và vận hành các hệ thống tải
@@ -35,7 +35,7 @@ export function HeroSection({ onOpenGalleryScreen }: HeroSectionProps) {
             <div className="flex flex-wrap items-center gap-4">
               <a
                 href="#systems"
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-[#181615] hover:bg-[#2E2A28] dark:bg-[#F4F1EC] dark:hover:bg-[#E5E0D8] text-[#FAF8F5] dark:text-[#0B0B0E] font-semibold text-sm transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-[#0A192F] hover:bg-[#13294B] dark:bg-[#2563EB] dark:hover:bg-[#1D4ED8] text-white font-semibold text-sm transition-colors whitespace-nowrap"
               >
                 <span>Xem Dự Án Hệ Thống</span>
                 <ChevronDown className="w-4 h-4" aria-hidden="true" />
@@ -47,14 +47,14 @@ export function HeroSection({ onOpenGalleryScreen }: HeroSectionProps) {
                   e.preventDefault();
                   onOpenGalleryScreen();
                 }}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-lg border border-[#D8D0C5] dark:border-[#2E2D33] hover:border-[#9F1239] dark:hover:border-[#FB7185] text-[#181615] dark:text-[#F4F1EC] font-medium text-sm transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-lg border border-[#CBD8E6] dark:border-[#1E3250] hover:border-[#0284C7] dark:hover:border-[#38BDF8] text-[#0A192F] dark:text-[#F1F5F9] hover:text-[#0369A1] dark:hover:text-[#38BDF8] font-medium text-sm transition-colors whitespace-nowrap"
               >
                 <span>Mở Triển Lãm Ảnh AI</span>
                 <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
               </a>
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#5E5852] dark:text-[#A8A29E]">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#475569] dark:text-[#94A3B8]">
               <span>C# .NET 8 &amp; Clean Architecture</span>
               <span aria-hidden="true">·</span>
               <span>Oracle, PostgreSQL &amp; Kafka</span>
@@ -66,7 +66,7 @@ export function HeroSection({ onOpenGalleryScreen }: HeroSectionProps) {
 
         {/* Right Authentic Engineer Portrait Anchor */}
         <div className="lg:col-span-5 flex items-center">
-          <figure className="relative w-full h-[420px] lg:h-[460px] rounded-2xl overflow-hidden border border-[#E6E0D6] dark:border-[#27262B] bg-[#181615]">
+          <figure className="relative w-full h-[420px] lg:h-[460px] rounded-2xl overflow-hidden border border-[#CBD8E6] dark:border-[#1B2B44] bg-[#060B14]">
             <img
               src={PORTFOLIO_PROFILE.realPortraitSrc}
               alt={`Chân dung đời thực của kỹ sư ${PORTFOLIO_PROFILE.fullLegalName} tại Hà Nội`}
@@ -77,16 +77,16 @@ export function HeroSection({ onOpenGalleryScreen }: HeroSectionProps) {
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover object-[50%_28%]"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/15 to-transparent pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#040914]/90 via-[#071426]/25 to-transparent pointer-events-none" />
 
             <figcaption className="absolute inset-x-0 bottom-0 p-5 sm:p-6 text-white space-y-1">
-              <p className="text-xs font-mono text-amber-200/90">
+              <p className="text-xs font-mono text-[#38BDF8]">
                 Senior .NET Engineer · 08/2022 – Nay
               </p>
               <p className="font-display text-xl sm:text-2xl font-semibold leading-snug text-white">
                 {PORTFOLIO_PROFILE.fullLegalName}
               </p>
-              <p className="text-xs text-stone-300">
+              <p className="text-xs text-slate-300">
                 {PORTFOLIO_PROFILE.location} · {PORTFOLIO_PROFILE.phoneFormatted}
               </p>
             </figcaption>
@@ -95,13 +95,13 @@ export function HeroSection({ onOpenGalleryScreen }: HeroSectionProps) {
       </div>
 
       {/* Full-Width 4-Column Proof Strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 pt-8 border-t border-[#E6E0D6] dark:border-[#27262B]">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 pt-8 border-t border-[#D7E2EE] dark:border-[#1B2B44]">
         {HERO_METRICS.map((metric) => (
           <div key={metric.id} className="space-y-1">
-            <div className="font-mono tabular-nums text-2xl sm:text-3xl font-medium text-[#181615] dark:text-[#F4F1EC]">
+            <div className="font-mono tabular-nums text-2xl sm:text-3xl font-medium text-[#0A192F] dark:text-[#F1F5F9]">
               {metric.value}
             </div>
-            <p className="text-xs sm:text-sm text-[#5E5852] dark:text-[#A8A29E]">
+            <p className="text-xs sm:text-sm text-[#475569] dark:text-[#94A3B8]">
               {metric.label}
             </p>
           </div>

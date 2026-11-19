@@ -192,7 +192,7 @@ export function executeCliCommand(rawInput: string): CliExecutionResult {
   stack              : Danh sách toàn bộ Database, Messaging & Framework
   contact            : Lấy thông tin liên hệ ngay lập tức
   clear              : Xóa màn hình terminal`,
-      responseToneClass: 'text-stone-200',
+      responseToneClass: 'text-slate-200',
     };
   }
 
@@ -206,7 +206,7 @@ export function executeCliCommand(rawInput: string): CliExecutionResult {
  Runtime:           Microsoft.NETCore.App 8.0
  Workloads:         ASP.NET Core Web API, EF Core, Clean Architecture, CQRS
  AI Media Engine:   MISA OneAI Video/Image Synthesis & Prompt Orchestration`,
-      responseToneClass: 'text-emerald-400',
+      responseToneClass: 'text-cyan-300',
     };
   }
 
@@ -220,7 +220,7 @@ export function executeCliCommand(rawInput: string): CliExecutionResult {
 - Cổ Phong & Nho Sĩ (3): Long Bào Ngự Án, Mưu Lược Thiên Hạ, Nho Sĩ Thư Hương
 - Chân Dung (3): Chân Dung Đời Thực, Chân Dung Thẻ Xanh, Filter Hoa Xuân
 - Đồng Đội & Kỷ Niệm (6): MISA Hạ Long 2026, Team Outing Phố Biển, Lễ Vu Quy, Đêm Nghỉ Dưỡng, Đêm Trắng 02:38, Dạo Phố Đêm Bên Hồ`,
-      responseToneClass: 'text-amber-300',
+      responseToneClass: 'text-sky-300',
     };
   }
 
@@ -233,7 +233,7 @@ export function executeCliCommand(rawInput: string): CliExecutionResult {
 3. Phenikaa MEC Smart Hospital (2024 - Nay): HIS integration, 60 devs, Kafka, Elasticsearch, PostgreSQL.
 4. GC Joint Stock (2025 - 2026): Hóa đơn điện tử Fast, Chữ ký số, HIS Agent integration.
 5. Lotus Edu & TH Nguyễn Siêu (2023 - 2024): Tối ưu truy vấn legacy code xuống mili-giây.`,
-      responseToneClass: 'text-stone-200',
+      responseToneClass: 'text-slate-200',
     };
   }
 
@@ -246,7 +246,7 @@ export function executeCliCommand(rawInput: string): CliExecutionResult {
 2. Tư duy Performance: luôn tìm cách tối ưu SQL, cache Redis và kiến trúc event-driven.
 3. Kỹ năng Clean Architecture & CQRS giúp code rõ ràng, dễ bảo trì và mở rộng.
 4. Tư duy thẩm mỹ & AI Media: làm chủ quy trình tích hợp LLM, sinh ảnh và video thực tế.`,
-      responseToneClass: 'text-emerald-400',
+      responseToneClass: 'text-blue-300',
     };
   }
 
@@ -260,7 +260,7 @@ export function executeCliCommand(rawInput: string): CliExecutionResult {
 - GitHub:   https://github.com/thuanlevan72
 - Facebook: https://www.facebook.com/thuanlevan72
 - Địa chỉ:  Hoài Đức - Hà Nội`,
-      responseToneClass: 'text-amber-400 font-semibold',
+      responseToneClass: 'text-cyan-300 font-semibold',
     };
   }
 
