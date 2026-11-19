@@ -57,7 +57,7 @@ export function GallerySection({
   return (
     <section id="gallery" className="pt-8 sm:pt-12 pb-6 space-y-10">
       {/* Dedicated Exhibition Header & Navigation Back to Engineering Profile */}
-      <div className="space-y-6 border-b border-[#D7E2EE] dark:border-[#1B2B44] pb-8">
+      <div className="space-y-6 border-b border-[#DCE6F2] dark:border-[#182740] pb-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <a
             href="/"
@@ -76,7 +76,7 @@ export function GallerySection({
             type="button"
             onClick={onToggleTheme}
             aria-label="Chuyển đổi giao diện Sáng / Tối"
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-[#CBD8E6] dark:border-[#1E3250] bg-white dark:bg-[#0B1220] text-xs font-medium text-[#070B14] dark:text-[#F1F5F9] hover:border-[#0284C7] dark:hover:border-[#38BDF8] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-[#DCE6F2] dark:border-[#1E3250] bg-white/90 dark:bg-[#0B1220]/90 text-xs font-medium text-[#070B14] dark:text-[#F1F5F9] hover:border-[#0284C7] dark:hover:border-[#38BDF8] transition-all duration-200 whitespace-nowrap shrink-0 cursor-pointer"
           >
             {theme === 'dark' ? (
               <Moon className="w-3.5 h-3.5 text-[#38BDF8]" aria-hidden="true" />
@@ -89,10 +89,10 @@ export function GallerySection({
 
         <div className="flex flex-col xl:flex-row xl:items-end justify-between gap-6">
           <div className="space-y-3 max-w-2xl">
-            <p className="text-xs sm:text-sm font-medium text-[#0369A1] dark:text-[#38BDF8]">
+            <p className="text-xs sm:text-sm font-medium text-[#0369A1] dark:text-[#38BDF8] tracking-wide">
               Phòng Trưng Bày Độc Lập · Tác Giả Thuận Lê
             </p>
-            <h1 className="font-display font-bold text-4xl sm:text-5xl text-[#070B14] dark:text-[#F1F5F9] leading-[1.1] text-balance">
+            <h1 className="font-display font-semibold text-4xl sm:text-5xl tracking-[-0.02em] text-[#070B14] dark:text-[#F1F5F9] leading-[1.1] text-balance">
               Triển Lãm Ảnh, Video &amp; Kỷ Niệm Đời Thường
             </h1>
             <p className="text-sm sm:text-base text-[#475569] dark:text-[#94A3B8] leading-relaxed text-pretty">
@@ -108,7 +108,7 @@ export function GallerySection({
           id="gallery-filters"
           role="tablist"
           aria-label="Lọc bộ sưu tập ảnh theo chủ đề"
-          className="inline-flex flex-wrap items-center gap-1 p-1 rounded-lg bg-[#E6EEF7] dark:bg-[#0E182B] border border-[#D7E2EE] dark:border-[#1B2B44]"
+          className="inline-flex flex-wrap items-center gap-1 p-1.5 rounded-xl bg-[#E8F0F9] dark:bg-[#0B1426] border border-[#DCE6F2] dark:border-[#182740]"
         >
           {filterTabs.map((tab) => {
             const isActive = selectedCategory === tab.id;
@@ -119,9 +119,9 @@ export function GallerySection({
                 role="tab"
                 aria-selected={isActive}
                 onClick={() => setSelectedCategory(tab.id)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`px-3.5 py-2 rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
                   isActive
-                    ? 'bg-white dark:bg-[#162642] text-[#070B14] dark:text-[#F1F5F9] shadow-sm'
+                    ? 'bg-white dark:bg-[#14233E] text-[#070B14] dark:text-[#F1F5F9] shadow-[0_2px_8px_-2px_rgba(10,25,47,0.12)]'
                     : 'text-[#475569] dark:text-[#94A3B8] hover:text-[#070B14] dark:hover:text-[#F1F5F9]'
                 }`}
               >
@@ -146,9 +146,9 @@ export function GallerySection({
               <figure
                 key={artwork.id}
                 data-gallery-card="true"
-                className="md:col-span-2 lg:col-span-12 rounded-2xl overflow-hidden border border-[#D7E2EE] dark:border-[#1B2B44] bg-white dark:bg-[#0B1220] grid grid-cols-1 lg:grid-cols-12"
+                className="soft-card md:col-span-2 lg:col-span-12 rounded-3xl overflow-hidden border border-[#DCE6F2] dark:border-[#182740] bg-white/95 dark:bg-[#0B1220]/95 grid grid-cols-1 lg:grid-cols-12"
               >
-                <div className="lg:col-span-5 relative aspect-[4/3] sm:aspect-[16/10] lg:aspect-auto lg:min-h-[380px] bg-[#060B14] overflow-hidden">
+                <div className="lg:col-span-4 relative aspect-[4/5] sm:aspect-[4/3] lg:aspect-auto lg:min-h-[420px] bg-[#050A14] overflow-hidden flex items-center justify-center">
                   {isPlayingInline ? (
                     <video
                       src={artwork.src}
@@ -158,14 +158,14 @@ export function GallerySection({
                       loop
                       muted
                       playsInline
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain bg-[#050A14]"
                     />
                   ) : (
                     <button
                       type="button"
                       onClick={() => setInlinePlayingVideoId(artwork.id)}
                       aria-label={`Phát video ${artwork.title}`}
-                      className="relative w-full h-full block group cursor-pointer"
+                      className="relative w-full h-full block group cursor-pointer bg-[#050A14]"
                     >
                       <img
                         src={artwork.posterSrc || artwork.src}
@@ -174,10 +174,10 @@ export function GallerySection({
                         height={artwork.height}
                         loading="eager"
                         decoding="sync"
-                        className="w-full h-full object-cover object-[50%_55%] transition-transform duration-500 group-hover:scale-[1.03]"
+                        className="w-full h-full object-cover object-[50%_62%] transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.025]"
                       />
-                      <div className="absolute inset-0 bg-[#040914]/35 group-hover:bg-[#040914]/45 transition-colors flex items-center justify-center">
-                        <span className="w-14 h-14 rounded-full bg-[#0284C7]/90 hover:bg-[#0284C7] text-white border border-white/30 flex items-center justify-center shadow-lg transition-transform group-hover:scale-105">
+                      <div className="absolute inset-0 bg-gradient-to-t from-[#040914]/70 via-[#040914]/25 to-transparent group-hover:bg-[#040914]/45 transition-colors flex items-center justify-center">
+                        <span className="w-16 h-16 rounded-full bg-[#0284C7]/90 hover:bg-[#0284C7] text-white border border-white/35 flex items-center justify-center shadow-[0_12px_30px_-8px_rgba(2,132,199,0.7)] transition-transform duration-300 group-hover:scale-105">
                           <Play className="w-6 h-6 ml-0.5" aria-hidden="true" />
                         </span>
                       </div>
@@ -185,10 +185,10 @@ export function GallerySection({
                   )}
                 </div>
 
-                <figcaption className="lg:col-span-7 p-6 sm:p-8 flex flex-col justify-between gap-6">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-xs text-[#475569] dark:text-[#94A3B8]">
-                      <span className="inline-flex items-center gap-1.5 text-[#1D4ED8] dark:text-[#38BDF8] font-medium">
+                <figcaption className="lg:col-span-8 p-6 sm:p-10 flex flex-col justify-between gap-6">
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-[#475569] dark:text-[#94A3B8]">
+                      <span className="inline-flex items-center gap-1.5 text-[#1D4ED8] dark:text-[#38BDF8] font-semibold">
                         <Film className="w-3.5 h-3.5" aria-hidden="true" />
                         Video Spotlight
                       </span>
@@ -198,11 +198,11 @@ export function GallerySection({
                       <span className="font-mono tabular-nums">{artwork.specs.fileSize}</span>
                     </div>
 
-                    <h2 className="font-display text-2xl sm:text-3xl font-bold text-[#070B14] dark:text-[#F1F5F9] leading-snug">
+                    <h2 className="font-display text-2xl sm:text-4xl font-semibold tracking-[-0.015em] text-[#070B14] dark:text-[#F1F5F9] leading-snug">
                       <button
                         type="button"
                         onClick={() => onSelectArtwork(artwork)}
-                        className="text-left hover:text-[#1D4ED8] dark:hover:text-[#38BDF8] transition-colors cursor-pointer"
+                        className="text-left hover:text-[#0284C7] dark:hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         {artwork.title}
                       </button>
@@ -213,7 +213,7 @@ export function GallerySection({
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-[#E6EEF7] dark:border-[#17253B]">
+                  <div className="flex flex-wrap items-center justify-between gap-4 pt-5 border-t border-[#E9F0F8] dark:border-[#152339]">
                     <div className="flex flex-wrap items-center gap-2 text-xs text-[#475569] dark:text-[#94A3B8]">
                       <span>{artwork.specs.concept}</span>
                       <span aria-hidden="true">·</span>
@@ -225,7 +225,7 @@ export function GallerySection({
                         <button
                           type="button"
                           onClick={() => setInlinePlayingVideoId(artwork.id)}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#1D4ED8] hover:bg-[#1E40AF] dark:bg-[#0284C7] dark:hover:bg-[#0369A1] text-white text-xs font-semibold transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#0A192F] hover:bg-[#13294B] dark:bg-[#0284C7] dark:hover:bg-[#0369A1] text-white text-xs font-semibold transition-all duration-200 cursor-pointer"
                         >
                           <Play className="w-3.5 h-3.5" aria-hidden="true" />
                           <span>Phát Tại Chỗ</span>
@@ -235,7 +235,7 @@ export function GallerySection({
                         type="button"
                         onClick={() => onSelectArtwork(artwork)}
                         aria-label={`Xem chi tiết tác phẩm ${artwork.title}`}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-[#CBD8E6] dark:border-[#1E3250] hover:border-[#0284C7] dark:hover:border-[#38BDF8] text-xs font-medium text-[#0A192F] dark:text-[#F1F5F9] transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-[#CBD8E6] dark:border-[#1E3250] hover:border-[#0284C7] dark:hover:border-[#38BDF8] text-xs font-medium text-[#0A192F] dark:text-[#F1F5F9] transition-all duration-200 cursor-pointer"
                       >
                         <Expand className="w-3.5 h-3.5" aria-hidden="true" />
                         <span>Toàn Màn Hình</span>
@@ -285,7 +285,7 @@ export function GallerySection({
             <figure
               key={artwork.id}
               data-gallery-card="true"
-              className={`${colSpanClass} group flex flex-col justify-between rounded-2xl overflow-hidden border border-[#D7E2EE] dark:border-[#1B2B44] bg-white dark:bg-[#0B1220] hover:border-[#0284C7]/60 dark:hover:border-[#38BDF8]/60 transition-colors`}
+              className={`${colSpanClass} soft-card group flex flex-col justify-between rounded-2xl overflow-hidden border border-[#DCE6F2] dark:border-[#182740] bg-white/95 dark:bg-[#0B1220]/95 hover:border-[#0284C7]/60 dark:hover:border-[#38BDF8]/60`}
             >
               <button
                 type="button"
@@ -310,17 +310,17 @@ export function GallerySection({
                     onError={() =>
                       setFailedImages((prev) => ({ ...prev, [artwork.id]: true }))
                     }
-                    className={`w-full h-full object-cover ${objectPosClass} transition-transform duration-500 group-hover:scale-[1.03]`}
+                    className={`w-full h-full object-cover ${objectPosClass} transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.03]`}
                   />
                 )}
 
-                <span className="absolute top-3 right-3 w-9 h-9 rounded-full bg-[#05080F]/65 backdrop-blur-sm border border-[#38BDF8]/30 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="absolute top-3.5 right-3.5 w-9 h-9 rounded-full bg-[#05080F]/65 backdrop-blur-md border border-[#38BDF8]/35 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                   <Expand className="w-4 h-4" aria-hidden="true" />
                 </span>
               </button>
 
-              <figcaption className="p-5 space-y-2 flex-1 flex flex-col justify-between">
-                <div className="space-y-1.5">
+              <figcaption className="p-5 sm:p-6 space-y-2.5 flex-1 flex flex-col justify-between">
+                <div className="space-y-2">
                   <div className="flex items-center gap-2 text-xs text-[#475569] dark:text-[#94A3B8] whitespace-nowrap overflow-hidden">
                     <span className="text-[#0369A1] dark:text-[#38BDF8] font-medium truncate">
                       {artwork.categoryLabel}
@@ -329,11 +329,11 @@ export function GallerySection({
                     <span className="font-mono tabular-nums shrink-0">{artwork.specs.aspect}</span>
                   </div>
 
-                  <h2 className="font-display text-xl font-bold text-[#070B14] dark:text-[#F1F5F9] leading-snug">
+                  <h2 className="font-display text-xl sm:text-[22px] font-semibold text-[#070B14] dark:text-[#F1F5F9] leading-snug">
                     <button
                       type="button"
                       onClick={() => onSelectArtwork(artwork)}
-                      className="text-left hover:text-[#1D4ED8] dark:hover:text-[#38BDF8] transition-colors cursor-pointer"
+                      className="text-left hover:text-[#0284C7] dark:hover:text-[#38BDF8] transition-colors cursor-pointer"
                     >
                       {artwork.title}
                     </button>
@@ -344,7 +344,7 @@ export function GallerySection({
                   </p>
                 </div>
 
-                <div className="pt-3 mt-3 border-t border-[#E6EEF7] dark:border-[#17253B] flex items-center justify-between text-xs text-[#475569] dark:text-[#94A3B8]">
+                <div className="pt-3.5 mt-3 border-t border-[#E9F0F8] dark:border-[#152339] flex items-center justify-between text-xs text-[#475569] dark:text-[#94A3B8]">
                   <span className="truncate">{artwork.specs.concept}</span>
                   <span className="font-mono tabular-nums shrink-0 ml-2">{artwork.year}</span>
                 </div>
@@ -355,12 +355,12 @@ export function GallerySection({
       </div>
 
       {/* Exhibition Cross-Link Strip back to Profile */}
-      <div className="p-6 sm:p-8 rounded-2xl border border-[#D7E2EE] dark:border-[#1B2B44] bg-white dark:bg-[#0B1220] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="soft-card p-6 sm:p-8 rounded-3xl border border-[#DCE6F2] dark:border-[#182740] bg-white/95 dark:bg-[#0B1220]/95 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
-          <p className="text-xs font-medium text-[#0369A1] dark:text-[#38BDF8]">
+          <p className="text-xs font-medium text-[#0369A1] dark:text-[#38BDF8] tracking-wide">
             Hồ Sơ Kỹ Thuật &amp; Kinh Nghiệm
           </p>
-          <p className="font-display text-2xl font-bold text-[#070B14] dark:text-[#F1F5F9]">
+          <p className="font-display text-2xl sm:text-[28px] font-semibold text-[#070B14] dark:text-[#F1F5F9]">
             Xem Nền Tảng Backend .NET &amp; Dự Án Hệ Thống Doanh Nghiệp
           </p>
         </div>
@@ -370,7 +370,7 @@ export function GallerySection({
             e.preventDefault();
             onBackToProfile();
           }}
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-[#0A192F] hover:bg-[#13294B] dark:bg-[#2563EB] dark:hover:bg-[#1D4ED8] text-white font-semibold text-sm transition-colors whitespace-nowrap shrink-0"
+          className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#0A192F] hover:bg-[#13294B] dark:bg-[#0284C7] dark:hover:bg-[#0369A1] text-white font-semibold text-sm transition-all duration-200 hover:-translate-y-0.5 whitespace-nowrap shrink-0"
         >
           <ArrowLeft className="w-4 h-4" aria-hidden="true" />
           <span>Về Trang Hồ Sơ</span>

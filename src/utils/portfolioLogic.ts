@@ -204,6 +204,7 @@ export function executeCliCommand(rawInput: string): CliExecutionResult {
       commandEcho: `thuanle@portfolio:~$ ${cmd}`,
       responseText: `Các lệnh hỗ trợ:
   dotnet --info      : Xem thông tin Runtime & kiến trúc Backend
+  ai-agents          : Kinh nghiệm dùng Gemini, Claude, Grok & Codex
   projects           : Liệt kê các hệ thống production lớn đã build
   cv                 : Xem tóm tắt CV & tải bản PDF tại /cv
   gallery            : Xem danh sách 28 tác phẩm ảnh WebP & video tại /trien-lam
@@ -215,6 +216,20 @@ export function executeCliCommand(rawInput: string): CliExecutionResult {
     };
   }
 
+  if (lower === 'ai-agents' || lower === 'ai' || lower === 'agents') {
+    return {
+      action: 'append',
+      commandEcho: `thuanle@portfolio:~$ ${cmd}`,
+      responseText: `Kinh nghiệm thực chiến với AI Agent (đơn giản, hiệu quả):
+  - Claude (Anthropic) : Đọc hiểu codebase lớn (.NET nhiều tầng), tìm lỗi logic, viết unit test.
+  - Gemini (Google)    : Tóm tắt tài liệu nghiệp vụ dài, viết prompt ảnh/video & MISA OneAI API.
+  - Codex (OpenAI)     : Tạo nhanh khung code DTO, script tự động, câu lệnh Docker & tối ưu SQL.
+  - Grok (xAI)         : Tra cứu công nghệ mới, phản biện giải pháp nhanh khi xử lý lỗi lạ.
+  Nguyên tắc: Chia nhỏ việc trước khi hỏi · Luôn tự kiểm tra lại code · Chọn đúng AI cho đúng việc.`,
+      responseToneClass: 'text-cyan-300',
+    };
+  }
+
   if (lower === 'cv' || lower === 'cv pdf' || lower === 'resume') {
     return {
       action: 'append',
@@ -223,6 +238,7 @@ export function executeCliCommand(rawInput: string): CliExecutionResult {
 - Ứng viên:     Lê Văn Thuận (Nhâm Ngọ 2002) · Hoài Đức, Hà Nội
 - Kinh nghiệm:  04 Năm production (08/2022 – Nay) · Đội ngũ tới 60 devs
 - Hệ thống:     MISA OneAI, Smart Form Agribank (AML), Phenikaa MEC (HIS), GC FAST, Lotus Edu, MEMID
+- AI Agents:    Claude, Gemini, Codex, Grok — tăng tốc đọc code, tối ưu SQL & tạo nội dung AI
 - Xuất bản PDF: Truy cập tab "CV PDF" (/cv) để xem chuẩn A4 & tải file .PDF ngay.`,
       responseToneClass: 'text-cyan-300',
     };
@@ -276,7 +292,7 @@ export function executeCliCommand(rawInput: string): CliExecutionResult {
 1. Gần 4 năm thực chiến với các dự án lớn (Agribank, Phenikaa, MISA), không ngại dự án phức tạp.
 2. Tư duy Performance: luôn tìm cách tối ưu SQL, cache Redis và kiến trúc event-driven.
 3. Kỹ năng Clean Architecture & CQRS giúp code rõ ràng, dễ bảo trì và mở rộng.
-4. Tư duy thẩm mỹ & AI Media: làm chủ quy trình tích hợp LLM, sinh ảnh và video thực tế.`,
+4. Làm chủ AI Agent (Claude, Gemini, Codex, Grok): tăng tốc lập trình, viết test & tạo nội dung AI an toàn.`,
       responseToneClass: 'text-blue-300',
     };
   }
@@ -329,6 +345,22 @@ export interface CvMetricInput {
   readonly label: string;
 }
 
+export interface AiAgentExperienceItem {
+  readonly id: string;
+  readonly name: string;
+  readonly provider: string;
+  readonly roleSummary: string;
+  readonly simpleUsage: string;
+  readonly realTaskExamples: readonly string[];
+  readonly projectImpact: string;
+}
+
+export interface AiAgentPrincipleItem {
+  readonly id: string;
+  readonly title: string;
+  readonly detail: string;
+}
+
 export interface CvSourceData {
   profile: {
     fullName: string;
@@ -344,10 +376,11 @@ export interface CvSourceData {
   metrics: readonly CvMetricInput[];
   projects: readonly PortfolioProject[];
   skillGroups: readonly CvSkillGroupInput[];
+  aiAgents?: readonly AiAgentExperienceItem[];
 }
 
 export function buildCvPlainText(data: CvSourceData): string {
-  const { profile, metrics, projects, skillGroups } = data;
+  const { profile, metrics, projects, skillGroups, aiAgents } = data;
   const lines: string[] = [
     `${profile.fullLegalName.toUpperCase()} (${profile.fullName})`,
     profile.role,
@@ -374,5 +407,235 @@ export function buildCvPlainText(data: CvSourceData): string {
     lines.push(`- ${group.title}: ${group.items.join(', ')}`);
   }
 
+  if (aiAgents && aiAgents.length > 0) {
+    lines.push('', 'KINH NGHIỆM SỬ DỤNG AI AGENT (GEMINI · CLAUDE · CODEX · GROK)');
+    for (const agent of aiAgents) {
+      lines.push(`- ${agent.name} (${agent.provider}) — ${agent.roleSummary}: ${agent.simpleUsage}`);
+    }
+  }
+
   return lines.join('\n');
+}
+
+export function buildStructuredDataGraph(origin: string, route: AppRoute) {
+  const cleanOrigin = origin.replace(/\/+$/, '');
+  const seoMeta = getRouteSeoMeta(route);
+  const currentUrl = buildCanonicalUrl(cleanOrigin, seoMeta.path);
+  const logoUrl = `${cleanOrigin}/brand-logo.png`;
+  const portraitUrl = `${cleanOrigin}/assets/gallery/thuan-le-doi-thuc.webp`;
+
+  const breadcrumbItems = [
+    {
+      '@type': 'ListItem',
+      position: 1,
+      name: 'Hồ Sơ Kỹ Sư Thuận Lê',
+      item: `${cleanOrigin}/`,
+    },
+  ];
+
+  if (route === 'cv') {
+    breadcrumbItems.push({
+      '@type': 'ListItem',
+      position: 2,
+      name: 'CV PDF Chuẩn A4',
+      item: `${cleanOrigin}/cv`,
+    });
+  } else if (route === 'gallery') {
+    breadcrumbItems.push({
+      '@type': 'ListItem',
+      position: 2,
+      name: 'Triển Lãm Ảnh & Video',
+      item: `${cleanOrigin}/trien-lam`,
+    });
+  }
+
+  return {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Brand',
+        '@id': `${cleanOrigin}/#brand`,
+        name: 'Thuận Lê — Systems Engineering & AI Workflow',
+        alternateName: 'TL Studio & Engineering',
+        url: `${cleanOrigin}/`,
+        logo: {
+          '@type': 'ImageObject',
+          '@id': `${cleanOrigin}/#logo`,
+          url: logoUrl,
+          contentUrl: logoUrl,
+          width: 512,
+          height: 512,
+          caption: 'Logo monogram TL của kỹ sư Lê Văn Thuận',
+        },
+        sameAs: [
+          'https://github.com/thuanlevan72?tab=repositories',
+          'https://www.facebook.com/thuanlevan72',
+        ],
+      },
+      {
+        '@type': 'WebSite',
+        '@id': `${cleanOrigin}/#website`,
+        url: `${cleanOrigin}/`,
+        name: 'Thuận Lê — Kỹ Sư Senior .NET & Triển Lãm Thị Giác AI',
+        inLanguage: 'vi',
+        description:
+          'Hồ sơ kỹ sư Senior .NET Lê Văn Thuận (MISA OneAI, Agribank, Phenikaa MEC), CV PDF chuẩn A4, kinh nghiệm AI Agent (Gemini, Claude, Grok, Codex) và triển lãm ảnh WebP/H.264.',
+        publisher: { '@id': `${cleanOrigin}/#brand` },
+        copyrightHolder: { '@id': `${cleanOrigin}/#person` },
+      },
+      {
+        '@type': route === 'gallery' ? 'CollectionPage' : 'ProfilePage',
+        '@id': `${currentUrl}#webpage`,
+        url: currentUrl,
+        name: seoMeta.title,
+        description: seoMeta.description,
+        inLanguage: 'vi',
+        isPartOf: { '@id': `${cleanOrigin}/#website` },
+        mainEntity: { '@id': `${cleanOrigin}/#person` },
+        primaryImageOfPage: {
+          '@type': 'ImageObject',
+          url:
+            route === 'gallery'
+              ? `${cleanOrigin}/assets/gallery/nang-tho-hoa-dao.webp`
+              : portraitUrl,
+        },
+        breadcrumb: { '@id': `${currentUrl}#breadcrumb` },
+      },
+      {
+        '@type': 'BreadcrumbList',
+        '@id': `${currentUrl}#breadcrumb`,
+        itemListElement: breadcrumbItems,
+      },
+      {
+        '@type': 'Person',
+        '@id': `${cleanOrigin}/#person`,
+        name: 'Lê Văn Thuận',
+        alternateName: 'Thuận Lê',
+        jobTitle: 'Senior .NET Systems Engineer & AI Agent Practitioner',
+        birthDate: '2002',
+        url: `${cleanOrigin}/`,
+        email: 'mailto:thuanlevan72@gmail.com',
+        telephone: '+84-352-988-596',
+        worksFor: {
+          '@type': 'Organization',
+          name: 'MISA JSC',
+        },
+        brand: { '@id': `${cleanOrigin}/#brand` },
+        address: {
+          '@type': 'PostalAddress',
+          addressLocality: 'Hoài Đức',
+          addressRegion: 'Hà Nội',
+          addressCountry: 'VN',
+        },
+        image: {
+          '@type': 'ImageObject',
+          url: portraitUrl,
+          width: 810,
+          height: 1440,
+        },
+        sameAs: [
+          'https://github.com/thuanlevan72?tab=repositories',
+          'https://www.facebook.com/thuanlevan72',
+        ],
+        knowsAbout: [
+          'C# .NET 8',
+          'ASP.NET Core Web API',
+          'Clean Architecture',
+          'CQRS & MediatR',
+          'Apache Kafka',
+          'Oracle Database',
+          'PostgreSQL',
+          'Redis Cluster',
+          'AI Agents (Claude, Gemini, Codex, Grok)',
+          'AI Image & Video Generation',
+          'LLM Integration',
+        ],
+      },
+      {
+        '@type': 'ImageGallery',
+        '@id': `${cleanOrigin}/#gallery`,
+        url: `${cleanOrigin}/trien-lam`,
+        name: 'Triển Lãm Ảnh & Video Đời Thường, Hành Trình & Đồng Đội — Thuận Lê',
+        description:
+          'Tuyển tập 28 tác phẩm thị giác tối ưu WebP và Video H.264 kết hợp nghệ thuật Nàng Thơ Hoa Đào, Coding Ban Công Đêm, Kawasaki Ninja 400, Rừng Thông và kỷ niệm MISA.',
+        creator: { '@id': `${cleanOrigin}/#person` },
+        associatedMedia: [
+          {
+            '@type': 'VideoObject',
+            name: 'Coding Timelapse — Góc Làm Việc & Đam Mê',
+            contentUrl: `${cleanOrigin}/assets/gallery/timelapse-coding.mp4`,
+            thumbnailUrl: `${cleanOrigin}/assets/gallery/timelapse-coding-poster.webp`,
+            encodingFormat: 'video/mp4',
+            description:
+              'Video tua nhanh 36 giây quá trình tập trung lập trình với bàn phím cơ đỏ tại văn phòng.',
+          },
+          {
+            '@type': 'ImageObject',
+            name: 'Cố Phán Di Quang Thái — Nàng Thơ Giữa Hoa Đào',
+            contentUrl: `${cleanOrigin}/assets/gallery/nang-tho-hoa-dao.webp`,
+            encodingFormat: 'image/webp',
+            width: 1440,
+            height: 804,
+            description: 'Nàng thơ dưới mưa hoa đào cùng tia nắng sớm và thư pháp Hán tự.',
+          },
+          {
+            '@type': 'ImageObject',
+            name: 'Chân Dung Đời Thực — Thuận Lê 2026',
+            contentUrl: portraitUrl,
+            encodingFormat: 'image/webp',
+            width: 810,
+            height: 1440,
+            description: 'Chân dung đời thực của kỹ sư Lê Văn Thuận tại không gian làm việc ở Hà Nội.',
+          },
+          {
+            '@type': 'ImageObject',
+            name: 'MISA Level Up With AI — Hạ Long 2026',
+            contentUrl: `${cleanOrigin}/assets/gallery/misa-ha-long-2026.webp`,
+            encodingFormat: 'image/webp',
+            width: 1440,
+            height: 960,
+            description: 'Tập thể Khối Sản Xuất MISA tại sự kiện Level Up With AI Hạ Long 2026.',
+          },
+        ],
+      },
+      {
+        '@type': 'FAQPage',
+        '@id': `${cleanOrigin}/#faq`,
+        mainEntity: [
+          {
+            '@type': 'Question',
+            name: 'Thuận Lê ứng dụng các AI Agent như Gemini, Claude, Grok và Codex vào công việc thực tế ra sao?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Mỗi AI Agent được dùng đúng thế mạnh: Claude giúp đọc codebase lớn, phát hiện lỗi logic và viết unit test; Gemini xử lý tài liệu nghiệp vụ dài và thiết kế prompt ảnh/video; Codex tạo nhanh khung code, script và tối ưu SQL; Grok hỗ trợ tra cứu công nghệ mới và phản biện giải pháp nhanh.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'Bộ sưu tập ảnh Nàng Thơ Hoa Đào và Video Timelapse được thực hiện như thế nào?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Các tác phẩm được Thuận Lê trực tiếp thiết kế prompt, kiểm soát ánh sáng, thẩm mỹ Á Đông và hậu kỳ tối ưu WebP / H.264 kết hợp cùng kinh nghiệm xây dựng pipeline AI Media Generation tại MISA OneAI.',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'Thuận Lê có những kinh nghiệm thực chiến gì về .NET và Hệ thống lớn?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Thuận Lê có gần 4 năm kinh nghiệm từ 08/2022 qua các hệ thống lớn như Smart Form Agribank (30 devs, AML & Oracle DB), Bệnh viện thông minh Phenikaa MEC (60 devs, HIS, Kafka, Elasticsearch) và MISA OneAI for Family (.NET 8, Vue 3, LLM API).',
+            },
+          },
+          {
+            '@type': 'Question',
+            name: 'Làm sao để liên hệ hợp tác dự án phần mềm hoặc sáng tạo nội dung AI với Thuận Lê?',
+            acceptedAnswer: {
+              '@type': 'Answer',
+              text: 'Bạn có thể gọi trực tiếp qua số 0352 988 596, gửi email về thuanlevan72@gmail.com hoặc kết nối qua GitHub và Facebook cá nhân ngay tại chân trang.',
+            },
+          },
+        ],
+      },
+    ],
+  };
 }

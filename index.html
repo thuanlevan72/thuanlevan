@@ -21,6 +21,12 @@
     <meta name="theme-color" content="#0A192F" />
     <link rel="canonical" href="https://thuanlevan.vercel.app/" id="canonical-link" />
 
+    <!-- Browser Tab Favicons & App Icons -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+
     <!-- OpenGraph Social Card -->
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="vi_VN" />
@@ -71,95 +77,168 @@
     />
 
     <!-- Schema.org Structured Data -->
-    <script type="application/ld+json">
+    <script id="structured-data-jsonld" type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@graph": [
           {
+            "@type": "Brand",
+            "@id": "https://thuanlevan.vercel.app/#brand",
+            "name": "Thuận Lê — Systems Engineering & AI Workflow",
+            "alternateName": "TL Studio & Engineering",
+            "url": "https://thuanlevan.vercel.app/",
+            "logo": {
+              "@type": "ImageObject",
+              "@id": "https://thuanlevan.vercel.app/#logo",
+              "url": "https://thuanlevan.vercel.app/brand-logo.png",
+              "contentUrl": "https://thuanlevan.vercel.app/brand-logo.png",
+              "width": 512,
+              "height": 512,
+              "caption": "Logo monogram TL của kỹ sư Lê Văn Thuận"
+            },
+            "sameAs": [
+              "https://github.com/thuanlevan72?tab=repositories",
+              "https://www.facebook.com/thuanlevan72"
+            ]
+          },
+          {
             "@type": "WebSite",
-            "@id": "#website",
-            "name": "Thuận Lê — Visual Art & Systems Engineering",
+            "@id": "https://thuanlevan.vercel.app/#website",
+            "url": "https://thuanlevan.vercel.app/",
+            "name": "Thuận Lê — Kỹ Sư Senior .NET & Triển Lãm Thị Giác AI",
             "inLanguage": "vi",
-            "description": "Triển lãm ảnh nghệ thuật thị giác WebP & Video H.264 (Nàng Thơ Hoa Đào, Chân Dung & Kỷ niệm MISA) và hồ sơ kỹ thuật Senior .NET của Lê Văn Thuận."
+            "description": "Hồ sơ kỹ sư Senior .NET Lê Văn Thuận (MISA OneAI, Agribank, Phenikaa MEC), CV PDF chuẩn A4, kinh nghiệm AI Agent (Gemini, Claude, Grok, Codex) và triển lãm ảnh WebP/H.264.",
+            "publisher": { "@id": "https://thuanlevan.vercel.app/#brand" },
+            "copyrightHolder": { "@id": "https://thuanlevan.vercel.app/#person" }
+          },
+          {
+            "@type": "ProfilePage",
+            "@id": "https://thuanlevan.vercel.app/#webpage",
+            "url": "https://thuanlevan.vercel.app/",
+            "name": "Thuận Lê — Kỹ Sư Senior .NET & Kiến Trúc Hệ Thống Doanh Nghiệp",
+            "inLanguage": "vi",
+            "isPartOf": { "@id": "https://thuanlevan.vercel.app/#website" },
+            "mainEntity": { "@id": "https://thuanlevan.vercel.app/#person" },
+            "primaryImageOfPage": {
+              "@type": "ImageObject",
+              "url": "https://thuanlevan.vercel.app/assets/gallery/thuan-le-doi-thuc.webp"
+            },
+            "breadcrumb": { "@id": "https://thuanlevan.vercel.app/#breadcrumb" }
+          },
+          {
+            "@type": "BreadcrumbList",
+            "@id": "https://thuanlevan.vercel.app/#breadcrumb",
+            "itemListElement": [
+              {
+                "@type": "ListItem",
+                "position": 1,
+                "name": "Hồ Sơ Kỹ Sư Thuận Lê",
+                "item": "https://thuanlevan.vercel.app/"
+              }
+            ]
           },
           {
             "@type": "Person",
-            "@id": "#person",
+            "@id": "https://thuanlevan.vercel.app/#person",
             "name": "Lê Văn Thuận",
             "alternateName": "Thuận Lê",
-            "jobTitle": "Senior .NET & Systems Engineer / AI Media Creator",
+            "jobTitle": "Senior .NET Systems Engineer & AI Agent Practitioner",
             "birthDate": "2002",
+            "url": "https://thuanlevan.vercel.app/",
             "email": "mailto:thuanlevan72@gmail.com",
             "telephone": "+84-352-988-596",
+            "worksFor": {
+              "@type": "Organization",
+              "name": "MISA JSC"
+            },
+            "brand": { "@id": "https://thuanlevan.vercel.app/#brand" },
             "address": {
               "@type": "PostalAddress",
               "addressLocality": "Hoài Đức",
               "addressRegion": "Hà Nội",
               "addressCountry": "VN"
             },
-            "image": "/assets/gallery/thuan-le-doi-thuc.webp",
+            "image": {
+              "@type": "ImageObject",
+              "url": "https://thuanlevan.vercel.app/assets/gallery/thuan-le-doi-thuc.webp",
+              "width": 810,
+              "height": 1440
+            },
             "sameAs": [
               "https://github.com/thuanlevan72?tab=repositories",
               "https://www.facebook.com/thuanlevan72"
             ],
             "knowsAbout": [
               "C# .NET 8",
-              "ASP.NET Core",
+              "ASP.NET Core Web API",
               "Clean Architecture",
+              "CQRS & MediatR",
               "Apache Kafka",
               "Oracle Database",
               "PostgreSQL",
+              "Redis Cluster",
+              "AI Agents (Claude, Gemini, Codex, Grok)",
               "AI Image & Video Generation",
               "LLM Integration"
             ]
           },
           {
             "@type": "ImageGallery",
-            "@id": "#gallery",
+            "@id": "https://thuanlevan.vercel.app/#gallery",
+            "url": "https://thuanlevan.vercel.app/trien-lam",
             "name": "Triển Lãm Ảnh & Video Đời Thường, Hành Trình & Đồng Đội — Thuận Lê",
             "description": "Tuyển tập 28 tác phẩm thị giác tối ưu WebP và Video H.264 kết hợp nghệ thuật Nàng Thơ Hoa Đào, Coding Ban Công Đêm, Kawasaki Ninja 400, Rừng Thông và kỷ niệm MISA.",
-            "creator": { "@id": "#person" },
+            "creator": { "@id": "https://thuanlevan.vercel.app/#person" },
             "associatedMedia": [
               {
                 "@type": "VideoObject",
                 "name": "Coding Timelapse — Góc Làm Việc & Đam Mê",
-                "contentUrl": "/assets/gallery/timelapse-coding.mp4",
-                "thumbnailUrl": "/assets/gallery/timelapse-coding-poster.webp",
+                "contentUrl": "https://thuanlevan.vercel.app/assets/gallery/timelapse-coding.mp4",
+                "thumbnailUrl": "https://thuanlevan.vercel.app/assets/gallery/timelapse-coding-poster.webp",
                 "encodingFormat": "video/mp4",
                 "description": "Video tua nhanh 36 giây quá trình tập trung lập trình với bàn phím cơ đỏ tại văn phòng."
               },
               {
                 "@type": "ImageObject",
                 "name": "Cố Phán Di Quang Thái — Nàng Thơ Giữa Hoa Đào",
-                "contentUrl": "/assets/gallery/nang-tho-hoa-dao.webp",
+                "contentUrl": "https://thuanlevan.vercel.app/assets/gallery/nang-tho-hoa-dao.webp",
                 "encodingFormat": "image/webp",
-                "width": "1440",
-                "height": "804",
+                "width": 1440,
+                "height": 804,
                 "description": "Nàng thơ dưới mưa hoa đào cùng tia nắng sớm và thư pháp Hán tự."
               },
               {
                 "@type": "ImageObject",
                 "name": "Chân Dung Đời Thực — Thuận Lê 2026",
-                "contentUrl": "/assets/gallery/thuan-le-doi-thuc.webp",
+                "contentUrl": "https://thuanlevan.vercel.app/assets/gallery/thuan-le-doi-thuc.webp",
                 "encodingFormat": "image/webp",
-                "width": "810",
-                "height": "1440",
+                "width": 810,
+                "height": 1440,
                 "description": "Chân dung đời thực của kỹ sư Lê Văn Thuận tại không gian làm việc ở Hà Nội."
               },
               {
                 "@type": "ImageObject",
                 "name": "MISA Level Up With AI — Hạ Long 2026",
-                "contentUrl": "/assets/gallery/misa-ha-long-2026.webp",
+                "contentUrl": "https://thuanlevan.vercel.app/assets/gallery/misa-ha-long-2026.webp",
                 "encodingFormat": "image/webp",
-                "width": "1440",
-                "height": "960",
+                "width": 1440,
+                "height": 960,
                 "description": "Tập thể Khối Sản Xuất MISA tại sự kiện Level Up With AI Hạ Long 2026."
               }
             ]
           },
           {
             "@type": "FAQPage",
+            "@id": "https://thuanlevan.vercel.app/#faq",
             "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Thuận Lê ứng dụng các AI Agent như Gemini, Claude, Grok và Codex vào công việc thực tế ra sao?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Mỗi AI Agent được dùng đúng thế mạnh: Claude giúp đọc codebase lớn, phát hiện lỗi logic và viết unit test; Gemini xử lý tài liệu nghiệp vụ dài và thiết kế prompt ảnh/video; Codex tạo nhanh khung code, script và tối ưu SQL; Grok hỗ trợ tra cứu công nghệ mới và phản biện giải pháp nhanh."
+                }
+              },
               {
                 "@type": "Question",
                 "name": "Bộ sưu tập ảnh Nàng Thơ Hoa Đào và Video Timelapse được thực hiện như thế nào?",
@@ -190,7 +269,7 @@
       }
     </script>
   </head>
-  <body class="bg-[#F4F7FB] dark:bg-[#05080F] text-[#070B14] dark:text-[#F1F5F9] antialiased transition-colors duration-200 selection:bg-[#1D4ED8]/15 selection:text-[#070B14] dark:selection:bg-[#38BDF8]/25 dark:selection:text-[#F1F5F9]">
+  <body class="bg-[#F5F8FC] dark:bg-[#05080F] text-[#070B14] dark:text-[#F1F5F9] antialiased transition-colors duration-200 selection:bg-[#1D4ED8]/15 selection:text-[#070B14] dark:selection:bg-[#38BDF8]/25 dark:selection:text-[#F1F5F9]">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

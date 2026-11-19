@@ -6,16 +6,16 @@
   --font-sans: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  --color-paper: #F4F7FB;
+  --color-paper: #F5F8FC;
   --color-paper-card: #FFFFFF;
-  --color-paper-muted: #E6EEF7;
-  --color-paper-border: #D7E2EE;
+  --color-paper-muted: #E9F0F8;
+  --color-paper-border: #DCE6F2;
   --color-ink: #070B14;
   --color-ink-muted: #475569;
 
   --color-lacquer: #05080F;
   --color-lacquer-card: #0B1220;
-  --color-lacquer-border: #1B2B44;
+  --color-lacquer-border: #182740;
   --color-ivory: #F1F5F9;
   --color-ivory-muted: #94A3B8;
 
@@ -29,9 +29,11 @@
   html {
     font-family: var(--font-sans);
     scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  h1, h2, .font-editorial {
+  h1, h2, h3, .font-editorial {
     font-family: var(--font-display);
     text-wrap: balance;
   }
@@ -41,17 +43,55 @@
   }
 }
 
+/* Soft, refined atmospheric backdrop instead of harsh wireframe grid */
 .editorial-grid-bg {
-  background-size: 48px 48px;
+  background-color: #F5F8FC;
   background-image:
-    linear-gradient(to right, rgba(10, 25, 47, 0.035) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(10, 25, 47, 0.035) 1px, transparent 1px);
+    radial-gradient(ellipse 80% 50% at 15% -5%, rgba(2, 132, 199, 0.08), transparent 60%),
+    radial-gradient(ellipse 65% 45% at 88% 8%, rgba(29, 78, 216, 0.06), transparent 55%),
+    linear-gradient(to right, rgba(10, 25, 47, 0.018) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(10, 25, 47, 0.018) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 64px 64px, 64px 64px;
 }
 
 .dark .editorial-grid-bg {
+  background-color: #05080F;
   background-image:
-    linear-gradient(to right, rgba(56, 189, 248, 0.04) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(56, 189, 248, 0.04) 1px, transparent 1px);
+    radial-gradient(ellipse 75% 48% at 18% -5%, rgba(56, 189, 248, 0.09), transparent 62%),
+    radial-gradient(ellipse 60% 42% at 85% 6%, rgba(37, 99, 235, 0.08), transparent 58%),
+    linear-gradient(to right, rgba(56, 189, 248, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(56, 189, 248, 0.02) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 64px 64px, 64px 64px;
+}
+
+/* Soft, single-elevation sculpted card feel */
+.soft-card {
+  box-shadow:
+    0 1px 2px rgba(10, 25, 47, 0.03),
+    0 10px 28px -18px rgba(10, 25, 47, 0.14);
+  transition:
+    transform 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.soft-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 2px 4px rgba(10, 25, 47, 0.04),
+    0 18px 36px -18px rgba(2, 132, 199, 0.2);
+}
+
+.dark .soft-card {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    0 14px 32px -20px rgba(0, 0, 0, 0.7);
+}
+
+.dark .soft-card:hover {
+  box-shadow:
+    0 4px 10px rgba(0, 0, 0, 0.35),
+    0 20px 42px -20px rgba(56, 189, 248, 0.16);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -60,6 +100,10 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .soft-card:hover {
+    transform: none;
   }
 }
 

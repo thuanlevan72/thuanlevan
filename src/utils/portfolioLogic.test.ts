@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  AI_AGENT_EXPERIENCE,
   GALLERY_ARTWORKS,
   HERO_METRICS,
   PORTFOLIO_PROFILE,
@@ -10,6 +11,7 @@ import {
 import {
   buildCanonicalUrl,
   buildCvPlainText,
+  buildStructuredDataGraph,
   executeCliCommand,
   filterGalleryItems,
   filterProjects,
@@ -135,14 +137,24 @@ test('executeCliCommand handles gallery, dotnet, clear, and unknown inputs', () 
   if (unknownRes.action === 'append') {
     assert.equal(unknownRes.responseToneClass, 'text-rose-400');
   }
+
+  const aiAgentsRes = executeCliCommand('ai-agents');
+  assert.equal(aiAgentsRes.action, 'append');
+  if (aiAgentsRes.action === 'append') {
+    assert.match(aiAgentsRes.responseText, /Claude/);
+    assert.match(aiAgentsRes.responseText, /Gemini/);
+    assert.match(aiAgentsRes.responseText, /Codex/);
+    assert.match(aiAgentsRes.responseText, /Grok/);
+  }
 });
 
-test('buildCvPlainText builds structured Vietnamese CV content from portfolio data', () => {
+test('buildCvPlainText builds structured Vietnamese CV content including AI agents', () => {
   const plainText = buildCvPlainText({
     profile: PORTFOLIO_PROFILE,
     metrics: HERO_METRICS,
     projects: PORTFOLIO_PROJECTS,
     skillGroups: SKILL_GROUPS,
+    aiAgents: AI_AGENT_EXPERIENCE,
   });
 
   assert.match(plainText, /LÊ VĂN THUẬN/);
@@ -150,4 +162,25 @@ test('buildCvPlainText builds structured Vietnamese CV content from portfolio da
   assert.match(plainText, /Smart Form Agribank/);
   assert.match(plainText, /Phenikaa MEC/);
   assert.match(plainText, /C# \.NET 8/);
+  assert.match(plainText, /Claude/);
+  assert.match(plainText, /Gemini/);
+  assert.match(plainText, /Codex/);
+  assert.match(plainText, /Grok/);
+});
+
+test('buildStructuredDataGraph outputs valid Schema.org Brand logo, BreadcrumbList, and ProfilePage/CollectionPage', () => {
+  const profileGraph = buildStructuredDataGraph('https://thuanlevan.vercel.app', 'profile');
+  const brandNode = profileGraph['@graph'].find((n) => n['@type'] === 'Brand');
+  assert.ok(brandNode && 'logo' in brandNode && brandNode.logo);
+  assert.equal(brandNode.logo.url, 'https://thuanlevan.vercel.app/brand-logo.png');
+  assert.equal(brandNode.logo.width, 512);
+
+  const profilePage = profileGraph['@graph'].find((n) => n['@type'] === 'ProfilePage');
+  assert.ok(profilePage);
+  assert.equal(profilePage.url, 'https://thuanlevan.vercel.app/');
+
+  const galleryGraph = buildStructuredDataGraph('https://thuanlevan.vercel.app/', 'gallery');
+  const collectionPage = galleryGraph['@graph'].find((n) => n['@type'] === 'CollectionPage');
+  assert.ok(collectionPage);
+  assert.equal(collectionPage.url, 'https://thuanlevan.vercel.app/trien-lam');
 });

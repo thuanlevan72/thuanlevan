@@ -1,4 +1,9 @@
-import { ArtworkItem, PortfolioProject } from '../utils/portfolioLogic.ts';
+import {
+  AiAgentExperienceItem,
+  AiAgentPrincipleItem,
+  ArtworkItem,
+  PortfolioProject,
+} from '../utils/portfolioLogic.ts';
 
 export const PORTFOLIO_PROFILE = {
   fullName: 'Thuận Lê',
@@ -15,6 +20,7 @@ export const PORTFOLIO_PROFILE = {
   facebookUrl: 'https://www.facebook.com/thuanlevan72',
   heroPortraitSrc: '/assets/gallery/thuan-le-doi-thuc.webp',
   realPortraitSrc: '/assets/gallery/thuan-le-doi-thuc.webp',
+  brandLogoSrc: '/brand-logo.png',
 };
 
 export const HERO_METRICS = [
@@ -928,19 +934,106 @@ export const SKILL_GROUPS = [
   {
     id: 'frontend-ai',
     title: 'Giao Diện & Nghệ Thuật AI',
-    description: 'Phát triển giao diện hiện đại và làm chủ pipeline AI tạo sinh.',
+    description: 'Phát triển giao diện hiện đại và làm chủ AI Agent, pipeline tạo sinh.',
     items: [
       'Vue 3 / Vue.js',
       'React.js & Next.js',
       'TypeScript & Tailwind',
-      'LLM Integration',
+      'AI Agents (Claude, Gemini, Codex, Grok)',
+      'LLM Integration & RAG',
       'AI Image & Video Gen',
       'Prompt Art Direction',
     ],
   },
 ] as const;
 
+export const AI_AGENT_EXPERIENCE: readonly AiAgentExperienceItem[] = [
+  {
+    id: 'claude',
+    name: 'Claude',
+    provider: 'Anthropic · Claude Code & Sonnet/Opus',
+    roleSummary: 'Đọc hiểu hệ thống lớn & Sửa code sạch gọn',
+    simpleUsage:
+      'Dùng như một người đồng nghiệp giỏi đọc code: ném cả thư mục dự án .NET nhiều tầng vào để hỏi luồng chạy, tìm chỗ dễ sinh lỗi ngầm và viết lại hàm dài thành code gọn dễ đọc.',
+    realTaskExamples: [
+      'Rà soát kiến trúc Clean Architecture & CQRS trước khi merge code',
+      'Tìm điểm nghẽn truy vấn SQL cũ và viết unit test tự động cho nghiệp vụ khó',
+      'Giải thích nhanh luồng xử lý giao dịch ngân hàng / bệnh án khi mới nhận dự án',
+    ],
+    projectImpact: 'Giảm rõ thời gian đọc hiểu code cũ ở Phenikaa MEC & Smart Form',
+  },
+  {
+    id: 'gemini',
+    name: 'Gemini',
+    provider: 'Google · Gemini Pro/Flash & AI Studio',
+    roleSummary: 'Đọc tài liệu dài & Tạo nội dung ảnh/video AI',
+    simpleUsage:
+      'Mạnh ở việc đọc các file tài liệu nghiệp vụ dài hàng trăm trang để tóm tắt thành danh sách việc cần làm dễ hiểu, đồng thời viết câu lệnh (prompt) tạo ảnh, video và tích hợp trực tiếp API.',
+    realTaskExamples: [
+      'Tóm tắt tài liệu yêu cầu dự án (PRD) và chuyển thành danh sách API cần làm',
+      'Thiết kế prompt sinh hình ảnh & dựng kịch bản video cho MISA OneAI',
+      'Kiểm tra lỗi giao diện thực tế và tối ưu nội dung hiển thị cho người dùng cuối',
+    ],
+    projectImpact: 'Ứng dụng trực tiếp vào luồng AI Media & Chatbot tại MISA OneAI',
+  },
+  {
+    id: 'codex',
+    name: 'Codex & ChatGPT',
+    provider: 'OpenAI · Codex CLI & GPT Agents',
+    roleSummary: 'Viết khung code nhanh, SQL & Script tự động',
+    simpleUsage:
+      'Khi đã có thiết kế rõ ràng, dùng để tạo nhanh phần khung lặp đi lặp lại như file DTO, migration database, script nén ảnh/video hàng loạt hoặc gợi ý đánh index bảng dữ liệu lớn.',
+    realTaskExamples: [
+      'Tạo nhanh cấu trúc CRUD, DTO mapping và file cấu hình Docker / CI-CD',
+      'Gợi ý cách viết lại câu SQL Oracle/PostgreSQL chậm trên bảng hàng triệu dòng',
+      'Viết script tự động chuyển đổi hàng chục file ảnh/video sang WebP & MP4 nhẹ',
+    ],
+    projectImpact: 'Tiết kiệm hàng giờ thao tác lặp và đẩy nhanh tiến độ bàn giao sprint',
+  },
+  {
+    id: 'grok',
+    name: 'Grok',
+    provider: 'xAI · Tìm Kiếm Thời Gian Thực',
+    roleSummary: 'Cập nhật công nghệ mới & Phản biện phương án nhanh',
+    simpleUsage:
+      'Dùng khi gặp lỗi thư viện mới ra mắt chưa có nhiều hướng dẫn cũ, hoặc cần một góc nhìn phản biện thẳng thắn xem giải pháp mình định làm có rủi ro gì khi đưa lên chạy thật.',
+    realTaskExamples: [
+      'Tra cứu nhanh lỗi tương thích của các gói .NET, Kafka, Docker phiên bản mới nhất',
+      'So sánh ưu nhược điểm khi chọn giải pháp lưu trữ, cache hoặc chia tách dịch vụ',
+      'Đóng vai người dùng khó tính để kiểm tra lại tính hợp lý của luồng sản phẩm',
+    ],
+    projectImpact: 'Tránh đi đường vòng khi xử lý sự cố mới phát sinh trên môi trường thật',
+  },
+];
+
+export const AI_AGENT_PRINCIPLES: readonly AiAgentPrincipleItem[] = [
+  {
+    id: 'split-tasks',
+    title: '01 · Chia nhỏ việc trước khi hỏi AI',
+    detail:
+      'Không đưa cả yêu cầu mơ hồ một lần; luôn tách rõ: hiểu bài toán -> phác thảo cách làm -> viết từng phần -> kiểm tra lại.',
+  },
+  {
+    id: 'human-review',
+    title: '02 · Luôn tự đọc lại & chạy kiểm chứng',
+    detail:
+      'AI viết nháp rất nhanh nhưng phần liên quan đến tiền bạc, bảo mật hay dữ liệu y tế đều phải tự đọc kỹ từng dòng và chạy test thật.',
+  },
+  {
+    id: 'right-tool',
+    title: '03 · Chọn đúng AI cho đúng đầu việc',
+    detail:
+      'Claude để đọc & sửa code sâu, Gemini để xử lý tài liệu & hình ảnh/video, Codex để sinh script nhanh, Grok để tra cứu cập nhật mới.',
+  },
+];
+
 export const FAQ_ITEMS = [
+  {
+    question:
+      'Thuận Lê sử dụng các AI Agent (Claude, Gemini, Codex, Grok) trong công việc lập trình hằng ngày như thế nào?',
+    answer:
+      'Tôi coi AI Agent như những cộng sự chuyên môn hóa: dùng Claude để đọc hiểu hệ thống .NET lớn, tìm lỗi logic và viết test; dùng Gemini để tóm tắt tài liệu dài và làm nội dung ảnh/video AI; dùng Codex để tạo nhanh khung code, script tự động và tối ưu SQL; còn Grok giúp tra cứu công nghệ mới và phản biện giải pháp nhanh. Mọi kết quả từ AI đều được tôi tự kiểm tra kỹ và chạy test trước khi đưa vào dự án thật.',
+  },
   {
     question:
       'Bộ sưu tập ảnh Nàng Thơ Hoa Đào và Video Timelapse được thực hiện như thế nào?',
@@ -963,6 +1056,7 @@ export const FAQ_ITEMS = [
 
 export const TERMINAL_SUGGESTIONS = [
   { command: 'help', label: 'help' },
+  { command: 'ai-agents', label: 'ai-agents' },
   { command: 'cv', label: 'cv' },
   { command: 'gallery', label: 'gallery' },
   { command: 'dotnet --info', label: 'dotnet --info' },

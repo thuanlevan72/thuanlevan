@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import {
+  AI_AGENT_EXPERIENCE,
   HERO_METRICS,
   PORTFOLIO_PROFILE,
   PORTFOLIO_PROJECTS,
@@ -29,6 +30,7 @@ import {
   CvSourceData,
   ThemeMode,
 } from '../utils/portfolioLogic.ts';
+import { BrandLogo } from './BrandLogo.tsx';
 
 interface CvPdfSectionProps {
   theme: ThemeMode;
@@ -39,7 +41,7 @@ interface CvPdfSectionProps {
 const CV_ID_PORTRAIT_SRC = '/assets/gallery/chan-dung-the-xanh.webp';
 
 const CV_SUMMARY_PARAGRAPH =
-  'Kỹ sư hệ thống Senior .NET với gần 4 năm kinh nghiệm thực chiến (từ 08/2022 đến nay) trong việc thiết kế và vận hành các nền tảng doanh nghiệp chịu tải cao: Ngân hàng số & Phòng chống rửa tiền (Smart Form Agribank), Y tế thông minh (Phenikaa MEC với đội ngũ 60 kỹ sư), Công nghệ giáo dục (Lotus & Nguyễn Siêu) và Hệ sinh thái AI Media Generation (MISA OneAI for Family). Thế mạnh cốt lõi về C# .NET Core 8, Clean Architecture, CQRS, tối ưu truy vấn SQL/Oracle/PostgreSQL dưới 50ms, Apache Kafka, Redis và tích hợp LLM tạo sinh hình ảnh/video.';
+  'Kỹ sư hệ thống Senior .NET với gần 4 năm kinh nghiệm thực chiến (từ 08/2022 đến nay) trong việc thiết kế và vận hành các nền tảng doanh nghiệp chịu tải cao: Ngân hàng số & Phòng chống rửa tiền (Smart Form Agribank), Y tế thông minh (Phenikaa MEC với đội ngũ 60 kỹ sư), Công nghệ giáo dục (Lotus & Nguyễn Siêu) và Hệ sinh thái AI Media Generation (MISA OneAI for Family). Thế mạnh cốt lõi về C# .NET Core 8, Clean Architecture, CQRS, tối ưu truy vấn SQL/Oracle/PostgreSQL dưới 50ms, Apache Kafka, Redis và ứng dụng thành thạo AI Agent (Claude, Gemini, Codex, Grok) vào quy trình phát triển phần mềm an toàn.';
 
 export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionProps) {
   const [isExporting, setIsExporting] = useState(false);
@@ -55,6 +57,7 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
       metrics: HERO_METRICS,
       projects: PORTFOLIO_PROJECTS,
       skillGroups: SKILL_GROUPS,
+      aiAgents: AI_AGENT_EXPERIENCE,
     }),
     []
   );
@@ -136,9 +139,9 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
   };
 
   return (
-    <section id="cv-section" className="pt-8 sm:pt-12 pb-6 space-y-8">
+    <section id="cv-section" className="pt-8 sm:pt-12 pb-6 space-y-10">
       {/* Top utility bar & Action toolbar (hidden when printing) */}
-      <div className="no-print space-y-6 border-b border-[#D7E2EE] dark:border-[#1B2B44] pb-8">
+      <div className="no-print space-y-6 border-b border-[#DCE6F2] dark:border-[#182740] pb-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <a
             href="/"
@@ -157,7 +160,7 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
             type="button"
             onClick={onToggleTheme}
             aria-label="Chuyển đổi giao diện Sáng / Tối"
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-[#CBD8E6] dark:border-[#1E3250] bg-white dark:bg-[#0B1220] text-xs font-medium text-[#070B14] dark:text-[#F1F5F9] hover:border-[#0284C7] dark:hover:border-[#38BDF8] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-[#DCE6F2] dark:border-[#1E3250] bg-white/90 dark:bg-[#0B1220]/90 text-xs font-medium text-[#070B14] dark:text-[#F1F5F9] hover:border-[#0284C7] dark:hover:border-[#38BDF8] transition-all duration-200 whitespace-nowrap shrink-0 cursor-pointer"
           >
             {theme === 'dark' ? (
               <Moon className="w-3.5 h-3.5 text-[#38BDF8]" aria-hidden="true" />
@@ -170,11 +173,11 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
 
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
           <div className="space-y-3 max-w-2xl">
-            <p className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-[#0369A1] dark:text-[#38BDF8]">
+            <p className="inline-flex items-center gap-2 text-xs sm:text-sm font-medium text-[#0369A1] dark:text-[#38BDF8] tracking-wide">
               <FileText className="w-4 h-4" aria-hidden="true" />
               <span>Bản CV Chuẩn A4 · Đồng Bộ Từ Dữ Liệu Website</span>
             </p>
-            <h1 className="font-display font-bold text-4xl sm:text-5xl text-[#070B14] dark:text-[#F1F5F9] leading-[1.1] text-balance">
+            <h1 className="font-display font-semibold text-4xl sm:text-5xl tracking-[-0.02em] text-[#070B14] dark:text-[#F1F5F9] leading-[1.1] text-balance">
               CV Kỹ Sư Senior .NET &amp; Kiến Trúc Hệ Thống
             </h1>
             <p className="text-sm sm:text-base text-[#475569] dark:text-[#94A3B8] leading-relaxed text-pretty">
@@ -190,7 +193,7 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
               type="button"
               onClick={handleDownloadPdf}
               disabled={isExporting}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-[#0A192F] hover:bg-[#13294B] dark:bg-[#0284C7] dark:hover:bg-[#0369A1] disabled:opacity-60 text-white font-semibold text-sm transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0A192F] hover:bg-[#13294B] dark:bg-[#0284C7] dark:hover:bg-[#0369A1] disabled:opacity-60 text-white font-semibold text-sm shadow-[0_10px_24px_-8px_rgba(10,25,47,0.4)] dark:shadow-[0_10px_24px_-8px_rgba(2,132,199,0.5)] hover:-translate-y-0.5 transition-all duration-200 whitespace-nowrap shrink-0 cursor-pointer"
             >
               {isExporting ? (
                 <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
@@ -204,7 +207,7 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
               id="print-cv-btn"
               type="button"
               onClick={handlePrintPdf}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#CBD8E6] dark:border-[#1E3250] bg-white dark:bg-[#0B1220] hover:border-[#0284C7] dark:hover:border-[#38BDF8] text-[#070B14] dark:text-[#F1F5F9] font-medium text-sm transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#CBD8E6] dark:border-[#1E3250] bg-white/90 dark:bg-[#0B1220]/90 hover:border-[#0284C7] dark:hover:border-[#38BDF8] text-[#070B14] dark:text-[#F1F5F9] font-medium text-sm hover:-translate-y-0.5 transition-all duration-200 whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Printer className="w-4 h-4 text-[#0284C7] dark:text-[#38BDF8]" aria-hidden="true" />
               <span>In / Lưu PDF</span>
@@ -214,7 +217,7 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
               id="copy-cv-text-btn"
               type="button"
               onClick={handleCopyPlainText}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-[#CBD8E6] dark:border-[#1E3250] bg-white dark:bg-[#0B1220] hover:border-[#0284C7] dark:hover:border-[#38BDF8] text-[#070B14] dark:text-[#F1F5F9] font-medium text-sm transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-[#CBD8E6] dark:border-[#1E3250] bg-white/90 dark:bg-[#0B1220]/90 hover:border-[#0284C7] dark:hover:border-[#38BDF8] text-[#070B14] dark:text-[#F1F5F9] font-medium text-sm hover:-translate-y-0.5 transition-all duration-200 whitespace-nowrap shrink-0 cursor-pointer"
             >
               {copied ? (
                 <Check className="w-4 h-4 text-[#0284C7] dark:text-[#38BDF8]" aria-hidden="true" />
@@ -232,7 +235,7 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
             aria-live="polite"
             className={`px-4 py-3 rounded-xl border text-xs sm:text-sm font-medium ${
               exportStatus.type === 'success'
-                ? 'bg-[#E6EEF7]/80 dark:bg-[#0E1B31] border-[#0284C7]/40 text-[#0A192F] dark:text-[#38BDF8]'
+                ? 'bg-[#E6EEF7]/85 dark:bg-[#0E1B31] border-[#0284C7]/40 text-[#0A192F] dark:text-[#38BDF8]'
                 : 'bg-rose-50 dark:bg-rose-950/40 border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200'
             }`}
           >
@@ -245,20 +248,21 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
       <article
         id="cv-printable-sheet"
         aria-label="Hồ sơ CV điện tử của Lê Văn Thuận"
-        className="max-w-4xl mx-auto rounded-2xl border border-[#D7E2EE] dark:border-[#1B2B44] bg-white dark:bg-[#0B1220] shadow-sm overflow-hidden"
+        className="max-w-4xl mx-auto rounded-3xl border border-[#DCE6F2] dark:border-[#182740] bg-white dark:bg-[#0B1220] shadow-[0_24px_64px_-24px_rgba(10,25,47,0.18)] dark:shadow-[0_28px_64px_-20px_rgba(0,0,0,0.75)] overflow-hidden"
       >
         {/* Top Navy & Ocean Blue accent strip */}
         <div className="h-2 bg-gradient-to-r from-[#05080F] via-[#0A192F] to-[#0284C7]" />
 
-        <div className="p-6 sm:p-10 space-y-8">
+        <div className="p-6 sm:p-11 space-y-8">
           {/* Candidate Header + ID Portrait */}
-          <header className="flex flex-col-reverse sm:flex-row sm:items-start justify-between gap-6 border-b border-[#D7E2EE] dark:border-[#1B2B44] pb-7">
+          <header className="flex flex-col-reverse sm:flex-row sm:items-start justify-between gap-6 border-b border-[#DCE6F2] dark:border-[#182740] pb-7">
             <div className="space-y-3 flex-1 min-w-0">
               <div className="space-y-1">
-                <p className="text-xs font-mono text-[#0369A1] dark:text-[#38BDF8]">
-                  HỒ SƠ ỨNG VIÊN · {PORTFOLIO_PROFILE.birthInfo.toUpperCase()}
-                </p>
-                <h2 className="font-display font-bold text-3xl sm:text-4xl text-[#070B14] dark:text-[#F1F5F9] leading-tight">
+                <div className="inline-flex items-center gap-2 text-xs font-mono text-[#0369A1] dark:text-[#38BDF8]">
+                  <BrandLogo size={20} className="rounded-md" />
+                  <span>HỒ SƠ ỨNG VIÊN · {PORTFOLIO_PROFILE.birthInfo.toUpperCase()}</span>
+                </div>
+                <h2 className="font-display font-semibold text-3xl sm:text-4xl text-[#070B14] dark:text-[#F1F5F9] leading-tight">
                   {PORTFOLIO_PROFILE.fullLegalName}
                 </h2>
                 <p className="text-sm sm:text-base font-semibold text-[#1D4ED8] dark:text-[#38BDF8]">
@@ -300,7 +304,7 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
               </div>
             </div>
 
-            <div className="w-28 h-36 sm:w-32 sm:h-40 rounded-xl overflow-hidden border border-[#CBD8E6] dark:border-[#1E3250] bg-[#0A192F] shrink-0">
+            <div className="w-28 h-36 sm:w-32 sm:h-40 rounded-2xl overflow-hidden border border-[#CBD8E6] dark:border-[#1E3250] bg-[#0A192F] shadow-sm shrink-0">
               <img
                 src={CV_ID_PORTRAIT_SRC}
                 alt={`Ảnh thẻ chân dung kỹ sư ${PORTFOLIO_PROFILE.fullLegalName}`}
@@ -318,9 +322,9 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
             {HERO_METRICS.map((metric) => (
               <div
                 key={metric.id}
-                className="p-3.5 rounded-xl bg-[#F4F7FB] dark:bg-[#080E1A] border border-[#D7E2EE] dark:border-[#1B2B44] space-y-1"
+                className="p-4 rounded-2xl bg-[#F5F8FC] dark:bg-[#080E1A] border border-[#DCE6F2] dark:border-[#182740] space-y-1"
               >
-                <p className="font-display font-bold text-xl sm:text-2xl text-[#070B14] dark:text-[#F1F5F9] tabular-nums">
+                <p className="font-mono font-medium text-xl sm:text-2xl text-[#070B14] dark:text-[#F1F5F9] tabular-nums">
                   {metric.value}
                 </p>
                 <p className="text-[11px] sm:text-xs text-[#475569] dark:text-[#94A3B8] leading-snug">
@@ -332,7 +336,7 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
 
           {/* Executive Summary */}
           <section className="space-y-2.5 cv-avoid-break">
-            <h3 className="text-xs font-mono uppercase tracking-wider font-semibold text-[#0369A1] dark:text-[#38BDF8] border-b border-[#E6EEF7] dark:border-[#17253B] pb-1.5">
+            <h3 className="text-xs font-mono uppercase tracking-wider font-semibold text-[#0369A1] dark:text-[#38BDF8] border-b border-[#E9F0F8] dark:border-[#152339] pb-1.5">
               Tóm Tắt Chuyên Môn
             </h3>
             <p className="text-sm text-[#070B14] dark:text-[#CBD5E1] leading-relaxed text-pretty">
@@ -342,15 +346,15 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
 
           {/* Production Experience & Systems */}
           <section className="space-y-4">
-            <h3 className="text-xs font-mono uppercase tracking-wider font-semibold text-[#0369A1] dark:text-[#38BDF8] border-b border-[#E6EEF7] dark:border-[#17253B] pb-1.5">
+            <h3 className="text-xs font-mono uppercase tracking-wider font-semibold text-[#0369A1] dark:text-[#38BDF8] border-b border-[#E9F0F8] dark:border-[#152339] pb-1.5">
               Kinh Nghiệm &amp; Hệ Thống Production Trọng Điểm
             </h3>
 
-            <div className="divide-y divide-[#E6EEF7] dark:divide-[#17253B]">
+            <div className="divide-y divide-[#E9F0F8] dark:divide-[#152339]">
               {PORTFOLIO_PROJECTS.map((project) => (
                 <div key={project.id} className="py-4 first:pt-1 last:pb-1 space-y-2.5 cv-avoid-break">
                   <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1">
-                    <h4 className="font-display font-bold text-xl text-[#070B14] dark:text-[#F1F5F9]">
+                    <h4 className="font-display font-semibold text-xl sm:text-[22px] text-[#070B14] dark:text-[#F1F5F9]">
                       {project.title}
                     </h4>
                     <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-[#0369A1] dark:text-[#38BDF8] shrink-0">
@@ -387,7 +391,7 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
 
           {/* Technical Skills Matrix */}
           <section className="space-y-4 cv-avoid-break">
-            <h3 className="text-xs font-mono uppercase tracking-wider font-semibold text-[#0369A1] dark:text-[#38BDF8] border-b border-[#E6EEF7] dark:border-[#17253B] pb-1.5">
+            <h3 className="text-xs font-mono uppercase tracking-wider font-semibold text-[#0369A1] dark:text-[#38BDF8] border-b border-[#E9F0F8] dark:border-[#152339] pb-1.5">
               Năng Lực Kỹ Thuật &amp; Hệ Sinh Thái Công Nghệ
             </h3>
 
@@ -395,9 +399,9 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
               {SKILL_GROUPS.map((group) => (
                 <div
                   key={group.id}
-                  className="p-4 rounded-xl bg-[#F4F7FB] dark:bg-[#080E1A] border border-[#D7E2EE] dark:border-[#1B2B44] space-y-1.5"
+                  className="p-4 rounded-2xl bg-[#F5F8FC] dark:bg-[#080E1A] border border-[#DCE6F2] dark:border-[#182740] space-y-1.5"
                 >
-                  <h4 className="font-display font-bold text-lg text-[#070B14] dark:text-[#F1F5F9]">
+                  <h4 className="font-display font-semibold text-lg text-[#070B14] dark:text-[#F1F5F9]">
                     {group.title}
                   </h4>
                   <p className="text-xs text-[#475569] dark:text-[#94A3B8]">
@@ -411,8 +415,36 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
             </div>
           </section>
 
+          {/* Practical AI Agent Experience */}
+          <section className="space-y-3.5 cv-avoid-break">
+            <h3 className="text-xs font-mono uppercase tracking-wider font-semibold text-[#0369A1] dark:text-[#38BDF8] border-b border-[#E9F0F8] dark:border-[#152339] pb-1.5">
+              Kinh Nghiệm Sử Dụng AI Agent (Claude · Gemini · Codex · Grok)
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {AI_AGENT_EXPERIENCE.map((agent) => (
+                <div
+                  key={agent.id}
+                  className="p-4 rounded-2xl bg-[#F5F8FC] dark:bg-[#080E1A] border border-[#DCE6F2] dark:border-[#182740] space-y-1.5"
+                >
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h4 className="font-display font-semibold text-lg text-[#070B14] dark:text-[#F1F5F9]">
+                      {agent.name}
+                    </h4>
+                    <span className="text-[11px] font-mono text-[#0369A1] dark:text-[#38BDF8]">
+                      {agent.roleSummary}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#475569] dark:text-[#94A3B8] leading-relaxed">
+                    {agent.simpleUsage}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+
           {/* Portfolio & Exhibition Cross-Reference Footer inside Sheet */}
-          <div className="pt-4 border-t border-[#D7E2EE] dark:border-[#1B2B44] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-[#475569] dark:text-[#94A3B8]">
+          <div className="pt-4 border-t border-[#DCE6F2] dark:border-[#182740] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-[#475569] dark:text-[#94A3B8]">
             <div className="inline-flex items-center gap-2">
               <Globe className="w-3.5 h-3.5 text-[#0284C7] shrink-0" aria-hidden="true" />
               <span>

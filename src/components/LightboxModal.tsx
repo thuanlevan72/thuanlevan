@@ -41,11 +41,11 @@ export function LightboxModal({
       role="dialog"
       aria-modal="true"
       aria-label={`Chi tiết tác phẩm ${artwork.title}`}
-      className="fixed inset-0 z-50 bg-[#03060C]/92 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6"
+      className="fixed inset-0 z-50 bg-[#03060C]/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-6xl max-h-[92vh] rounded-2xl bg-[#070D19] text-[#F1F5F9] border border-[#1B2D4B] overflow-hidden grid grid-cols-1 lg:grid-cols-12"
+        className="relative w-full max-w-6xl max-h-[92vh] rounded-3xl bg-[#070D19] text-[#F1F5F9] border border-[#1B2D4B] shadow-[0_32px_80px_-20px_rgba(0,0,0,0.85)] overflow-hidden grid grid-cols-1 lg:grid-cols-12"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
@@ -53,7 +53,7 @@ export function LightboxModal({
           type="button"
           onClick={onClose}
           aria-label="Đóng trình xem ảnh"
-          className="absolute top-4 right-4 z-20 w-10 h-10 rounded-full bg-[#05080F]/80 hover:bg-[#0A192F] text-white border border-[#38BDF8]/30 flex items-center justify-center transition-colors cursor-pointer"
+          className="absolute top-4 right-4 z-20 w-10 h-10 rounded-full bg-[#05080F]/85 hover:bg-[#0A192F] text-white border border-[#38BDF8]/30 flex items-center justify-center transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" aria-hidden="true" />
         </button>
@@ -71,7 +71,7 @@ export function LightboxModal({
               muted
               playsInline
               preload="metadata"
-              className="max-h-[50vh] lg:max-h-[82vh] w-auto rounded-lg bg-black"
+              className="max-h-[50vh] lg:max-h-[82vh] w-auto rounded-xl bg-black"
             />
           ) : (
             <img
@@ -80,7 +80,7 @@ export function LightboxModal({
               width={artwork.width}
               height={artwork.height}
               referrerPolicy="no-referrer"
-              className="max-h-[50vh] lg:max-h-[82vh] w-auto object-contain rounded-lg"
+              className="max-h-[50vh] lg:max-h-[82vh] w-auto object-contain rounded-xl"
             />
           )}
 
@@ -88,7 +88,7 @@ export function LightboxModal({
             type="button"
             onClick={onPrev}
             aria-label="Tác phẩm trước"
-            className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-[#05080F]/75 hover:bg-[#0A192F] text-white border border-[#38BDF8]/25 flex items-center justify-center transition-colors cursor-pointer"
+            className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-[#05080F]/80 hover:bg-[#0A192F] text-white border border-[#38BDF8]/25 flex items-center justify-center transition-colors cursor-pointer"
           >
             <ChevronLeft className="w-5 h-5" aria-hidden="true" />
           </button>
@@ -97,7 +97,7 @@ export function LightboxModal({
             type="button"
             onClick={onNext}
             aria-label="Tác phẩm tiếp theo"
-            className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-[#05080F]/75 hover:bg-[#0A192F] text-white border border-[#38BDF8]/25 flex items-center justify-center transition-colors cursor-pointer"
+            className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-[#05080F]/80 hover:bg-[#0A192F] text-white border border-[#38BDF8]/25 flex items-center justify-center transition-colors cursor-pointer"
           >
             <ChevronRight className="w-5 h-5" aria-hidden="true" />
           </button>
@@ -118,7 +118,7 @@ export function LightboxModal({
             </div>
 
             <div className="space-y-1.5">
-              <h3 className="font-display text-2xl sm:text-3xl font-bold text-[#F1F5F9] leading-tight">
+              <h3 className="font-display text-2xl sm:text-3xl font-semibold text-[#F1F5F9] leading-tight">
                 {artwork.title}
               </h3>
               <p className="text-xs text-[#94A3B8]">{artwork.subtitle}</p>

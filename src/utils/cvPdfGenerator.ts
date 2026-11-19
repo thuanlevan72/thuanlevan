@@ -79,7 +79,7 @@ export async function downloadPortfolioCvPdf(
   data: CvSourceData,
   options: { portraitSrc?: string; summaryParagraph: string }
 ): Promise<string> {
-  const { profile, metrics, projects, skillGroups } = data;
+  const { profile, metrics, projects, skillGroups, aiAgents } = data;
   const fonts = await loadVietnameseFonts();
   const portraitDataUrl = options.portraitSrc
     ? await loadPortraitAsJpegDataUrl(options.portraitSrc)
@@ -323,6 +323,31 @@ export async function downloadPortfolioCvPdf(
     }
 
     cursorY += rowHeight;
+  }
+
+  // AI Agent Practical Experience section
+  if (aiAgents && aiAgents.length > 0) {
+    cursorY += 3;
+    drawSectionHeading('Kinh Nghiệm Sử Dụng AI Agent (Claude · Gemini · Codex · Grok)');
+
+    for (const agent of aiAgents) {
+      const descText = `${agent.roleSummary}: ${agent.simpleUsage}`;
+      const descWrapped = doc.splitTextToSize(descText, contentWidth);
+      const itemHeight = 5 + descWrapped.length * 3.9 + 2.5;
+      ensureSpace(itemHeight);
+
+      doc.setFont('DejaVuSans', 'bold');
+      doc.setFontSize(8.8);
+      doc.setTextColor(...colors.navy);
+      doc.text(`${agent.name} (${agent.provider})`, marginX, cursorY);
+
+      cursorY += 4.1;
+      doc.setFont('DejaVuSans', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(...colors.muted);
+      doc.text(descWrapped, marginX, cursorY);
+      cursorY += descWrapped.length * 3.9 + 2.4;
+    }
   }
 
   // Page numbers & clean footer on every page

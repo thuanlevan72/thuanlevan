@@ -18,6 +18,7 @@ import {
   AppRoute,
   ArtworkItem,
   buildCanonicalUrl,
+  buildStructuredDataGraph,
   getNextGalleryIndex,
   getPrevGalleryIndex,
   getRoutePath,
@@ -108,6 +109,13 @@ export default function App() {
     if (twitterDesc instanceof HTMLMetaElement) {
       twitterDesc.content = seoMeta.description;
     }
+
+    const ldJsonEl = document.getElementById('structured-data-jsonld');
+    if (ldJsonEl) {
+      ldJsonEl.textContent = JSON.stringify(
+        buildStructuredDataGraph(window.location.origin, activeRoute)
+      );
+    }
   }, [activeRoute]);
 
   const handleNavigate = useCallback(
@@ -191,7 +199,11 @@ export default function App() {
           />
         ) : (
           <>
-            <HeroSection onOpenGalleryScreen={() => handleNavigate('gallery')} />
+            <HeroSection
+              theme={theme}
+              onToggleTheme={handleToggleTheme}
+              onOpenGalleryScreen={() => handleNavigate('gallery')}
+            />
             <ProjectsSection />
             <SkillsSection />
             <InteractiveTerminal />
