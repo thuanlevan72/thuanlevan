@@ -44,6 +44,7 @@ export default function App() {
     parseAppRoute(window.location.pathname, window.location.hash)
   );
   const [activeArtworkId, setActiveArtworkId] = useState<string | null>(null);
+  const [lightboxScope, setLightboxScope] = useState<ArtworkItem[]>(GALLERY_ARTWORKS);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -150,12 +151,18 @@ export default function App() {
     setTheme((prev) => resolveNextTheme(prev));
   };
 
+  const activeList = lightboxScope.length > 0 ? lightboxScope : GALLERY_ARTWORKS;
   const activeIndex = activeArtworkId
-    ? GALLERY_ARTWORKS.findIndex((item) => item.id === activeArtworkId)
+    ? activeList.findIndex((item) => item.id === activeArtworkId)
     : -1;
-  const activeArtwork = activeIndex >= 0 ? GALLERY_ARTWORKS[activeIndex] : null;
+  const activeArtwork = activeIndex >= 0 ? activeList[activeIndex] : null;
 
-  const handleOpenArtwork = useCallback((artwork: ArtworkItem) => {
+  const handleOpenArtwork = useCallback((artwork: ArtworkItem, scopeList?: ArtworkItem[]) => {
+    if (scopeList && scopeList.length > 0) {
+      setLightboxScope(scopeList);
+    } else {
+      setLightboxScope(GALLERY_ARTWORKS);
+    }
     setActiveArtworkId(artwork.id);
   }, []);
 
@@ -165,19 +172,29 @@ export default function App() {
 
   const handlePrevArtwork = useCallback(() => {
     if (activeIndex < 0) return;
-    const prevIdx = getPrevGalleryIndex(activeIndex, GALLERY_ARTWORKS.length);
+    const prevIdx = getPrevGalleryIndex(activeIndex, activeList.length);
     if (prevIdx >= 0) {
-      setActiveArtworkId(GALLERY_ARTWORKS[prevIdx].id);
+      setActiveArtworkId(activeList[prevIdx].id);
     }
-  }, [activeIndex]);
+  }, [activeIndex, activeList]);
 
   const handleNextArtwork = useCallback(() => {
     if (activeIndex < 0) return;
-    const nextIdx = getNextGalleryIndex(activeIndex, GALLERY_ARTWORKS.length);
+    const nextIdx = getNextGalleryIndex(activeIndex, activeList.length);
     if (nextIdx >= 0) {
-      setActiveArtworkId(GALLERY_ARTWORKS[nextIdx].id);
+      setActiveArtworkId(activeList[nextIdx].id);
     }
-  }, [activeIndex]);
+  }, [activeIndex, activeList]);
+
+  const handleSelectLightboxIndex = useCallback(
+    (index: number) => {
+      const target = activeList[index];
+      if (target) {
+        setActiveArtworkId(target.id);
+      }
+    },
+    [activeList]
+  );
 
   return (
     <div className="min-h-screen editorial-grid-bg flex flex-col">
@@ -220,11 +237,13 @@ export default function App() {
 
       <LightboxModal
         artwork={activeArtwork}
+        artworks={activeList}
         currentIndex={activeIndex}
-        totalCount={GALLERY_ARTWORKS.length}
+        totalCount={activeList.length}
         onClose={handleCloseLightbox}
         onPrev={handlePrevArtwork}
         onNext={handleNextArtwork}
+        onSelectIndex={handleSelectLightboxIndex}
       />
     </div>
   );

@@ -24,6 +24,7 @@ import {
   parseAppRoute,
   resolveInitialTheme,
   resolveNextTheme,
+  searchAndFilterGalleryItems,
 } from './portfolioLogic.ts';
 
 test('resolveInitialTheme and resolveNextTheme manage theme transitions cleanly', () => {
@@ -83,6 +84,11 @@ test('filterGalleryItems filters all 28 exhibition media items accurately', () =
   assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'poetic').length, 1);
   assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'portrait').length, 11);
   assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'moments').length, 16);
+
+  assert.equal(searchAndFilterGalleryItems(GALLERY_ARTWORKS, 'all', 'hoa dao').length, 1);
+  assert.equal(searchAndFilterGalleryItems(GALLERY_ARTWORKS, 'all', 'rung thong').length, 4);
+  assert.equal(searchAndFilterGalleryItems(GALLERY_ARTWORKS, 'moments', 'misa').length, 2);
+  assert.equal(searchAndFilterGalleryItems(GALLERY_ARTWORKS, 'all', 'khong-ton-tai-xyz').length, 0);
 });
 
 test('lightbox next/prev index helpers wrap cleanly across gallery boundaries', () => {
@@ -173,7 +179,7 @@ test('buildStructuredDataGraph outputs valid Schema.org Brand logo, BreadcrumbLi
   const brandNode = profileGraph['@graph'].find((n) => n['@type'] === 'Brand');
   assert.ok(brandNode && 'logo' in brandNode && brandNode.logo);
   assert.equal(brandNode.logo.url, 'https://thuanlevan.vercel.app/brand-logo.png');
-  assert.equal(brandNode.logo.width, 512);
+  assert.equal(brandNode.logo.width, 192);
 
   const profilePage = profileGraph['@graph'].find((n) => n['@type'] === 'ProfilePage');
   assert.ok(profilePage);

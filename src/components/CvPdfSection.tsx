@@ -324,7 +324,7 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
                 key={metric.id}
                 className="p-4 rounded-2xl bg-[#F5F8FC] dark:bg-[#080E1A] border border-[#DCE6F2] dark:border-[#182740] space-y-1"
               >
-                <p className="font-mono font-medium text-xl sm:text-2xl text-[#070B14] dark:text-[#F1F5F9] tabular-nums">
+                <p className="font-mono font-semibold text-lg sm:text-[21px] text-[#070B14] dark:text-[#F1F5F9] tabular-nums whitespace-nowrap">
                   {metric.value}
                 </p>
                 <p className="text-[11px] sm:text-xs text-[#475569] dark:text-[#94A3B8] leading-snug">
@@ -427,15 +427,15 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
                   key={agent.id}
                   className="p-4 rounded-2xl bg-[#F5F8FC] dark:bg-[#080E1A] border border-[#DCE6F2] dark:border-[#182740] space-y-1.5"
                 >
-                  <div className="flex items-baseline justify-between gap-2">
+                  <div className="space-y-0.5">
                     <h4 className="font-display font-semibold text-lg text-[#070B14] dark:text-[#F1F5F9]">
                       {agent.name}
                     </h4>
-                    <span className="text-[11px] font-mono text-[#0369A1] dark:text-[#38BDF8]">
+                    <p className="text-[11px] font-mono text-[#0369A1] dark:text-[#38BDF8]">
                       {agent.roleSummary}
-                    </span>
+                    </p>
                   </div>
-                  <p className="text-xs text-[#475569] dark:text-[#94A3B8] leading-relaxed">
+                  <p className="text-xs text-[#475569] dark:text-[#94A3B8] leading-relaxed pt-0.5">
                     {agent.simpleUsage}
                   </p>
                 </div>

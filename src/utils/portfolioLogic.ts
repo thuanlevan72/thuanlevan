@@ -133,6 +133,16 @@ export function buildCanonicalUrl(origin: string, pathname: string): string {
   return `${cleanOrigin}${cleanPath}`;
 }
 
+export function normalizeVietnameseText(input: string): string {
+  return input
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim();
+}
+
 export function filterGalleryItems(
   items: ArtworkItem[],
   category: GalleryCategory
@@ -141,6 +151,25 @@ export function filterGalleryItems(
     return items;
   }
   return items.filter((item) => item.category === category);
+}
+
+export function searchAndFilterGalleryItems(
+  items: ArtworkItem[],
+  category: GalleryCategory,
+  rawQuery: string
+): ArtworkItem[] {
+  const byCategory = filterGalleryItems(items, category);
+  const query = normalizeVietnameseText(rawQuery);
+  if (!query) {
+    return byCategory;
+  }
+
+  return byCategory.filter((item) => {
+    const haystack = normalizeVietnameseText(
+      `${item.title} ${item.subtitle} ${item.story} ${item.categoryLabel} ${item.specs.concept} ${item.year}`
+    );
+    return haystack.includes(query);
+  });
 }
 
 export function getGalleryCategoryCounts(
@@ -463,8 +492,8 @@ export function buildStructuredDataGraph(origin: string, route: AppRoute) {
           '@id': `${cleanOrigin}/#logo`,
           url: logoUrl,
           contentUrl: logoUrl,
-          width: 512,
-          height: 512,
+          width: 192,
+          height: 192,
           caption: 'Logo monogram TL của kỹ sư Lê Văn Thuận',
         },
         sameAs: [
@@ -530,8 +559,8 @@ export function buildStructuredDataGraph(origin: string, route: AppRoute) {
         image: {
           '@type': 'ImageObject',
           url: portraitUrl,
-          width: 810,
-          height: 1440,
+          width: 675,
+          height: 1200,
         },
         sameAs: [
           'https://github.com/thuanlevan72?tab=repositories',
@@ -574,8 +603,8 @@ export function buildStructuredDataGraph(origin: string, route: AppRoute) {
             name: 'Cố Phán Di Quang Thái — Nàng Thơ Giữa Hoa Đào',
             contentUrl: `${cleanOrigin}/assets/gallery/nang-tho-hoa-dao.webp`,
             encodingFormat: 'image/webp',
-            width: 1440,
-            height: 804,
+            width: 1080,
+            height: 603,
             description: 'Nàng thơ dưới mưa hoa đào cùng tia nắng sớm và thư pháp Hán tự.',
           },
           {
@@ -583,8 +612,8 @@ export function buildStructuredDataGraph(origin: string, route: AppRoute) {
             name: 'Chân Dung Đời Thực — Thuận Lê 2026',
             contentUrl: portraitUrl,
             encodingFormat: 'image/webp',
-            width: 810,
-            height: 1440,
+            width: 675,
+            height: 1200,
             description: 'Chân dung đời thực của kỹ sư Lê Văn Thuận tại không gian làm việc ở Hà Nội.',
           },
           {
@@ -592,8 +621,8 @@ export function buildStructuredDataGraph(origin: string, route: AppRoute) {
             name: 'MISA Level Up With AI — Hạ Long 2026',
             contentUrl: `${cleanOrigin}/assets/gallery/misa-ha-long-2026.webp`,
             encodingFormat: 'image/webp',
-            width: 1440,
-            height: 960,
+            width: 1080,
+            height: 720,
             description: 'Tập thể Khối Sản Xuất MISA tại sự kiện Level Up With AI Hạ Long 2026.',
           },
         ],
