@@ -52,28 +52,28 @@ test('buildCanonicalUrl strips trailing slashes safely for SEO canonical tags', 
   );
 });
 
-test('filterGalleryItems filters all 15 exhibition media items accurately', () => {
+test('filterGalleryItems filters all 11 exhibition media items accurately', () => {
   const counts = getGalleryCategoryCounts(GALLERY_ARTWORKS);
   assert.deepEqual(counts, {
-    all: 15,
-    imperial: 3,
-    poetic: 2,
+    all: 11,
+    imperial: 0,
+    poetic: 1,
     portrait: 4,
     moments: 6,
   });
 
-  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'all').length, 15);
-  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'imperial').length, 3);
-  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'poetic').length, 2);
+  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'all').length, 11);
+  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'imperial').length, 0);
+  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'poetic').length, 1);
   assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'portrait').length, 4);
   assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'moments').length, 6);
 });
 
 test('lightbox next/prev index helpers wrap cleanly across gallery boundaries', () => {
-  assert.equal(getNextGalleryIndex(0, 15), 1);
-  assert.equal(getNextGalleryIndex(14, 15), 0);
-  assert.equal(getPrevGalleryIndex(0, 15), 14);
-  assert.equal(getPrevGalleryIndex(3, 15), 2);
+  assert.equal(getNextGalleryIndex(0, 11), 1);
+  assert.equal(getNextGalleryIndex(10, 11), 0);
+  assert.equal(getPrevGalleryIndex(0, 11), 10);
+  assert.equal(getPrevGalleryIndex(3, 11), 2);
   assert.equal(getNextGalleryIndex(0, 0), -1);
   assert.equal(getPrevGalleryIndex(0, 0), -1);
 });
@@ -100,7 +100,7 @@ test('executeCliCommand handles gallery, dotnet, clear, and unknown inputs', () 
   assert.equal(galleryRes.action, 'append');
   if (galleryRes.action === 'append') {
     assert.match(galleryRes.responseText, /Cố Phán Di Quang Thái/);
-    assert.match(galleryRes.responseText, /Long Bào Ngự Án/);
+    assert.match(galleryRes.responseText, /Coding Timelapse/);
   }
 
   const dotnetRes = executeCliCommand('dotnet --info');

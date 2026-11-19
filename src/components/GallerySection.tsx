@@ -40,13 +40,19 @@ export function GallerySection({
     [visibleArtworks]
   );
 
-  const filterTabs: { id: GalleryCategory; label: string }[] = [
-    { id: 'all', label: `Tất Cả (${counts.all})` },
-    { id: 'imperial', label: `Cổ Phong & Nho Sĩ (${counts.imperial})` },
-    { id: 'poetic', label: `Nàng Thơ Hoa Đào (${counts.poetic})` },
-    { id: 'portrait', label: `Chân Dung & Video (${counts.portrait})` },
-    { id: 'moments', label: `Đồng Đội & Kỷ Niệm (${counts.moments})` },
-  ];
+  const filterTabs = useMemo(
+    () =>
+      (
+        [
+          { id: 'all', label: `Tất Cả (${counts.all})` },
+          { id: 'imperial', label: `Cổ Phong & Nho Sĩ (${counts.imperial})` },
+          { id: 'poetic', label: `Nàng Thơ Hoa Đào (${counts.poetic})` },
+          { id: 'portrait', label: `Chân Dung & Video (${counts.portrait})` },
+          { id: 'moments', label: `Đồng Đội & Kỷ Niệm (${counts.moments})` },
+        ] as { id: GalleryCategory; label: string }[]
+      ).filter((tab) => tab.id === 'all' || counts[tab.id] > 0),
+    [counts]
+  );
 
   return (
     <section id="gallery" className="pt-8 sm:pt-12 pb-6 space-y-10">
@@ -90,7 +96,7 @@ export function GallerySection({
               Triển Lãm Ảnh, Video &amp; Kỷ Niệm Đời Thường
             </h1>
             <p className="text-sm sm:text-base text-[#475569] dark:text-[#94A3B8] leading-relaxed text-pretty">
-              15 khung hình &amp; video timelapse đối thoại giữa nghệ thuật Cổ Phong, Hoa Đào, chân
+              {counts.all} khung hình &amp; video timelapse đối thoại giữa nghệ thuật Hoa Đào, chân
               dung đời thực và những khoảnh khắc đồng đội tại MISA. Toàn bộ media được nén chuẩn
               WebP &amp; H.264 MP4 (giảm hơn 94% dung lượng gốc) giúp tải trang tức thì.
             </p>
@@ -127,7 +133,10 @@ export function GallerySection({
       </div>
 
       {/* Dynamic Editorial Bento Grid */}
-      <div id="gallery-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6">
+      <div
+        id="gallery-grid"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 lg:grid-flow-dense gap-6"
+      >
         {visibleArtworks.map((artwork) => {
           const isVideo = artwork.mediaType === 'video';
 
@@ -239,10 +248,19 @@ export function GallerySection({
           }
 
           const isLandscape = artwork.aspectType === 'landscape';
+          const portraitRank = !isLandscape
+            ? visibleArtworks
+                .filter((item) => item.mediaType !== 'video' && item.aspectType === 'portrait')
+                .findIndex((item) => item.id === artwork.id)
+            : -1;
+
           let colSpanClass = 'md:col-span-1 lg:col-span-3';
           let aspectClass = 'aspect-[3/4]';
 
-          if (isLandscape) {
+          if (visibleArtworks.length === 1) {
+            colSpanClass = 'md:col-span-2 lg:col-span-8 lg:col-start-3';
+            aspectClass = isLandscape ? 'aspect-[16/10]' : 'aspect-[3/4]';
+          } else if (isLandscape) {
             colSpanClass = 'md:col-span-2 lg:col-span-6';
             aspectClass = 'aspect-[16/10]';
           } else if (nonVideoPortraitCount === 2) {
@@ -251,8 +269,9 @@ export function GallerySection({
           } else if (nonVideoPortraitCount === 3) {
             colSpanClass = 'md:col-span-1 lg:col-span-4';
             aspectClass = 'aspect-[3/4]';
-          } else if (visibleArtworks.length === 1) {
-            colSpanClass = 'md:col-span-2 lg:col-span-8 lg:col-start-3';
+          } else if (nonVideoPortraitCount === 5 && portraitRank >= 2) {
+            colSpanClass = 'md:col-span-1 lg:col-span-4';
+            aspectClass = 'aspect-[3/4]';
           }
 
           const objectPosClass =

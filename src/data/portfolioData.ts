@@ -13,7 +13,7 @@ export const PORTFOLIO_PROFILE = {
   emailHref: 'mailto:thuanlevan72@gmail.com',
   githubUrl: 'https://github.com/thuanlevan72?tab=repositories',
   facebookUrl: 'https://www.facebook.com/thuanlevan72',
-  heroPortraitSrc: '/assets/gallery/long-bao-ngu-an.webp',
+  heroPortraitSrc: '/assets/gallery/thuan-le-doi-thuc.webp',
   realPortraitSrc: '/assets/gallery/thuan-le-doi-thuc.webp',
 };
 
@@ -88,102 +88,6 @@ export const GALLERY_ARTWORKS: ArtworkItem[] = [
       lighting: 'Tia nắng sớm xuyên sương mưa xuân',
       concept: 'Mỹ học Á Đông · Thư pháp cổ điển',
       fileSize: '94 KB (nén từ 2.3 MB PNG)',
-    },
-  },
-  {
-    id: 'nang-tho-duoi-mua-hoa-dao',
-    category: 'poetic',
-    categoryLabel: 'Nàng Thơ Hoa Đào',
-    mediaType: 'image',
-    objectPosition: 'center',
-    title: 'Lệ Hoa Đào Dưới Mưa Sương',
-    subtitle: 'Bản Nguyên Tác Điện Ảnh · Tối Giản Không Chữ',
-    story:
-      'Phiên bản nguyên tác không chèn chữ nhằm giữ trọn độ sâu trường ảnh (depth of field), sự tĩnh lặng của làn sương lam xám và sắc hồng mỏng manh của từng cánh đào rơi.',
-    src: '/assets/gallery/le-hoa-dao.webp',
-    alt: 'Lệ Hoa Đào Dưới Mưa Sương — Ảnh nghệ thuật nàng thơ dưới cơn mưa hoa đào bản nguyên tác',
-    width: 1440,
-    height: 810,
-    aspectType: 'landscape',
-    year: '2026',
-    specs: {
-      format: 'WebP Optimized (1440 × 810)',
-      aspect: '16:9',
-      lighting: 'Ánh sáng khuếch tán lam sương',
-      concept: 'Mưa hoa đào · Tĩnh lặng & Chiều sâu',
-      fileSize: '61 KB (nén từ 2.1 MB PNG)',
-    },
-  },
-  {
-    id: 'de-vuong-long-bao',
-    category: 'imperial',
-    categoryLabel: 'Cổ Phong & Nho Sĩ',
-    mediaType: 'image',
-    objectPosition: 'top',
-    title: 'Long Bào Ngự Án — Khí Phách Đế Vương',
-    subtitle: 'Thuận Lê · Hoàng Bào Đỏ Thẫm & Miện Vàng',
-    story:
-      'Chân dung concept cổ phong lấy nguyên mẫu gương mặt thật của Thuận Lê. Long bào đỏ thẫm thêu rồng chỉ vàng, cổ áo lông thú và nhẫn ngọc đỏ tạo nên khí chất điềm tĩnh nhưng uy nghiêm.',
-    src: '/assets/gallery/long-bao-ngu-an.webp',
-    alt: 'Long Bào Ngự Án — Chân dung Thuận Lê hóa thân đế vương cổ phong mặc hoàng bào thêu rồng',
-    width: 1095,
-    height: 1437,
-    aspectType: 'portrait',
-    year: '2026',
-    specs: {
-      format: 'WebP Studio (1095 × 1437)',
-      aspect: '3:4',
-      lighting: 'Ánh nến ấm tương phản nền cung điện tối',
-      concept: 'Identity-Preserved AI Portrait · Cổ Phong',
-      fileSize: '172 KB (nén từ 2.4 MB PNG)',
-    },
-  },
-  {
-    id: 'muu-luoc-thien-ha',
-    category: 'imperial',
-    categoryLabel: 'Cổ Phong & Nho Sĩ',
-    mediaType: 'image',
-    objectPosition: 'top',
-    title: 'Mưu Lược Thiên Hạ — Ánh Nhìn Trầm Tư',
-    subtitle: 'Ngự Án Thư Cuộn · Khắc Họa Chiều Sâu Tâm Lý',
-    story:
-      'Góc máy cận bên án thư với thẻ tre, quyển trục và lư hương đồng vàng. Ánh mắt hướng nghiêng thể hiện sự suy tư chiến lược — tương đồng với tư duy thiết kế kiến trúc hệ thống.',
-    src: '/assets/gallery/muu-luoc-thien-ha.webp',
-    alt: 'Mưu Lược Thiên Hạ — Chân dung Thuận Lê trầm tư bên án thư, cuộn sách cổ và lư hương đồng',
-    width: 1075,
-    height: 1440,
-    aspectType: 'portrait',
-    year: '2026',
-    specs: {
-      format: 'WebP High-Res (1075 × 1440)',
-      aspect: '3:4',
-      lighting: 'Rim light vàng ấm từ góc án thư',
-      concept: 'Storytelling Cổ Phong · Thư Cuộn & Bút Lông',
-      fileSize: '150 KB (nén từ 7.7 MB PNG)',
-    },
-  },
-  {
-    id: 'nho-si-thu-huong',
-    category: 'imperial',
-    categoryLabel: 'Cổ Phong & Nho Sĩ',
-    mediaType: 'image',
-    objectPosition: 'top',
-    title: 'Nho Sĩ Thư Hương — Bút Nghiên Đêm Trường',
-    subtitle: 'Ô Sa Mạo & Quan Phục Gấm Đỏ · Thư Pháp Cổ',
-    story:
-      'Hóa thân thành vị sử quan triều đại xưa dưới ánh nến đêm: mũ ô sa mạo cánh chuồn, áo gấm hoa văn đỏ son, tay cầm bút lông ghi chép từng nét mực trên trang giấy dó cổ.',
-    src: '/assets/gallery/nho-si-thu-huong.webp',
-    alt: 'Nho Sĩ Thư Hương — Thuận Lê đội mũ ô sa mặc quan phục đỏ viết bút lông trên sách cổ',
-    width: 810,
-    height: 1440,
-    aspectType: 'portrait',
-    year: '2026',
-    specs: {
-      format: 'WebP Vertical (810 × 1440)',
-      aspect: '9:16',
-      lighting: 'Ngọn nến đỏ hậu cảnh kết hợp khói trầm',
-      concept: 'Văn Nhân Cổ Điển · Nho Sĩ Ghi Sử',
-      fileSize: '89 KB (nén từ 9.0 MB PNG)',
     },
   },
   {
@@ -631,9 +535,9 @@ export const SKILL_GROUPS = [
 export const FAQ_ITEMS = [
   {
     question:
-      'Bộ sưu tập ảnh Cổ Phong và Nàng Thơ Hoa Đào được thực hiện như thế nào?',
+      'Bộ sưu tập ảnh Nàng Thơ Hoa Đào và Video Timelapse được thực hiện như thế nào?',
     answer:
-      'Các tác phẩm được Thuận Lê trực tiếp thiết kế prompt, kiểm soát ánh sáng, phục trang Đông Á và hậu kỳ đồng bộ nhận diện khuôn mặt — kết hợp trực tiếp với kinh nghiệm xây dựng pipeline AI Media Generation tại dự án MISA OneAI.',
+      'Các tác phẩm được Thuận Lê trực tiếp thiết kế prompt, kiểm soát ánh sáng, thẩm mỹ Á Đông và hậu kỳ tối ưu WebP / H.264 — kết hợp trực tiếp với kinh nghiệm xây dựng pipeline AI Media Generation tại dự án MISA OneAI.',
   },
   {
     question:
