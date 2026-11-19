@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset
+  xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+  xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+>
+  <url>
+    <loc>/</loc>
+    <lastmod>2026-11-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>/assets/gallery/thuan-le-doi-thuc.webp</image:loc>
+      <image:title>Lê Văn Thuận — Kỹ Sư Senior .NET</image:title>
+      <image:caption>Chân dung đời thực của kỹ sư Senior .NET Lê Văn Thuận tại Hà Nội.</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>/trien-lam</loc>
+    <lastmod>2026-11-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <image:image>
+      <image:loc>/assets/gallery/timelapse-coding-poster.webp</image:loc>
+      <image:title>Coding Timelapse — Góc Làm Việc &amp; Đam Mê</image:title>
+      <image:caption>Ảnh đại diện video timelapse 36 giây quá trình lập trình tại văn phòng.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>/assets/gallery/nang-tho-hoa-dao.webp</image:loc>
+      <image:title>Cố Phán Di Quang Thái — Nàng Thơ Giữa Hoa Đào</image:title>
+      <image:caption>Tác phẩm nghệ thuật thị giác AI phong cách thủy mặc và thư pháp Hán Nôm dưới ánh nắng mai.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>/assets/gallery/le-hoa-dao.webp</image:loc>
+      <image:title>Lệ Hoa Đào Dưới Mưa Sương</image:title>
+      <image:caption>Khung hình điện ảnh nàng thơ dưới cơn mưa hoa đào bản nguyên tác không chữ.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>/assets/gallery/long-bao-ngu-an.webp</image:loc>
+      <image:title>Long Bào Ngự Án — Chân Dung Đế Vương Cổ Phong</image:title>
+      <image:caption>Chân dung concept cổ phong đế vương của Thuận Lê trong long bào đỏ thẫm thêu rồng vàng.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>/assets/gallery/muu-luoc-thien-ha.webp</image:loc>
+      <image:title>Mưu Lược Thiên Hạ — Ngự Án Thư Cuộn</image:title>
+      <image:caption>Chân dung Thuận Lê trong trang phục hoàng gia bên án thư và bút lông cổ điển.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>/assets/gallery/nho-si-thu-huong.webp</image:loc>
+      <image:title>Nho Sĩ Thư Hương — Bút Nghiên Đêm Trường</image:title>
+      <image:caption>Concept nho sĩ mặc quan phục gấm đỏ đội mũ cánh chuồn viết thư pháp bên ánh nến.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>/assets/gallery/thuan-le-doi-thuc.webp</image:loc>
+      <image:title>Thuận Lê — Chân Dung Đời Thực 2026</image:title>
+      <image:caption>Ảnh chân dung đời thực của Lê Văn Thuận, Senior .NET Systems Engineer.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>/assets/gallery/misa-ha-long-2026.webp</image:loc>
+      <image:title>MISA Level Up With AI — Hạ Long 2026</image:title>
+      <image:caption>Tập thể khối sản xuất MISA tại sự kiện Level Up With AI Hạ Long 2026.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>/assets/gallery/team-outing-bien.webp</image:loc>
+      <image:title>Team Outing — Phố Biển Sáng Sớm</image:title>
+      <image:caption>Ảnh kỷ niệm chuyến du lịch gắn kết đồng nghiệp ngoài trời.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>/assets/gallery/le-vu-quy-anh-em.webp</image:loc>
+      <image:title>Ngày Chung Vui — Lễ Vu Quy Anh Em</image:title>
+      <image:caption>Khoảnh khắc anh em bạn bè hội ngộ trong lễ vu quy.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>/assets/gallery/dem-nghi-duong.webp</image:loc>
+      <image:title>Đêm Nghỉ Dưỡng Dưới Mái Ngói Cổ</image:title>
+      <image:caption>Ảnh chụp ban đêm cùng đồng đội dưới ánh đèn vàng bên khu nhà truyền thống.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>/assets/gallery/chan-dung-the-xanh.webp</image:loc>
+      <image:title>Chân Dung Thẻ — Phông Xanh Chuẩn Mực</image:title>
+      <image:caption>Ảnh chân dung thẻ phông xanh mặc áo polo trắng của Lê Văn Thuận.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>/assets/gallery/dem-trang-0238.webp</image:loc>
+      <image:title>Đêm Trắng 02:38 — Nạp Năng Lượng</image:title>
+      <image:caption>Khoảnh khắc ăn mì ly lúc 2h38 sáng tại cửa hàng tiện lợi.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>/assets/gallery/dao-pho-dem-ben-ho.webp</image:loc>
+      <image:title>Dạo Phố Đêm Bên Hồ Gươm</image:title>
+      <image:caption>Khung hình dạo phố đêm bên hồ ánh đèn lung linh phản chiếu trên mặt nước.</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>/assets/gallery/filter-hoa-xuan.webp</image:loc>
+      <image:title>Góc Vui Nhộn — Filter Hoa Xuân</image:title>
+      <image:caption>Ảnh selfie hài hước với filter vòng hoa xuân và kính mắt.</image:caption>
+    </image:image>
+  </url>
+</urlset>

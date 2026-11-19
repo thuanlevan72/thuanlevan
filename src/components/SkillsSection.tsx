@@ -1,91 +1,49 @@
-import { Code2, Database, GitBranch, Sparkles, Terminal } from 'lucide-react';
-import { SKILL_GROUPS, SkillGroup } from '../data/portfolioData.ts';
-
-function GroupIcon({ icon }: { icon: SkillGroup['icon'] }) {
-  switch (icon) {
-    case 'code':
-      return <Code2 className="w-5 h-5" aria-hidden="true" />;
-    case 'database':
-      return <Database className="w-5 h-5" aria-hidden="true" />;
-    case 'tree':
-      return <GitBranch className="w-5 h-5" aria-hidden="true" />;
-    case 'sparkles':
-      return <Sparkles className="w-5 h-5" aria-hidden="true" />;
-  }
-}
-
-function getChipClass(
-  surfaceTint: SkillGroup['surfaceTint'],
-  tone: SkillGroup['items'][number]['tone']
-) {
-  const tintMap: Record<SkillGroup['surfaceTint'], string> = {
-    emerald: 'bg-emerald-50 dark:bg-dark-surface border-emerald-300 dark:border-dark-outline',
-    sky: 'bg-sky-50 dark:bg-dark-surface border-sky-300 dark:border-dark-outline',
-    indigo: 'bg-indigo-50 dark:bg-dark-surface border-indigo-300 dark:border-dark-outline',
-    amber: 'bg-amber-50 dark:bg-dark-surface border-amber-300 dark:border-dark-outline',
-  };
-
-  const toneMap: Record<SkillGroup['items'][number]['tone'], string> = {
-    emerald: 'text-emerald-800 dark:text-dark-primary font-medium',
-    cyan: 'text-cyan dark:text-sky-400 font-medium',
-    surface: 'text-light-on-surface dark:text-dark-on-surface font-medium',
-    indigo: 'text-indigo-900 dark:text-indigo-400 font-medium',
-    red: 'text-red-700 dark:text-rose-400 font-medium',
-    muted: 'text-light-on-surface-variant dark:text-dark-on-surface-variant',
-  };
-
-  return `${tintMap[surfaceTint]} ${toneMap[tone]}`;
-}
+import { SKILL_GROUPS } from '../data/portfolioData.ts';
 
 export function SkillsSection() {
   return (
-    <section id="skills" className="space-y-8">
-      <div className="border-b border-light-outline/60 dark:border-dark-outline pb-4">
-        <div className="inline-flex items-center gap-2 text-emerald-800 dark:text-dark-primary font-mono text-label-sm mb-2 font-bold">
-          <Terminal className="w-5 h-5" aria-hidden="true" />
-          <span>ENGINEERING TOOLBELT</span>
-        </div>
-        <h2 className="font-headline font-bold text-headline-xl-mobile md:text-headline-xl text-light-on-surface dark:text-dark-on-surface">
-          Vũ Khí Kỹ Thuật Đã Được Kiểm Chứng
+    <section id="skills" className="space-y-8 pt-6">
+      <div className="border-b border-[#E6E0D6] dark:border-[#27262B] pb-6 space-y-2 max-w-2xl">
+        <p className="text-xs font-medium text-[#9F1239] dark:text-[#FB7185]">
+          Năng Lực Kỹ Thuật &amp; Sáng Tạo
+        </p>
+        <h2 className="font-display font-bold text-3xl sm:text-4xl text-[#181615] dark:text-[#F4F1EC]">
+          Công Nghệ Chuyên Sâu Đã Kiểm Chứng
         </h2>
-        <p className="font-body text-body-md text-light-on-surface-variant dark:text-dark-on-surface-variant text-pretty">
-          Không học vẹt framework. Mọi công nghệ đều được sử dụng trong các tình huống chịu tải và
-          yêu cầu bảo mật cao.
+        <p className="text-sm sm:text-base text-[#5E5852] dark:text-[#A8A29E] text-pretty">
+          Kết hợp giữa nền tảng Backend C# .NET chịu tải cao và tư duy điều phối mỹ thuật AI hiện
+          đại.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {SKILL_GROUPS.map((group) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+        {SKILL_GROUPS.map((group, idx) => (
           <div
             key={group.id}
-            className="p-6 rounded-2xl bg-light-surface-variant dark:bg-dark-surface-variant border border-light-outline/70 dark:border-dark-outline space-y-4 shadow-sm"
+            className="space-y-4 pt-4 border-t border-[#D8D0C5] dark:border-[#2E2D33]"
           >
-            <div className="flex items-center gap-3">
-              <span
-                className={`p-2.5 rounded-lg inline-flex items-center justify-center shrink-0 ${group.headerBadgeClass}`}
-              >
-                <GroupIcon icon={group.icon} />
+            <div className="space-y-1">
+              <span className="font-mono tabular-nums text-xs text-[#9F1239] dark:text-[#FB7185]">
+                0{idx + 1}.
               </span>
-              <h3 className="font-headline font-bold text-headline-md text-light-on-surface dark:text-dark-on-surface truncate">
+              <h3 className="font-display text-xl font-bold text-[#181615] dark:text-[#F4F1EC]">
                 {group.title}
               </h3>
+              <p className="text-xs text-[#5E5852] dark:text-[#A8A29E] leading-relaxed">
+                {group.description}
+              </p>
             </div>
-            <p className="text-body-sm text-light-on-surface-variant dark:text-dark-on-surface-variant">
-              {group.description}
-            </p>
-            <div className="flex flex-wrap gap-2 font-mono text-label-sm">
+
+            <ul className="space-y-1.5 text-sm text-[#181615] dark:text-[#E5E0D8]">
               {group.items.map((item) => (
-                <span
-                  key={item.label}
-                  className={`px-2.5 py-1 rounded-md border ${getChipClass(
-                    group.surfaceTint,
-                    item.tone
-                  )}`}
+                <li
+                  key={item}
+                  className="py-1 border-b border-[#EFEAE2] dark:border-[#1E1D22] last:border-b-0"
                 >
-                  {item.label}
-                </span>
+                  {item}
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         ))}
       </div>

@@ -18,9 +18,7 @@ export function InteractiveTerminal() {
 
   const runCommand = (rawCommand: string) => {
     const result = executeCliCommand(rawCommand);
-    if (result.action === 'noop') {
-      return;
-    }
+    if (result.action === 'noop') return;
 
     if (result.action === 'clear') {
       setHistory([]);
@@ -34,7 +32,7 @@ export function InteractiveTerminal() {
 
     setHistory((prev) => [
       ...prev,
-      { id: echoId, text: result.commandEcho, toneClass: 'text-sky-400 font-bold' },
+      { id: echoId, text: result.commandEcho, toneClass: 'text-amber-300 font-semibold' },
       { id: respId, text: result.responseText, toneClass: result.responseToneClass },
     ]);
   };
@@ -45,60 +43,41 @@ export function InteractiveTerminal() {
     setInputValue('');
   };
 
-  const handleSuggestedClick = (command: string) => {
-    setInputValue('');
-    runCommand(command);
-  };
-
   return (
-    <section id="terminal" className="space-y-4">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <div className="inline-flex items-center gap-2 text-emerald-800 dark:text-dark-primary font-mono text-label-sm font-bold">
-            <Terminal className="w-5 h-5" aria-hidden="true" />
-            <span>LIVE INTERACTIVE CLI</span>
-          </div>
-          <h2 className="font-headline font-bold text-headline-lg-mobile md:text-headline-lg text-light-on-surface dark:text-dark-on-surface">
-            Thử nghiệm Command Line Terminal của Thuận
+    <section id="terminal" className="space-y-4 pt-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+        <div className="space-y-1">
+          <p className="inline-flex items-center gap-1.5 text-xs font-medium text-[#9F1239] dark:text-[#FB7185]">
+            <Terminal className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Tra Cứu Nhanh Qua Dòng Lệnh</span>
+          </p>
+          <h2 className="font-display font-bold text-2xl sm:text-3xl text-[#181615] dark:text-[#F4F1EC]">
+            Terminal Hồ Sơ Kỹ Thuật &amp; Tác Phẩm
           </h2>
         </div>
-        <span className="hidden sm:inline font-mono text-label-sm text-light-on-surface-variant dark:text-dark-on-surface-variant font-medium">
-          Gõ lệnh hoặc bấm nút gợi ý bên dưới
+        <span className="text-xs text-[#5E5852] dark:text-[#A8A29E]">
+          Gõ lệnh hoặc chọn nhanh bên dưới
         </span>
       </div>
 
       <div
         id="terminal-box"
-        className="rounded-2xl bg-slate-900 text-slate-100 border border-slate-800 overflow-hidden font-mono shadow-2xl"
+        className="rounded-2xl bg-[#121114] text-stone-100 border border-[#2C2A30] overflow-hidden font-mono"
       >
-        {/* Terminal Titlebar */}
-        <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="w-3 h-3 rounded-full bg-rose-500 inline-block shrink-0" />
-            <span className="w-3 h-3 rounded-full bg-amber-500 inline-block shrink-0" />
-            <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block shrink-0" />
-            <span className="ml-2 text-label-sm text-slate-400 truncate">
-              bash — thuanle@wood-kernel: ~/portfolio
-            </span>
-          </div>
-          <span className="text-label-sm text-emerald-400 font-bold shrink-0">
-            READY (MỆNH MỘC)
-          </span>
+        <div className="px-4 py-3 bg-[#0C0B0D] border-b border-[#27262B] flex items-center justify-between gap-3 text-xs text-stone-400">
+          <span className="truncate">bash — thuanle@portfolio</span>
+          <span className="text-amber-300 font-medium shrink-0">Sẵn Sàng</span>
         </div>
 
-        {/* Terminal Output Screen */}
         <div
           id="terminal-output"
           ref={outputContainerRef}
-          className="p-4 sm:p-6 text-label-sm space-y-3 min-h-[220px] max-h-[380px] overflow-y-auto text-slate-300"
+          className="p-5 sm:p-6 text-xs sm:text-sm space-y-3 min-h-[200px] max-h-[340px] overflow-y-auto text-stone-300"
         >
-          <p className="text-white">
-            Chào mừng đến với Terminal CLI của{' '}
-            <strong className="text-emerald-400">Thuận Lê (2002 - Dương Liễu Mộc)</strong>! Gõ{' '}
-            <code className="text-sky-400 font-bold">help</code> để xem các lệnh khả dụng.
-          </p>
-          <p className="text-slate-400 font-mono overflow-hidden whitespace-nowrap">
-            --------------------------------------------------------------------------------
+          <p className="text-stone-100">
+            Chào mừng bạn đến với CLI của <strong className="text-amber-300">Thuận Lê</strong>. Gõ{' '}
+            <code className="text-rose-300 font-semibold">help</code> hoặc chọn một lệnh gợi ý để
+            tra cứu nhanh.
           </p>
           <div id="terminal-history" className="space-y-3">
             {history.map((entry) => (
@@ -112,43 +91,41 @@ export function InteractiveTerminal() {
           </div>
         </div>
 
-        {/* Terminal Input Row */}
         <form
           onSubmit={handleSubmit}
-          className="px-4 py-3 bg-slate-950 border-t border-slate-800 flex items-center gap-2 sm:gap-3"
+          className="px-4 py-3 bg-[#0C0B0D] border-t border-[#27262B] flex items-center gap-2 sm:gap-3"
         >
           <label
             htmlFor="terminal-input"
-            className="text-emerald-400 font-bold text-xs sm:text-label-sm shrink-0"
+            className="text-rose-400 font-semibold text-xs shrink-0"
           >
-            thuanle@portfolio:~$
+            thuanle:~$
           </label>
           <input
             id="terminal-input"
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Nhập lệnh: 'dotnet --info', 'projects', 'contact', 'why-hire', 'clear'..."
+            placeholder="Nhập 'gallery', 'dotnet --info', 'projects', 'why-hire', 'clear'..."
             autoComplete="off"
-            className="flex-1 min-w-0 bg-transparent border-none text-white placeholder:text-slate-500 focus:outline-none focus:ring-0 font-mono text-label-sm"
+            className="flex-1 min-w-0 bg-transparent border-none text-white placeholder:text-stone-500 focus:outline-none focus:ring-0 font-mono text-xs sm:text-sm"
           />
           <button
             type="submit"
-            className="px-3.5 py-1 rounded-md bg-emerald-700 hover:bg-emerald-600 text-white font-semibold text-label-sm transition cursor-pointer shrink-0"
+            className="px-3.5 py-1.5 rounded-md bg-[#9F1239] hover:bg-[#BE123C] text-white font-sans font-semibold text-xs transition-colors cursor-pointer shrink-0"
           >
-            Run
+            Chạy Lệnh
           </button>
         </form>
 
-        {/* Quick Command Shortcuts */}
-        <div className="px-4 py-2.5 bg-slate-950/80 border-t border-slate-800/80 flex flex-wrap items-center gap-2 text-label-sm text-slate-400">
-          <span>Gợi ý bấm nhanh:</span>
+        <div className="px-4 py-2.5 bg-[#09080A] border-t border-[#232227] flex flex-wrap items-center gap-2 text-xs text-stone-400">
+          <span>Gợi ý:</span>
           {TERMINAL_SUGGESTIONS.map((item) => (
             <button
               key={item.command}
               type="button"
-              onClick={() => handleSuggestedClick(item.command)}
-              className={`px-2.5 py-0.5 rounded-md bg-slate-800 hover:text-emerald-400 border border-slate-700 transition cursor-pointer ${item.colorClass}`}
+              onClick={() => runCommand(item.command)}
+              className="px-2.5 py-1 rounded bg-[#1B1A1F] hover:bg-[#27262C] text-stone-200 border border-[#2E2D35] transition-colors cursor-pointer"
             >
               {item.label}
             </button>

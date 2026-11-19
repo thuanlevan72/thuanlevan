@@ -1,11 +1,11 @@
-import { PortfolioProject } from '../utils/portfolioLogic.ts';
+import { ArtworkItem, PortfolioProject } from '../utils/portfolioLogic.ts';
 
 export const PORTFOLIO_PROFILE = {
   fullName: 'Thuận Lê',
-  birthInfo: 'Nhâm Ngọ 2002 • Dương Liễu Mộc',
-  location: 'Nhâm Ngọ 2002 • Hoài Đức, Hà Nội',
-  role: 'Senior .NET / Systems Architect',
-  subtitle: 'Sinh Khí Dồi Dào • Rễ Sâu Vững Chắc • Senior .NET & Systems Engineer',
+  fullLegalName: 'Lê Văn Thuận',
+  birthInfo: 'Nhâm Ngọ 2002',
+  location: 'Hoài Đức, Hà Nội',
+  role: 'Senior .NET Systems Engineer & AI Visual Creator',
   phoneDisplay: '0352.988.596',
   phoneFormatted: '0352 988 596',
   phoneHref: 'tel:0352988596',
@@ -13,375 +13,647 @@ export const PORTFOLIO_PROFILE = {
   emailHref: 'mailto:thuanlevan72@gmail.com',
   githubUrl: 'https://github.com/thuanlevan72?tab=repositories',
   facebookUrl: 'https://www.facebook.com/thuanlevan72',
-  avatarSrc: '/assets/thuan-le-avatar.png',
+  heroPortraitSrc: '/assets/gallery/long-bao-ngu-an.webp',
+  realPortraitSrc: '/assets/gallery/thuan-le-doi-thuc.webp',
 };
 
-export const WOOD_PILLARS = [
-  {
-    number: '01',
-    title: 'Thâm Căn Cố Đế',
-    description:
-      'Cây đại thụ muốn vươn cao thì rễ phải cắm sâu vào lòng đất. Tôi chú trọng nền tảng vững chắc: cấu trúc C# .NET Core, indexing CSDL (Oracle, Postgres, SQL Server) và xử lý bất đồng bộ triệt để.',
-    badgeClass:
-      'bg-emerald-100 dark:bg-dark-primary/10 text-emerald-800 dark:text-dark-primary border border-emerald-400 dark:border-dark-primary/30',
-  },
-  {
-    number: '02',
-    title: 'Thủy Nhu Dưỡng Mộc',
-    description:
-      'Nước nuôi dưỡng cây. Dòng dữ liệu (Data Streams, Kafka, Redis) được điều phối thông suốt, không nghẽn tắc, đảm bảo hệ thống ngân hàng và bệnh viện vận hành mượt mà 24/7.',
-    badgeClass:
-      'bg-sky-100 dark:bg-cyan/10 text-cyan dark:text-sky-400 border border-sky-400 dark:border-sky-400/30',
-  },
-  {
-    number: '03',
-    title: 'Sinh Trưởng Bất Tận',
-    description:
-      'Dương Liễu Mộc không bao giờ đứng yên. Luôn đón nhận các xu thế công nghệ mới nhất: đưa AI LLM vào ứng dụng gia đình MISA, làm chủ Vue 3 / Next.js để sẵn sàng cho mọi bài toán tương lai.',
-    badgeClass:
-      'bg-indigo-100 dark:bg-accent/15 text-indigo-900 dark:text-indigo-400 border border-indigo-400 dark:border-indigo-400/30',
-  },
-] as const;
-
-export const ENGINEERING_STATS = [
+export const HERO_METRICS = [
   {
     id: 'experience',
-    label: 'THỜI GIAN THỰC CHIẾN',
-    value: 'gần 4 Năm',
-    description: 'Từ 08/2022 đến nay, liên tục gắn liền các hệ thống production thực tế.',
-    icon: 'timer' as const,
-    colorClass: 'text-emerald-800 dark:text-dark-primary',
+    value: '04 Năm',
+    label: 'Kỹ thuật hệ thống production (08/2022 – Nay)',
   },
   {
     id: 'team-scale',
-    label: 'QUY MÔ TEAM LỚN NHẤT',
     value: '60 Devs',
-    description: 'Kinh nghiệm làm việc hiệu quả từ dự án agile 10 người đến đại dự án 60 người.',
-    icon: 'groups' as const,
-    colorClass: 'text-cyan dark:text-sky-400',
+    label: 'Quy mô đội ngũ lớn nhất đã vận hành',
+  },
+  {
+    id: 'systems-count',
+    value: '06 Hệ Thống',
+    label: 'Ngân hàng số, Bệnh viện thông minh, EdTech & AI',
   },
   {
     id: 'latency',
-    label: 'TỐI ƯU TRUY VẤN',
-    value: '< 50ms',
-    description: 'Tối ưu truy vấn legacy SQL, indexing Postgres/Oracle từ hàng giây xuống miligiây.',
-    icon: 'speed' as const,
-    colorClass: 'text-indigo-900 dark:text-indigo-400',
-  },
-  {
-    id: 'security',
-    label: 'BẢO MẬT & CHUẨN MỰC',
-    value: '100%',
-    description: 'Triển khai chuẩn AML ngân hàng, chữ ký số bảo mật y tế và hóa đơn điện tử.',
-    icon: 'verified' as const,
-    colorClass: 'text-amber-800 dark:text-amber-400',
+    value: '< 50 ms',
+    label: 'Chuẩn tối ưu truy vấn SQL & luồng AI Media',
   },
 ] as const;
+
+export const GALLERY_ARTWORKS: ArtworkItem[] = [
+  {
+    id: 'timelapse-coding-desk',
+    category: 'portrait',
+    categoryLabel: 'Chân Dung & Video',
+    mediaType: 'video',
+    posterSrc: '/assets/gallery/timelapse-coding-poster.webp',
+    objectPosition: 'top',
+    title: 'Coding Timelapse — Góc Làm Việc & Đam Mê',
+    subtitle: '36 Giây Tua Nhanh · Bàn Phím Cơ Đỏ & Lá Cờ Tổ Quốc',
+    story:
+      'Khoảnh khắc tập trung cao độ bên bàn làm việc quen thuộc: bàn phím cơ đỏ trắng, tai nghe kiểm âm và ánh đèn văn phòng phía dưới dải cờ đỏ sao vàng.',
+    src: '/assets/gallery/timelapse-coding.mp4',
+    alt: 'Video timelapse Thuận Lê tập trung lập trình với bàn phím cơ đỏ tại văn phòng',
+    width: 720,
+    height: 1280,
+    aspectType: 'portrait',
+    year: '2026',
+    specs: {
+      format: 'MP4 H.264 Fast-Start (720 × 1280)',
+      aspect: '9:16 Video · 0:36',
+      lighting: 'Ánh sáng bàn làm việc tự nhiên',
+      concept: 'Engineering Flow · Coding Timelapse',
+      fileSize: '3.6 MB (nén từ 65 MB MOV)',
+    },
+  },
+  {
+    id: 'nang-tho-giua-hoa-dao',
+    category: 'poetic',
+    categoryLabel: 'Nàng Thơ Hoa Đào',
+    mediaType: 'image',
+    objectPosition: 'center',
+    title: 'Cố Phán Di Quang Thái — Nàng Thơ Giữa Hoa Đào',
+    subtitle: 'Trường Khiếu Khí Nhược Lan · Thư Pháp & Nắng Mai',
+    story:
+      'Khung hình lấy cảm hứng từ thi ca phương Đông: làn mưa phùn xuân đọng trên mái tóc đen mượt, ánh nắng mai rọi qua cành đào phớt hồng cùng hai câu thơ chữ Hán cổ điển.',
+    src: '/assets/gallery/nang-tho-hoa-dao.webp',
+    alt: 'Cố Phán Di Quang Thái — Tác phẩm nàng thơ giữa hoa đào với ánh nắng mai và thư pháp cổ điển',
+    width: 1440,
+    height: 804,
+    aspectType: 'landscape',
+    year: '2026',
+    specs: {
+      format: 'WebP Optimized (1440 × 804)',
+      aspect: '16:9',
+      lighting: 'Tia nắng sớm xuyên sương mưa xuân',
+      concept: 'Mỹ học Á Đông · Thư pháp cổ điển',
+      fileSize: '94 KB (nén từ 2.3 MB PNG)',
+    },
+  },
+  {
+    id: 'nang-tho-duoi-mua-hoa-dao',
+    category: 'poetic',
+    categoryLabel: 'Nàng Thơ Hoa Đào',
+    mediaType: 'image',
+    objectPosition: 'center',
+    title: 'Lệ Hoa Đào Dưới Mưa Sương',
+    subtitle: 'Bản Nguyên Tác Điện Ảnh · Tối Giản Không Chữ',
+    story:
+      'Phiên bản nguyên tác không chèn chữ nhằm giữ trọn độ sâu trường ảnh (depth of field), sự tĩnh lặng của làn sương lam xám và sắc hồng mỏng manh của từng cánh đào rơi.',
+    src: '/assets/gallery/le-hoa-dao.webp',
+    alt: 'Lệ Hoa Đào Dưới Mưa Sương — Ảnh nghệ thuật nàng thơ dưới cơn mưa hoa đào bản nguyên tác',
+    width: 1440,
+    height: 810,
+    aspectType: 'landscape',
+    year: '2026',
+    specs: {
+      format: 'WebP Optimized (1440 × 810)',
+      aspect: '16:9',
+      lighting: 'Ánh sáng khuếch tán lam sương',
+      concept: 'Mưa hoa đào · Tĩnh lặng & Chiều sâu',
+      fileSize: '61 KB (nén từ 2.1 MB PNG)',
+    },
+  },
+  {
+    id: 'de-vuong-long-bao',
+    category: 'imperial',
+    categoryLabel: 'Cổ Phong & Nho Sĩ',
+    mediaType: 'image',
+    objectPosition: 'top',
+    title: 'Long Bào Ngự Án — Khí Phách Đế Vương',
+    subtitle: 'Thuận Lê · Hoàng Bào Đỏ Thẫm & Miện Vàng',
+    story:
+      'Chân dung concept cổ phong lấy nguyên mẫu gương mặt thật của Thuận Lê. Long bào đỏ thẫm thêu rồng chỉ vàng, cổ áo lông thú và nhẫn ngọc đỏ tạo nên khí chất điềm tĩnh nhưng uy nghiêm.',
+    src: '/assets/gallery/long-bao-ngu-an.webp',
+    alt: 'Long Bào Ngự Án — Chân dung Thuận Lê hóa thân đế vương cổ phong mặc hoàng bào thêu rồng',
+    width: 1095,
+    height: 1437,
+    aspectType: 'portrait',
+    year: '2026',
+    specs: {
+      format: 'WebP Studio (1095 × 1437)',
+      aspect: '3:4',
+      lighting: 'Ánh nến ấm tương phản nền cung điện tối',
+      concept: 'Identity-Preserved AI Portrait · Cổ Phong',
+      fileSize: '172 KB (nén từ 2.4 MB PNG)',
+    },
+  },
+  {
+    id: 'muu-luoc-thien-ha',
+    category: 'imperial',
+    categoryLabel: 'Cổ Phong & Nho Sĩ',
+    mediaType: 'image',
+    objectPosition: 'top',
+    title: 'Mưu Lược Thiên Hạ — Ánh Nhìn Trầm Tư',
+    subtitle: 'Ngự Án Thư Cuộn · Khắc Họa Chiều Sâu Tâm Lý',
+    story:
+      'Góc máy cận bên án thư với thẻ tre, quyển trục và lư hương đồng vàng. Ánh mắt hướng nghiêng thể hiện sự suy tư chiến lược — tương đồng với tư duy thiết kế kiến trúc hệ thống.',
+    src: '/assets/gallery/muu-luoc-thien-ha.webp',
+    alt: 'Mưu Lược Thiên Hạ — Chân dung Thuận Lê trầm tư bên án thư, cuộn sách cổ và lư hương đồng',
+    width: 1075,
+    height: 1440,
+    aspectType: 'portrait',
+    year: '2026',
+    specs: {
+      format: 'WebP High-Res (1075 × 1440)',
+      aspect: '3:4',
+      lighting: 'Rim light vàng ấm từ góc án thư',
+      concept: 'Storytelling Cổ Phong · Thư Cuộn & Bút Lông',
+      fileSize: '150 KB (nén từ 7.7 MB PNG)',
+    },
+  },
+  {
+    id: 'nho-si-thu-huong',
+    category: 'imperial',
+    categoryLabel: 'Cổ Phong & Nho Sĩ',
+    mediaType: 'image',
+    objectPosition: 'top',
+    title: 'Nho Sĩ Thư Hương — Bút Nghiên Đêm Trường',
+    subtitle: 'Ô Sa Mạo & Quan Phục Gấm Đỏ · Thư Pháp Cổ',
+    story:
+      'Hóa thân thành vị sử quan triều đại xưa dưới ánh nến đêm: mũ ô sa mạo cánh chuồn, áo gấm hoa văn đỏ son, tay cầm bút lông ghi chép từng nét mực trên trang giấy dó cổ.',
+    src: '/assets/gallery/nho-si-thu-huong.webp',
+    alt: 'Nho Sĩ Thư Hương — Thuận Lê đội mũ ô sa mặc quan phục đỏ viết bút lông trên sách cổ',
+    width: 810,
+    height: 1440,
+    aspectType: 'portrait',
+    year: '2026',
+    specs: {
+      format: 'WebP Vertical (810 × 1440)',
+      aspect: '9:16',
+      lighting: 'Ngọn nến đỏ hậu cảnh kết hợp khói trầm',
+      concept: 'Văn Nhân Cổ Điển · Nho Sĩ Ghi Sử',
+      fileSize: '89 KB (nén từ 9.0 MB PNG)',
+    },
+  },
+  {
+    id: 'chan-dung-doi-thuc',
+    category: 'portrait',
+    categoryLabel: 'Chân Dung & Video',
+    mediaType: 'image',
+    objectPosition: 'top',
+    title: 'Chân Dung Đời Thực — Thuận Lê',
+    subtitle: 'Nguyên Mẫu Tự Nhiên · Kỹ Sư Hệ Thống Tại Hà Nội',
+    story:
+      'Khoảnh khắc đời thường giản dị với sơ mi đen và tai nghe kiểm âm — nguyên mẫu chân thực đứng sau loạt tác phẩm AI đồng bộ gương mặt và các hệ thống .NET doanh nghiệp.',
+    src: '/assets/gallery/thuan-le-doi-thuc.webp',
+    alt: 'Chân dung đời thực của kỹ sư Lê Văn Thuận tại không gian làm việc ở Hà Nội',
+    width: 810,
+    height: 1440,
+    aspectType: 'portrait',
+    year: '2026',
+    specs: {
+      format: 'WebP Optimized (810 × 1440)',
+      aspect: '9:16',
+      lighting: 'Ánh sáng văn phòng tự nhiên',
+      concept: 'Documentary Reference · Nguyên Mẫu Gốc',
+      fileSize: '128 KB (nén từ 370 KB JPG)',
+    },
+  },
+  {
+    id: 'misa-ha-long-2026',
+    category: 'moments',
+    categoryLabel: 'Đồng Đội & Kỷ Niệm',
+    mediaType: 'image',
+    objectPosition: 'center',
+    title: 'MISA Level Up With AI — Hạ Long 2026',
+    subtitle: 'Khối Sản Xuất MISA · Đêm Gala Vinh Danh',
+    story:
+      'Khoảnh khắc tập thể khối sản xuất MISA rạng rỡ trên sân khấu sự kiện "Level Up With AI" tại Hạ Long 2026 — dấu ấn đồng hành xây dựng nền tảng AI cho người Việt.',
+    src: '/assets/gallery/misa-ha-long-2026.webp',
+    alt: 'Tập thể Khối Sản Xuất MISA chụp ảnh kỷ niệm trên sân khấu sự kiện Level Up With AI Hạ Long 2026',
+    width: 1440,
+    height: 960,
+    aspectType: 'landscape',
+    year: '2026',
+    specs: {
+      format: 'WebP Event (1440 × 960)',
+      aspect: '3:2',
+      lighting: 'Ánh sáng sân khấu LED hội nghị',
+      concept: 'MISA SJC · Đồng Đội Khối Sản Xuất',
+      fileSize: '157 KB (nén từ 296 KB JPEG)',
+    },
+  },
+  {
+    id: 'team-outing-bien',
+    category: 'moments',
+    categoryLabel: 'Đồng Đội & Kỷ Niệm',
+    mediaType: 'image',
+    objectPosition: 'center',
+    title: 'Team Outing — Phố Biển Sáng Sớm',
+    subtitle: 'Chuyến Đi Gắn Kết Đồng Nghiệp · Gió Biển & Nắng Mai',
+    story:
+      'Khung hình tập thể đầy năng lượng trong chuyến du lịch gắn kết đội ngũ — gác lại những giờ tối ưu hệ thống để tận hưởng bầu trời trong xanh bên biển.',
+    src: '/assets/gallery/team-outing-bien.webp',
+    alt: 'Đoàn đồng nghiệp đứng chụp ảnh tập thể ngoài trời dưới nền trời xanh tại phố biển',
+    width: 1440,
+    height: 1080,
+    aspectType: 'landscape',
+    year: '2026',
+    specs: {
+      format: 'WebP Travel (1440 × 1080)',
+      aspect: '4:3',
+      lighting: 'Nắng sớm ngoài trời tự nhiên',
+      concept: 'Team Building · Kỷ Niệm Chuyến Đi',
+      fileSize: '236 KB (nén từ 344 KB JPEG)',
+    },
+  },
+  {
+    id: 'le-vu-quy-anh-em',
+    category: 'moments',
+    categoryLabel: 'Đồng Đội & Kỷ Niệm',
+    mediaType: 'image',
+    objectPosition: 'center',
+    title: 'Ngày Chung Vui — Lễ Vu Quy Anh Em',
+    subtitle: 'Tình Bằng Hữu · Rạp Cưới Sắc Xanh Trắng',
+    story:
+      'Những người anh em thân thiết hội ngộ trong ngày trọng đại — khoảnh khắc giản dị, ấm áp tình bạn đồng hành qua nhiều chặng đường công việc và cuộc sống.',
+    src: '/assets/gallery/le-vu-quy-anh-em.webp',
+    alt: 'Nhóm 4 anh em bạn bè thân thiết mặc sơ mi chụp ảnh kỷ niệm tại lễ vu quy',
+    width: 1440,
+    height: 960,
+    aspectType: 'landscape',
+    year: '2026',
+    specs: {
+      format: 'WebP Candid (1440 × 960)',
+      aspect: '3:2',
+      lighting: 'Ánh sáng ban ngày khuếch tán dưới phông rạp',
+      concept: 'Friendship · Khoảnh Khắc Chung Vui',
+      fileSize: '134 KB (nén từ 688 KB JPG)',
+    },
+  },
+  {
+    id: 'dem-nghi-duong',
+    category: 'moments',
+    categoryLabel: 'Đồng Đội & Kỷ Niệm',
+    mediaType: 'image',
+    objectPosition: 'center',
+    title: 'Đêm Nghỉ Dưỡng Dưới Mái Ngói Cổ',
+    subtitle: 'Sân Vườn Ánh Vàng · Giây Phút Thư Giãn',
+    story:
+      'Khung cảnh buổi tối yên bình bên sân gạch và nếp nhà cổ truyền ngập tràn ánh đèn vàng — cuộc dạo chơi nhẹ nhàng sau những ngày làm việc bận rộn.',
+    src: '/assets/gallery/dem-nghi-duong.webp',
+    alt: 'Nhóm bạn chụp ảnh buổi tối trước khu nhà mái ngói cổ truyền dưới ánh đèn vàng ấm',
+    width: 960,
+    height: 720,
+    aspectType: 'landscape',
+    year: '2025',
+    specs: {
+      format: 'WebP Night (960 × 720)',
+      aspect: '4:3',
+      lighting: 'Đèn vàng kiến trúc sân vườn ban đêm',
+      concept: 'Night Retreat · Không Gian Truyền Thống',
+      fileSize: '104 KB (nén từ 185 KB JPG)',
+    },
+  },
+  {
+    id: 'chan-dung-the-xanh',
+    category: 'portrait',
+    categoryLabel: 'Chân Dung & Video',
+    mediaType: 'image',
+    objectPosition: 'top',
+    title: 'Chân Dung Thẻ — Phông Xanh Chuẩn Mực',
+    subtitle: 'Áo Polo Trắng · Phong Thái Điềm Tĩnh Chuyên Nghiệp',
+    story:
+      'Tấm ảnh thẻ phông xanh tối giản với áo polo trắng chỉn chu — thể hiện diện mạo tin cậy, chuẩn mực trong các hồ sơ kỹ thuật, hộ chiếu dự án và chứng thực danh tính.',
+    src: '/assets/gallery/chan-dung-the-xanh.webp',
+    alt: 'Ảnh chân dung thẻ phông xanh của Lê Văn Thuận mặc áo polo trắng chuyên nghiệp',
+    width: 472,
+    height: 709,
+    aspectType: 'portrait',
+    year: '2025',
+    specs: {
+      format: 'WebP Studio (472 × 709)',
+      aspect: '2:3',
+      lighting: 'Ánh sáng studio cân bằng mềm',
+      concept: 'Professional ID Portrait · Hồ Sơ Chính Thức',
+      fileSize: '19 KB (nén từ 49 KB JPG)',
+    },
+  },
+  {
+    id: 'dem-trang-0238',
+    category: 'moments',
+    categoryLabel: 'Đồng Đội & Kỷ Niệm',
+    mediaType: 'image',
+    objectPosition: 'center',
+    title: 'Đêm Trắng 02:38 — Nạp Năng Lượng',
+    subtitle: 'Cửa Hàng Tiện Lợi Khuya · Ly Mì Nóng Giữa Đêm',
+    story:
+      'Đồng hồ điện thoại điểm 02:38 sáng tại cửa hàng tiện lợi — bức ảnh chân thực đầy sức sống về những đêm trắng đồng hành cùng đam mê công nghệ và tuổi trẻ Hà Nội.',
+    src: '/assets/gallery/dem-trang-0238.webp',
+    alt: 'Khoảnh khắc ngồi ăn mì ly tại cửa hàng tiện lợi lúc 02:38 sáng',
+    width: 960,
+    height: 1280,
+    aspectType: 'portrait',
+    year: '2025',
+    specs: {
+      format: 'WebP Documentary (960 × 1280)',
+      aspect: '3:4',
+      lighting: 'Đèn huỳnh quang cửa hàng tiện lợi 24/7',
+      concept: 'Late Night Hustle · 02:38 AM',
+      fileSize: '130 KB (nén từ 260 KB JPG)',
+    },
+  },
+  {
+    id: 'dao-pho-dem-ben-ho',
+    category: 'moments',
+    categoryLabel: 'Đồng Đội & Kỷ Niệm',
+    mediaType: 'image',
+    objectPosition: 'top',
+    title: 'Dạo Phố Đêm Bên Hồ Gươm',
+    subtitle: 'Mặt Nước Phản Chiếu Đèn Đô Thị · Khung Tròn Kỷ Niệm',
+    story:
+      'Góc chụp lưu giữ nụ cười thanh xuân bên hàng cây ven hồ ban đêm, nơi ánh đèn phố rực rỡ phản chiếu trên mặt nước tạo nên chiều sâu ấm áp.',
+    src: '/assets/gallery/dao-pho-dem-ben-ho.webp',
+    alt: 'Ảnh chân dung bên gốc cây ven hồ ban đêm với ánh đèn phản chiếu trên mặt nước',
+    width: 1254,
+    height: 1254,
+    aspectType: 'portrait',
+    year: '2025',
+    specs: {
+      format: 'WebP Square Frame (1254 × 1254)',
+      aspect: '1:1',
+      lighting: 'Ánh đèn phố ban đêm phản chiếu mặt hồ',
+      concept: 'Evening Walk · Phố Đêm Hà Nội',
+      fileSize: '117 KB (nén từ 1.9 MB PNG)',
+    },
+  },
+  {
+    id: 'filter-hoa-xuan',
+    category: 'portrait',
+    categoryLabel: 'Chân Dung & Video',
+    mediaType: 'image',
+    objectPosition: 'top',
+    title: 'Góc Vui Nhộn — Filter Hoa Xuân',
+    subtitle: 'Khoảnh Khắc Thư Giãn · Tính Cách Hài Hước Đời Thường',
+    story:
+      'Một góc nhìn khác biệt, gần gũi và đầy tiếng cười bên ngoài những dòng code .NET khô khan — thử nghiệm hiệu ứng AR vòng hoa và mắt kính đầy màu sắc.',
+    src: '/assets/gallery/filter-hoa-xuan.webp',
+    alt: 'Ảnh selfie vui nhộn dùng hiệu ứng filter vòng hoa và mắt kính đầy màu sắc',
+    width: 664,
+    height: 1440,
+    aspectType: 'portrait',
+    year: '2026',
+    specs: {
+      format: 'WebP Mobile Capture (664 × 1440)',
+      aspect: '9:20',
+      lighting: 'AR Overlay & Selfie Ambient Light',
+      concept: 'Playful Moment · AR Filter Fun',
+      fileSize: '100 KB (nén từ 9.5 MB PNG)',
+    },
+  },
+];
 
 export const PORTFOLIO_PROJECTS: PortfolioProject[] = [
   {
     id: 'misa-oneai',
     category: 'ai',
-    themeVariant: 'emerald',
-    orgBadge: 'MISA SJC • Đang Thực Hiện',
-    orgIcon: 'psychology',
-    meta: 'Team: 10 Devs | 2026',
+    domainLabel: 'AI & Media Pipeline',
+    orgBadge: 'MISA SJC',
+    meta: '10 Devs · 2026 – Nay',
     title: 'MISA OneAI for Family',
-    summary: 'Hệ sinh thái AI trợ lý tài chính cá nhân & tạo nội dung đa phương tiện tự động.',
+    summary:
+      'Hệ sinh thái AI trợ lý tài chính cá nhân và quy trình tạo nội dung đa phương tiện tự động.',
     highlights: [
       {
         title: 'AI LLM & Chatbot:',
         description:
-          'Tích hợp các API LLM lớn, xây dựng luồng hội thoại thông minh phục vụ phân tích chi tiêu tự động.',
+          'Tích hợp API mô hình ngôn ngữ lớn, xây dựng luồng hội thoại phân tích chi tiêu tự động.',
       },
       {
         title: 'Media Generation:',
         description:
-          'Xử lý pipeline sinh video (generate/edit video), infographic tự động và tổng hợp hình ảnh từ prompt.',
+          'Phát triển pipeline sinh & chỉnh sửa video, infographic và tổng hợp hình ảnh từ prompt.',
       },
       {
         title: '.NET 8 & Vue 3:',
         description:
-          'Xây dựng backend API bằng .NET Core 8.0, triển khai giao diện OneAI bằng Vue 3 đảm bảo luồng thu chi mượt mà.',
+          'Xây dựng backend API bằng .NET Core 8.0 và giao diện Vue 3 cho trải nghiệm thu chi mượt mà.',
       },
     ],
-    tags: [
-      { label: '.NET Core 8.0', tone: 'cyan' },
-      { label: 'LLM API', tone: 'indigo' },
-      { label: 'Kafka', tone: 'emerald' },
-      { label: 'Vue 3', tone: 'surface' },
-      { label: 'MinIO', tone: 'muted' },
-      { label: 'Elasticsearch', tone: 'muted' },
-    ],
-    statusLabel: 'Live in Prod',
-    statusIcon: 'check',
+    tags: ['.NET Core 8.0', 'LLM API', 'Kafka', 'Vue 3', 'MinIO', 'Elasticsearch'],
+    statusLabel: 'Vận hành thực tế',
   },
   {
     id: 'agribank-smf',
     category: 'fintech',
-    themeVariant: 'sky',
+    domainLabel: 'Ngân Hàng & Tài Chính',
     orgBadge: 'Agribank Outsource',
-    orgIcon: 'bank',
-    meta: 'Team: 30 Devs | 2025 - 2026',
+    meta: '30 Devs · 2025 – 2026',
     title: 'Smart Form Agribank (SMF)',
     summary:
-      'Nền tảng ngân hàng số: Quản lý phát hành thẻ, tra soát giao dịch & Phòng chống rửa tiền (AML).',
+      'Nền tảng ngân hàng số: Quản lý phát hành thẻ, tra soát giao dịch và Phòng chống rửa tiền (AML).',
     highlights: [
       {
-        title: 'Chống Rửa Tiền (AML):',
+        title: 'Phòng Chống Rửa Tiền (AML):',
         description:
-          'Xây dựng module nghiệp vụ phát hiện giao dịch bất thường tuân thủ tiêu chuẩn ngân hàng nhà nước.',
+          'Xây dựng module nghiệp vụ phát hiện giao dịch bất thường đạt chuẩn Ngân hàng Nhà nước.',
       },
       {
         title: 'Hệ Thống Thẻ & Tra Soát:',
         description:
-          'Phát hành thẻ ghi nợ/tín dụng, tra soát giao dịch hai chiều đến và đi tức thì.',
+          'Xử lý phát hành thẻ ghi nợ/tín dụng và tra soát giao dịch hai chiều theo thời gian thực.',
       },
       {
         title: 'Oracle DB High-Throughput:',
         description:
-          'Tối ưu hóa cơ sở dữ liệu Oracle đảm bảo xử lý đồng thời lượng giao dịch ngân hàng cực lớn không nghẽn cổ chai.',
+          'Tối ưu hóa cơ sở dữ liệu Oracle phục vụ đồng thời lượng giao dịch ngân hàng tải cao.',
       },
     ],
-    tags: [
-      { label: 'Oracle Database', tone: 'cyan' },
-      { label: '.NET Core 8', tone: 'emerald' },
-      { label: 'Kafka', tone: 'amber' },
-      { label: 'Redis', tone: 'surface' },
-      { label: 'Next.js', tone: 'muted' },
-      { label: 'Keycloak', tone: 'muted' },
-    ],
-    statusLabel: 'Banking Grade',
-    statusIcon: 'security',
+    tags: ['Oracle Database', '.NET Core 8', 'Kafka', 'Redis', 'Next.js', 'Keycloak'],
+    statusLabel: 'Chuẩn Ngân Hàng',
   },
   {
     id: 'phenikaa-mec',
     category: 'healthcare',
-    themeVariant: 'emerald',
+    domainLabel: 'Y Tế Thông Minh',
     orgBadge: 'Phenikaa Group',
-    orgIcon: 'hospital',
-    meta: 'Team: 60 Devs | 2024 - Nay',
+    meta: '60 Devs · 2024 – Nay',
     title: 'Phenikaa MEC (Smart Hospital & HIS)',
     summary:
-      'Hệ sinh thái phần mềm quản trị bệnh viện lớn, kết nối HIS, hồ sơ bệnh án và dịch vụ y tế.',
+      'Hệ sinh thái phần mềm quản trị bệnh viện quy mô lớn, kết nối HIS và hồ sơ bệnh án điện tử.',
     highlights: [
       {
         title: 'Tích Hợp HIS Bệnh Viện:',
         description:
-          'Phát triển API ASP.NET Core kết nối HIS lấy dữ liệu bệnh nhân thời gian thực với độ trễ thấp.',
+          'Phát triển API ASP.NET Core đồng bộ dữ liệu bệnh nhân từ HIS với độ trễ dưới 50ms.',
       },
       {
         title: 'Bảo Mật & Tìm Kiếm:',
         description:
-          'Xác thực phân quyền tập trung qua Keycloak, tìm kiếm tức thì qua Elasticsearch, bộ đệm Redis và GraphQL Hasura.',
+          'Xác thực SSO qua Keycloak, tìm kiếm tức thì qua Elasticsearch, Redis và GraphQL Hasura.',
       },
       {
-        title: 'Hóa Đơn & In Ấn:',
+        title: 'Hóa Đơn & Báo Cáo Y Khoa:',
         description:
-          'Xử lý module phát hành hóa đơn điện tử và in ấn báo cáo y khoa tự động tốc độ cao.',
+          'Xử lý phát hành hóa đơn điện tử và in ấn phiếu khám, xét nghiệm tự động tốc độ cao.',
       },
     ],
-    tags: [
-      { label: 'C# .NET Core', tone: 'emerald' },
-      { label: 'PostgreSQL', tone: 'cyan' },
-      { label: 'Elasticsearch', tone: 'amber' },
-      { label: 'GraphQL', tone: 'indigo' },
-      { label: 'Kafka', tone: 'surface' },
-      { label: 'Keycloak', tone: 'muted' },
-    ],
-    statusLabel: 'Core Contributor',
-    statusIcon: 'verified',
+    tags: ['C# .NET Core', 'PostgreSQL', 'Elasticsearch', 'GraphQL', 'Kafka', 'Keycloak'],
+    statusLabel: 'Thành viên nòng cốt',
   },
   {
     id: 'gc-fast-invoice',
     category: 'healthcare',
-    themeVariant: 'sky',
+    domainLabel: 'Chứng Thực & Hóa Đơn',
     orgBadge: 'GC Joint Stock',
-    orgIcon: 'document',
-    meta: 'Team: 12 Devs | 2025 - 2026',
+    meta: '12 Devs · 2025 – 2026',
     title: 'Hệ Thống Ký Số & Hóa Đơn FAST',
     summary:
-      'Giải pháp tích hợp chữ ký số và hóa đơn điện tử cho hệ thống quản lý bệnh viện.',
+      'Giải pháp tích hợp chữ ký số y tế và hóa đơn điện tử FAST cho hệ thống quản lý bệnh viện.',
     highlights: [
       {
         title: 'Chữ Ký Số & Hóa Đơn FAST:',
         description:
-          'Tích hợp trơn tru hệ thống hóa đơn điện tử Fast và giải pháp chứng thực số y tế.',
+          'Tích hợp đồng bộ hệ thống hóa đơn điện tử FAST và quy trình chứng thực chữ ký số.',
       },
       {
         title: 'Agent System Integration:',
         description:
-          'Phát triển API trung gian xử lý luồng dữ liệu từ Agent System đẩy về HIS GC.',
+          'Thiết kế API trung gian tiếp nhận và điều phối dữ liệu từ Agent System đẩy về HIS GC.',
       },
       {
-        title: 'Schema Optimization:',
+        title: 'Tối Ưu Schema CSDL:',
         description:
-          'Thiết kế cấu trúc database, indexing truy vấn phức tạp trên PostgreSQL và SQL Server.',
+          'Thiết kế cấu trúc bảng và indexing truy vấn phức tạp trên PostgreSQL cùng SQL Server.',
       },
     ],
-    tags: [
-      { label: 'ASP.NET Core Web API', tone: 'cyan' },
-      { label: 'PostgreSQL', tone: 'emerald' },
-      { label: 'SQL Server', tone: 'surface' },
-      { label: 'Soap API', tone: 'muted' },
-      { label: 'DevExpress', tone: 'muted' },
-    ],
-    statusLabel: 'Digital Signature',
-    statusIcon: 'signature',
+    tags: ['ASP.NET Core Web API', 'PostgreSQL', 'SQL Server', 'Soap API', 'DevExpress'],
+    statusLabel: 'Ký Số Doanh Nghiệp',
   },
   {
     id: 'lotus-nguyen-sieu',
     category: 'healthcare',
-    themeVariant: 'emerald',
-    orgBadge: 'Lotus Edu & Nguyễn Siêu School',
-    orgIcon: 'school',
-    meta: 'Team: 11 Devs | 2023 - 2024',
+    domainLabel: 'Công Nghệ Giáo Dục',
+    orgBadge: 'Lotus Edu & Nguyễn Siêu',
+    meta: '11 Devs · 2023 – 2024',
     title: 'Lotus Academy & Trường Tiểu Học Nguyễn Siêu',
     summary:
-      'Nền tảng quản lý thời khóa biểu thông minh, tiến độ học sinh & quản lý căn tin bán trú.',
+      'Nền tảng xếp thời khóa biểu thông minh, theo dõi tiến độ học sinh và căn tin bán trú.',
     highlights: [
       {
-        title: 'Query Speed Down to Milliseconds:',
+        title: 'Tối Ưu Truy Vấn Mili-giây:',
         description:
-          'Tối ưu toàn bộ mã truy vấn cũ (legacy code), giảm tải database từ độ trễ nặng nề xuống vài mili-giây.',
+          'Tái cấu trúc toàn bộ mã truy vấn legacy SQL, giảm thời gian phản hồi từ hàng giây xuống mili-giây.',
       },
       {
-        title: 'Nghiệp Vụ Học Đường Phức Tạp:',
+        title: 'Nghiệp Vụ Học Đường:',
         description:
-          'Thuật toán xếp lịch học động theo giáo viên, chuyển trường, chuyển lớp và quản lý suất ăn căn tin chính xác tuyệt đối.',
+          'Xây dựng luồng xếp lịch học động theo giáo viên, chuyển lớp và thống kê suất ăn bán trú.',
       },
     ],
-    tags: [
-      { label: 'C# .NET Core', tone: 'emerald' },
-      { label: 'SQL Server', tone: 'cyan' },
-      { label: 'Vue.js', tone: 'surface' },
-      { label: 'Query Refactoring', tone: 'muted' },
-    ],
-    statusLabel: 'Legacy Speedup',
-    statusIcon: 'flash',
+    tags: ['C# .NET Core', 'SQL Server', 'Vue.js', 'Query Refactoring'],
+    statusLabel: 'Tăng Tốc Legacy',
   },
   {
     id: 'memid-platform',
     category: 'fintech',
-    themeVariant: 'sky',
+    domainLabel: 'Định Danh & Outsource',
     orgBadge: 'MEMID & LTS Group',
-    orgIcon: 'memory',
-    meta: 'Team: 12 Devs | 2022 - 2023',
+    meta: '12 Devs · 2022 – 2023',
     title: 'MEMID Identity Platform',
     summary:
       'Hệ thống định danh xác thực người dùng, bảo mật JWT và tương tác cơ sở dữ liệu tốc độ cao.',
     highlights: [
       {
-        title: 'Fullstack Experience:',
+        title: 'Kinh Nghiệm Fullstack:',
         description:
-          'Kinh nghiệm toàn diện cả Backend API và Frontend ReactJS/VueJS trong môi trường outsource đa dạng khách hàng.',
+          'Phát triển song song Backend API và Frontend ReactJS/VueJS cho nhiều dự án khách hàng.',
       },
       {
-        title: 'Database Optimization:',
+        title: 'Tối Ưu MySQL:',
         description:
-          'Viết và tối ưu hoá câu truy vấn MySQL, thiết kế schema dữ liệu linh hoạt, không lỗi kết nối.',
+          'Thiết kế schema linh hoạt và tối ưu truy vấn MySQL đảm bảo độ ổn định kết nối cao.',
       },
     ],
-    tags: [
-      { label: 'NestJS & .NET', tone: 'cyan' },
-      { label: 'React.js', tone: 'emerald' },
-      { label: 'MySQL', tone: 'surface' },
-      { label: 'JWT Auth', tone: 'muted' },
-    ],
-    statusLabel: 'Fullstack Foundations',
-    statusIcon: 'code',
+    tags: ['NestJS & .NET', 'React.js', 'MySQL', 'JWT Auth'],
+    statusLabel: 'Nền Tảng Fullstack',
   },
 ];
 
-export interface SkillGroup {
-  id: string;
-  title: string;
-  description: string;
-  icon: 'code' | 'database' | 'tree' | 'sparkles';
-  headerBadgeClass: string;
-  surfaceTint: 'emerald' | 'sky' | 'indigo' | 'amber';
-  items: { label: string; tone: 'emerald' | 'cyan' | 'surface' | 'indigo' | 'red' | 'muted' }[];
-}
-
-export const SKILL_GROUPS: SkillGroup[] = [
+export const SKILL_GROUPS = [
   {
     id: 'backend-core',
-    title: 'Backend Core',
-    description: 'Trọng tâm C# .NET và kiến trúc phần mềm chuẩn Enterprise.',
-    icon: 'code',
-    headerBadgeClass:
-      'bg-emerald-100 dark:bg-dark-primary/10 text-emerald-800 dark:text-dark-primary border border-emerald-400 dark:border-dark-primary/30',
-    surfaceTint: 'emerald',
+    title: 'Backend & Kiến Trúc',
+    description: 'Trọng tâm C# .NET 8 và kiến trúc phần mềm chuẩn doanh nghiệp.',
     items: [
-      { label: 'C# .NET', tone: 'emerald' },
-      { label: 'ASP.NET Core Web API', tone: 'emerald' },
-      { label: 'Entity Framework', tone: 'surface' },
-      { label: 'Clean Architecture', tone: 'cyan' },
-      { label: 'CQRS & MediatR', tone: 'cyan' },
-      { label: 'RESTful API', tone: 'muted' },
-      { label: 'JWT Authentication', tone: 'muted' },
+      'C# .NET 8',
+      'ASP.NET Core Web API',
+      'Entity Framework Core',
+      'Clean Architecture',
+      'CQRS & MediatR',
+      'RESTful & SOAP API',
+      'JWT & RBAC',
     ],
   },
   {
     id: 'database-cache',
-    title: 'Database & Cache',
-    description: 'Thiết kế schema, tối ưu hóa indexing truy vấn tốc độ cao.',
-    icon: 'database',
-    headerBadgeClass:
-      'bg-sky-100 dark:bg-cyan/10 text-cyan dark:text-sky-400 border border-sky-400 dark:border-sky-400/30',
-    surfaceTint: 'sky',
+    title: 'Dữ Liệu & Bộ Đệm',
+    description: 'Thiết kế schema, tối ưu hóa indexing truy vấn chịu tải lớn.',
     items: [
-      { label: 'PostgreSQL', tone: 'cyan' },
-      { label: 'Oracle Database', tone: 'cyan' },
-      { label: 'SQL Server', tone: 'surface' },
-      { label: 'MySQL / PDO', tone: 'surface' },
-      { label: 'Elasticsearch', tone: 'indigo' },
-      { label: 'Redis Cluster', tone: 'red' },
-      { label: 'MongoDB', tone: 'muted' },
+      'PostgreSQL',
+      'Oracle Database',
+      'SQL Server',
+      'MySQL / PDO',
+      'Elasticsearch',
+      'Redis Cluster',
+      'MongoDB',
     ],
   },
   {
     id: 'streams-ops',
-    title: 'Streams & Ops',
-    description: 'Luồng sự kiện phi đồng bộ, xác thực SSO & container hóa.',
-    icon: 'tree',
-    headerBadgeClass:
-      'bg-indigo-100 dark:bg-accent/15 text-indigo-900 dark:text-indigo-400 border border-indigo-400 dark:border-indigo-400/30',
-    surfaceTint: 'indigo',
+    title: 'Luồng Dữ Liệu & Vận Hành',
+    description: 'Xử lý sự kiện bất đồng bộ, xác thực tập trung và triển khai.',
     items: [
-      { label: 'Apache Kafka', tone: 'indigo' },
-      { label: 'Docker', tone: 'indigo' },
-      { label: 'Keycloak (SSO/IAM)', tone: 'cyan' },
-      { label: 'Git & GitLab CI', tone: 'surface' },
-      { label: 'Hasura GraphQL', tone: 'surface' },
-      { label: 'MinIO S3', tone: 'muted' },
-      { label: 'Soap API', tone: 'muted' },
+      'Apache Kafka',
+      'Docker',
+      'Keycloak (SSO/IAM)',
+      'Git & GitLab CI',
+      'Hasura GraphQL',
+      'MinIO S3 Storage',
     ],
   },
   {
     id: 'frontend-ai',
-    title: 'Frontend & AI',
-    description: 'Hỗ trợ full-stack mượt mà & tích hợp AI LLM hiện đại.',
-    icon: 'sparkles',
-    headerBadgeClass:
-      'bg-amber-100 dark:bg-warning/15 text-amber-900 dark:text-amber-400 border border-amber-400 dark:border-amber-400/30',
-    surfaceTint: 'amber',
+    title: 'Giao Diện & Nghệ Thuật AI',
+    description: 'Phát triển giao diện hiện đại và làm chủ pipeline AI tạo sinh.',
     items: [
-      { label: 'Vue 3 / Vue.js', tone: 'emerald' },
-      { label: 'React.js', tone: 'cyan' },
-      { label: 'Next.js', tone: 'cyan' },
-      { label: 'TypeScript', tone: 'surface' },
-      { label: 'LLM Chatbots', tone: 'indigo' },
-      { label: 'Video & Img Gen', tone: 'indigo' },
-      { label: 'Tailwind / CSS', tone: 'muted' },
+      'Vue 3 / Vue.js',
+      'React.js & Next.js',
+      'TypeScript & Tailwind',
+      'LLM Integration',
+      'AI Image & Video Gen',
+      'Prompt Art Direction',
     ],
   },
-];
+] as const;
+
+export const FAQ_ITEMS = [
+  {
+    question:
+      'Bộ sưu tập ảnh Cổ Phong và Nàng Thơ Hoa Đào được thực hiện như thế nào?',
+    answer:
+      'Các tác phẩm được Thuận Lê trực tiếp thiết kế prompt, kiểm soát ánh sáng, phục trang Đông Á và hậu kỳ đồng bộ nhận diện khuôn mặt — kết hợp trực tiếp với kinh nghiệm xây dựng pipeline AI Media Generation tại dự án MISA OneAI.',
+  },
+  {
+    question:
+      'Thuận Lê có những kinh nghiệm thực chiến gì về .NET và các hệ thống quy mô lớn?',
+    answer:
+      'Thuận Lê có gần 4 năm kinh nghiệm từ 08/2022 qua các dự án trọng yếu như Smart Form Agribank (30 devs, AML & Oracle DB), Bệnh viện thông minh Phenikaa MEC (60 devs, HIS, Kafka, Elasticsearch) và MISA OneAI for Family (.NET 8, Vue 3, LLM API).',
+  },
+  {
+    question:
+      'Làm thế nào để liên hệ hợp tác phát triển phần mềm hoặc sáng tạo nội dung AI?',
+    answer:
+      'Bạn có thể gọi trực tiếp qua số 0352 988 596, gửi email về thuanlevan72@gmail.com, hoặc truy cập GitHub và Facebook cá nhân ngay tại khu vực liên hệ ở cuối trang.',
+  },
+] as const;
 
 export const TERMINAL_SUGGESTIONS = [
-  { command: 'help', label: 'help', colorClass: 'text-sky-400' },
-  { command: 'dotnet --info', label: 'dotnet --info', colorClass: 'text-emerald-400' },
-  { command: 'projects --recent', label: 'projects --recent', colorClass: 'text-slate-200' },
-  { command: 'why-hire', label: 'why-hire', colorClass: 'text-indigo-400 font-semibold' },
-  { command: 'contact', label: 'contact', colorClass: 'text-amber-400' },
+  { command: 'help', label: 'help' },
+  { command: 'gallery', label: 'gallery' },
+  { command: 'dotnet --info', label: 'dotnet --info' },
+  { command: 'projects --recent', label: 'projects --recent' },
+  { command: 'why-hire', label: 'why-hire' },
+  { command: 'contact', label: 'contact' },
 ] as const;
