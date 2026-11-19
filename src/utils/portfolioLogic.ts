@@ -95,9 +95,9 @@ export function getRoutePath(route: AppRoute): string {
 export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
   if (route === 'gallery') {
     return {
-      title: 'Triển Lãm Ảnh & Video: Hoa Đào, Chân Dung & Đời Thường — Thuận Lê',
+      title: 'Triển Lãm Ảnh & Video: Đời Thường, Hành Trình & MISA — Thuận Lê',
       description:
-        'Phòng triển lãm trực tuyến 11 tác phẩm WebP & H.264 tối ưu tốc độ: Nàng Thơ Hoa Đào, Video Timelapse Coding, Chân Dung & Kỷ Niệm Đồng Đội.',
+        'Phòng triển lãm trực tuyến 28 tác phẩm WebP & H.264 tối ưu tốc độ: Nàng Thơ Hoa Đào, Coding Đêm, Mô Tô Rừng Thông, Kỷ Niệm MISA và Người Thương.',
       path: '/trien-lam',
     };
   }
@@ -187,7 +187,7 @@ export function executeCliCommand(rawInput: string): CliExecutionResult {
       responseText: `Các lệnh hỗ trợ:
   dotnet --info      : Xem thông tin Runtime & kiến trúc Backend
   projects           : Liệt kê các hệ thống production lớn đã build
-  gallery            : Xem danh sách 11 tác phẩm ảnh WebP & video tại /trien-lam
+  gallery            : Xem danh sách 28 tác phẩm ảnh WebP & video tại /trien-lam
   why-hire           : 4 lý do tại sao nên tuyển Thuận Lê
   stack              : Danh sách toàn bộ Database, Messaging & Framework
   contact            : Lấy thông tin liên hệ ngay lập tức
@@ -214,11 +214,11 @@ export function executeCliCommand(rawInput: string): CliExecutionResult {
     return {
       action: 'append',
       commandEcho: `thuanle@portfolio:~$ ${cmd}`,
-      responseText: `Triển Lãm Nghệ Thuật & Đời Thường (/trien-lam — 11 Tác Phẩm WebP & H.264):
+      responseText: `Triển Lãm Nghệ Thuật & Đời Thường (/trien-lam — 28 Tác Phẩm WebP & H.264):
 - Video (1): Coding Timelapse — Góc Làm Việc & Đam Mê (MP4 3.6 MB)
 - Nàng Thơ Hoa Đào (1): Cố Phán Di Quang Thái — Nàng Thơ Giữa Hoa Đào
-- Chân Dung (3): Chân Dung Đời Thực, Chân Dung Thẻ Xanh, Filter Hoa Xuân
-- Đồng Đội & Kỷ Niệm (6): MISA Hạ Long 2026, Team Outing Phố Biển, Lễ Vu Quy, Đêm Nghỉ Dưỡng, Đêm Trắng 02:38, Người Thương Bên Bờ Hồ Đêm`,
+- Chân Dung (10): Coding Ban Công Đêm, Ninja 400 Eagle Villa, Rừng Thông, Guitar Acoustic, Chân Dung Đời Thực, Thẻ Xanh, Filter Hoa Xuân
+- Đồng Đội & Kỷ Niệm (16): MISA Infinity Impact Award, Hạ Long 2026, Team MEC, Bàn Bi Lắc, Khán Đài Gỗ, Vịt 34, Lẩu Sum Vầy, Biển Bạc & Người Thương`,
       responseToneClass: 'text-sky-300',
     };
   }

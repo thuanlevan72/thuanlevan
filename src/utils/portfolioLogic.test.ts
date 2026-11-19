@@ -52,28 +52,28 @@ test('buildCanonicalUrl strips trailing slashes safely for SEO canonical tags', 
   );
 });
 
-test('filterGalleryItems filters all 11 exhibition media items accurately', () => {
+test('filterGalleryItems filters all 28 exhibition media items accurately', () => {
   const counts = getGalleryCategoryCounts(GALLERY_ARTWORKS);
   assert.deepEqual(counts, {
-    all: 11,
+    all: 28,
     imperial: 0,
     poetic: 1,
-    portrait: 4,
-    moments: 6,
+    portrait: 11,
+    moments: 16,
   });
 
-  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'all').length, 11);
+  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'all').length, 28);
   assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'imperial').length, 0);
   assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'poetic').length, 1);
-  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'portrait').length, 4);
-  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'moments').length, 6);
+  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'portrait').length, 11);
+  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'moments').length, 16);
 });
 
 test('lightbox next/prev index helpers wrap cleanly across gallery boundaries', () => {
-  assert.equal(getNextGalleryIndex(0, 11), 1);
-  assert.equal(getNextGalleryIndex(10, 11), 0);
-  assert.equal(getPrevGalleryIndex(0, 11), 10);
-  assert.equal(getPrevGalleryIndex(3, 11), 2);
+  assert.equal(getNextGalleryIndex(0, 28), 1);
+  assert.equal(getNextGalleryIndex(27, 28), 0);
+  assert.equal(getPrevGalleryIndex(0, 28), 27);
+  assert.equal(getPrevGalleryIndex(3, 28), 2);
   assert.equal(getNextGalleryIndex(0, 0), -1);
   assert.equal(getPrevGalleryIndex(0, 0), -1);
 });

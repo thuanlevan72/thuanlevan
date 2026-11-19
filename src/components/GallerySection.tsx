@@ -269,7 +269,10 @@ export function GallerySection({
           } else if (nonVideoPortraitCount === 3) {
             colSpanClass = 'md:col-span-1 lg:col-span-4';
             aspectClass = 'aspect-[3/4]';
-          } else if (nonVideoPortraitCount === 5 && portraitRank >= 2) {
+          } else if (nonVideoPortraitCount === 10 && portraitRank >= 4) {
+            colSpanClass = 'md:col-span-1 lg:col-span-4';
+            aspectClass = 'aspect-[3/4]';
+          } else if (nonVideoPortraitCount === 17 && portraitRank >= 8) {
             colSpanClass = 'md:col-span-1 lg:col-span-4';
             aspectClass = 'aspect-[3/4]';
           }
