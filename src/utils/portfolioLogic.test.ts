@@ -1,8 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { GALLERY_ARTWORKS, PORTFOLIO_PROJECTS } from '../data/portfolioData.ts';
+import {
+  GALLERY_ARTWORKS,
+  HERO_METRICS,
+  PORTFOLIO_PROFILE,
+  PORTFOLIO_PROJECTS,
+  SKILL_GROUPS,
+} from '../data/portfolioData.ts';
 import {
   buildCanonicalUrl,
+  buildCvPlainText,
   executeCliCommand,
   filterGalleryItems,
   filterProjects,
@@ -24,19 +31,26 @@ test('resolveInitialTheme and resolveNextTheme manage theme transitions cleanly'
   assert.equal(resolveNextTheme('dark'), 'light');
 });
 
-test('parseAppRoute, getRoutePath, and getRouteSeoMeta separate profile and exhibition routes', () => {
+test('parseAppRoute, getRoutePath, and getRouteSeoMeta separate profile, cv, and exhibition routes', () => {
   assert.equal(parseAppRoute('/'), 'profile');
   assert.equal(parseAppRoute('/trien-lam'), 'gallery');
   assert.equal(parseAppRoute('/trien-lam/'), 'gallery');
   assert.equal(parseAppRoute('/', '#trien-lam'), 'gallery');
+  assert.equal(parseAppRoute('/cv'), 'cv');
+  assert.equal(parseAppRoute('/cv-pdf/'), 'cv');
+  assert.equal(parseAppRoute('/', '#cv'), 'cv');
 
   assert.equal(getRoutePath('profile'), '/');
   assert.equal(getRoutePath('gallery'), '/trien-lam');
+  assert.equal(getRoutePath('cv'), '/cv');
 
   const galleryMeta = getRouteSeoMeta('gallery');
+  const cvMeta = getRouteSeoMeta('cv');
   const profileMeta = getRouteSeoMeta('profile');
   assert.match(galleryMeta.title, /Triển Lãm/);
   assert.equal(galleryMeta.path, '/trien-lam');
+  assert.match(cvMeta.title, /CV PDF/);
+  assert.equal(cvMeta.path, '/cv');
   assert.match(profileMeta.title, /Kỹ Sư Senior \.NET/);
   assert.equal(profileMeta.path, '/');
 });
@@ -109,9 +123,31 @@ test('executeCliCommand handles gallery, dotnet, clear, and unknown inputs', () 
     assert.match(dotnetRes.responseText, /8\.0\.300/);
   }
 
+  const cvRes = executeCliCommand('cv');
+  assert.equal(cvRes.action, 'append');
+  if (cvRes.action === 'append') {
+    assert.match(cvRes.responseText, /Lê Văn Thuận/);
+    assert.match(cvRes.responseText, /\/cv/);
+  }
+
   const unknownRes = executeCliCommand('invalid-cmd');
   assert.equal(unknownRes.action, 'append');
   if (unknownRes.action === 'append') {
     assert.equal(unknownRes.responseToneClass, 'text-rose-400');
   }
+});
+
+test('buildCvPlainText builds structured Vietnamese CV content from portfolio data', () => {
+  const plainText = buildCvPlainText({
+    profile: PORTFOLIO_PROFILE,
+    metrics: HERO_METRICS,
+    projects: PORTFOLIO_PROJECTS,
+    skillGroups: SKILL_GROUPS,
+  });
+
+  assert.match(plainText, /LÊ VĂN THUẬN/);
+  assert.match(plainText, /MISA OneAI for Family/);
+  assert.match(plainText, /Smart Form Agribank/);
+  assert.match(plainText, /Phenikaa MEC/);
+  assert.match(plainText, /C# \.NET 8/);
 });

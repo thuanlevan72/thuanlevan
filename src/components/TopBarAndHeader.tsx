@@ -25,7 +25,7 @@ export function TopBarAndHeader({ activeRoute, onNavigate }: TopBarAndHeaderProp
         {/* Zone 2: Clean route & section links (supports both mobile screen switch & desktop links) */}
         <nav
           aria-label="Điều hướng chính"
-          className="flex items-center gap-4 sm:gap-6 text-xs sm:text-sm font-medium text-[#475569] dark:text-[#94A3B8]"
+          className="flex items-center gap-3 sm:gap-6 text-xs sm:text-sm font-medium text-[#475569] dark:text-[#94A3B8]"
         >
           <a
             href="/"
@@ -63,6 +63,22 @@ export function TopBarAndHeader({ activeRoute, onNavigate }: TopBarAndHeaderProp
             className="hidden md:inline-block hover:text-[#070B14] dark:hover:text-[#F1F5F9] hover:underline underline-offset-4 decoration-[#0284C7] dark:decoration-[#38BDF8] transition-colors whitespace-nowrap shrink-0"
           >
             Kỹ Thuật
+          </a>
+
+          <a
+            href="/cv"
+            aria-current={activeRoute === 'cv' ? 'page' : undefined}
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('cv');
+            }}
+            className={`whitespace-nowrap shrink-0 transition-colors hover:text-[#0369A1] dark:hover:text-[#38BDF8] ${
+              activeRoute === 'cv'
+                ? 'text-[#0369A1] dark:text-[#38BDF8] font-semibold underline underline-offset-4 decoration-[#0284C7] dark:decoration-[#38BDF8]'
+                : ''
+            }`}
+          >
+            CV PDF
           </a>
 
           <a

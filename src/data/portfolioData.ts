@@ -963,6 +963,7 @@ export const FAQ_ITEMS = [
 
 export const TERMINAL_SUGGESTIONS = [
   { command: 'help', label: 'help' },
+  { command: 'cv', label: 'cv' },
   { command: 'gallery', label: 'gallery' },
   { command: 'dotnet --info', label: 'dotnet --info' },
   { command: 'projects --recent', label: 'projects --recent' },

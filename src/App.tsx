@@ -4,6 +4,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { CvPdfSection } from './components/CvPdfSection.tsx';
 import { FaqAndCta, GlobalFooter } from './components/FaqAndFooter.tsx';
 import { GallerySection } from './components/GallerySection.tsx';
 import { HeroSection } from './components/HeroSection.tsx';
@@ -181,6 +182,12 @@ export default function App() {
             onToggleTheme={handleToggleTheme}
             onSelectArtwork={handleOpenArtwork}
             onBackToProfile={() => handleNavigate('profile', 'overview')}
+          />
+        ) : activeRoute === 'cv' ? (
+          <CvPdfSection
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
+            onNavigate={handleNavigate}
           />
         ) : (
           <>

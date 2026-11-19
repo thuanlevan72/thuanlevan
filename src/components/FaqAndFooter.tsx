@@ -137,6 +137,17 @@ export function GlobalFooter({ theme, onToggleTheme, onNavigate }: GlobalFooterP
         </div>
         <div className="flex flex-wrap items-center justify-center gap-4">
           <a
+            href="/cv"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('cv');
+            }}
+            className="hover:text-[#0369A1] dark:hover:text-[#38BDF8] hover:underline underline-offset-4 transition-colors"
+          >
+            CV PDF
+          </a>
+          <span aria-hidden="true">·</span>
+          <a
             href="/trien-lam"
             onClick={(e) => {
               e.preventDefault();

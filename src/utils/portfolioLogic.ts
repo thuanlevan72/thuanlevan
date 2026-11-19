@@ -1,6 +1,6 @@
 export type ThemeMode = 'light' | 'dark';
 
-export type AppRoute = 'profile' | 'gallery';
+export type AppRoute = 'profile' | 'gallery' | 'cv';
 
 export type GalleryCategory = 'all' | 'imperial' | 'poetic' | 'portrait' | 'moments';
 
@@ -85,11 +85,21 @@ export function parseAppRoute(pathname: string, hash = ''): AppRoute {
   if (cleanPath === '/trien-lam' || cleanPath === '/gallery' || cleanHash === 'trien-lam') {
     return 'gallery';
   }
+  if (
+    cleanPath === '/cv' ||
+    cleanPath === '/cv-pdf' ||
+    cleanHash === 'cv' ||
+    cleanHash === 'cv-pdf'
+  ) {
+    return 'cv';
+  }
   return 'profile';
 }
 
 export function getRoutePath(route: AppRoute): string {
-  return route === 'gallery' ? '/trien-lam' : '/';
+  if (route === 'gallery') return '/trien-lam';
+  if (route === 'cv') return '/cv';
+  return '/';
 }
 
 export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
@@ -99,6 +109,14 @@ export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
       description:
         'Phòng triển lãm trực tuyến 28 tác phẩm WebP & H.264 tối ưu tốc độ: Nàng Thơ Hoa Đào, Coding Đêm, Mô Tô Rừng Thông, Kỷ Niệm MISA và Người Thương.',
       path: '/trien-lam',
+    };
+  }
+  if (route === 'cv') {
+    return {
+      title: 'CV PDF — Lê Văn Thuận | Kỹ Sư Senior .NET & Kiến Trúc Hệ Thống',
+      description:
+        'Bản CV điện tử và tải xuống PDF chuẩn A4 của kỹ sư Senior .NET Lê Văn Thuận: gần 4 năm kinh nghiệm hệ thống tài chính Agribank, Phenikaa MEC và MISA OneAI.',
+      path: '/cv',
     };
   }
   return {
@@ -187,12 +205,26 @@ export function executeCliCommand(rawInput: string): CliExecutionResult {
       responseText: `Các lệnh hỗ trợ:
   dotnet --info      : Xem thông tin Runtime & kiến trúc Backend
   projects           : Liệt kê các hệ thống production lớn đã build
+  cv                 : Xem tóm tắt CV & tải bản PDF tại /cv
   gallery            : Xem danh sách 28 tác phẩm ảnh WebP & video tại /trien-lam
   why-hire           : 4 lý do tại sao nên tuyển Thuận Lê
   stack              : Danh sách toàn bộ Database, Messaging & Framework
   contact            : Lấy thông tin liên hệ ngay lập tức
   clear              : Xóa màn hình terminal`,
       responseToneClass: 'text-slate-200',
+    };
+  }
+
+  if (lower === 'cv' || lower === 'cv pdf' || lower === 'resume') {
+    return {
+      action: 'append',
+      commandEcho: `thuanle@portfolio:~$ ${cmd}`,
+      responseText: `CV Senior .NET Systems Engineer (/cv):
+- Ứng viên:     Lê Văn Thuận (Nhâm Ngọ 2002) · Hoài Đức, Hà Nội
+- Kinh nghiệm:  04 Năm production (08/2022 – Nay) · Đội ngũ tới 60 devs
+- Hệ thống:     MISA OneAI, Smart Form Agribank (AML), Phenikaa MEC (HIS), GC FAST, Lotus Edu, MEMID
+- Xuất bản PDF: Truy cập tab "CV PDF" (/cv) để xem chuẩn A4 & tải file .PDF ngay.`,
+      responseToneClass: 'text-cyan-300',
     };
   }
 
@@ -282,4 +314,65 @@ Auth & Tools:  Keycloak, Git, Docker, MinIO, GraphQL Hasura`,
     responseText: `Lệnh không nhận dạng: "${cmd}". Gõ 'help' để xem hướng dẫn.`,
     responseToneClass: 'text-rose-400',
   };
+}
+
+export interface CvSkillGroupInput {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly items: readonly string[];
+}
+
+export interface CvMetricInput {
+  readonly id: string;
+  readonly value: string;
+  readonly label: string;
+}
+
+export interface CvSourceData {
+  profile: {
+    fullName: string;
+    fullLegalName: string;
+    birthInfo: string;
+    location: string;
+    role: string;
+    phoneFormatted: string;
+    email: string;
+    githubUrl: string;
+    facebookUrl: string;
+  };
+  metrics: readonly CvMetricInput[];
+  projects: readonly PortfolioProject[];
+  skillGroups: readonly CvSkillGroupInput[];
+}
+
+export function buildCvPlainText(data: CvSourceData): string {
+  const { profile, metrics, projects, skillGroups } = data;
+  const lines: string[] = [
+    `${profile.fullLegalName.toUpperCase()} (${profile.fullName})`,
+    profile.role,
+    `${profile.birthInfo} | ${profile.location} | SĐT: ${profile.phoneFormatted} | Email: ${profile.email}`,
+    `GitHub: ${profile.githubUrl}`,
+    '',
+    'CHỈ SỐ THỰC CHIẾN',
+    ...metrics.map((m) => `- ${m.value}: ${m.label}`),
+    '',
+    'DỰ ÁN & KINH NGHIỆM PRODUCTION',
+  ];
+
+  for (const project of projects) {
+    lines.push(`${project.title} — ${project.orgBadge} (${project.meta})`);
+    lines.push(`  ${project.summary}`);
+    for (const h of project.highlights) {
+      lines.push(`  * ${h.title} ${h.description}`);
+    }
+    lines.push(`  Công nghệ: ${project.tags.join(', ')}`);
+  }
+
+  lines.push('', 'NĂNG LỰC KỸ THUẬT');
+  for (const group of skillGroups) {
+    lines.push(`- ${group.title}: ${group.items.join(', ')}`);
+  }
+
+  return lines.join('\n');
 }
