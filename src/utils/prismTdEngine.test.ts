@@ -172,8 +172,8 @@ test('Pure Gun Lv1..Lv10 progression for all 16 guns scales monotonically + Beac
     kills: 0,
   };
   const allyBuff = computeBeaconBuffAtTile([beaconGun], 5, 4);
-  assert.equal(allyBuff.speedMult, 1.45);
-  assert.equal(allyBuff.damageMult, 1.38);
+  assert.equal(allyBuff.speedMult, 1.3);
+  assert.equal(allyBuff.damageMult, 1.24);
 
   const selfBuff = computeBeaconBuffAtTile([beaconGun], 4, 4);
   assert.equal(selfBuff.speedMult, 1);
@@ -319,12 +319,12 @@ test('Rebalanced steeper wave spawns and all 12 enemy archetypes & abilities wor
 
 test('All 16 guns unlock distinct Lv3/Lv5/Lv7/Lv10 combat profile milestones without broken ranges', () => {
   const gat10 = getGunCombatProfile('gatling', 10);
-  assert.equal(gat10.projectilesPerShot, 5);
-  assert.equal(gat10.armorPierce, 1);
+  assert.equal(gat10.projectilesPerShot, 4);
+  assert.equal(gat10.armorPierce, 0.75);
   assert.ok(gat10.splashRadius > 0);
 
   const sg10 = getGunCombatProfile('shotgun', 10);
-  assert.equal(sg10.projectilesPerShot, 11);
+  assert.equal(sg10.projectilesPerShot, 9);
   assert.ok(sg10.burnDps > 0);
   assert.ok(sg10.rangePx <= 260, `Shotgun Lv10 rangePx=${sg10.rangePx} stays reachable by pellets`);
 
@@ -332,25 +332,26 @@ test('All 16 guns unlock distinct Lv3/Lv5/Lv7/Lv10 combat profile milestones wit
   assert.ok(fl10.burnDps > 0 && fl10.slowPct > 0);
 
   const cr10 = getGunCombatProfile('cryo', 10);
-  assert.ok(cr10.slowPct >= 0.65 && cr10.brittleBonus >= 0.42);
+  assert.ok(cr10.slowPct >= 0.42 && cr10.slowPct <= 0.45);
+  assert.ok(cr10.brittleBonus >= 0.22 && cr10.brittleBonus <= 0.25);
 
   const te10 = getGunCombatProfile('tesla', 10);
-  assert.equal(te10.chainCount, 9);
-  assert.equal(te10.splashRadius, 48);
+  assert.equal(te10.chainCount, 7);
+  assert.equal(te10.splashRadius, 38);
 
   const mi10 = getGunCombatProfile('missile', 10);
-  assert.equal(mi10.projectilesPerShot, 4);
-  assert.ok(mi10.splashRadius >= 140);
+  assert.equal(mi10.projectilesPerShot, 3);
+  assert.ok(mi10.splashRadius >= 110 && mi10.splashRadius <= 125);
 
   const rg7 = getGunCombatProfile('railgun', 7);
   const rg10 = getGunCombatProfile('railgun', 10);
-  assert.ok(rg7.splashRadius >= 46);
+  assert.ok(rg7.splashRadius >= 36);
   assert.equal(rg10.projectilesPerShot, 3);
   assert.equal(rg10.armorPierce, 1);
 
   const mo10 = getGunCombatProfile('mortar', 10);
   assert.equal(mo10.projectilesPerShot, 2);
-  assert.ok(mo10.pullForce > 20);
+  assert.ok(mo10.pullForce >= 18 && mo10.pullForce <= 22);
 
   const sn10 = getGunCombatProfile('sniper', 10);
   assert.equal(sn10.projectilesPerShot, 2);
@@ -358,28 +359,106 @@ test('All 16 guns unlock distinct Lv3/Lv5/Lv7/Lv10 combat profile milestones wit
 
   const ac10 = getGunCombatProfile('acid', 10);
   assert.equal(ac10.projectilesPerShot, 2);
-  assert.equal(ac10.slowPct, 0.45);
+  assert.equal(ac10.slowPct, 0.34);
 
   const saw10 = getGunCombatProfile('saw', 10);
   assert.equal(saw10.projectilesPerShot, 3);
-  assert.equal(saw10.chainCount, 11);
+  assert.equal(saw10.chainCount, 7);
 
   const cn10 = getGunCombatProfile('cannon', 10);
   assert.equal(cn10.projectilesPerShot, 3);
-  assert.equal(cn10.splashRadius, 105);
+  assert.equal(cn10.splashRadius, 82);
 
   const pl10 = getGunCombatProfile('plasma', 10);
   assert.equal(pl10.projectilesPerShot, 3);
-  assert.equal(pl10.shieldMult, 2.4);
+  assert.equal(pl10.shieldMult, 1.95);
 
   const cl10 = getGunCombatProfile('cluster', 10);
   assert.equal(cl10.projectilesPerShot, 3);
-  assert.equal(cl10.splashRadius, 128);
+  assert.equal(cl10.splashRadius, 102);
 
   const hu10 = getGunCombatProfile('hunter', 10);
-  assert.equal(hu10.projectilesPerShot, 5);
-  assert.equal(hu10.armorPierce, 1);
-  assert.equal(hu10.splashRadius, 24);
+  assert.equal(hu10.projectilesPerShot, 4);
+  assert.equal(hu10.armorPierce, 0.85);
+  assert.equal(hu10.splashRadius, 20);
 });
+
+test('Anti-permafreeze & gun balance: stacked CC never halts enemies and Boss/Juggernaut resist pull', () => {
+  const map = PRISM_MAPS[0]; // horizontal segment (0,2)->(3,2)
+  const cases: Array<{ kind: 'scout' | 'armored' | 'boss' | 'juggernaut'; floor: number }> = [
+    { kind: 'scout', floor: 0.48 },
+    { kind: 'armored', floor: 0.48 },
+    { kind: 'boss', floor: 0.55 },
+    { kind: 'juggernaut', floor: 0.62 },
+  ];
+
+  for (const c of cases) {
+    const en = createEnemyForWave(1, c.kind, 5, map, false, 'normal');
+    const startX = en.x;
+    en.slowTimer = 5;
+    en.slowFactor = 0.2; // extreme slow attempt
+    en.stunTimer = 2; // stagger interrupt attempt
+    stepEnemies([en], map, 0.25);
+    const moved = en.x - startX;
+    const minExpected = en.speed * c.floor * 0.25 - 0.05;
+    assert.ok(
+      moved >= minExpected,
+      `${c.kind} moved ${moved.toFixed(2)}px under stacked slow+stun, expected >= ${minExpected.toFixed(2)}px (never frozen)`
+    );
+  }
+
+  // Pull clamping & heavy unit pull immunity
+  const boss = createEnemyForWave(2, 'boss', 5, map, false, 'normal');
+  boss.x += 90;
+  const bossBeforeX = boss.x;
+  pullEnemyAlongTrack(boss, map, boss.x - 60, boss.y, 40);
+  assert.equal(boss.x, bossBeforeX, 'Boss must resist vortex pull');
+
+  const jugg = createEnemyForWave(3, 'juggernaut', 5, map, false, 'normal');
+  jugg.x += 90;
+  const juggBeforeX = jugg.x;
+  pullEnemyAlongTrack(jugg, map, jugg.x - 60, jugg.y, 40);
+  assert.equal(jugg.x, juggBeforeX, 'Juggernaut must resist vortex pull');
+
+  const scout = createEnemyForWave(4, 'scout', 5, map, false, 'normal');
+  scout.x += 90;
+  const scoutBeforeX = scout.x;
+  pullEnemyAlongTrack(scout, map, scout.x - 80, scout.y, 40);
+  assert.ok(scoutBeforeX - scout.x <= 18.01, 'Standard enemy pull displacement must stay capped at <= 18px');
+
+  // Rebalanced DPS ceiling check
+  for (const g of GUN_CATALOG) {
+    const p10 = getGunCombatProfile(g.type, 10);
+    assert.ok(p10.dpsEstimate < 1400, `${g.type} Lv10 DPS=${p10.dpsEstimate} stays balanced (<1400)`);
+  }
+});
+
+test('Late-wave swarm and power surge: waves become dramatically denser and stronger from Wave 2 onward', () => {
+  const map = PRISM_MAPS[0];
+  const w1 = buildWaveSpawns(1, 10, 'normal', 'campaign');
+  const w4 = buildWaveSpawns(4, 10, 'normal', 'campaign');
+  const w8 = buildWaveSpawns(8, 10, 'normal', 'campaign');
+  const w10 = buildWaveSpawns(10, 10, 'normal', 'campaign');
+
+  assert.ok(w4.length >= 135, `W4 should have >= 135 enemies, got ${w4.length}`);
+  assert.ok(w8.length >= 300, `W8 should swarm with >= 300 enemies, got ${w8.length}`);
+  assert.ok(w10.length > w8.length, 'W10 must be denser than W8');
+
+  const w8Bosses = w8.filter((s) => s.kind === 'boss').length;
+  const w8Elites = w8.filter((s) => s.isElite).length;
+  assert.ok(w8Bosses >= 4, `W8 should field >= 4 bosses, got ${w8Bosses}`);
+  assert.ok(w8Elites >= 50, `W8 should field >= 50 elites, got ${w8Elites}`);
+
+  const s1 = createEnemyForWave(1, 'scout', 1, map, false, 'normal');
+  const s4 = createEnemyForWave(2, 'scout', 4, map, false, 'normal');
+  const s8 = createEnemyForWave(3, 'scout', 8, map, false, 'normal');
+  const boss8 = createEnemyForWave(4, 'boss', 8, map, false, 'normal');
+
+  assert.ok(s4.maxHp > s1.maxHp * 3.5);
+  assert.ok(s8.maxHp > s4.maxHp * 3.0);
+  assert.ok(s8.speed > s1.speed + 20);
+  assert.ok(boss8.maxHp > 65000, `W8 Boss HP=${boss8.maxHp} should threaten Lv10 defenses`);
+});
+
 
 

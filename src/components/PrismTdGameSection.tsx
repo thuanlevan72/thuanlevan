@@ -1648,7 +1648,9 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     if (gameState !== 'playing' || s.overdriveCharge < 100 || s.overdriveTimer > 0) return;
     s.overdriveCharge = 0;
     s.overdriveTimer = 5.0;
-    s.shakeTrauma = 0.65;
+    if (s.speedMult < 2) {
+      s.shakeTrauma = 0.65;
+    }
 
     for (const g of s.guns) {
       const pt = gridToWorldCenter(g.col, g.row);
@@ -1666,9 +1668,9 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
 
     for (const en of s.enemies) {
       if (en.hp <= 0 || en.koTimer > 0) continue;
-      const res = applyDamageToEnemy(en, 85 + s.wave * 18, { armorPierce: 1 });
-      en.slowTimer = Math.max(en.slowTimer, 2.2);
-      en.slowFactor = Math.min(en.slowFactor || 1, 0.55);
+      const res = applyDamageToEnemy(en, 65 + s.wave * 14, { armorPierce: 1 });
+      en.slowTimer = Math.max(en.slowTimer, 1.8);
+      en.slowFactor = Math.min(en.slowFactor || 1, 0.62);
       if (res.killed) {
         s.kills += 1;
         s.energy += en.reward;
@@ -1678,7 +1680,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     }
     recomputeFirepower();
     syncHudFromSim();
-    setStatusNotice('HỘI TỤ HỎA LỰC ×2.0 ĐÃ KÍCH HOẠT (5s)! Toàn bộ pháo đài xả đạn tốc độ tối đa!');
+    setStatusNotice('HỘI TỤ HỎA LỰC ×1.75 ĐÃ KÍCH HOẠT (5s)! Toàn bộ pháo đài tăng tốc xả đạn!');
     playSynthFx('overdrive', soundEnabled, audioCtxRef);
   }, [gameState, recomputeFirepower, syncHudFromSim, soundEnabled, emitParticles]);
 
@@ -2178,7 +2180,9 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
 
       pushCombatText(en.x, en.y, `+${en.reward}⚡`, '#FBBF24', en.kind === 'boss' ? 1.3 : 1);
       if (en.kind === 'boss') {
-        s.shakeTrauma = Math.min(1, s.shakeTrauma + 0.65);
+        if (s.speedMult < 2) {
+          s.shakeTrauma = Math.min(1, s.shakeTrauma + 0.65);
+        }
         playSynthFx('explosion', soundEnabled, audioCtxRef);
       } else {
         playSynthFx('kill', soundEnabled, audioCtxRef);
@@ -2240,8 +2244,8 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
 
         // 2. Pure Gun Turrets Combat Simulation (Lv1 -> Lv10 Skills & FX)
         const liveEnemies = s.enemies.filter((e) => e.hp > 0 && e.koTimer <= 0);
-        const overdriveSpeedMult = s.overdriveTimer > 0 ? 1.7 : 1;
-        const overdriveDmgMult = s.overdriveTimer > 0 ? 1.3 : 1;
+        const overdriveSpeedMult = s.overdriveTimer > 0 ? 1.45 : 1;
+        const overdriveDmgMult = s.overdriveTimer > 0 ? 1.22 : 1;
 
         for (const gun of s.guns) {
           if (gun.recoil > 0) gun.recoil = Math.max(0, gun.recoil - simDt * 5);
@@ -2287,6 +2291,9 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           if (gun.type === 'gatling') {
             const count = profile.projectilesPerShot;
             const bColor = profile.visualTier === 4 ? '#FDE047' : profile.visualTier === 3 ? '#FB923C' : '#38BDF8';
+            const perBulletDmg = Math.round(
+              shotDmg * (count === 4 ? 0.44 : count === 3 ? 0.54 : count === 2 ? 0.7 : 1)
+            );
             for (let b = 0; b < count; b++) {
               const offsetAngle = count === 1 ? 0 : (b - (count - 1) / 2) * 0.075;
               const shotAngle = gun.aimAngle + offsetAngle;
@@ -2301,7 +2308,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 vx: Math.cos(shotAngle) * 600,
                 vy: Math.sin(shotAngle) * 600,
                 targetId: target.id,
-                damage: count > 1 ? Math.round(shotDmg * (count === 5 ? 0.56 : count === 3 ? 0.68 : 0.78)) : shotDmg,
+                damage: perBulletDmg,
                 armorPierce: profile.armorPierce,
                 shieldMult: profile.shieldMult,
                 splashRadius: profile.splashRadius,
@@ -2325,6 +2332,8 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             const spreadCone = 0.52;
             const pColor = profile.visualTier === 4 ? '#FDE047' : profile.visualTier >= 3 ? '#FBBF24' : '#FB923C';
             const pelletLife = Math.max(0.58, (profile.rangePx + 45) / 480);
+            const pelletFactor = gun.level >= 10 ? 0.52 : gun.level >= 7 ? 0.55 : 0.58;
+            const perPelletDmg = Math.round(shotDmg * pelletFactor);
             for (let b = 0; b < count; b++) {
               const frac = count > 1 ? b / (count - 1) - 0.5 : 0;
               const shotAngle = gun.aimAngle + frac * spreadCone;
@@ -2339,15 +2348,15 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 vx: Math.cos(shotAngle) * 480,
                 vy: Math.sin(shotAngle) * 480,
                 targetId: target.id,
-                damage: shotDmg,
+                damage: perPelletDmg,
                 armorPierce: profile.armorPierce,
                 shieldMult: profile.shieldMult,
                 splashRadius: 0,
                 pullForce: 0,
                 burnDps: profile.burnDps,
-                burnDuration: profile.burnDps > 0 ? 2.2 : 0,
+                burnDuration: profile.burnDps > 0 ? 2.0 : 0,
                 slowAmount: 0,
-                pierceLeft: gun.level >= 10 ? 2 : gun.level >= 7 ? 1 : 0,
+                pierceLeft: gun.level >= 7 ? 1 : 0,
                 hitIds: [],
                 life: pelletLife,
                 maxLife: pelletLife,
@@ -2364,7 +2373,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             playSynthFx('shotgun', soundEnabled, audioCtxRef);
           } else if (gun.type === 'flamer') {
             const isNova360 = gun.level === MAX_GUN_LEVEL;
-            const coneRange = profile.rangePx * (1.06 + (gun.level - 1) * 0.03);
+            const coneRange = profile.rangePx * (1.04 + (gun.level - 1) * 0.025);
             const halfArc = 0.48 + (gun.level >= 7 ? 0.14 : 0);
             const muzzleX = isNova360 ? origin.x : origin.x + Math.cos(gun.aimAngle) * 18;
             const muzzleY = isNova360 ? origin.y : origin.y + Math.sin(gun.aimAngle) * 18;
@@ -2403,6 +2412,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                     : '#FACC15';
             }
 
+            const pulseDmg = isNova360 ? Math.round(shotDmg * 0.72) : shotDmg;
             for (const en of liveEnemies) {
               const dx = en.x - origin.x;
               const dy = en.y - origin.y;
@@ -2412,16 +2422,16 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                   Math.atan2(Math.sin(Math.atan2(dy, dx) - gun.aimAngle), Math.cos(Math.atan2(dy, dx) - gun.aimAngle))
                 );
                 if (diff <= halfArc || isNova360) {
-                  en.burnTimer = Math.max(en.burnTimer, 2.8 + gun.level * 0.25);
+                  en.burnTimer = Math.max(en.burnTimer, 2.4 + gun.level * 0.2);
                   en.burnDps = Math.max(en.burnDps, Math.round(profile.burnDps * overdriveDmgMult));
                   if (gun.level >= 5) {
-                    en.armorShred = Math.max(en.armorShred, 0.35);
+                    en.armorShred = Math.max(en.armorShred, 0.25);
                   }
                   if (profile.slowPct > 0) {
-                    en.slowTimer = Math.max(en.slowTimer, 1.0);
+                    en.slowTimer = Math.max(en.slowTimer, 0.9);
                     en.slowFactor = Math.min(en.slowFactor || 1, 1 - profile.slowPct);
                   }
-                  const res = applyDamageToEnemy(en, shotDmg, {
+                  const res = applyDamageToEnemy(en, pulseDmg, {
                     armorPierce: profile.armorPierce,
                     shieldMult: profile.shieldMult,
                   });
@@ -2458,13 +2468,10 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             for (const en of liveEnemies) {
               if ((en.x - origin.x) ** 2 + (en.y - origin.y) ** 2 <= rangeSq) {
                 const wasChilled = en.slowTimer > 0;
-                const totalFrost = wasChilled && profile.visualTier >= 3 ? Math.round(shotDmg * 1.45) : shotDmg;
-                en.slowTimer = Math.max(en.slowTimer, 3.0 + gun.level * 0.25);
+                const totalFrost = wasChilled && profile.visualTier >= 3 ? Math.round(shotDmg * 1.15) : shotDmg;
+                en.slowTimer = Math.max(en.slowTimer, 2.4 + gun.level * 0.15);
                 en.slowFactor = Math.min(en.slowFactor || 1, 1 - profile.slowPct);
                 en.brittleBonus = Math.max(en.brittleBonus, profile.brittleBonus);
-                if (gun.level >= 7) {
-                  en.stunTimer = Math.max(en.stunTimer, gun.level === 10 ? 0.6 : 0.35);
-                }
                 emitParticles(en.x, en.y, '#E0F2FE', 5, 70, 0.85);
                 const res = applyDamageToEnemy(en, totalFrost, {
                   armorPierce: profile.armorPierce,
@@ -2497,12 +2504,12 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 { x: cur.x, y: cur.y }
               );
 
-              const falloff = Math.max(0.58, 1 - j * 0.06);
+              const falloff = Math.max(0.5, 1 - j * 0.08);
               const zapDmg = Math.round(shotDmg * falloff);
-              cur.slowTimer = Math.max(cur.slowTimer, 1.5 + gun.level * 0.15);
+              cur.slowTimer = Math.max(cur.slowTimer, 1.4 + gun.level * 0.1);
               cur.slowFactor = Math.min(cur.slowFactor || 1, 1 - profile.slowPct);
               if (gun.level >= 7) {
-                cur.stunTimer = Math.max(cur.stunTimer, 0.35);
+                cur.stunTimer = Math.max(cur.stunTimer, 0.25);
               }
               emitParticles(cur.x, cur.y, profile.visualTier >= 3 ? '#FDE047' : '#7DD3FC', 8, 120, 1);
 
@@ -2528,7 +2535,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                   spikes: 6,
                   rot: Math.random() * Math.PI,
                 });
-                const thunderDmg = Math.round(shotDmg * 0.62);
+                const thunderDmg = Math.round(shotDmg * 0.45);
                 for (const aoeEn of liveEnemies) {
                   if (aoeEn.id === cur.id || aoeEn.hp <= 0 || aoeEn.koTimer > 0) continue;
                   if (Math.hypot(aoeEn.x - cur.x, aoeEn.y - cur.y) <= profile.splashRadius + aoeEn.radius) {
@@ -2544,7 +2551,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               }
 
               let nextTarget: TdEnemy | null = null;
-              let minD = (150 + gun.level * 12) ** 2;
+              let minD = (140 + gun.level * 10) ** 2;
               for (const cand of liveEnemies) {
                 if (hitIds.has(cand.id) || cand.hp <= 0) continue;
                 const dSq = (cand.x - cur.x) ** 2 + (cand.y - cur.y) ** 2;
@@ -2591,7 +2598,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 vx: Math.cos(launchAngle) * mSpeed,
                 vy: Math.sin(launchAngle) * mSpeed,
                 targetId: lock.id,
-                damage: salvoCount === 4 ? Math.round(shotDmg * 0.56) : salvoCount === 2 ? Math.round(shotDmg * 0.72) : shotDmg,
+                damage: salvoCount === 3 ? Math.round(shotDmg * 0.56) : salvoCount === 2 ? Math.round(shotDmg * 0.68) : shotDmg,
                 armorPierce: profile.armorPierce,
                 shieldMult: profile.shieldMult,
                 splashRadius: profile.splashRadius,
@@ -2637,7 +2644,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               s.muzzleFlashes.push({ x: muzzleX, y: muzzleY, angle: bAngle, radius: 26 + profile.visualTier * 4, alpha: 1, color: railColor });
 
               const segLenSq = (endX - origin.x) ** 2 + (endY - origin.y) ** 2;
-              const perBeamDmg = beamCount === 3 ? Math.round(shotDmg * 0.56) : beamCount === 2 ? Math.round(shotDmg * 0.68) : shotDmg;
+              const perBeamDmg = beamCount === 3 ? Math.round(shotDmg * 0.45) : beamCount === 2 ? Math.round(shotDmg * 0.62) : shotDmg;
               for (const en of liveEnemies) {
                 if (en.hp <= 0 || en.koTimer > 0) continue;
                 const tProj = Math.max(
@@ -2649,7 +2656,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 const distSq = (en.x - px) ** 2 + (en.y - py) ** 2;
                 if (distSq <= (en.radius + 14 + profile.visualTier * 2) ** 2) {
                   const bossCrit = gun.level === MAX_GUN_LEVEL && en.kind === 'boss';
-                  const beamHitDmg = bossCrit ? Math.round(perBeamDmg * 1.5) : perBeamDmg;
+                  const beamHitDmg = bossCrit ? Math.round(perBeamDmg * 1.25) : perBeamDmg;
                   emitParticles(en.x, en.y, profile.visualTier >= 3 ? '#FDE047' : '#E879F9', 14, 175, 1.2);
                   const res = applyDamageToEnemy(en, beamHitDmg, {
                     armorPierce: profile.armorPierce,
@@ -2676,7 +2683,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                       spikes: 5,
                       rot: Math.random() * Math.PI,
                     });
-                    const orbitalDmg = Math.round(perBeamDmg * 0.45);
+                    const orbitalDmg = Math.round(perBeamDmg * 0.32);
                     for (const near of liveEnemies) {
                       if (near.id === en.id || near.hp <= 0 || near.koTimer > 0) continue;
                       if (Math.hypot(near.x - en.x, near.y - en.y) <= profile.splashRadius + near.radius) {
@@ -2713,13 +2720,13 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 targetId: target.id,
                 destX: target.x,
                 destY: target.y,
-                damage: shellCount === 2 ? Math.round(shotDmg * 0.72) : shotDmg,
+                damage: shellCount === 2 ? Math.round(shotDmg * 0.62) : shotDmg,
                 armorPierce: profile.armorPierce,
                 shieldMult: profile.shieldMult,
                 splashRadius: profile.splashRadius,
                 pullForce: profile.pullForce,
                 burnDps: profile.burnDps,
-                burnDuration: profile.burnDps > 0 ? 2.5 : 0,
+                burnDuration: profile.burnDps > 0 ? 2.2 : 0,
                 slowAmount: profile.slowPct,
                 pierceLeft: 0,
                 life: 2.3,
@@ -2734,8 +2741,8 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             playSynthFx('mortar', soundEnabled, audioCtxRef);
           } else if (gun.type === 'sniper') {
             const shots = profile.projectilesPerShot;
-            const critChance = gun.level >= 10 ? 0.65 : gun.level >= 5 ? 0.45 : 0.25;
-            const critMult = gun.level >= 10 ? 2.6 : gun.level >= 5 ? 2.1 : 1.55;
+            const critChance = gun.level >= 10 ? 0.5 : gun.level >= 5 ? 0.35 : 0.2;
+            const critMult = gun.level >= 10 ? 2.0 : gun.level >= 5 ? 1.75 : 1.45;
             const inRangeSorted = liveEnemies
               .filter((e) => (e.x - origin.x) ** 2 + (e.y - origin.y) ** 2 <= rangeSq)
               .sort((a, b) => b.hp + b.shield - (a.hp + a.shield));
@@ -2750,10 +2757,10 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               const bossBonus =
                 gun.level >= 7 &&
                 (hitTarget.kind === 'boss' || hitTarget.kind === 'healer' || hitTarget.isElite)
-                  ? 1.45
+                  ? 1.25
                   : 1;
               const finalDmg = Math.round(
-                (shots === 2 ? shotDmg * 0.72 : shotDmg) * (isCrit ? critMult : 1) * bossBonus
+                (shots === 2 ? shotDmg * 0.65 : shotDmg) * (isCrit ? critMult : 1) * bossBonus
               );
 
               s.railBeams.push({
@@ -2821,7 +2828,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 targetId: lock.id,
                 destX: lock.x,
                 destY: lock.y,
-                damage: count === 2 ? Math.round(shotDmg * 0.72) : shotDmg,
+                damage: count === 2 ? Math.round(shotDmg * 0.65) : shotDmg,
                 armorPierce: profile.armorPierce,
                 shieldMult: profile.shieldMult,
                 splashRadius: profile.splashRadius,
@@ -2830,7 +2837,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 burnDuration: 0,
                 slowAmount: profile.slowPct,
                 pierceLeft: 0,
-                acidShred: gun.level >= 10 ? 0.75 : gun.level >= 3 ? 0.45 : 0.3,
+                acidShred: gun.level >= 10 ? 0.5 : gun.level >= 3 ? 0.32 : 0.22,
                 life: 1.5,
                 maxLife: 1.5,
                 age: 0,
@@ -2866,13 +2873,13 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 vx: Math.cos(launchAngle) * speed,
                 vy: Math.sin(launchAngle) * speed,
                 targetId: target.id,
-                damage: count === 3 ? Math.round(shotDmg * 0.62) : count === 2 ? Math.round(shotDmg * 0.76) : shotDmg,
+                damage: count === 3 ? Math.round(shotDmg * 0.5) : count === 2 ? Math.round(shotDmg * 0.68) : shotDmg,
                 armorPierce: profile.armorPierce,
                 shieldMult: profile.shieldMult,
                 splashRadius: 0,
                 pullForce: 0,
                 burnDps: profile.burnDps,
-                burnDuration: profile.burnDps > 0 ? 2.0 : 0,
+                burnDuration: profile.burnDps > 0 ? 1.8 : 0,
                 slowAmount: 0,
                 pierceLeft: 0,
                 bounceLeft: profile.chainCount,
@@ -2912,7 +2919,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             for (const en of liveEnemies) {
               if ((en.x - origin.x) ** 2 + (en.y - origin.y) ** 2 <= rangeSq) {
                 if (gun.level >= 5) {
-                  en.slowTimer = Math.max(en.slowTimer, 1.6);
+                  en.slowTimer = Math.max(en.slowTimer, 1.4);
                   en.slowFactor = Math.min(en.slowFactor || 1, 1 - profile.slowPct);
                 }
                 emitParticles(en.x, en.y, '#FDE047', 4, 70, 0.8);
@@ -2945,14 +2952,14 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 vx: Math.cos(shotAngle) * 430,
                 vy: Math.sin(shotAngle) * 430,
                 targetId: target.id,
-                damage: count === 3 ? Math.round(shotDmg * 0.56) : count === 2 ? Math.round(shotDmg * 0.72) : shotDmg,
+                damage: count === 3 ? Math.round(shotDmg * 0.48) : count === 2 ? Math.round(shotDmg * 0.64) : shotDmg,
                 armorPierce: profile.armorPierce,
                 shieldMult: profile.shieldMult,
                 splashRadius: profile.splashRadius,
                 pullForce: 0,
                 burnDps: 0,
                 burnDuration: 0,
-                slowAmount: gun.level >= 5 ? (gun.level === 10 ? 0.8 : 0.55) : 0, // reused as stun sec
+                slowAmount: gun.level >= 5 ? (gun.level === 10 ? 0.45 : 0.35) : 0, // stagger interrupt duration
                 pierceLeft: 0,
                 life: 1.25,
                 maxLife: 1.25,
@@ -2980,13 +2987,13 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 vx: Math.cos(shotAngle) * 365,
                 vy: Math.sin(shotAngle) * 365,
                 targetId: target.id,
-                damage: count === 3 ? Math.round(shotDmg * 0.6) : count === 2 ? Math.round(shotDmg * 0.74) : shotDmg,
+                damage: count === 3 ? Math.round(shotDmg * 0.5) : count === 2 ? Math.round(shotDmg * 0.66) : shotDmg,
                 armorPierce: profile.armorPierce,
                 shieldMult: profile.shieldMult,
                 splashRadius: profile.splashRadius,
                 pullForce: profile.pullForce,
                 burnDps: profile.burnDps,
-                burnDuration: 2.2,
+                burnDuration: 2.0,
                 slowAmount: 0,
                 pierceLeft: 0,
                 life: 1.4,
@@ -3017,13 +3024,13 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 targetId: target.id,
                 destX: target.x,
                 destY: target.y,
-                damage: count === 3 ? Math.round(shotDmg * 0.56) : count === 2 ? Math.round(shotDmg * 0.72) : shotDmg,
+                damage: count === 3 ? Math.round(shotDmg * 0.48) : count === 2 ? Math.round(shotDmg * 0.64) : shotDmg,
                 armorPierce: profile.armorPierce,
                 shieldMult: profile.shieldMult,
                 splashRadius: profile.splashRadius,
                 pullForce: 0,
                 burnDps: profile.burnDps,
-                burnDuration: profile.burnDps > 0 ? 2.4 : 0,
+                burnDuration: profile.burnDps > 0 ? 2.2 : 0,
                 slowAmount: 0,
                 pierceLeft: 0,
                 life: 2.1,
@@ -3063,14 +3070,14 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 vx: Math.cos(shotAngle) * hSpeed,
                 vy: Math.sin(shotAngle) * hSpeed,
                 targetId: lock.id,
-                damage: count >= 5 ? Math.round(shotDmg * 0.5) : count >= 3 ? Math.round(shotDmg * 0.64) : count === 2 ? Math.round(shotDmg * 0.78) : shotDmg,
+                damage: count >= 4 ? Math.round(shotDmg * 0.46) : count >= 3 ? Math.round(shotDmg * 0.56) : count === 2 ? Math.round(shotDmg * 0.72) : shotDmg,
                 armorPierce: profile.armorPierce,
                 shieldMult: profile.shieldMult,
                 splashRadius: profile.splashRadius,
                 pullForce: 0,
                 burnDps: 0,
                 burnDuration: 0,
-                slowAmount: gun.level >= 5 ? 1.35 : 1,
+                slowAmount: gun.level >= 5 ? 1.22 : 1,
                 pierceLeft: 0,
                 life: 2.2,
                 maxLife: 2.2,
@@ -3181,14 +3188,14 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                     pullEnemyAlongTrack(en, s.map, pr.x, pr.y, pr.pullForce);
                   }
                   if (pr.slowAmount > 0) {
-                    en.slowTimer = Math.max(en.slowTimer, 1.8);
+                    en.slowTimer = Math.max(en.slowTimer, 1.5);
                     en.slowFactor = Math.min(en.slowFactor || 1, 1 - pr.slowAmount);
                   }
                   if (pr.burnDps > 0) {
                     en.burnTimer = Math.max(en.burnTimer, pr.burnDuration);
                     en.burnDps = Math.max(en.burnDps, pr.burnDps);
                   }
-                  const falloffDmg = Math.round(pr.damage * (dist < 42 ? 1 : 0.78));
+                  const falloffDmg = Math.round(pr.damage * (dist < 42 ? 1 : 0.72));
                   const res = applyDamageToEnemy(en, falloffDmg, {
                     armorPierce: pr.armorPierce,
                     shieldMult: pr.shieldMult,
@@ -3218,7 +3225,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 if (en.hp <= 0 || en.koTimer > 0) continue;
                 const dist = Math.hypot(en.x - pr.x, en.y - pr.y);
                 if (dist <= pr.splashRadius + en.radius) {
-                  const dmg = Math.round(pr.damage * (dist < 28 ? 1 : 0.74));
+                  const dmg = Math.round(pr.damage * (dist < 28 ? 1 : 0.7));
                   const res = applyDamageToEnemy(en, dmg, {
                     armorPierce: pr.armorPierce,
                     shieldMult: pr.shieldMult,
@@ -3232,8 +3239,8 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 }
               }
               if (pr.kind === 'missile' && pr.spawnCluster) {
-                for (let c = 0; c < 3; c++) {
-                  const ca = (c * Math.PI * 2) / 3 + Math.random() * 0.5;
+                for (let c = 0; c < 2; c++) {
+                  const ca = c * Math.PI + Math.random() * 0.6;
                   s.projectiles.push({
                     id: s.nextProjId++,
                     kind: 'bomblet',
@@ -3243,17 +3250,17 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                     vx: Math.cos(ca) * 210,
                     vy: Math.sin(ca) * 210,
                     targetId: -1,
-                    damage: Math.round(pr.damage * 0.42),
+                    damage: Math.round(pr.damage * 0.32),
                     armorPierce: pr.armorPierce,
                     shieldMult: pr.shieldMult,
-                    splashRadius: 46,
+                    splashRadius: 40,
                     pullForce: 0,
                     burnDps: 0,
                     burnDuration: 0,
                     slowAmount: 0,
                     pierceLeft: 0,
-                    life: 0.25,
-                    maxLife: 0.25,
+                    life: 0.24,
+                    maxLife: 0.24,
                     age: 0,
                     speed: 210,
                     color: '#FDE047',
@@ -3273,16 +3280,16 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
               if (res.killed) recordKill(hitEnemy, pr.sourceGunId);
 
-              const poolLife = pr.visualTier >= 3 ? 5.2 : pr.visualTier === 2 ? 4.8 : 3.6;
-              if (s.acidPools.length >= 24) s.acidPools.shift();
+              const poolLife = pr.visualTier >= 3 ? 4.0 : pr.visualTier === 2 ? 3.8 : 3.2;
+              if (s.acidPools.length >= 16) s.acidPools.shift();
               s.acidPools.push({
                 x: pr.x,
                 y: pr.y,
                 radius: pr.splashRadius,
                 life: poolLife,
                 maxLife: poolLife,
-                dps: Math.max(12, pr.burnDps),
-                shred: pr.acidShred ?? 0.35,
+                dps: Math.max(10, pr.burnDps),
+                shred: pr.acidShred ?? 0.25,
                 slowPct: pr.slowAmount,
                 tickAccum: 0.25,
                 sourceGunId: pr.sourceGunId,
@@ -3358,7 +3365,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                   if (pr.slowAmount > 0 && en.id === hitEnemy.id) {
                     en.stunTimer = Math.max(en.stunTimer, pr.slowAmount);
                   }
-                  const res = applyDamageToEnemy(en, Math.round(pr.damage * (en.id === hitEnemy.id ? 1 : 0.65)), {
+                  const res = applyDamageToEnemy(en, Math.round(pr.damage * (en.id === hitEnemy.id ? 1 : 0.6)), {
                     armorPierce: pr.armorPierce,
                     shieldMult: pr.shieldMult,
                   });
@@ -3389,14 +3396,14 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 const dy = pr.y - en.y;
                 const dist = Math.hypot(dx, dy);
                 if (dist <= pr.splashRadius + en.radius) {
-                  if (pr.pullForce > 0 && dist > 6 && en.kind !== 'boss') {
+                  if (pr.pullForce > 0 && dist > 6 && en.kind !== 'boss' && en.kind !== 'juggernaut') {
                     pullEnemyAlongTrack(en, s.map, pr.x, pr.y, pr.pullForce);
                   }
                   if (pr.burnDps > 0) {
                     en.burnTimer = Math.max(en.burnTimer, pr.burnDuration);
                     en.burnDps = Math.max(en.burnDps, pr.burnDps);
                   }
-                  const res = applyDamageToEnemy(en, Math.round(pr.damage * (dist < 28 ? 1 : 0.72)), {
+                  const res = applyDamageToEnemy(en, Math.round(pr.damage * (dist < 28 ? 1 : 0.68)), {
                     armorPierce: pr.armorPierce,
                     shieldMult: pr.shieldMult,
                   });
@@ -3429,9 +3436,9 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                     en.burnDps = Math.max(en.burnDps, pr.burnDps);
                   }
                   if (pr.visualTier === 4) {
-                    en.armorShred = Math.max(en.armorShred, 0.5);
+                    en.armorShred = Math.max(en.armorShred, 0.3);
                   }
-                  const res = applyDamageToEnemy(en, Math.round(pr.damage * (dist < 32 ? 1 : 0.75)), {
+                  const res = applyDamageToEnemy(en, Math.round(pr.damage * (dist < 32 ? 1 : 0.7)), {
                     armorPierce: pr.armorPierce,
                     shieldMult: pr.shieldMult,
                   });
@@ -3441,7 +3448,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 }
               }
               if (pr.spawnCluster) {
-                const subCount = pr.visualTier === 4 ? 7 : pr.visualTier === 3 ? 6 : 5;
+                const subCount = 4;
                 for (let c = 0; c < subCount; c++) {
                   const ca = (c * Math.PI * 2) / subCount + Math.random() * 0.35;
                   s.projectiles.push({
@@ -3453,10 +3460,10 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                     vx: Math.cos(ca) * 195,
                     vy: Math.sin(ca) * 195,
                     targetId: -1,
-                    damage: Math.round(pr.damage * 0.45),
+                    damage: Math.round(pr.damage * 0.3),
                     armorPierce: pr.armorPierce,
                     shieldMult: pr.shieldMult,
-                    splashRadius: 48,
+                    splashRadius: 42,
                     pullForce: 0,
                     burnDps: pr.burnDps,
                     burnDuration: pr.burnDuration,
@@ -3485,8 +3492,8 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                   ? pr.slowAmount
                   : 1;
               const hitDmg = Math.round(pr.damage * priorityBonus);
-              hitEnemy.slowTimer = Math.max(hitEnemy.slowTimer, 0.8);
-              hitEnemy.slowFactor = Math.min(hitEnemy.slowFactor || 1, 0.82);
+              hitEnemy.slowTimer = Math.max(hitEnemy.slowTimer, 0.7);
+              hitEnemy.slowFactor = Math.min(hitEnemy.slowFactor || 1, 0.86);
               s.impactFlashes.push({
                 x: pr.x,
                 y: pr.y,
@@ -3503,7 +3510,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 if (!isMain && (pr.splashRadius <= 0 || Math.hypot(en.x - pr.x, en.y - pr.y) > pr.splashRadius + en.radius)) {
                   continue;
                 }
-                const res = applyDamageToEnemy(en, isMain ? hitDmg : Math.round(hitDmg * 0.45), {
+                const res = applyDamageToEnemy(en, isMain ? hitDmg : Math.round(hitDmg * 0.4), {
                   armorPierce: pr.armorPierce,
                   shieldMult: pr.shieldMult,
                 });
@@ -3520,7 +3527,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               if (pr.burnDps > 0) {
                 hitEnemy.burnTimer = Math.max(hitEnemy.burnTimer, pr.burnDuration);
                 hitEnemy.burnDps = Math.max(hitEnemy.burnDps, pr.burnDps);
-                hitEnemy.armorShred = Math.max(hitEnemy.armorShred, 0.25);
+                hitEnemy.armorShred = Math.max(hitEnemy.armorShred, 0.18);
               }
               if (pr.splashRadius > 0) {
                 s.impactFlashes.push({
@@ -3537,7 +3544,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                   if (en.hp <= 0 || en.koTimer > 0) continue;
                   const dist = Math.hypot(en.x - pr.x, en.y - pr.y);
                   if (dist <= pr.splashRadius + en.radius) {
-                    const res = applyDamageToEnemy(en, Math.round(pr.damage * (en.id === hitEnemy.id ? 1 : 0.55)), {
+                    const res = applyDamageToEnemy(en, Math.round(pr.damage * (en.id === hitEnemy.id ? 1 : 0.4)), {
                       armorPierce: pr.armorPierce,
                       shieldMult: pr.shieldMult,
                     });
@@ -4850,7 +4857,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 type="button"
                 onClick={activateOverdrive}
                 disabled={hud.overdrivePct < 100 || hud.overdriveActive}
-                title="Kích hoạt Hội Tụ Hỏa Lực ×2.0 (Space)"
+                title="Kích hoạt Hội Tụ Hỏa Lực ×1.75 (Space)"
                 className={`h-8 sm:h-9 px-2.5 sm:px-3 rounded-lg border text-xs font-mono font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
                   hud.overdriveActive
                     ? 'bg-rose-600 border-rose-400 text-white'

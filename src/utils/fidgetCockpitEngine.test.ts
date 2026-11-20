@@ -5,10 +5,14 @@ import {
   COCKPIT_DIFFICULTY_CONFIGS,
   COCKPIT_DIFFICULTY_ORDER,
   createInitialHardwareState,
+  CRISIS_TASK_INTERVAL,
   evaluateMicroTask,
+  getPilotRank,
+  getShortestDialDirection,
   getSpeedMultiplier,
   getSpeedTier,
   getTaskTimeLimitSec,
+  isCrisisRound,
   isOverdriveTrigger,
   normalizeDialAngle,
   OVERDRIVE_COMBO_STEP,
@@ -17,8 +21,8 @@ import {
   TASK_PLUGINS,
 } from './fidgetCockpitEngine.ts';
 
-test('Plugin registry defines all 6 cockpit modules with valid limits and anti-repeat selection', () => {
-  assert.ok(TASK_PLUGINS.length >= 9);
+test('Plugin registry defines 15 tactical tasks across all 6 cockpit modules with anti-repeat selection', () => {
+  assert.ok(TASK_PLUGINS.length >= 15);
   assert.deepEqual(COCKPIT_DIFFICULTY_ORDER, ['easy', 'normal', 'hard', 'chaos']);
   assert.equal(COCKPIT_DIFFICULTY_CONFIGS.easy.shields, 3);
   assert.equal(COCKPIT_DIFFICULTY_CONFIGS.normal.shields, 2);
@@ -32,10 +36,11 @@ test('Plugin registry defines all 6 cockpit modules with valid limits and anti-r
   );
 
   let prevMod = null;
-  for (let i = 0; i < 18; i++) {
+  for (let i = 0; i < 24; i++) {
     const { task, hardwarePatch } = pickNextMicroTask(i, prevMod, 'endless_survival', 'easy');
     assert.notEqual(task.module, prevMod, 'Must alternate module every command for ADHD zero-downtime variety');
     assert.ok(task.timeLimitSec >= 4.0 && task.timeLimitSec <= 8.2);
+    assert.equal(Boolean(task.isCrisis), isCrisisRound(i));
     const hw = { ...createInitialHardwareState(), ...hardwarePatch };
     assert.equal(
       evaluateMicroTask(task, hw, 0, false),
@@ -62,6 +67,11 @@ test('Difficulty levels properly scale time limits, click quotas, shields, and s
   const easyScore = calculateTaskScore(5, 1, 0.5, false, 'easy');
   const chaosScore = calculateTaskScore(5, 1, 0.5, false, 'chaos');
   assert.ok(chaosScore > easyScore * 2);
+
+  // Crisis rounds award 1.5x points
+  const crisisScore = calculateTaskScore(5, 1, 0.5, false, 'normal', true);
+  const normalScore = calculateTaskScore(5, 1, 0.5, false, 'normal', false);
+  assert.ok(crisisScore > normalScore * 1.4);
 });
 
 test('Switch, Red Button (mash & exact), Dial, Wave Fader, and Patch Bay plugins evaluate accurately', () => {
@@ -99,7 +109,7 @@ test('Switch, Red Button (mash & exact), Dial, Wave Fader, and Patch Bay plugins
   hwExact.redPressCount = 5;
   assert.equal(evaluateMicroTask(exactTask, hwExact, 0.9, false), 'failed');
 
-  // Rotary dial wrapping around 0/330 deg
+  // Rotary dial wrapping + directional turn hint
   const dialPlugin = TASK_PLUGINS.find((p) => p.id === 'rotary_dial_target')!;
   const dialTask = {
     pluginId: dialPlugin.id,
@@ -113,8 +123,11 @@ test('Switch, Red Button (mash & exact), Dial, Wave Fader, and Patch Bay plugins
   const hwDial = { ...createInitialHardwareState(), dialAngle: normalizeDialAngle(360) };
   assert.equal(hwDial.dialAngle, 0);
   assert.equal(evaluateMicroTask(dialTask, hwDial, 1.1, false), 'success');
+  assert.equal(getShortestDialDirection(30, 90), 'cw');
+  assert.equal(getShortestDialDirection(30, 330), 'ccw');
+  assert.equal(getShortestDialDirection(90, 90), 'done');
 
-  // Patch bay matching
+  // Patch bay matching + rewire task
   const patchPlugin = TASK_PLUGINS.find((p) => p.id === 'patch_bay_connect')!;
   const patchInit = patchPlugin.init(() => 0.5, 1, 'easy');
   const patchTask = {
@@ -133,6 +146,27 @@ test('Switch, Red Button (mash & exact), Dial, Wave Fader, and Patch Bay plugins
     { fromIndex: 1, toIndex: hwPatch.rightPortOrder.indexOf(leftColors[1]) },
   ];
   assert.equal(evaluateMicroTask(patchTask, hwPatch, 2.0, false), 'success');
+
+  const rewirePlugin = TASK_PLUGINS.find((p) => p.id === 'patch_bay_rewire')!;
+  const rewireInit = rewirePlugin.init(() => 0.1, 1, 'normal'); // gold required
+  const rewireTask = {
+    pluginId: rewirePlugin.id,
+    module: rewirePlugin.module,
+    title: rewireInit.title,
+    hint: rewireInit.hint,
+    badgeLabel: rewireInit.badgeLabel,
+    timeLimitSec: 5.0,
+    goal: rewireInit.goal,
+  };
+  const hwRewire = { ...createInitialHardwareState(), ...rewireInit.hardwarePatch };
+  // Connecting cyan + rose without gold must stay active
+  hwRewire.patchConnections = [
+    { fromIndex: 1, toIndex: hwRewire.rightPortOrder.indexOf('cyan') },
+    { fromIndex: 2, toIndex: hwRewire.rightPortOrder.indexOf('rose') },
+  ];
+  assert.equal(evaluateMicroTask(rewireTask, hwRewire, 1.5, false), 'active');
+  hwRewire.patchConnections.push({ fromIndex: 0, toIndex: hwRewire.rightPortOrder.indexOf('gold') });
+  assert.equal(evaluateMicroTask(rewireTask, hwRewire, 1.8, false), 'success');
 });
 
 test('Yellow Hold Pad + Sweeping Lightning Hazard fails on zap hit and succeeds when dodged', () => {
@@ -154,6 +188,7 @@ test('Yellow Hold Pad + Sweeping Lightning Hazard fails on zap hit and succeeds 
     const cyc = stepHazardCycle(t, 1, 'easy');
     if (cyc.warning) sawWarn = true;
     if (cyc.active) sawActive = true;
+    assert.ok(cyc.progressRatio >= 0 && cyc.progressRatio <= 1);
   }
   assert.ok(sawWarn && sawActive, 'Hazard cycle must produce warning then lightning active phase');
 
@@ -168,10 +203,14 @@ test('Yellow Hold Pad + Sweeping Lightning Hazard fails on zap hit and succeeds 
   assert.equal(evaluateMicroTask(holdTask, hwHold, 2.5, false), 'success');
 });
 
-test('10-combo Overdrive trigger, speed escalation, and 2x Overdrive scoring', () => {
+test('10-combo Overdrive, 5-step Crisis rounds, Blitz 60s mode, and Pilot Rank progression', () => {
   assert.equal(isOverdriveTrigger(9), false);
   assert.equal(isOverdriveTrigger(OVERDRIVE_COMBO_STEP), true);
   assert.equal(isOverdriveTrigger(20), true);
+
+  assert.equal(isCrisisRound(CRISIS_TASK_INTERVAL - 2), false);
+  assert.equal(isCrisisRound(CRISIS_TASK_INTERVAL - 1), true);
+  assert.equal(isCrisisRound(9), true);
 
   assert.equal(getSpeedTier(0), 1);
   assert.equal(getSpeedTier(10), 2);
@@ -180,8 +219,16 @@ test('10-combo Overdrive trigger, speed escalation, and 2x Overdrive scoring', (
     getTaskTimeLimitSec(4.0, 3, 'endless_survival', 'normal') <
       getTaskTimeLimitSec(4.0, 1, 'endless_survival', 'normal')
   );
+  assert.ok(
+    getTaskTimeLimitSec(4.0, 1, 'blitz_60s', 'normal') <=
+      getTaskTimeLimitSec(4.0, 1, 'endless_survival', 'normal')
+  );
 
   const normalPts = calculateTaskScore(5, 1, 0.5, false, 'normal');
   const odPts = calculateTaskScore(5, 1, 0.5, true, 'normal');
   assert.equal(odPts, normalPts * 2);
+
+  assert.equal(getPilotRank(200, 1).rank, 'C');
+  assert.equal(getPilotRank(3100, 12).rank, 'A');
+  assert.equal(getPilotRank(9500, 30).rank, 'S+');
 });

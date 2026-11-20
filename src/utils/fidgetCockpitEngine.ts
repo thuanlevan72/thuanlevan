@@ -6,9 +6,11 @@ export type CockpitModuleId =
   | 'patch_bay'
   | 'hazard_hold';
 
-export type CockpitMode = 'endless_survival' | 'rush_15s';
+export type CockpitMode = 'endless_survival' | 'rush_15s' | 'blitz_60s';
 
 export type CockpitDifficulty = 'easy' | 'normal' | 'hard' | 'chaos';
+
+export type PilotRank = 'S+' | 'S' | 'A' | 'B' | 'C';
 
 export interface CockpitDifficultyConfig {
   readonly id: CockpitDifficulty;
@@ -19,6 +21,8 @@ export interface CockpitDifficultyConfig {
   readonly timeScale: number;
   readonly rushStartSec: number;
   readonly rushBonusSec: number;
+  readonly blitzStartSec: number;
+  readonly blitzPenaltySec: number;
   readonly clickDelta: number;
   readonly dialToleranceDeg: number;
   readonly faderTolerance: number;
@@ -46,6 +50,8 @@ export const COCKPIT_DIFFICULTY_CONFIGS: Record<CockpitDifficulty, CockpitDiffic
     timeScale: 1.55,
     rushStartSec: 18.0,
     rushBonusSec: 3.4,
+    blitzStartSec: 60.0,
+    blitzPenaltySec: 1.5,
     clickDelta: -2,
     dialToleranceDeg: 35,
     faderTolerance: 14,
@@ -64,6 +70,8 @@ export const COCKPIT_DIFFICULTY_CONFIGS: Record<CockpitDifficulty, CockpitDiffic
     timeScale: 1.25,
     rushStartSec: 15.0,
     rushBonusSec: 2.9,
+    blitzStartSec: 60.0,
+    blitzPenaltySec: 2.0,
     clickDelta: -1,
     dialToleranceDeg: 28,
     faderTolerance: 11,
@@ -82,6 +90,8 @@ export const COCKPIT_DIFFICULTY_CONFIGS: Record<CockpitDifficulty, CockpitDiffic
     timeScale: 1.0,
     rushStartSec: 15.0,
     rushBonusSec: 2.5,
+    blitzStartSec: 60.0,
+    blitzPenaltySec: 2.5,
     clickDelta: 0,
     dialToleranceDeg: 22,
     faderTolerance: 9,
@@ -100,6 +110,8 @@ export const COCKPIT_DIFFICULTY_CONFIGS: Record<CockpitDifficulty, CockpitDiffic
     timeScale: 0.85,
     rushStartSec: 13.0,
     rushBonusSec: 2.2,
+    blitzStartSec: 60.0,
+    blitzPenaltySec: 3.5,
     clickDelta: 1,
     dialToleranceDeg: 18,
     faderTolerance: 7,
@@ -157,6 +169,7 @@ export interface ActiveMicroTask {
   readonly badgeLabel: string;
   readonly timeLimitSec: number;
   readonly goal: TaskGoal;
+  readonly isCrisis?: boolean;
 }
 
 export interface TaskPlugin {
@@ -184,8 +197,10 @@ export interface TaskPlugin {
 
 export const OVERDRIVE_COMBO_STEP = 10;
 export const OVERDRIVE_DURATION_SEC = 5.0;
+export const CRISIS_TASK_INTERVAL = 5;
 export const RUSH_15S_START_SEC = 15.0;
 export const RUSH_15S_TIME_BONUS_SEC = 2.9;
+export const BLITZ_60S_START_SEC = 60.0;
 
 export const PATCH_SYMBOL_MAP: Record<PatchColor, { symbol: string; label: string; hex: string }> = {
   gold: { symbol: '▲', label: 'Vàng', hex: '#F59E0B' },
@@ -224,7 +239,7 @@ export function getTaskTimeLimitSec(
 ): number {
   const mult = getSpeedMultiplier(speedTier);
   const diffScale = COCKPIT_DIFFICULTY_CONFIGS[difficulty].timeScale;
-  const modeScale = mode === 'rush_15s' ? 0.96 : 1.0;
+  const modeScale = mode === 'rush_15s' ? 0.96 : mode === 'blitz_60s' ? 0.94 : 1.0;
   return Number(Math.max(2.3, Math.min(8.2, (baseSec * diffScale * modeScale) / mult)).toFixed(2));
 }
 
@@ -232,19 +247,46 @@ export function isOverdriveTrigger(nextCombo: number): boolean {
   return nextCombo > 0 && nextCombo % OVERDRIVE_COMBO_STEP === 0;
 }
 
+export function isCrisisRound(completedTasks: number): boolean {
+  const nextNumber = completedTasks + 1;
+  return nextNumber >= CRISIS_TASK_INTERVAL && nextNumber % CRISIS_TASK_INTERVAL === 0;
+}
+
 export function calculateTaskScore(
   combo: number,
   speedTier: number,
   remainingRatio: number,
   isOverdrive: boolean,
-  difficulty: CockpitDifficulty = 'normal'
+  difficulty: CockpitDifficulty = 'normal',
+  isCrisis = false
 ): number {
   const base = 100 + Math.min(200, combo * 15);
   const speedBonus = Math.round(Math.max(0, Math.min(1, remainingRatio)) * 60);
   const diffMult = COCKPIT_DIFFICULTY_CONFIGS[difficulty].scoreMult;
-  const mult = (1 + (speedTier - 1) * 0.25) * diffMult;
+  const crisisMult = isCrisis ? 1.5 : 1.0;
+  const mult = (1 + (speedTier - 1) * 0.25) * diffMult * crisisMult;
   const single = Math.round((base + speedBonus) * mult);
   return isOverdrive ? single * 2 : single;
+}
+
+export function getPilotRank(score: number, completedTasks: number): {
+  rank: PilotRank;
+  title: string;
+  colorHex: string;
+} {
+  if (score >= 9000 || completedTasks >= 28) {
+    return { rank: 'S+', title: 'Cơ Trưởng Siêu Thanh', colorHex: '#FACC15' };
+  }
+  if (score >= 5200 || completedTasks >= 18) {
+    return { rank: 'S', title: 'Phi Công Tinh Nhuệ', colorHex: '#34D399' };
+  }
+  if (score >= 2800 || completedTasks >= 11) {
+    return { rank: 'A', title: 'Kỹ Thuật Viên Chuẩn Xác', colorHex: '#38BDF8' };
+  }
+  if (score >= 1200 || completedTasks >= 5) {
+    return { rank: 'B', title: 'Học Viên Buồng Lái', colorHex: '#A78BFA' };
+  }
+  return { rank: 'C', title: 'Tập Sự Khởi Động', colorHex: '#94A3B8' };
 }
 
 /**
@@ -255,7 +297,7 @@ export function stepHazardCycle(
   elapsedSec: number,
   speedTier: number,
   difficulty: CockpitDifficulty = 'normal'
-): { warning: boolean; active: boolean } {
+): { warning: boolean; active: boolean; progressRatio: number; phaseLabel: 'safe' | 'warning' | 'active' } {
   const slowFactor = COCKPIT_DIFFICULTY_CONFIGS[difficulty].hazardSlowFactor;
   const cyclePeriod = Math.max(1.5, (2.25 - (speedTier - 1) * 0.1) * slowFactor);
   const phase = (elapsedSec + 0.35) % cyclePeriod;
@@ -263,19 +305,26 @@ export function stepHazardCycle(
   const activeStart = cyclePeriod * 0.68;
   const zapDuration = difficulty === 'easy' ? 0.42 : difficulty === 'normal' ? 0.48 : 0.55;
   const activeEnd = Math.min(cyclePeriod * 0.94, activeStart + zapDuration);
+  const progressRatio = Number((phase / cyclePeriod).toFixed(3));
 
   if (phase >= activeStart && phase < activeEnd) {
-    return { warning: false, active: true };
+    return { warning: false, active: true, progressRatio, phaseLabel: 'active' };
   }
   if (phase >= warnStart && phase < activeStart) {
-    return { warning: true, active: false };
+    return { warning: true, active: false, progressRatio, phaseLabel: 'warning' };
   }
-  return { warning: false, active: false };
+  return { warning: false, active: false, progressRatio, phaseLabel: 'safe' };
 }
 
 function angularDeltaDeg(a: number, b: number): number {
   const diff = Math.abs((((a - b) % 360) + 540) % 360 - 180);
   return diff;
+}
+
+export function getShortestDialDirection(fromDeg: number, toDeg: number): 'cw' | 'ccw' | 'done' {
+  const delta = (((toDeg - fromDeg) % 360) + 540) % 360 - 180;
+  if (Math.abs(delta) < 15) return 'done';
+  return delta > 0 ? 'cw' : 'ccw';
 }
 
 export function normalizeDialAngle(deg: number): number {
@@ -293,8 +342,7 @@ function shuffleColors(rng: () => number): [PatchColor, PatchColor, PatchColor] 
 }
 
 /**
- * Plugin Registry: Each micro-task is a concise self-contained object with init() and evaluate().
- * Adding a new cockpit challenge only requires appending a new plugin entry here.
+ * Plugin Registry: 15 self-contained tactical cockpit micro-tasks across all 6 hardware modules.
  */
 export const TASK_PLUGINS: readonly TaskPlugin[] = [
   {
@@ -369,6 +417,33 @@ export const TASK_PLUGINS: readonly TaskPlugin[] = [
     },
   },
   {
+    id: 'switches_amber_lock',
+    module: 'switches',
+    baseTimeLimitSec: 4.3,
+    init: (rng) => {
+      const midTarget: SwitchState = rng() > 0.5 ? 'green' : 'off';
+      const target: [SwitchState, SwitchState, SwitchState] = ['amber', midTarget, 'amber'];
+      const start: [SwitchState, SwitchState, SwitchState] = [
+        'off',
+        midTarget === 'green' ? 'amber' : 'green',
+        'green',
+      ];
+      const midCode = midTarget === 'green' ? 'X' : '0';
+      return {
+        title: `Khóa chế độ dự phòng [V·${midCode}·V]`,
+        hint: 'Gạt 2 công tắc ngoài về VÀNG, công tắc giữa theo đèn mẫu',
+        badgeLabel: `V·${midCode}·V`,
+        goal: { targetSwitches: target },
+        hardwarePatch: { switches: start },
+      };
+    },
+    evaluate: (task, hw, elapsedSec) => {
+      const target = task.goal.targetSwitches!;
+      if (hw.switches.every((s, i) => s === target[i])) return 'success';
+      return elapsedSec >= task.timeLimitSec ? 'failed' : 'active';
+    },
+  },
+  {
     id: 'red_button_mash',
     module: 'red_button',
     baseTimeLimitSec: 3.9,
@@ -411,6 +486,26 @@ export const TASK_PLUGINS: readonly TaskPlugin[] = [
     },
   },
   {
+    id: 'red_button_turbo',
+    module: 'red_button',
+    baseTimeLimitSec: 4.2,
+    init: (_rng, speedTier, difficulty) => {
+      const bonus = difficulty === 'chaos' ? 3 : difficulty === 'hard' ? 2 : 0;
+      const targetClicks = Math.max(6, Math.min(15, 9 + bonus + Math.floor((speedTier - 1) * 1.2)));
+      return {
+        title: `Xả áp khẩn cấp ${targetClicks} nhịp!`,
+        hint: 'Đập nút ĐỎ siêu tốc đạt ngưỡng xả áp an toàn',
+        badgeLabel: `XẢ ${targetClicks}×`,
+        goal: { targetClicks, exactClicks: false },
+        hardwarePatch: { redPressCount: 0 },
+      };
+    },
+    evaluate: (task, hw, elapsedSec) => {
+      if (hw.redPressCount >= (task.goal.targetClicks ?? 9)) return 'success';
+      return elapsedSec >= task.timeLimitSec ? 'failed' : 'active';
+    },
+  },
+  {
     id: 'rotary_dial_target',
     module: 'rotary_dial',
     baseTimeLimitSec: 4.4,
@@ -437,6 +532,31 @@ export const TASK_PLUGINS: readonly TaskPlugin[] = [
     },
   },
   {
+    id: 'rotary_dial_opposite',
+    module: 'rotary_dial',
+    baseTimeLimitSec: 4.5,
+    init: (rng, _tier, difficulty) => {
+      const startIdx = Math.floor(rng() * 12);
+      const targetIdx = (startIdx + 6) % 12;
+      const startAngle = startIdx * 30;
+      const targetAngle = targetIdx * 30;
+      const tol = Math.max(15, COCKPIT_DIFFICULTY_CONFIGS[difficulty].dialToleranceDeg - 3);
+      return {
+        title: `Đảo pha 180° tới ${targetAngle}°!`,
+        hint: 'Xoay nhanh sang góc đối diện 180° theo mũi tên chỉ dẫn',
+        badgeLabel: `ĐẢO ${targetAngle}°`,
+        goal: { targetDialAngle: targetAngle, dialToleranceDeg: tol },
+        hardwarePatch: { dialAngle: startAngle },
+      };
+    },
+    evaluate: (task, hw, elapsedSec) => {
+      const target = task.goal.targetDialAngle ?? 180;
+      const tol = task.goal.dialToleranceDeg ?? 24;
+      if (angularDeltaDeg(hw.dialAngle, target) <= tol) return 'success';
+      return elapsedSec >= task.timeLimitSec ? 'failed' : 'active';
+    },
+  },
+  {
     id: 'wave_fader_match',
     module: 'wave_fader',
     baseTimeLimitSec: 4.5,
@@ -458,6 +578,33 @@ export const TASK_PLUGINS: readonly TaskPlugin[] = [
     },
     evaluate: (task, hw, elapsedSec) => {
       const reqHold = task.goal.faderHoldRequiredSec ?? 0.18;
+      if (hw.faderMatchedSec >= reqHold) return 'success';
+      return elapsedSec >= task.timeLimitSec ? 'failed' : 'active';
+    },
+  },
+  {
+    id: 'wave_fader_extreme',
+    module: 'wave_fader',
+    baseTimeLimitSec: 4.0,
+    init: (rng, _tier, difficulty) => {
+      const cfg = COCKPIT_DIFFICULTY_CONFIGS[difficulty];
+      const goHigh = rng() > 0.5;
+      const start = goHigh ? 14 : 86;
+      const target = goHigh ? 92 : 8;
+      return {
+        title: goHigh ? 'Đẩy công suất sóng ĐỈNH 92%!' : 'Hạ biên độ sóng ĐÁY 8%!',
+        hint: 'Gạt mạnh thanh sóng về sát ngưỡng mục tiêu và giữ nhịp',
+        badgeLabel: goHigh ? 'MAX 92%' : 'MIN 8%',
+        goal: {
+          targetFader: target,
+          faderTolerance: Math.max(9, cfg.faderTolerance + 1),
+          faderHoldRequiredSec: Math.max(0.1, cfg.faderHoldSec - 0.04),
+        },
+        hardwarePatch: { faderValue: start, faderMatchedSec: 0 },
+      };
+    },
+    evaluate: (task, hw, elapsedSec) => {
+      const reqHold = task.goal.faderHoldRequiredSec ?? 0.14;
       if (hw.faderMatchedSec >= reqHold) return 'success';
       return elapsedSec >= task.timeLimitSec ? 'failed' : 'active';
     },
@@ -493,6 +640,41 @@ export const TASK_PLUGINS: readonly TaskPlugin[] = [
     },
   },
   {
+    id: 'patch_bay_rewire',
+    module: 'patch_bay',
+    baseTimeLimitSec: 4.8,
+    init: (rng) => {
+      const order = shuffleColors(rng);
+      // Pre-plug 1 wrong/crossed cable so the player must rewire cleanly to reach 2 valid pairs
+      const wrongToIdx = (order.indexOf('gold') + 1) % 3;
+      const targetColors: readonly PatchColor[] = ['gold', 'cyan', 'rose'];
+      const chosenColor = targetColors[Math.floor(rng() * targetColors.length)];
+      const meta = PATCH_SYMBOL_MAP[chosenColor];
+      return {
+        title: `Sửa dây nhiễu · Nối [${meta.symbol} ${meta.label}] + 1 dây`,
+        hint: `Rút dây sai & cắm đúng cổng [${meta.symbol} ${meta.label}] cùng ít nhất 1 dây khác`,
+        badgeLabel: `ƯU TIÊN ${meta.symbol}`,
+        goal: { requiredPatchColor: chosenColor, requiredPatchCount: 2 },
+        hardwarePatch: {
+          rightPortOrder: order,
+          patchConnections: [{ fromIndex: 0, toIndex: wrongToIdx }],
+          selectedLeftPort: null,
+        },
+      };
+    },
+    evaluate: (task, hw, elapsedSec) => {
+      const reqCount = task.goal.requiredPatchCount ?? 2;
+      const reqColor = task.goal.requiredPatchColor;
+      const leftOrder: readonly PatchColor[] = ['gold', 'cyan', 'rose'];
+      const validConns = hw.patchConnections.filter(
+        (c) => leftOrder[c.fromIndex] === hw.rightPortOrder[c.toIndex]
+      );
+      const hasColor = !reqColor || validConns.some((c) => leftOrder[c.fromIndex] === reqColor);
+      if (validConns.length >= reqCount && hasColor) return 'success';
+      return elapsedSec >= task.timeLimitSec ? 'failed' : 'active';
+    },
+  },
+  {
     id: 'hazard_hold_dodge',
     module: 'hazard_hold',
     baseTimeLimitSec: 4.9,
@@ -512,6 +694,26 @@ export const TASK_PLUGINS: readonly TaskPlugin[] = [
       return elapsedSec >= task.timeLimitSec ? 'failed' : 'active';
     },
   },
+  {
+    id: 'hazard_hold_burst',
+    module: 'hazard_hold',
+    baseTimeLimitSec: 4.5,
+    init: (_rng, _tier, difficulty) => {
+      const holdSec = Number(Math.max(0.75, COCKPIT_DIFFICULTY_CONFIGS[difficulty].holdSec * 0.72).toFixed(2));
+      return {
+        title: 'Nạp tụ nhanh giữa nhịp sét!',
+        hint: 'Canh nhịp an toàn để giữ [F] đủ 100% thật nhanh',
+        badgeLabel: 'NẠP NHANH',
+        goal: { targetHoldSec: holdSec },
+        hardwarePatch: { yellowHolding: false, yellowHoldChargeSec: 0 },
+      };
+    },
+    evaluate: (task, hw, elapsedSec, hazardZapActive) => {
+      if (hw.yellowHolding && hazardZapActive) return 'failed';
+      if (hw.yellowHoldChargeSec >= (task.goal.targetHoldSec ?? 0.95)) return 'success';
+      return elapsedSec >= task.timeLimitSec ? 'failed' : 'active';
+    },
+  },
 ];
 
 export function pickNextMicroTask(
@@ -528,16 +730,24 @@ export function pickNextMicroTask(
   const pool = candidates.length > 0 ? candidates : TASK_PLUGINS;
   const plugin = pool[Math.floor(rng() * pool.length)];
   const setup = plugin.init(rng, speedTier, difficulty);
+  const crisis = isCrisisRound(completedTasks);
+  const adjustedTime = getTaskTimeLimitSec(
+    crisis ? Math.max(3.6, plugin.baseTimeLimitSec * 0.94) : plugin.baseTimeLimitSec,
+    speedTier,
+    mode,
+    difficulty
+  );
 
   return {
     task: {
       pluginId: plugin.id,
       module: plugin.module,
-      title: setup.title,
+      title: crisis ? `KHẨN CẤP · ${setup.title}` : setup.title,
       hint: setup.hint,
-      badgeLabel: setup.badgeLabel,
-      timeLimitSec: getTaskTimeLimitSec(plugin.baseTimeLimitSec, speedTier, mode, difficulty),
+      badgeLabel: crisis ? `${setup.badgeLabel} ×1.5` : setup.badgeLabel,
+      timeLimitSec: adjustedTime,
       goal: setup.goal,
+      isCrisis: crisis,
     },
     hardwarePatch: setup.hardwarePatch,
   };

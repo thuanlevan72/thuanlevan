@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
+  Award,
   Flame,
   Gauge,
   Play,
   RotateCcw,
   ShieldAlert,
   Sparkles,
+  Timer,
+  Unplug,
   Volume2,
   VolumeX,
   Zap,
@@ -20,6 +24,8 @@ import {
   CockpitModuleId,
   createInitialHardwareState,
   evaluateMicroTask,
+  getPilotRank,
+  getShortestDialDirection,
   getSpeedMultiplier,
   getSpeedTier,
   isOverdriveTrigger,
@@ -40,7 +46,7 @@ interface FidgetCockpitGameSectionProps {
   onToggleTheme: () => void;
 }
 
-type CockpitPhase = 'ready' | 'playing' | 'overdrive' | 'failed';
+type CockpitPhase = 'ready' | 'playing' | 'overdrive' | 'failed' | 'finished';
 
 interface FireworkParticle {
   id: number;
@@ -52,15 +58,42 @@ interface FireworkParticle {
   size: number;
 }
 
+interface ModuleStats {
+  count: number;
+  totalSec: number;
+}
+
+type ModuleTelemetryMap = Record<CockpitModuleId, ModuleStats>;
+
+function createEmptyModuleTelemetry(): ModuleTelemetryMap {
+  return {
+    switches: { count: 0, totalSec: 0 },
+    red_button: { count: 0, totalSec: 0 },
+    rotary_dial: { count: 0, totalSec: 0 },
+    wave_fader: { count: 0, totalSec: 0 },
+    patch_bay: { count: 0, totalSec: 0 },
+    hazard_hold: { count: 0, totalSec: 0 },
+  };
+}
+
+const MODULE_SHORT_LABELS: Record<CockpitModuleId, string> = {
+  switches: 'Công tắc',
+  red_button: 'Nút đỏ',
+  rotary_dial: 'Núm xoay',
+  wave_fader: 'Sóng',
+  patch_bay: 'Cắm dây',
+  hazard_hold: 'Giữ vàng',
+};
+
 const SAVE_BEST_KEY = 'thuanle-fidget-cockpit-best-v1';
 
 const PENTATONIC_HZ = [392.0, 440.0, 523.25, 587.33, 659.25, 783.99, 880.0, 1046.5, 1174.66, 1318.51];
 const OVERDRIVE_CHORDS = [
-  [261.63, 329.63, 392.0, 493.88], // Cmaj7
-  [293.66, 349.23, 440.0, 523.25], // Dm7
-  [329.63, 392.0, 493.88, 587.33], // Em7
-  [349.23, 440.0, 523.25, 659.25], // Fmaj7
-  [392.0, 493.88, 587.33, 698.46], // G9sus
+  [261.63, 329.63, 392.0, 493.88],
+  [293.66, 349.23, 440.0, 523.25],
+  [329.63, 392.0, 493.88, 587.33],
+  [349.23, 440.0, 523.25, 659.25],
+  [392.0, 493.88, 587.33, 698.46],
 ];
 
 function loadBestScore(): number {
@@ -102,11 +135,16 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState<number>(() => loadBestScore());
   const [combo, setCombo] = useState(0);
+  const [maxCombo, setMaxCombo] = useState(0);
   const [completedTasks, setCompletedTasks] = useState(0);
   const [shieldsLeft, setShieldsLeft] = useState<number>(COCKPIT_DIFFICULTY_CONFIGS.easy.shields);
   const [shieldNotice, setShieldNotice] = useState<string | null>(null);
   const [rushTimeLeft, setRushTimeLeft] = useState<number>(COCKPIT_DIFFICULTY_CONFIGS.easy.rushStartSec);
+  const [blitzTimeLeft, setBlitzTimeLeft] = useState<number>(COCKPIT_DIFFICULTY_CONFIGS.easy.blitzStartSec);
   const [overdriveLeft, setOverdriveLeft] = useState(0);
+  const [moduleTelemetry, setModuleTelemetry] = useState<ModuleTelemetryMap>(() =>
+    createEmptyModuleTelemetry()
+  );
 
   const [hw, setHw] = useState<CockpitHardwareState>(() => createInitialHardwareState());
   const [activeTask, setActiveTask] = useState<ActiveMicroTask>(() => {
@@ -114,9 +152,16 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
     return first.task;
   });
   const [taskElapsedSec, setTaskElapsedSec] = useState(0);
-  const [hazardCycle, setHazardCycle] = useState<{ warning: boolean; active: boolean }>({
+  const [hazardCycle, setHazardCycle] = useState<{
+    warning: boolean;
+    active: boolean;
+    progressRatio: number;
+    phaseLabel: 'safe' | 'warning' | 'active';
+  }>({
     warning: false,
     active: false,
+    progressRatio: 0,
+    phaseLabel: 'safe',
   });
   const [failReason, setFailReason] = useState<string | null>(null);
   const [fireworks, setFireworks] = useState<FireworkParticle[]>([]);
@@ -129,6 +174,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
   const particleIdRef = useRef(1);
   const failedAtMsRef = useRef(0);
   const shieldNoticeTimerRef = useRef<number | null>(null);
+  const autoStartedRef = useRef(false);
 
   // Live simulation refs synced for 60Hz loop without stale closures
   const phaseRef = useRef<CockpitPhase>('ready');
@@ -138,17 +184,26 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
   const taskRef = useRef<ActiveMicroTask>(activeTask);
   const taskElapsedRef = useRef(0);
   const rushLeftRef = useRef<number>(COCKPIT_DIFFICULTY_CONFIGS.easy.rushStartSec);
+  const blitzLeftRef = useRef<number>(COCKPIT_DIFFICULTY_CONFIGS.easy.blitzStartSec);
   const overdriveLeftRef = useRef(0);
   const shieldsLeftRef = useRef<number>(COCKPIT_DIFFICULTY_CONFIGS.easy.shields);
   const comboRef = useRef(0);
+  const maxComboRef = useRef(0);
   const completedRef = useRef(0);
   const scoreRef = useRef(0);
   const bestRef = useRef(bestScore);
   const mutedRef = useRef(muted);
+  const telemetryRef = useRef<ModuleTelemetryMap>(createEmptyModuleTelemetry());
 
   useEffect(() => {
     phaseRef.current = phase;
-    document.body.dataset.state = phase;
+    const mappedState =
+      phase === 'ready'
+        ? 'title'
+        : phase === 'failed' || phase === 'finished'
+          ? 'gameover'
+          : 'playing';
+    document.body.dataset.state = mappedState;
     return () => {
       delete document.body.dataset.state;
     };
@@ -293,6 +348,24 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
     [ensureAudio]
   );
 
+  const playCrisisWarningSfx = useCallback(() => {
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [520, 740].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      const t = now + idx * 0.065;
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.045, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.065);
+    });
+  }, [ensureAudio]);
+
   const playOverdriveChordSfx = useCallback(() => {
     const ctx = ensureAudio();
     if (!ctx) return;
@@ -329,10 +402,20 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
     osc.stop(now + 0.25);
   }, [ensureAudio]);
 
+  const showTransientNotice = useCallback((msg: string) => {
+    if (shieldNoticeTimerRef.current !== null) {
+      window.clearTimeout(shieldNoticeTimerRef.current);
+    }
+    setShieldNotice(msg);
+    shieldNoticeTimerRef.current = window.setTimeout(() => {
+      setShieldNotice(null);
+      shieldNoticeTimerRef.current = null;
+    }, 2400);
+  }, []);
+
   // ---------------------------------------------------------------------------
   // Fireworks & Tactile Visual Bursts (Zero Screen Shake)
   // ---------------------------------------------------------------------------
-
   const spawnFireworksAtModule = useCallback((mod: CockpitModuleId, burstCount = 12) => {
     const centerMap: Record<CockpitModuleId, { x: number; y: number }> = {
       switches: { x: 18, y: 26 },
@@ -386,13 +469,19 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
       setActiveTask(nextPick.task);
       setTaskElapsedSec(0);
       setHw(patchedHw);
-      setHazardCycle({ warning: false, active: false });
+      setHazardCycle({ warning: false, active: false, progressRatio: 0, phaseLabel: 'safe' });
+      if (nextPick.task.isCrisis && phaseRef.current === 'playing') {
+        playCrisisWarningSfx();
+      }
     },
-    []
+    [playCrisisWarningSfx]
   );
 
   const startImmediateRun = useCallback(
     (overrideMode?: CockpitMode, overrideDifficulty?: CockpitDifficulty) => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
       const activeMode = overrideMode ?? modeRef.current;
       const activeDiff = overrideDifficulty ?? difficultyRef.current;
       const diffCfg = COCKPIT_DIFFICULTY_CONFIGS[activeDiff];
@@ -402,29 +491,46 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         shieldNoticeTimerRef.current = null;
       }
 
+      const freshTelemetry = createEmptyModuleTelemetry();
+      telemetryRef.current = freshTelemetry;
       scoreRef.current = 0;
       comboRef.current = 0;
+      maxComboRef.current = 0;
       completedRef.current = 0;
       rushLeftRef.current = diffCfg.rushStartSec;
+      blitzLeftRef.current = diffCfg.blitzStartSec;
       overdriveLeftRef.current = 0;
       shieldsLeftRef.current = diffCfg.shields;
 
+      setModuleTelemetry(freshTelemetry);
       setScore(0);
       setCombo(0);
+      setMaxCombo(0);
       setCompletedTasks(0);
       setRushTimeLeft(diffCfg.rushStartSec);
+      setBlitzTimeLeft(diffCfg.blitzStartSec);
       setOverdriveLeft(0);
       setShieldsLeft(diffCfg.shields);
       setShieldNotice(null);
       setFailReason(null);
-      setPhase('playing');
       phaseRef.current = 'playing';
+      setPhase('playing');
 
       spawnTaskState(0, null, activeMode, activeDiff);
       playComboSuccessSfx(1);
     },
     [playComboSuccessSfx, spawnTaskState]
   );
+
+  // Honor ?autostart=1 if present
+  useEffect(() => {
+    if (autoStartedRef.current || typeof window === 'undefined') return;
+    const auto = new URLSearchParams(window.location.search).get('autostart');
+    if (auto === '1') {
+      autoStartedRef.current = true;
+      startImmediateRun();
+    }
+  }, [startImmediateRun]);
 
   const selectDifficulty = useCallback(
     (nextDiff: CockpitDifficulty) => {
@@ -440,8 +546,10 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         const diffCfg = COCKPIT_DIFFICULTY_CONFIGS[nextDiff];
         shieldsLeftRef.current = diffCfg.shields;
         rushLeftRef.current = diffCfg.rushStartSec;
+        blitzLeftRef.current = diffCfg.blitzStartSec;
         setShieldsLeft(diffCfg.shields);
         setRushTimeLeft(diffCfg.rushStartSec);
+        setBlitzTimeLeft(diffCfg.blitzStartSec);
         spawnTaskState(0, null, modeRef.current, nextDiff);
       } else {
         startImmediateRun(modeRef.current, nextDiff);
@@ -454,20 +562,34 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
     const activeDiff = difficultyRef.current;
     const diffCfg = COCKPIT_DIFFICULTY_CONFIGS[activeDiff];
     const nextCombo = comboRef.current + 1;
+    const nextMaxCombo = Math.max(maxComboRef.current, nextCombo);
     const nextCompleted = completedRef.current + 1;
     const tier = getSpeedTier(completedRef.current);
-    const remainingRatio = Math.max(
-      0,
-      1 - taskElapsedRef.current / Math.max(0.1, taskRef.current.timeLimitSec)
-    );
-    const pts = calculateTaskScore(nextCombo, tier, remainingRatio, false, activeDiff);
+    const curTask = taskRef.current;
+    const elapsed = taskElapsedRef.current;
+    const remainingRatio = Math.max(0, 1 - elapsed / Math.max(0.1, curTask.timeLimitSec));
+    const pts = calculateTaskScore(nextCombo, tier, remainingRatio, false, activeDiff, Boolean(curTask.isCrisis));
     const nextScore = scoreRef.current + pts;
 
+    // Record per-module reaction telemetry
+    const prevModStat = telemetryRef.current[curTask.module];
+    const updatedTelemetry: ModuleTelemetryMap = {
+      ...telemetryRef.current,
+      [curTask.module]: {
+        count: prevModStat.count + 1,
+        totalSec: prevModStat.totalSec + elapsed,
+      },
+    };
+    telemetryRef.current = updatedTelemetry;
+    setModuleTelemetry(updatedTelemetry);
+
     comboRef.current = nextCombo;
+    maxComboRef.current = nextMaxCombo;
     completedRef.current = nextCompleted;
     scoreRef.current = nextScore;
 
     setCombo(nextCombo);
+    setMaxCombo(nextMaxCombo);
     setCompletedTasks(nextCompleted);
     setScore(nextScore);
 
@@ -477,6 +599,14 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
       saveBestScore(nextScore);
     }
 
+    // Crisis bonus: recover 1 lost shield if below max!
+    if (curTask.isCrisis && shieldsLeftRef.current < diffCfg.shields) {
+      const recovered = shieldsLeftRef.current + 1;
+      shieldsLeftRef.current = recovered;
+      setShieldsLeft(recovered);
+      showTransientNotice(`Vượt Khẩn Cấp ×1.5 điểm & hồi +1 Giáp (${recovered}/${diffCfg.shields})`);
+    }
+
     if (modeRef.current === 'rush_15s') {
       const cap = Math.max(20, diffCfg.rushStartSec + 4);
       const nextRush = Math.min(cap, rushLeftRef.current + diffCfg.rushBonusSec);
@@ -484,7 +614,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
       setRushTimeLeft(nextRush);
     }
 
-    spawnFireworksAtModule(taskRef.current.module, 10);
+    spawnFireworksAtModule(curTask.module, curTask.isCrisis ? 16 : 10);
 
     if (isOverdriveTrigger(nextCombo)) {
       overdriveLeftRef.current = OVERDRIVE_DURATION_SEC;
@@ -496,53 +626,64 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
       spawnFireworksAtModule('rotary_dial', 14);
     } else {
       playComboSuccessSfx(nextCombo);
-      spawnTaskState(nextCompleted, taskRef.current.module, modeRef.current, activeDiff);
+      spawnTaskState(nextCompleted, curTask.module, modeRef.current, activeDiff);
     }
-  }, [playComboSuccessSfx, playOverdriveChordSfx, spawnFireworksAtModule, spawnTaskState]);
+  }, [playComboSuccessSfx, playOverdriveChordSfx, showTransientNotice, spawnFireworksAtModule, spawnTaskState]);
 
   const handleTaskFailed = useCallback(
-    (reason: string) => {
-      if (phaseRef.current === 'failed') return;
+    (reason: string, isFinished60s = false) => {
+      if (phaseRef.current === 'failed' || phaseRef.current === 'finished') return;
       failedAtMsRef.current = performance.now();
-      phaseRef.current = 'failed';
-      setPhase('failed');
+      const targetPhase: CockpitPhase = isFinished60s ? 'finished' : 'failed';
+      phaseRef.current = targetPhase;
+      setPhase(targetPhase);
       setFailReason(reason);
       setShieldNotice(null);
-      playFailBuzzSfx();
+      if (isFinished60s) {
+        playOverdriveChordSfx();
+      } else {
+        playFailBuzzSfx();
+      }
     },
-    [playFailBuzzSfx]
+    [playFailBuzzSfx, playOverdriveChordSfx]
   );
 
   const handleShieldAbsorb = useCallback(
     (reason: string) => {
+      const diffCfg = COCKPIT_DIFFICULTY_CONFIGS[difficultyRef.current];
+
+      // In 60s Blitz mode: mistakes break combo and subtract penalty seconds instead of ending the run
+      if (modeRef.current === 'blitz_60s') {
+        comboRef.current = 0;
+        setCombo(0);
+        const nextBlitz = Math.max(0.1, blitzLeftRef.current - diffCfg.blitzPenaltySec);
+        blitzLeftRef.current = nextBlitz;
+        setBlitzTimeLeft(nextBlitz);
+        playFailBuzzSfx();
+        showTransientNotice(`${reason} · Trừ ${diffCfg.blitzPenaltySec.toFixed(1)}s đồng hồ 60s!`);
+        spawnTaskState(completedRef.current, taskRef.current.module, modeRef.current, difficultyRef.current);
+        return;
+      }
+
       const nextShields = Math.max(0, shieldsLeftRef.current - 1);
       shieldsLeftRef.current = nextShields;
       setShieldsLeft(nextShields);
 
-      // Reset streak on slip, keep score and keep playing smoothly
       comboRef.current = 0;
       setCombo(0);
       playFailBuzzSfx();
 
-      if (shieldNoticeTimerRef.current !== null) {
-        window.clearTimeout(shieldNoticeTimerRef.current);
-      }
-      setShieldNotice(`${reason} · Dùng 1 Giáp (Còn ${nextShields} Giáp) — Tiếp tục!`);
-      shieldNoticeTimerRef.current = window.setTimeout(() => {
-        setShieldNotice(null);
-        shieldNoticeTimerRef.current = null;
-      }, 2200);
-
+      showTransientNotice(`${reason} · Dùng 1 Giáp (Còn ${nextShields} Giáp) — Tiếp tục!`);
       spawnTaskState(completedRef.current, taskRef.current.module, modeRef.current, difficultyRef.current);
     },
-    [playFailBuzzSfx, spawnTaskState]
+    [playFailBuzzSfx, showTransientNotice, spawnTaskState]
   );
 
   // Overdrive bonus input reward: every fidget action fires fireworks & polyphonic chord + 2x bonus pts
   const triggerOverdriveStimulus = useCallback(
     (mod: CockpitModuleId) => {
       if (phaseRef.current !== 'overdrive') return;
-      const bonus = 100; // 50 base * 2x overdrive multiplier
+      const bonus = 100;
       const nextScore = scoreRef.current + bonus;
       scoreRef.current = nextScore;
       setScore(nextScore);
@@ -595,7 +736,6 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         const nextElapsed = taskElapsedRef.current + dt;
         taskElapsedRef.current = nextElapsed;
 
-        // Track wave fader dwell time inside target band
         if (curTask.module === 'wave_fader') {
           const target = curTask.goal.targetFader ?? 50;
           const tol = curTask.goal.faderTolerance ?? 12;
@@ -603,24 +743,31 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
           curHw.faderMatchedSec = isMatched ? curHw.faderMatchedSec + dt : 0;
         }
 
-        // Track yellow hold charge (safe vs hazard lightning)
         const tier = getSpeedTier(completedRef.current);
         const haz =
           curTask.module === 'hazard_hold'
             ? stepHazardCycle(nextElapsed, tier, difficultyRef.current)
-            : { warning: false, active: false };
+            : { warning: false, active: false, progressRatio: 0, phaseLabel: 'safe' as const };
 
         if (curTask.module === 'hazard_hold' && curHw.yellowHolding && !haz.active) {
           curHw.yellowHoldChargeSec += dt;
         }
 
-        // Track 15-Second Rush global clock
         if (modeRef.current === 'rush_15s') {
           const nextRush = Math.max(0, rushLeftRef.current - dt);
           rushLeftRef.current = nextRush;
           if (nextRush <= 0) {
             setRushTimeLeft(0);
             handleTaskFailed('HẾT GIỜ NƯỚC RÚT!');
+            rafId = window.requestAnimationFrame(tick);
+            return;
+          }
+        } else if (modeRef.current === 'blitz_60s') {
+          const nextBlitz = Math.max(0, blitzLeftRef.current - dt);
+          blitzLeftRef.current = nextBlitz;
+          if (nextBlitz <= 0) {
+            setBlitzTimeLeft(0);
+            handleTaskFailed('HOÀN THÀNH PHIÊN 60 GIÂY!', true);
             rafId = window.requestAnimationFrame(tick);
             return;
           }
@@ -638,7 +785,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                   curHw.redPressCount > (curTask.goal.targetClicks ?? 0)
                 ? 'BẤM THỪA SỐ LẦN!'
                 : 'HẾT GIỜ PHẢN XẠ!';
-          if (shieldsLeftRef.current > 0) {
+          if (shieldsLeftRef.current > 0 || modeRef.current === 'blitz_60s') {
             handleShieldAbsorb(reason);
           } else {
             handleTaskFailed(reason);
@@ -654,6 +801,8 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             }
             if (modeRef.current === 'rush_15s') {
               setRushTimeLeft(rushLeftRef.current);
+            } else if (modeRef.current === 'blitz_60s') {
+              setBlitzTimeLeft(blitzLeftRef.current);
             }
           }
         }
@@ -730,7 +879,6 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
       const rect = dialSvgRef.current.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
-      // 0 deg at top (12 o'clock), increasing clockwise
       const rad = Math.atan2(clientX - cx, -(clientY - cy));
       const deg = (rad * 180) / Math.PI;
       setDialToAngle(deg);
@@ -775,11 +923,9 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
       const cur = hwRef.current;
       const selectedLeft = cur.selectedLeftPort;
       if (selectedLeft === null) {
-        // Convenience: if no left port selected, auto-select matching color left port if unplugged or first unplugged
         const colorAtRight = cur.rightPortOrder[rightIdx];
         const matchingLeft = LEFT_PORT_COLORS.indexOf(colorAtRight);
         if (matchingLeft >= 0) {
-          const valid = true;
           updateHardware((prev) => {
             const filtered = prev.patchConnections.filter(
               (c) => c.fromIndex !== matchingLeft && c.toIndex !== rightIdx
@@ -790,7 +936,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
               selectedLeftPort: null,
             };
           });
-          playPatchSnapSfx(valid);
+          playPatchSnapSfx(true);
           triggerOverdriveStimulus('patch_bay');
         }
         return;
@@ -813,6 +959,15 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
     [playPatchSnapSfx, triggerOverdriveStimulus, updateHardware]
   );
 
+  const clearPatchConnections = useCallback(() => {
+    updateHardware((prev) => ({
+      ...prev,
+      patchConnections: [],
+      selectedLeftPort: null,
+    }));
+    playSwitchSfx('off');
+  }, [playSwitchSfx, updateHardware]);
+
   const setYellowHolding = useCallback(
     (holding: boolean) => {
       if (hwRef.current.yellowHolding === holding) return;
@@ -826,13 +981,19 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
   );
 
   // ---------------------------------------------------------------------------
-  // Keyboard Shortcuts (1/2/3 Switches, Space/B Red, Q/E Dial, A/D Fader, F Hold)
+  // Keyboard Shortcuts + Focus Loss Hygiene
   // ---------------------------------------------------------------------------
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement && e.target.type !== 'range') return;
       if (e.target instanceof HTMLTextAreaElement) return;
       const key = e.key.toLowerCase();
+
+      if (key === 'enter' && (phaseRef.current === 'ready' || phaseRef.current === 'failed' || phaseRef.current === 'finished')) {
+        e.preventDefault();
+        startImmediateRun();
+        return;
+      }
 
       if (key === ' ') {
         e.preventDefault();
@@ -841,7 +1002,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
           startImmediateRun();
           return;
         }
-        if (phaseRef.current === 'failed') {
+        if (phaseRef.current === 'failed' || phaseRef.current === 'finished') {
           if (performance.now() - failedAtMsRef.current > 180) {
             startImmediateRun();
           }
@@ -873,11 +1034,18 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
       }
     };
 
+    const clearHeld = () => {
+      setYellowHolding(false);
+      dialDraggingRef.current = false;
+    };
+
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', clearHeld);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', clearHeld);
     };
   }, [
     clickLeftPatchPort,
@@ -889,7 +1057,6 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
     startImmediateRun,
   ]);
 
-  // Global pointer release for rotary dial dragging
   useEffect(() => {
     const onPointerMove = (e: PointerEvent) => {
       if (dialDraggingRef.current) {
@@ -932,7 +1099,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
     phase === 'playing' && activeTask.module === mod;
 
   // Dual-trace SVG waveform paths for Module 4 (Wave Fader)
-  const { playerWavePath, targetWavePath, faderMatched } = useMemo(() => {
+  const { playerWavePath, targetWavePath, faderMatched, faderTargetVal, faderTol } = useMemo(() => {
     const buildSine = (ampVal: number) => {
       const amp = 4 + (ampVal / 100) * 19;
       const pts: string[] = [];
@@ -948,11 +1115,35 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
       playerWavePath: buildSine(hw.faderValue),
       targetWavePath: buildSine(targetVal),
       faderMatched: Math.abs(hw.faderValue - targetVal) <= tol,
+      faderTargetVal: targetVal,
+      faderTol: tol,
     };
   }, [activeTask.goal.faderTolerance, activeTask.goal.targetFader, hw.faderValue]);
 
   const maxShields = COCKPIT_DIFFICULTY_CONFIGS[difficulty].shields;
   const activeDifficultyCfg = COCKPIT_DIFFICULTY_CONFIGS[difficulty];
+
+  const dialDirection =
+    isModuleTargeted('rotary_dial') && activeTask.goal.targetDialAngle !== undefined
+      ? getShortestDialDirection(hw.dialAngle, activeTask.goal.targetDialAngle)
+      : null;
+
+  const validPatchCount = hw.patchConnections.filter(
+    (c) => LEFT_PORT_COLORS[c.fromIndex] === hw.rightPortOrder[c.toIndex]
+  ).length;
+  const wrongPatchCount = hw.patchConnections.length - validPatchCount;
+
+  const pilotRankInfo = useMemo(() => getPilotRank(score, completedTasks), [completedTasks, score]);
+
+  const avgReactionMs = useMemo(() => {
+    const vals = Object.values(moduleTelemetry);
+    const totalCount = vals.reduce((sum, v) => sum + v.count, 0);
+    const totalSec = vals.reduce((sum, v) => sum + v.totalSec, 0);
+    return totalCount > 0 ? Math.round((totalSec / totalCount) * 1000) : 0;
+  }, [moduleTelemetry]);
+
+  const selectedLeftColor: PatchColor | null =
+    hw.selectedLeftPort !== null ? LEFT_PORT_COLORS[hw.selectedLeftPort] : null;
 
   return (
     <section
@@ -962,9 +1153,21 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
           ? 'border-amber-400 bg-[#141008] shadow-[0_0_45px_-10px_rgba(251,191,36,0.45)]'
           : phase === 'failed'
             ? 'border-rose-500/80 bg-[#140B10]'
-            : 'border-slate-700/90 bg-[#0D131D]'
-      } text-slate-100 p-3 sm:p-5`}
+            : phase === 'finished'
+              ? 'border-emerald-400/80 bg-[#0A1614]'
+              : 'border-slate-700/90 bg-[#0D131D]'
+      } text-slate-100 p-4 sm:p-5`}
     >
+      {/* Subtle Anodized Corner Bolts */}
+      <svg aria-hidden="true" className="pointer-events-none absolute top-2.5 left-2.5 w-3 h-3 text-slate-700" viewBox="0 0 12 12">
+        <circle cx="6" cy="6" r="5" fill="currentColor" />
+        <line x1="3" y1="6" x2="9" y2="6" stroke="#0B1018" strokeWidth="1.4" />
+      </svg>
+      <svg aria-hidden="true" className="pointer-events-none absolute top-2.5 right-2.5 w-3 h-3 text-slate-700" viewBox="0 0 12 12">
+        <circle cx="6" cy="6" r="5" fill="currentColor" />
+        <line x1="6" y1="3" x2="6" y2="9" stroke="#0B1018" strokeWidth="1.4" />
+      </svg>
+
       {/* OVERDRIVE & COMPLETION FIREWORKS LAYER */}
       {fireworks.length > 0 && (
         <div
@@ -1002,17 +1205,18 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                 Buồng Lái Hỗn Loạn 15 Giây
               </h1>
               <p className="text-xs text-slate-400">
-                WarioWare liên hoàn · Bảng mạch cơ khí phản xạ tức thì
+                15 phản xạ cơ khí · Sự cố Khẩn Cấp ×1.5 điểm · Overdrive pháo hoa
               </p>
             </div>
 
             <div
               role="group"
               aria-label="Chế độ buồng lái"
-              className="inline-flex items-center rounded-lg bg-[#080C13] border border-slate-800 p-1"
+              className="inline-flex flex-wrap items-center rounded-lg bg-[#080C13] border border-slate-800 p-1 gap-0.5"
             >
               <button
                 type="button"
+                data-testid="fidget-mode-endless"
                 onClick={() => {
                   setMode('endless_survival');
                   if (phase !== 'ready') startImmediateRun('endless_survival');
@@ -1027,6 +1231,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
               </button>
               <button
                 type="button"
+                data-testid="fidget-mode-rush"
                 onClick={() => {
                   setMode('rush_15s');
                   if (phase !== 'ready') startImmediateRun('rush_15s');
@@ -1039,12 +1244,27 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
               >
                 Nước Rút {activeDifficultyCfg.rushStartSec.toFixed(0)}s
               </button>
+              <button
+                type="button"
+                data-testid="fidget-mode-blitz"
+                onClick={() => {
+                  setMode('blitz_60s');
+                  if (phase !== 'ready') startImmediateRun('blitz_60s');
+                }}
+                className={`min-h-[36px] px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+                  mode === 'blitz_60s'
+                    ? 'bg-emerald-400 text-slate-950 font-semibold'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                Đua 60s
+              </button>
             </div>
           </div>
 
-          {/* Clean Unboxed Tabular LCD Readouts + Mute/Reset Controls */}
+          {/* Clean Tabular LCD Readouts + Mute/Reset Controls */}
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-            <div className="flex flex-wrap items-center gap-3.5 rounded-xl bg-[#070A10] border border-slate-800 px-3.5 py-2 font-mono tabular-nums text-xs">
+            <div className="flex flex-wrap items-center gap-3 rounded-xl bg-[#070A10] border border-slate-800 px-3.5 py-2 font-mono tabular-nums text-xs">
               <div>
                 <span className="text-slate-400 block text-[10px]">ĐIỂM</span>
                 <span data-testid="fidget-score" className="text-sm sm:text-base font-bold text-white">
@@ -1052,21 +1272,35 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                 </span>
               </div>
               <span className="h-6 w-px bg-slate-800" aria-hidden="true" />
-              <div>
-                <span className="text-slate-400 block text-[10px]">GIÁP</span>
-                <span
-                  data-testid="fidget-shields"
-                  className={`text-sm sm:text-base font-bold ${
-                    shieldsLeft > 1
-                      ? 'text-emerald-300'
-                      : shieldsLeft === 1
-                        ? 'text-amber-300'
-                        : 'text-rose-400'
-                  }`}
-                >
-                  {shieldsLeft}/{maxShields}
-                </span>
-              </div>
+              {mode === 'blitz_60s' ? (
+                <div>
+                  <span className="text-slate-400 block text-[10px]">ĐỒNG HỒ</span>
+                  <span
+                    data-testid="fidget-blitz-clock"
+                    className={`text-sm sm:text-base font-bold ${
+                      blitzTimeLeft <= 10 ? 'text-rose-400' : 'text-emerald-300'
+                    }`}
+                  >
+                    {blitzTimeLeft.toFixed(1)}s
+                  </span>
+                </div>
+              ) : (
+                <div>
+                  <span className="text-slate-400 block text-[10px]">GIÁP</span>
+                  <span
+                    data-testid="fidget-shields"
+                    className={`text-sm sm:text-base font-bold ${
+                      shieldsLeft > 1
+                        ? 'text-emerald-300'
+                        : shieldsLeft === 1
+                          ? 'text-amber-300'
+                          : 'text-rose-400'
+                    }`}
+                  >
+                    {shieldsLeft}/{maxShields}
+                  </span>
+                </div>
+              )}
               <span className="h-6 w-px bg-slate-800" aria-hidden="true" />
               <div>
                 <span className="text-slate-400 block text-[10px]">CHUỖI</span>
@@ -1106,7 +1340,11 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setMuted((m) => !m)}
+                tabIndex={-1}
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  setMuted((m) => !m);
+                }}
                 aria-label={muted ? 'Bật âm thanh cơ khí' : 'Tắt âm thanh cơ khí'}
                 className="min-h-[40px] min-w-[40px] px-3 py-2 rounded-lg border border-slate-700 bg-slate-900 hover:border-slate-500 text-slate-200 inline-flex items-center justify-center cursor-pointer"
               >
@@ -1119,7 +1357,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                 className="min-h-[40px] px-4 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 cursor-pointer"
               >
                 {phase === 'ready' ? <Play className="w-3.5 h-3.5" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                <span>{phase === 'ready' ? 'Bắt Đầu [Space]' : 'Đặt Lại (0.1s)'}</span>
+                <span>{phase === 'ready' ? 'Bắt Đầu [Space]' : 'Đặt Lại'}</span>
               </button>
             </div>
           </div>
@@ -1166,30 +1404,73 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         </div>
       </div>
 
-      {/* COMMAND DISPLAY + 10-COMBO OVERDRIVE METER (ZERO MODAL BLOCKING) */}
-      <div className="mt-3 mb-4 space-y-2">
-        {phase === 'failed' ? (
-          <button
-            type="button"
-            data-testid="fidget-instant-retry"
-            onClick={() => startImmediateRun()}
-            className="w-full rounded-xl border border-rose-400/80 bg-rose-950/70 hover:bg-rose-900/80 px-4 py-3 text-left flex flex-wrap items-center justify-between gap-3 transition-colors cursor-pointer"
+      {/* COMMAND DISPLAY + PILOT DEBRIEF + OVERDRIVE CAPACITOR */}
+      <div className="mt-3 mb-4 space-y-2.5">
+        {phase === 'failed' || phase === 'finished' ? (
+          <div
+            data-testid="fidget-debrief-card"
+            className={`rounded-xl border p-4 space-y-3 ${
+              phase === 'finished'
+                ? 'border-emerald-400/80 bg-emerald-950/45'
+                : 'border-rose-400/80 bg-rose-950/60'
+            }`}
           >
-            <div className="flex items-center gap-3">
-              <ShieldAlert className="w-6 h-6 text-rose-300 shrink-0" />
-              <div>
-                <p className="text-sm sm:text-base font-bold text-white">
-                  {failReason || 'MẤT NHỊP BUỒNG LÁI!'} · Đạt {score} điểm ({combo} chuỗi)
-                </p>
-                <p className="text-xs text-rose-200">
-                  Bấm [Space] hoặc chạm ngay vào đây để thử lại trong 0,1 giây
-                </p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-12 h-12 rounded-xl border-2 flex flex-col items-center justify-center font-mono font-bold shrink-0"
+                  style={{ borderColor: pilotRankInfo.colorHex, color: pilotRankInfo.colorHex }}
+                >
+                  <span className="text-[10px] text-slate-400 leading-none">HẠNG</span>
+                  <span className="text-xl leading-tight">{pilotRankInfo.rank}</span>
+                </div>
+                <div>
+                  <p className="text-sm sm:text-base font-bold text-white flex items-center gap-2">
+                    {phase === 'finished' ? (
+                      <Award className="w-5 h-5 text-emerald-300 shrink-0" />
+                    ) : (
+                      <ShieldAlert className="w-5 h-5 text-rose-300 shrink-0" />
+                    )}
+                    <span>{failReason || 'MẤT NHỊP BUỒNG LÁI!'}</span>
+                  </p>
+                  <p className="text-xs text-slate-200 font-mono tabular-nums">
+                    {pilotRankInfo.title} · {score} điểm · {completedTasks} lệnh · Chuỗi max {maxCombo}
+                    {avgReactionMs > 0 ? ` · TB ${avgReactionMs}ms/lệnh` : ''}
+                  </p>
+                </div>
               </div>
+
+              <button
+                type="button"
+                data-testid="fidget-instant-retry"
+                data-start="true"
+                onClick={() => startImmediateRun()}
+                className="min-h-[42px] px-5 py-2 rounded-lg bg-white hover:bg-amber-200 text-slate-950 font-bold text-xs whitespace-nowrap shrink-0 cursor-pointer"
+              >
+                Chơi Lại Ngay [Space]
+              </button>
             </div>
-            <span className="px-4 py-2 rounded-lg bg-white text-slate-950 font-bold text-xs whitespace-nowrap shrink-0">
-              Thử Lại Ngay
-            </span>
-          </button>
+
+            {completedTasks > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-2 border-t border-white/10">
+                {(Object.keys(MODULE_SHORT_LABELS) as CockpitModuleId[]).map((modId) => {
+                  const stat = moduleTelemetry[modId];
+                  const avgMs = stat.count > 0 ? Math.round((stat.totalSec / stat.count) * 1000) : null;
+                  return (
+                    <div key={modId} className="rounded-lg bg-black/30 px-2.5 py-1.5 font-mono tabular-nums">
+                      <span className="block text-[10px] text-slate-400 truncate">
+                        {MODULE_SHORT_LABELS[modId]}
+                      </span>
+                      <span className="text-xs font-bold text-slate-100">
+                        {avgMs !== null ? `${avgMs}ms` : '—'}
+                        {stat.count > 0 ? ` (${stat.count})` : ''}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         ) : phase === 'overdrive' ? (
           <div
             data-testid="fidget-overdrive-banner"
@@ -1216,10 +1497,10 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
               <Gauge className="w-5 h-5 text-sky-300 shrink-0" />
               <div>
                 <p className="text-sm sm:text-base font-bold text-white">
-                  Bảng mạch sẵn sàng — Bấm thử mọi công tắc bên dưới hoặc nhấn [Space] để vào nhịp!
+                  Buồng lái sẵn sàng — Thử tự do 6 cụm phím cơ khí bên dưới hoặc nhấn Chơi Ngay!
                 </p>
                 <p className="text-xs text-slate-300">
-                  Hoàn thành chuỗi 10 lệnh liên tiếp để kích hoạt 5 giây Overdrive pháo hoa ×2 điểm.
+                  Chuỗi 5 lệnh kích hoạt Khẩn Cấp (×1.5 điểm + hồi 1 Giáp) · Chuỗi 10 lệnh mở Overdrive pháo hoa!
                 </p>
               </div>
             </div>
@@ -1235,15 +1516,27 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         ) : (
           <div
             data-testid="fidget-active-command"
-            className="rounded-xl border border-amber-400/70 bg-[#121B2B] px-4 py-2.5 space-y-2"
+            className={`rounded-xl border px-4 py-2.5 space-y-2 ${
+              activeTask.isCrisis
+                ? 'border-rose-400 bg-[#24111B]'
+                : 'border-amber-400/70 bg-[#121B2B]'
+            }`}
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2.5 min-w-0">
-                <Zap className="w-5 h-5 text-amber-300 shrink-0" />
+                {activeTask.isCrisis ? (
+                  <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+                ) : (
+                  <Zap className="w-5 h-5 text-amber-300 shrink-0" />
+                )}
                 <p className="text-sm sm:text-lg font-bold text-white truncate">
                   {activeTask.title}
                 </p>
-                <span className="text-xs font-mono font-semibold text-amber-300 shrink-0">
+                <span
+                  className={`text-xs font-mono font-semibold shrink-0 ${
+                    activeTask.isCrisis ? 'text-rose-300' : 'text-amber-300'
+                  }`}
+                >
                   · {activeTask.badgeLabel}
                 </span>
               </div>
@@ -1261,13 +1554,22 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
               </div>
             </div>
 
-            <div className="h-2 w-full rounded-full bg-slate-900 overflow-hidden">
-              <div
-                className={`h-full transition-transform duration-75 origin-left ${
-                  taskRemainSec <= 1.2 ? 'bg-rose-500' : 'bg-amber-400'
-                }`}
-                style={{ transform: `scaleX(${taskTimeRatio})` }}
-              />
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1 h-2 rounded-full bg-slate-900 overflow-hidden">
+                <div
+                  className={`h-full transition-transform duration-75 origin-left ${
+                    taskRemainSec <= 1.2
+                      ? 'bg-rose-500'
+                      : activeTask.isCrisis
+                        ? 'bg-orange-400'
+                        : 'bg-amber-400'
+                  }`}
+                  style={{ transform: `scaleX(${taskTimeRatio})` }}
+                />
+              </div>
+              <span className="text-[11px] font-mono text-slate-400 hidden md:inline shrink-0">
+                {activeTask.hint}
+              </span>
             </div>
           </div>
         )}
@@ -1276,9 +1578,10 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
           <div
             data-testid="fidget-shield-notice"
             role="status"
-            className="rounded-lg border border-amber-400/70 bg-amber-950/50 px-3 py-1.5 text-xs font-medium text-amber-200"
+            className="rounded-lg border border-amber-400/70 bg-amber-950/50 px-3 py-1.5 text-xs font-medium text-amber-200 flex items-center gap-2"
           >
-            {shieldNotice}
+            <Timer className="w-3.5 h-3.5 shrink-0" />
+            <span>{shieldNotice}</span>
           </div>
         )}
 
@@ -1331,6 +1634,10 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
           <div className="grid grid-cols-3 gap-2.5 my-auto">
             {([0, 1, 2] as const).map((idx) => {
               const st = hw.switches[idx];
+              const targetSt = isModuleTargeted('switches')
+                ? activeTask.goal.targetSwitches?.[idx]
+                : undefined;
+              const isMatched = targetSt !== undefined && st === targetSt;
               const tiltClass =
                 st === 'green'
                   ? '-translate-y-2.5 bg-emerald-400 border-emerald-200'
@@ -1338,6 +1645,8 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                     ? 'translate-y-0 bg-amber-400 border-amber-200'
                     : 'translate-y-2.5 bg-slate-500 border-slate-300';
               const textLabel = st === 'green' ? 'XANH' : st === 'amber' ? 'VÀNG' : 'TẮT';
+              const targetShort =
+                targetSt === 'green' ? '→ XANH' : targetSt === 'amber' ? '→ VÀNG' : '→ TẮT';
               return (
                 <button
                   key={idx}
@@ -1345,7 +1654,11 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                   data-testid={`cockpit-switch-${idx}`}
                   onClick={() => cycleSwitch(idx)}
                   aria-label={`Công tắc ${idx + 1}: ${textLabel}`}
-                  className="min-h-[108px] rounded-xl border border-slate-700 bg-[#0A0E16] hover:border-slate-500 p-2 flex flex-col items-center justify-between gap-1.5 cursor-pointer select-none"
+                  className={`min-h-[112px] rounded-xl border p-2 flex flex-col items-center justify-between gap-1 cursor-pointer select-none transition-colors ${
+                    isMatched
+                      ? 'border-emerald-400 bg-emerald-950/35'
+                      : 'border-slate-700 bg-[#0A0E16] hover:border-slate-500'
+                  }`}
                 >
                   <div className="flex items-center gap-1.5">
                     <span className="text-[11px] font-mono text-slate-400">SW-{idx + 1}</span>
@@ -1374,7 +1687,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                           : 'text-slate-400'
                     }`}
                   >
-                    {textLabel}
+                    {targetSt !== undefined && !isMatched ? targetShort : textLabel}
                   </span>
                 </button>
               );
@@ -1408,16 +1721,24 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
               data-testid="cockpit-red-btn"
               onClick={pressRedButton}
               aria-label="Nút bấm đỏ khẩn cấp"
-              className="relative w-28 h-28 rounded-full bg-gradient-to-b from-slate-700 to-slate-900 p-2.5 border-2 border-slate-600 shadow-lg cursor-pointer select-none focus-visible:outline-2 focus-visible:outline-amber-300"
+              className={`relative w-28 h-28 rounded-full p-2.5 border-2 shadow-lg cursor-pointer select-none focus-visible:outline-2 focus-visible:outline-amber-300 ${
+                activeTask.goal.exactClicks &&
+                isModuleTargeted('red_button') &&
+                hw.redPressCount === activeTask.goal.targetClicks
+                  ? 'bg-emerald-950 border-emerald-400'
+                  : 'bg-gradient-to-b from-slate-700 to-slate-900 border-amber-400/60'
+              }`}
             >
               <div
-                className={`w-full h-full rounded-full border-2 border-rose-300/70 bg-gradient-to-b from-rose-400 via-rose-600 to-rose-800 flex items-center justify-center shadow-[0_6px_0_#881337,0_10px_20px_rgba(244,63,94,0.35)] transition-transform duration-75 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
+                className={`w-full h-full rounded-full border-2 border-rose-300/70 bg-gradient-to-b from-rose-400 via-rose-600 to-rose-800 flex flex-col items-center justify-center shadow-[0_6px_0_#881337,0_10px_20px_rgba(244,63,94,0.35)] transition-transform duration-75 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${
                   redPressedVisual ? 'translate-y-1.5 scale-95 shadow-[0_1px_0_#881337]' : ''
                 }`}
               >
                 <span className="font-mono font-bold text-sm text-white tracking-wide">
                   {activeTask.goal.exactClicks && isModuleTargeted('red_button')
-                    ? `${hw.redPressCount}/${activeTask.goal.targetClicks}`
+                    ? hw.redPressCount === activeTask.goal.targetClicks
+                      ? 'DỪNG!'
+                      : `${hw.redPressCount}/${activeTask.goal.targetClicks}`
                     : 'ĐẬP!'}
                 </span>
               </div>
@@ -1439,7 +1760,9 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             <span className="text-xs font-mono font-bold text-sky-300 tabular-nums">
               {hw.dialAngle}°
               {isModuleTargeted('rotary_dial') && activeTask.goal.targetDialAngle !== undefined
-                ? ` → ${activeTask.goal.targetDialAngle}°`
+                ? ` → ${activeTask.goal.targetDialAngle}° (${
+                    dialDirection === 'cw' ? 'Phải ↻' : dialDirection === 'ccw' ? 'Trái ↺' : 'Chuẩn!'
+                  })`
                 : ''}
             </span>
           </div>
@@ -1473,7 +1796,6 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
               }}
               className="w-28 h-28 cursor-grab active:cursor-grabbing touch-none select-none"
             >
-              {/* 12 radial detents */}
               {Array.from({ length: 12 }).map((_, idx) => {
                 const ang = idx * 30;
                 const rad = ((ang - 90) * Math.PI) / 180;
@@ -1497,17 +1819,15 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                 );
               })}
 
-              {/* Target zone marker circle */}
               {isModuleTargeted('rotary_dial') && activeTask.goal.targetDialAngle !== undefined && (
                 <circle
                   cx={60 + Math.cos(((activeTask.goal.targetDialAngle - 90) * Math.PI) / 180) * 50}
                   cy={60 + Math.sin(((activeTask.goal.targetDialAngle - 90) * Math.PI) / 180) * 50}
-                  r={5.5}
+                  r={6}
                   fill="#34D399"
                 />
               )}
 
-              {/* Rotating aluminum encoder knob */}
               <g
                 style={{
                   transform: `rotate(${hw.dialAngle}deg)`,
@@ -1551,13 +1871,16 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             >
               {hw.faderValue}%
               {isModuleTargeted('wave_fader') && activeTask.goal.targetFader !== undefined
-                ? ` / Mục tiêu ${activeTask.goal.targetFader}%`
+                ? ` → ${activeTask.goal.targetFader}% (±${faderTol})`
                 : ''}
             </span>
           </div>
 
           <div className="rounded-lg border border-slate-800 bg-[#06090F] p-2">
             <svg viewBox="0 0 200 52" className="w-full h-14 overflow-visible" aria-hidden="true">
+              <line x1={50} y1={4} x2={50} y2={48} stroke="#131C2B" strokeWidth={1} />
+              <line x1={100} y1={4} x2={100} y2={48} stroke="#131C2B" strokeWidth={1} />
+              <line x1={150} y1={4} x2={150} y2={48} stroke="#131C2B" strokeWidth={1} />
               <line x1={0} y1={26} x2={200} y2={26} stroke="#1E293B" strokeWidth={1} />
               <path
                 d={targetWavePath}
@@ -1565,7 +1888,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                 stroke="#34D399"
                 strokeWidth={2}
                 strokeDasharray="5 4"
-                opacity={isModuleTargeted('wave_fader') ? 0.9 : 0.3}
+                opacity={isModuleTargeted('wave_fader') ? 0.92 : 0.3}
               />
               <path
                 d={playerWavePath}
@@ -1577,7 +1900,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             </svg>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="relative flex items-center gap-2">
             <button
               type="button"
               onClick={() => setFaderValue(hw.faderValue - 10)}
@@ -1586,17 +1909,29 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             >
               -10
             </button>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={1}
-              value={hw.faderValue}
-              data-testid="cockpit-wave-slider"
-              aria-label="Thanh trượt đồng bộ sóng"
-              onChange={(e) => setFaderValue(Number(e.target.value))}
-              className="w-full h-3 accent-cyan-400 cursor-pointer"
-            />
+            <div className="relative flex-1 flex items-center">
+              {isModuleTargeted('wave_fader') && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute top-1/2 -translate-y-1/2 h-3 rounded bg-emerald-400/25 border border-emerald-400/60"
+                  style={{
+                    left: `${Math.max(0, faderTargetVal - faderTol)}%`,
+                    width: `${Math.min(100, faderTargetVal + faderTol) - Math.max(0, faderTargetVal - faderTol)}%`,
+                  }}
+                />
+              )}
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={1}
+                value={hw.faderValue}
+                data-testid="cockpit-wave-slider"
+                aria-label="Thanh trượt đồng bộ sóng"
+                onChange={(e) => setFaderValue(Number(e.target.value))}
+                className="relative z-10 w-full h-3 accent-cyan-400 cursor-pointer"
+              />
+            </div>
             <button
               type="button"
               onClick={() => setFaderValue(hw.faderValue + 10)}
@@ -1619,10 +1954,25 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         >
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-semibold text-slate-200">05. Bảng Cắm Dây [J/K/L]</span>
-            <span className="text-xs font-mono font-bold text-fuchsia-300 tabular-nums">
-              {hw.patchConnections.filter((c) => LEFT_PORT_COLORS[c.fromIndex] === hw.rightPortOrder[c.toIndex]).length}/
-              {isModuleTargeted('patch_bay') ? activeTask.goal.requiredPatchCount ?? 2 : 3} dây
-            </span>
+            <div className="flex items-center gap-2">
+              {hw.patchConnections.length > 0 && (
+                <button
+                  type="button"
+                  data-testid="patch-clear-btn"
+                  onClick={clearPatchConnections}
+                  title="Rút toàn bộ dây"
+                  aria-label="Rút toàn bộ dây"
+                  className="px-2 py-0.5 rounded border border-slate-700 bg-[#0A0E16] hover:border-rose-400 text-[10px] font-mono text-slate-300 inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <Unplug className="w-3 h-3" />
+                  <span>{wrongPatchCount > 0 ? 'Rút dây nhiễu' : 'Rút'}</span>
+                </button>
+              )}
+              <span className="text-xs font-mono font-bold text-fuchsia-300 tabular-nums">
+                {validPatchCount}/
+                {isModuleTargeted('patch_bay') ? activeTask.goal.requiredPatchCount ?? 2 : 3} dây
+              </span>
+            </div>
           </div>
 
           <div className="relative grid grid-cols-[auto_1fr_auto] items-center gap-2">
@@ -1663,15 +2013,18 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                 const clr = PATCH_SYMBOL_MAP[LEFT_PORT_COLORS[conn.fromIndex]].hex;
                 const valid = LEFT_PORT_COLORS[conn.fromIndex] === hw.rightPortOrder[conn.toIndex];
                 return (
-                  <path
-                    key={`${conn.fromIndex}-${conn.toIndex}`}
-                    d={`M 0,${y1} C 42,${y1 + 16} 58,${y2 + 16} 100,${y2}`}
-                    fill="none"
-                    stroke={valid ? clr : '#EF4444'}
-                    strokeWidth={4.5}
-                    strokeLinecap="round"
-                    strokeDasharray={valid ? undefined : '5 4'}
-                  />
+                  <g key={`${conn.fromIndex}-${conn.toIndex}`}>
+                    <path
+                      d={`M 0,${y1} C 42,${y1 + 16} 58,${y2 + 16} 100,${y2}`}
+                      fill="none"
+                      stroke={valid ? clr : '#EF4444'}
+                      strokeWidth={4.5}
+                      strokeLinecap="round"
+                      strokeDasharray={valid ? undefined : '5 4'}
+                    />
+                    <circle cx={4} cy={y1} r={3.5} fill={valid ? clr : '#EF4444'} />
+                    <circle cx={96} cy={y2} r={3.5} fill={valid ? clr : '#EF4444'} />
+                  </g>
                 );
               })}
             </svg>
@@ -1681,6 +2034,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
               {hw.rightPortOrder.map((clr, idx) => {
                 const meta = PATCH_SYMBOL_MAP[clr];
                 const isPlugged = hw.patchConnections.some((c) => c.toIndex === idx);
+                const matchesSelected = selectedLeftColor === clr;
                 return (
                   <button
                     key={`${clr}-${idx}`}
@@ -1688,7 +2042,9 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                     data-testid={`patch-right-${idx}`}
                     onClick={() => clickRightPatchPort(idx)}
                     aria-label={`Cổng đích phải ${meta.symbol} ${meta.label}`}
-                    className="min-h-[38px] px-2.5 rounded-lg border font-mono text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    className={`min-h-[38px] px-2.5 rounded-lg border font-mono text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-transform ${
+                      matchesSelected ? 'scale-105 ring-2 ring-white' : ''
+                    }`}
                     style={{
                       borderColor: meta.hex,
                       backgroundColor: isPlugged ? `${meta.hex}33` : '#0A0E16',
@@ -1707,7 +2063,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         {/* MODULE 6: YELLOW HOLD PAD + SWEEPING LIGHTNING HAZARD */}
         <div
           data-testid="module-hazard_hold"
-          className={`rounded-xl border p-4 bg-[#111824] flex flex-col justify-between gap-3 transition-all ${
+          className={`rounded-xl border p-4 bg-[#111824] flex flex-col justify-between gap-2.5 transition-all ${
             hazardCycle.active
               ? 'border-rose-500 ring-2 ring-rose-500/70 bg-[#271019]'
               : isModuleTargeted('hazard_hold')
@@ -1739,6 +2095,17 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             </span>
           </div>
 
+          {/* Live Hazard Sweep Indicator Bar (An Toàn -> Cảnh Báo -> Tia Sét) */}
+          <div className="relative h-2 w-full rounded-full bg-slate-900 overflow-hidden" aria-hidden="true">
+            <div className="absolute inset-y-0 left-0 w-[44%] bg-emerald-500/25" />
+            <div className="absolute inset-y-0 left-[44%] w-[24%] bg-amber-400/35" />
+            <div className="absolute inset-y-0 left-[68%] right-0 bg-rose-500/45" />
+            <div
+              className="absolute inset-y-0 w-1.5 bg-white shadow-[0_0_6px_#fff]"
+              style={{ left: `calc(${Math.round(hazardCycle.progressRatio * 100)}% - 3px)` }}
+            />
+          </div>
+
           <button
             type="button"
             data-testid="cockpit-yellow-hold"
@@ -1747,7 +2114,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             onPointerLeave={() => setYellowHolding(false)}
             onPointerCancel={() => setYellowHolding(false)}
             aria-label="Nút giữ vàng né tia sét"
-            className={`relative min-h-[104px] rounded-xl border-2 p-3 flex flex-col items-center justify-center gap-1.5 select-none touch-none cursor-pointer transition-transform ${
+            className={`relative min-h-[96px] rounded-xl border-2 p-3 flex flex-col items-center justify-center gap-1.5 select-none touch-none cursor-pointer transition-transform ${
               hazardCycle.active
                 ? 'border-rose-400 bg-rose-950/70 text-rose-100'
                 : hw.yellowHolding
