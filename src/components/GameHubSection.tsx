@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { FileSearch, Gamepad2, Grid3X3, Layers, Sparkles } from 'lucide-react';
+import { FileSearch, Gamepad2, Grid3X3, Layers, Sparkles, Terminal } from 'lucide-react';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 import { AnomalyGameSection } from './AnomalyGameSection.tsx';
+import { BrowserBreakerGameSection } from './BrowserBreakerGameSection.tsx';
 import { XiangqiGameSection } from './XiangqiGameSection.tsx';
 
-type GameId = 'xiangqi' | 'anomaly';
+type GameId = 'xiangqi' | 'anomaly' | 'browser_breaker';
 
 interface GameCatalogItem {
   id: string;
@@ -30,10 +31,19 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     id: 'anomaly',
     title: 'Kiểm Duyệt Hồ Sơ',
     shortTitle: 'Hồ Sơ Dị Biệt',
-    subtitle: 'Minimalist Document Inspection · 5 Ngày Quy Tắc Lồng Nhau',
-    badge: '5 Ngày',
+    subtitle: 'Minimalist Document Inspection · 12 Ngày · 60 Hồ Sơ Dị Biệt',
+    badge: '12 Ngày',
     playable: true,
     gameKey: 'anomaly',
+  },
+  {
+    id: 'browser-breaker',
+    title: 'Phá Vỡ Trình Duyệt',
+    shortTitle: 'Phá Trình Duyệt',
+    subtitle: 'Browser-Breaking Meta-UI Puzzle · 8 Màn Giải Đố DOM',
+    badge: '8 Màn',
+    playable: true,
+    gameKey: 'browser_breaker',
   },
   {
     id: 'gomoku-planned',
@@ -63,6 +73,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
     if (typeof window !== 'undefined') {
       const playParam = new URLSearchParams(window.location.search).get('play');
       if (playParam === 'anomaly') return 'anomaly';
+      if (playParam === 'browser' || playParam === 'browser-breaker') return 'browser_breaker';
     }
     return 'xiangqi';
   });
@@ -122,6 +133,13 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
                         }`}
                         aria-hidden="true"
                       />
+                    ) : item.gameKey === 'browser_breaker' ? (
+                      <Terminal
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          isSelected ? 'text-sky-300' : 'text-[#0284C7] dark:text-sky-400'
+                        }`}
+                        aria-hidden="true"
+                      />
                     ) : (
                       <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true" />
                     )}
@@ -170,6 +188,9 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       )}
       {activeGame === 'anomaly' && (
         <AnomalyGameSection theme={theme} onToggleTheme={onToggleTheme} />
+      )}
+      {activeGame === 'browser_breaker' && (
+        <BrowserBreakerGameSection theme={theme} onToggleTheme={onToggleTheme} />
       )}
     </div>
   );

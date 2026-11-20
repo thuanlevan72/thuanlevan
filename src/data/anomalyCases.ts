@@ -1,3 +1,5 @@
+import { ANOMALY_DAYS_6_TO_12 } from './anomalyCasesDays6To12.ts';
+
 export type AnomalyVerdict = 'approve' | 'reject' | 'alarm';
 
 export type AnomalyScenarioTheme = 'hellgate' | 'dispatch_119' | 'alien_social' | 'archive_nexus';
@@ -158,6 +160,62 @@ export const ANOMALY_DAYS: readonly AnomalyDayDefinition[] = [
         explanationVi:
           'Mã ấn triện bắt đầu bằng "X-99" (dấu ấn giả mạo) và CSDL báo đối tượng đang TRỐN NÃ từ tầng 6. Bắt buộc bấm BÁO ĐỘNG!',
       },
+      {
+        id: 'd1-c4',
+        dossierCode: 'AT-1061',
+        applicantName: 'Đỗ Thị Hạnh',
+        applicantRole: 'Nghệ nhân gốm · Vùng Ngoại Ô',
+        theme: 'hellgate',
+        themeLabel: 'Gác Cổng Địa Ngục',
+        submittedAt: '10:18 · 19/11/2026',
+        sealNumber: 'S-5512',
+        documentFields: [
+          { key: 'expiry', label: 'Hạn thông hành', value: '05/12/2026' },
+          { key: 'death_year', label: 'Năm ghi nhận', value: '2024', suspectId: 'd1c4-yr' },
+          { key: 'gate', label: 'Cửa đăng ký', value: 'Cửa Số 04' },
+          { key: 'seal', label: 'Mã ấn triện', value: 'S-5512' },
+        ],
+        databaseFields: [
+          { key: 'db_status', label: 'Trạng thái CSDL', value: 'Hợp lệ · Chờ xác minh' },
+          { key: 'db_death', label: 'Năm lưu trữ', value: '2023 (Khác giấy tờ)', suspectId: 'd1c4-dbyr' },
+          { key: 'db_seal', label: 'Ấn triện gốc', value: 'S-5512' },
+          { key: 'db_karma', label: 'Chỉ số nghiệp', value: 'Tốt (+35)' },
+        ],
+        statement:
+          'Có lẽ thư ký ghi nhầm năm 2023 thành 2024 lúc đóng dấu, mong cán bộ châm chước cho qua.',
+        expectedVerdict: 'reject',
+        validClueIds: ['d1c4-yr', 'd1c4-dbyr'],
+        explanationVi:
+          'Năm ghi nhận trên giấy (2024) sai lệch với năm lưu trữ trong CSDL (2023), vi phạm QT-02. Không có dấu hiệu tội phạm nên xử lý TỪ CHỐI.',
+      },
+      {
+        id: 'd1-c5',
+        dossierCode: 'AT-1068',
+        applicantName: 'Phan Văn Kiên',
+        applicantRole: 'Thủ thư Dương Gian · Hạng A',
+        theme: 'hellgate',
+        themeLabel: 'Gác Cổng Địa Ngục',
+        submittedAt: '11:05 · 19/11/2026',
+        sealNumber: 'S-7731',
+        documentFields: [
+          { key: 'expiry', label: 'Hạn thông hành', value: '19/11/2026 (Hết hạn cuối ngày)' },
+          { key: 'death_year', label: 'Năm ghi nhận', value: '2026' },
+          { key: 'gate', label: 'Cửa đăng ký', value: 'Cửa Số 04' },
+          { key: 'seal', label: 'Mã ấn triện', value: 'S-7731' },
+        ],
+        databaseFields: [
+          { key: 'db_status', label: 'Trạng thái CSDL', value: 'Hợp lệ · Hôm nay còn hiệu lực' },
+          { key: 'db_death', label: 'Năm lưu trữ', value: '2026' },
+          { key: 'db_seal', label: 'Ấn triện gốc', value: 'S-7731' },
+          { key: 'db_karma', label: 'Chỉ số nghiệp', value: 'Tốt (+68)' },
+        ],
+        statement:
+          'Hạn giấy ghi tới hết ngày 19/11/2026, tôi tranh thủ qua cửa trước giờ trưa để kịp bàn giao sổ.',
+        expectedVerdict: 'approve',
+        validClueIds: [],
+        explanationVi:
+          'Quy tắc QT-01 quy định hạn từ 19/11/2026 trở về sau đều hợp lệ. Mã S-7731 và năm 2026 trùng khớp hoàn toàn -> DUYỆT.',
+      },
     ],
   },
   {
@@ -273,6 +331,62 @@ export const ANOMALY_DAYS: readonly AnomalyDayDefinition[] = [
         validClueIds: ['d2c3-temp', 'd2c3-bpm'],
         explanationVi:
           'Thân nhiệt 11.4°C (< 20°C), nhịp tim 18 BPM bất thường và lời thoại khớp mẫu Mimic ("đừng nhìn lên trần, cửa sổ không có kính"). Bắt buộc BÁO ĐỘNG!',
+      },
+      {
+        id: 'd2-c4',
+        dossierCode: '911-235',
+        applicantName: 'Chị Nguyễn Lan Phương',
+        applicantRole: 'Cuộc gọi di động · Khu D',
+        theme: 'dispatch_119',
+        themeLabel: 'Tổng Đài Cấp Cứu',
+        submittedAt: '02:14 · Ca Đêm',
+        sealNumber: 'SIM-9930',
+        documentFields: [
+          { key: 'addr', label: 'Địa chỉ khai báo', value: '07 Phố Hàng Bạc, P.2' },
+          { key: 'bpm', label: 'Nhịp tim đo được', value: '114 BPM (Lo âu)' },
+          { key: 'temp', label: 'Thân nhiệt cảm biến', value: '36.9°C' },
+          { key: 'symptom', label: 'Tình trạng', value: 'Sốt cao co giật trẻ nhỏ' },
+        ],
+        databaseFields: [
+          { key: 'db_map', label: 'Bản đồ khu vực', value: '07 Phố Hàng Bạc · Hợp lệ' },
+          { key: 'db_tower', label: 'Trạm phát sóng', value: 'Tháp P.2 (cách 180m)' },
+          { key: 'db_history', label: 'Lịch sử số gọi', value: 'Lần đầu gọi 119' },
+          { key: 'db_alert', label: 'Cảnh báo dị thường', value: 'An toàn' },
+        ],
+        statement:
+          'Con gái tôi 4 tuổi sốt 39.8 độ và đang run rẩy, xin điều xe y tế tới số 7 Hàng Bạc ngay!',
+        expectedVerdict: 'approve',
+        validClueIds: [],
+        explanationVi:
+          'Địa chỉ thật, trạm phát sóng khớp, thân nhiệt 36.9°C và nhịp tim 114 BPM hoàn toàn tự nhiên -> DUYỆT điều xe gấp.',
+      },
+      {
+        id: 'd2-c5',
+        dossierCode: '911-241',
+        applicantName: 'Tài xế Nguyễn Văn Lợi',
+        applicantRole: 'Cuộc gọi máy công cộng · Cầu Vượt',
+        theme: 'dispatch_119',
+        themeLabel: 'Tổng Đài Cấp Cứu',
+        submittedAt: '03:05 · Ca Đêm',
+        sealNumber: 'PAY-112',
+        documentFields: [
+          { key: 'addr', label: 'Địa chỉ khai báo', value: 'Chân cầu vượt Ngã Tư Sở', suspectId: 'd2c5-addr' },
+          { key: 'bpm', label: 'Nhịp tim đo được', value: '74 BPM' },
+          { key: 'temp', label: 'Thân nhiệt cảm biến', value: '36.6°C' },
+          { key: 'symptom', label: 'Tình trạng', value: 'Hỏng lốp xe tải nhẹ' },
+        ],
+        databaseFields: [
+          { key: 'db_map', label: 'Bản đồ khu vực', value: 'Bốt gọi nằm tại Khu Công Nghiệp Nam (cách 18km)', suspectId: 'd2c5-tower' },
+          { key: 'db_tower', label: 'Trạm phát sóng', value: 'Ngoài bán kính Quận khai báo' },
+          { key: 'db_history', label: 'Lịch sử số gọi', value: 'Không có quấy rối' },
+          { key: 'db_alert', label: 'Cảnh báo dị thường', value: 'Không phải Mimic' },
+        ],
+        statement:
+          'Xe tôi nổ lốp ở Ngã Tư Sở, tổng đài điều giúp 1 xe cứu thương tới kéo hộ xe với!',
+        expectedVerdict: 'reject',
+        validClueIds: ['d2c5-addr', 'd2c5-tower'],
+        explanationVi:
+          'Vị trí trạm phát sóng lệch 18km so với địa chỉ khai báo (vi phạm CC-01) và gọi sai chức năng cấp cứu y tế -> TỪ CHỐI điều xe.',
       },
     ],
   },
@@ -390,6 +504,62 @@ export const ANOMALY_DAYS: readonly AnomalyDayDefinition[] = [
         explanationVi:
           'Giả mạo hành tinh ZET-09 (gốc ANDR-01), đính kèm tọa độ lưới điện và cụm mật mã "Đợt Đổ Bộ Thứ 4". Bắt buộc BÁO ĐỘNG!',
       },
+      {
+        id: 'd3-c4',
+        dossierCode: 'XN-325',
+        applicantName: 'Nila-02 (@nila_botanist)',
+        applicantRole: 'Nhà thực vật học · VEX-88',
+        theme: 'alien_social',
+        themeLabel: 'Mạng Xã Hội Ngoại Lai',
+        submittedAt: '16:40 · UTC+7',
+        sealNumber: 'ID-VEX-330',
+        documentFields: [
+          { key: 'planet', label: 'Hành tinh khai báo', value: 'VEX-88 (Chưa cấp phép)', suspectId: 'd3c4-pl' },
+          { key: 'topic', label: 'Chủ đề bài viết', value: 'Hoa anh đào mùa xuân' },
+          { key: 'attach', label: 'Tệp đính kèm', value: 'sakura_notes.webp' },
+          { key: 'signal', label: 'Tần số phát', value: 'Dân sự · 2.4 GHz' },
+        ],
+        databaseFields: [
+          { key: 'db_origin', label: 'Hộ chiếu liên sao', value: 'VEX-88 · Visa Du Lịch', suspectId: 'd3c4-db' },
+          { key: 'db_trust', label: 'Điểm tín nhiệm', value: '82/100' },
+          { key: 'db_scan', label: 'Quét từ cấm', value: 'Sạch (0 khớp)' },
+          { key: 'db_flag', label: 'Cảnh báo an ninh', value: 'Không có âm mưu xâm lăng' },
+        ],
+        statement:
+          'Hoa đào ở Trái Đất nở đẹp quá, tôi đăng ảnh này làm kỷ niệm trước khi bay về hành tinh VEX-88.',
+        expectedVerdict: 'reject',
+        validClueIds: ['d3c4-pl', 'd3c4-db'],
+        explanationVi:
+          'Chỉ cư dân từ KEP-42, GLI-07 và ZET-09 mới được đăng bài công khai (NL-01). Tài khoản từ VEX-88 chưa có quyền đăng công khai -> TỪ CHỐI.',
+      },
+      {
+        id: 'd3-c5',
+        dossierCode: 'XN-331',
+        applicantName: 'Tark-V (@tark_violin)',
+        applicantRole: 'Nghệ sĩ vĩ cầm · GLI-07',
+        theme: 'alien_social',
+        themeLabel: 'Mạng Xã Hội Ngoại Lai',
+        submittedAt: '17:20 · UTC+7',
+        sealNumber: 'ID-GLI-519',
+        documentFields: [
+          { key: 'planet', label: 'Hành tinh khai báo', value: 'GLI-07' },
+          { key: 'topic', label: 'Chủ đề bài viết', value: 'Hòa nhạc giao hưởng Hồ Gươm' },
+          { key: 'attach', label: 'Tệp đính kèm', value: 'violin_clip.mp4' },
+          { key: 'signal', label: 'Tần số phát', value: 'Dân sự · 5.0 GHz' },
+        ],
+        databaseFields: [
+          { key: 'db_origin', label: 'Hộ chiếu liên sao', value: 'GLI-07 · Visa Văn Hóa' },
+          { key: 'db_trust', label: 'Điểm tín nhiệm', value: '99/100' },
+          { key: 'db_scan', label: 'Quét từ cấm', value: 'Sạch (0 khớp)' },
+          { key: 'db_flag', label: 'Cảnh báo an ninh', value: 'An toàn' },
+        ],
+        statement:
+          'Tối nay mình biểu diễn cùng dàn nhạc giao hưởng tại phố đi bộ, mời bạn bè GLI-07 và Trái Đất ghé nghe nhé!',
+        expectedVerdict: 'approve',
+        validClueIds: [],
+        explanationVi:
+          'Hành tinh GLI-07 hợp lệ, hộ chiếu trùng khớp, nội dung âm nhạc hoàn toàn sạch -> DUYỆT đăng bài.',
+      },
     ],
   },
   {
@@ -505,6 +675,62 @@ export const ANOMALY_DAYS: readonly AnomalyDayDefinition[] = [
         validClueIds: ['d4c3-dup', 'd4c3-bio'],
         explanationVi:
           'CSDL phát hiện cùng hồ sơ sinh trắc đã qua Cổng Tây cách đây 42 km chỉ 3 phút trước (dấu hiệu Song Trùng nhân bản LK-03). Bắt buộc BÁO ĐỘNG!',
+      },
+      {
+        id: 'd4-c4',
+        dossierCode: 'NX-424',
+        applicantName: 'Bà Lê Thu Cúc',
+        applicantRole: 'Giáo viên về hưu · Khu 4',
+        theme: 'archive_nexus',
+        themeLabel: 'Thanh Tra Liên Ngành',
+        submittedAt: '14:15 · 19/11/2026',
+        sealNumber: 'VIP-102',
+        documentFields: [
+          { key: 'zone', label: 'Khu vực xuất phát', value: 'Khu 4 (Đang giới nghiêm)', suspectId: 'd4c4-zone' },
+          { key: 'badge', label: 'Tem ưu tiên', value: 'VIP-102 · Cấp 14/11/2026 (Tuần trước)', suspectId: 'd4c4-oldvip' },
+          { key: 'route', label: 'Tuyến di chuyển', value: 'Cầu Hầm Đông' },
+          { key: 'bio', label: 'Sinh trắc vân tay', value: 'Khớp 99.1%' },
+        ],
+        databaseFields: [
+          { key: 'db_vip', label: 'Xác thực Tem VIP', value: 'VIP-102 · Cấp 14/11/2026 (Hết hạn theo LK-01)', suspectId: 'd4c4-dbvip' },
+          { key: 'db_road', label: 'Trạng thái Cầu Hầm Đông', value: 'Thông tuyến' },
+          { key: 'db_dup', label: 'Nhật ký quét cổng', value: 'Duy nhất 1 lượt' },
+          { key: 'db_dept', label: 'Đơn vị xác nhận', value: 'Dân cư Khu 4' },
+        ],
+        statement:
+          'Tôi đi thăm cháu nội ở Khu 1, có giữ tấm thẻ VIP-102 xin từ thứ Bảy tuần trước đó cậu.',
+        expectedVerdict: 'reject',
+        validClueIds: ['d4c4-zone', 'd4c4-oldvip', 'd4c4-dbvip'],
+        explanationVi:
+          'Xuất phát từ Khu 4 đang giới nghiêm, tuy có mã VIP- nhưng ngày cấp 14/11/2026 (không phải 19/11/2026 như ngoại lệ LK-01). Không có dấu hiệu Song Trùng -> TỪ CHỐI.',
+      },
+      {
+        id: 'd4-c5',
+        dossierCode: 'NX-430',
+        applicantName: 'Trần Gia Minh',
+        applicantRole: 'Kỹ sư cầu đường · Khu 3',
+        theme: 'archive_nexus',
+        themeLabel: 'Thanh Tra Liên Ngành',
+        submittedAt: '15:30 · 19/11/2026',
+        sealNumber: 'REG-880',
+        documentFields: [
+          { key: 'zone', label: 'Khu vực xuất phát', value: 'Khu 3 (Bình thường)' },
+          { key: 'badge', label: 'Tem ưu tiên', value: 'Thẻ công tác REG-880' },
+          { key: 'route', label: 'Tuyến di chuyển', value: 'Cầu Vượt Sông Hồng' },
+          { key: 'bio', label: 'Sinh trắc vân tay', value: 'Khớp 99.2%' },
+        ],
+        databaseFields: [
+          { key: 'db_vip', label: 'Xác thực thẻ', value: 'REG-880 · Hợp lệ' },
+          { key: 'db_road', label: 'Trạng thái Cầu Sông Hồng', value: 'Thông tuyến bình thường' },
+          { key: 'db_dup', label: 'Nhật ký quét cổng', value: 'Chưa có lượt qua cổng nào hôm nay' },
+          { key: 'db_dept', label: 'Đơn vị xác nhận', value: 'Sở Giao Thông' },
+        ],
+        statement:
+          'Tôi vừa lái xe qua Cầu Vượt Sông Hồng lúc 15 giờ để kiểm tra hệ thống đèn tín hiệu.',
+        expectedVerdict: 'approve',
+        validClueIds: [],
+        explanationVi:
+          'Xuất phát từ Khu 3 không giới nghiêm, tuyến Cầu Vượt Sông Hồng thông suốt, sinh trắc duy nhất và hợp lệ -> DUYỆT.',
       },
     ],
   },
@@ -622,6 +848,63 @@ export const ANOMALY_DAYS: readonly AnomalyDayDefinition[] = [
         explanationVi:
           'Hội tụ đủ dấu hiệu báo động TM-03: thân nhiệt 14.2°C, chữ ký giả mạo, 2 bản sao song trùng và từ khóa "Xóa Bỏ Nhân Chứng". Kích hoạt BÁO ĐỘNG ngay!',
       },
+      {
+        id: 'd5-c4',
+        dossierCode: 'HQ-525',
+        applicantName: 'Bác Sĩ Tạ Minh Đức',
+        applicantRole: 'Chuyên khoa Hồi Sức · Âm Ty - Dương Gian',
+        theme: 'hellgate',
+        themeLabel: 'Phiên Hỗn Hợp',
+        submittedAt: '03:12 · 19/11/2026',
+        sealNumber: 'MED-908',
+        documentFields: [
+          { key: 'expiry', label: 'Hạn thông hành', value: '16/11/2026 (Hết hạn 3 ngày)', suspectId: 'd5c4-exp' },
+          { key: 'category', label: 'Diện công tác', value: 'Hộ Tống Y Tế' },
+          { key: 'signer', label: 'Chữ ký phê duyệt', value: 'Trưởng Ca P.N.H (Không phải L.V.T)', suspectId: 'd5c4-sig' },
+          { key: 'temp', label: 'Thân nhiệt kiểm tra', value: '36.8°C' },
+        ],
+        databaseFields: [
+          { key: 'db_med', label: 'Lệnh Hộ Tống Y Tế', value: 'Hợp lệ' },
+          { key: 'db_sig', label: 'Chữ ký L.V.T', value: 'KHÔNG CÓ CHỮ KÝ L.V.T', suspectId: 'd5c4-dbsig' },
+          { key: 'db_dup', label: 'Nhật ký qua cổng', value: 'Duy nhất 1 lượt' },
+          { key: 'db_alert', label: 'Chỉ số dị thường', value: 'An toàn' },
+        ],
+        statement:
+          'Tôi đi diện Hộ Tống Y Tế khẩn cấp nhưng lúc xuất phát Giám Đốc L.V.T bận họp nên Trưởng Ca ký thay.',
+        expectedVerdict: 'reject',
+        validClueIds: ['d5c4-exp', 'd5c4-sig', 'd5c4-dbsig'],
+        explanationVi:
+          'Giấy hết hạn và dù thuộc diện Hộ Tống Y Tế nhưng THIẾU chữ ký Giám Đốc Trạm "L.V.T" (không thỏa đủ Ngoại Lệ Kép TM-01). Sinh học bình thường -> TỪ CHỐI.',
+      },
+      {
+        id: 'd5-c5',
+        dossierCode: 'HQ-531',
+        applicantName: 'Vex-Orb (@vex_nightmail)',
+        applicantRole: 'Bưu tá quỹ đạo · ZET-09',
+        theme: 'alien_social',
+        themeLabel: 'Phiên Hỗn Hợp',
+        submittedAt: '03:45 · 19/11/2026',
+        sealNumber: 'NIGHT-ZET-09',
+        documentFields: [
+          { key: 'planet', label: 'Hành tinh', value: 'ZET-09' },
+          { key: 'night_code', label: 'Mã Xác Thực Đêm', value: 'NIGHT-ZET-09 (Còn hạn)' },
+          { key: 'topic', label: 'Chủ đề tin nhắn', value: 'Báo cáo thời tiết quỹ đạo' },
+          { key: 'temp', label: 'Tần số sóng', value: 'Dân sự · Hợp chuẩn' },
+        ],
+        databaseFields: [
+          { key: 'db_origin', label: 'Hộ chiếu liên sao', value: 'ZET-09 · Hợp lệ' },
+          { key: 'db_night', label: 'Cấp phép ban đêm', value: 'NIGHT-ZET-09 · Xác thực thành công' },
+          { key: 'db_scan', label: 'Quét từ cấm', value: 'Sạch (0 từ khóa mật)' },
+          { key: 'db_alert', label: 'Cảnh báo dị thường', value: '0% (An toàn)' },
+        ],
+        statement:
+          'Gửi bản tin thời tiết định kỳ lúc 03:45 kèm đầy đủ Mã Xác Thực Đêm từ trạm ZET-09.',
+        expectedVerdict: 'approve',
+        validClueIds: [],
+        explanationVi:
+          'Đăng bài trong khung giờ 00:00–04:00 nhưng có đầy đủ Mã Xác Thực Đêm hợp lệ từ ZET-09 và nội dung sạch (đạt TM-02) -> DUYỆT!',
+      },
     ],
   },
+  ...ANOMALY_DAYS_6_TO_12,
 ];

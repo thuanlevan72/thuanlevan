@@ -161,6 +161,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
     return 'title';
   });
 
+  const [unlockAllDays, setUnlockAllDays] = useState<boolean>(false);
   const [selectedStartDay, setSelectedStartDay] = useState<number>(1);
   const [progress, setProgress] = useState<AnomalyProgressState>(() =>
     createInitialAnomalyProgress(1, initialMeta.bestScore, initialMeta.highestUnlockedDay)
@@ -173,6 +174,11 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
 
   const audioCtxRef = useRef<AudioContext | null>(null);
 
+  const totalCasesCount = useMemo(
+    () => ANOMALY_DAYS.reduce((acc, day) => acc + day.cases.length, 0),
+    []
+  );
+  const effectiveUnlockedDay = unlockAllDays ? ANOMALY_DAYS.length : progress.highestUnlockedDay;
   const activeDay = useMemo(() => getActiveDay(progress), [progress]);
   const activeCase = useMemo(() => getActiveCase(progress), [progress]);
 
@@ -191,9 +197,10 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
   const startShift = useCallback(
     (dayNumber: number) => {
       const saved = loadSavedAnomalyMeta();
-      const clampedDay = Math.max(1, Math.min(saved.highestUnlockedDay, dayNumber));
+      const maxAllowed = unlockAllDays ? ANOMALY_DAYS.length : saved.highestUnlockedDay;
+      const clampedDay = Math.max(1, Math.min(maxAllowed, dayNumber));
       setProgress(
-        createInitialAnomalyProgress(clampedDay, saved.bestScore, saved.highestUnlockedDay)
+        createInitialAnomalyProgress(clampedDay, saved.bestScore, maxAllowed)
       );
       setFlaggedIds([]);
       setLastEvaluation(null);
@@ -201,7 +208,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
       setScreenState('playing');
       playAnomalyFx('stamp', soundEnabled, audioCtxRef);
     },
-    [soundEnabled]
+    [soundEnabled, unlockAllDays]
   );
 
   const handleToggleFlag = useCallback(
@@ -407,13 +414,15 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
     >
       {/* TITLE SCREEN */}
       {screenState === 'title' && (
-        <div className="p-4 sm:p-7 lg:p-8 space-y-5">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-7 items-center">
-            <div className="lg:col-span-7 space-y-4">
+        <div className="p-4 sm:p-6 lg:p-7 space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-center">
+            <div className="lg:col-span-8 space-y-3.5">
               <div className="flex flex-wrap items-center gap-2 text-xs font-mono uppercase tracking-[0.12em] text-[#B45309] dark:text-amber-400">
                 <span>Sở Kiểm Duyệt Dị Biệt</span>
                 <span>·</span>
-                <span>5 Ca Trực · 15 Hồ Sơ</span>
+                <span>
+                  {ANOMALY_DAYS.length} Ca Trực · {totalCasesCount} Hồ Sơ
+                </span>
                 {progress.bestScore > 0 && (
                   <>
                     <span>·</span>
@@ -428,29 +437,50 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                 Kiểm Duyệt Hồ Sơ Dị Biệt
               </h1>
 
-              <p className="text-sm sm:text-[15px] text-[#334155] dark:text-[#CBD5E1] leading-relaxed max-w-2xl">
+              <p className="text-sm text-[#334155] dark:text-[#CBD5E1] leading-relaxed max-w-2xl">
                 Ngồi bàn trực tối giản: đọc hồ sơ đệ trình, đối chiếu CSDL hệ thống, đánh dấu điểm
-                mâu thuẫn theo bộ quy tắc thay đổi mỗi ngày rồi đóng dấu quyết định{' '}
+                mâu thuẫn theo bộ quy tắc thay đổi mỗi ngày rồi đóng dấu{' '}
                 <strong className="text-emerald-700 dark:text-emerald-400">Duyệt</strong>,{' '}
                 <strong className="text-amber-700 dark:text-amber-400">Từ Chối</strong> hoặc{' '}
                 <strong className="text-rose-700 dark:text-rose-400">Báo Động</strong>.
               </p>
 
-              {/* Day / Shift Selector */}
+              {/* Day / Shift Selector (12 Days) */}
               <div className="space-y-2">
-                <p className="text-xs font-mono uppercase tracking-[0.1em] text-[#475569] dark:text-[#94A3B8]">
-                  Chọn ngày trực khởi đầu (Đã mở khóa: Ngày 1–{progress.highestUnlockedDay})
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-mono uppercase tracking-[0.08em] text-[#475569] dark:text-[#94A3B8]">
+                    Chọn ngày trực (Mở khóa: Ngày 1–{effectiveUnlockedDay}/{ANOMALY_DAYS.length})
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setUnlockAllDays((prev) => !prev)}
+                    className={`text-[11px] font-mono px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${
+                      unlockAllDays
+                        ? 'bg-amber-600 text-white border-amber-700'
+                        : 'bg-white dark:bg-[#111C33] text-[#0284C7] dark:text-sky-400 border-[#CBD5E1] dark:border-[#243454] hover:border-[#0284C7]'
+                    }`}
+                  >
+                    {unlockAllDays ? '✓ Đang mở toàn bộ 12 ngày' : 'Mở khóa chơi thử cả 12 ngày'}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-1.5 sm:gap-2">
                   {ANOMALY_DAYS.map((dayItem) => {
-                    const isUnlocked = dayItem.day <= progress.highestUnlockedDay;
+                    const isUnlocked = dayItem.day <= effectiveUnlockedDay;
                     const isSelected = selectedStartDay === dayItem.day;
                     const shortChannelLabels: Record<number, string> = {
                       1: 'Cổng Âm Ty',
                       2: 'Cấp Cứu 119',
                       3: 'MXH Ngoại Lai',
-                      4: 'Luật Lồng Nhau',
-                      5: 'Phiên Tối Mật',
+                      4: 'Luật Lồng',
+                      5: 'Phiên Hỗn Hợp',
+                      6: 'Chuyến Bay 13',
+                      7: 'Tàu Điện M0',
+                      8: 'Kho Ký Ức',
+                      9: 'Thời Gian',
+                      10: 'Tầng Âm 9',
+                      11: 'Duyệt AI',
+                      12: 'Đa Vũ Trụ',
                     };
                     return (
                       <button
@@ -458,7 +488,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                         type="button"
                         disabled={!isUnlocked}
                         onClick={() => setSelectedStartDay(dayItem.day)}
-                        className={`px-2.5 py-2 rounded-xl border text-left transition-all ${
+                        className={`px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-xl border text-left transition-all ${
                           !isUnlocked
                             ? 'opacity-50 cursor-not-allowed bg-[#EDE6D8] dark:bg-[#0F172A] border-[#D6CCBA] dark:border-[#1E293B]'
                             : isSelected
@@ -466,12 +496,12 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                               : 'cursor-pointer bg-white dark:bg-[#111C33] text-[#0F172A] dark:text-[#E2E8F0] border-[#D8CEBC] dark:border-[#1E2E4A] hover:border-[#0284C7]'
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-1 text-xs font-mono font-semibold">
+                        <div className="flex items-center justify-between gap-1 text-[11px] font-mono font-bold">
                           <span>Ngày {dayItem.day}</span>
                           {!isUnlocked && <span aria-hidden="true">🔒</span>}
                         </div>
                         <div
-                          className={`text-[11px] leading-snug mt-0.5 ${
+                          className={`text-[10px] leading-tight mt-0.5 truncate ${
                             isSelected ? 'text-sky-100' : 'text-[#475569] dark:text-[#94A3B8]'
                           }`}
                         >
@@ -483,12 +513,12 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 pt-1">
+              <div className="flex flex-wrap items-center gap-3 pt-0.5">
                 <button
                   type="button"
                   data-start="true"
                   onClick={() => startShift(selectedStartDay)}
-                  className="inline-flex items-center justify-center gap-2 min-h-[48px] px-6 py-3 rounded-xl bg-[#991B1B] hover:bg-[#7F1D1D] dark:bg-[#DC2626] dark:hover:bg-[#B91C1C] text-white font-semibold text-sm sm:text-base shadow-md transition-colors cursor-pointer"
+                  className="inline-flex items-center justify-center gap-2 min-h-[46px] px-5 py-2.5 rounded-xl bg-[#991B1B] hover:bg-[#7F1D1D] dark:bg-[#DC2626] dark:hover:bg-[#B91C1C] text-white font-semibold text-sm sm:text-base shadow-md transition-colors cursor-pointer"
                 >
                   <Stamp className="w-4 h-4 shrink-0" aria-hidden="true" />
                   <span>Bắt Đầu Ca Trực (Ngày {selectedStartDay})</span>
@@ -498,16 +528,16 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                 <button
                   type="button"
                   onClick={() => setShowJsonPreview((prev) => !prev)}
-                  className="inline-flex items-center justify-center gap-1.5 min-h-[44px] px-4 py-2 rounded-xl border border-[#CBD5E1] dark:border-[#2A3B5E] bg-white/85 dark:bg-[#111C33] text-xs font-mono text-[#334155] dark:text-[#CBD5E1] hover:border-[#0284C7] cursor-pointer"
+                  className="inline-flex items-center justify-center gap-1.5 min-h-[42px] px-3.5 py-2 rounded-xl border border-[#CBD5E1] dark:border-[#2A3B5E] bg-white/85 dark:bg-[#111C33] text-xs font-mono text-[#334155] dark:text-[#CBD5E1] hover:border-[#0284C7] cursor-pointer"
                 >
                   <Info className="w-3.5 h-3.5 text-[#0284C7]" aria-hidden="true" />
-                  <span>{showJsonPreview ? 'Ẩn cấu trúc JSON' : 'Xem cấu trúc kịch bản JSON'}</span>
+                  <span>{showJsonPreview ? 'Ẩn JSON mẫu' : 'Cấu trúc JSON'}</span>
                 </button>
               </div>
             </div>
 
             {/* Right Visual Seal Emblem */}
-            <div className="lg:col-span-5">
+            <div className="lg:col-span-4">
               <div className="rounded-2xl border-2 border-[#D6CBB7] dark:border-[#1E2E4A] bg-[#F3ECDC] dark:bg-[#0F172A] p-5 sm:p-6 flex flex-col items-center text-center gap-4">
                 <svg
                   viewBox="0 0 220 220"
@@ -1117,7 +1147,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
             </p>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#0A192F] dark:text-white">
               {isVictory
-                ? 'Hoàn Thành Xuất Sắc Toàn Bộ 5 Ngày Trực!'
+                ? `Hoàn Thành Xuất Sắc Toàn Bộ ${ANOMALY_DAYS.length} Ngày Trực!`
                 : 'Uy Tín Về 0 — Mất Quyền Kiểm Duyệt'}
             </h2>
             <p className="text-sm text-[#475569] dark:text-[#CBD5E1]">

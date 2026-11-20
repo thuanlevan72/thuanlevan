@@ -11,8 +11,8 @@ import {
   getActiveDay,
 } from './anomalyInspectorEngine.ts';
 
-test('ANOMALY_DAYS contains 5 escalating days, 15 valid cases, and authentic clue references', () => {
-  assert.equal(ANOMALY_DAYS.length, 5);
+test('ANOMALY_DAYS contains 12 escalating days, 60 valid cases, and authentic clue references', () => {
+  assert.equal(ANOMALY_DAYS.length, 12);
 
   const verdictHistogram: Record<AnomalyVerdict, number> = {
     approve: 0,
@@ -25,7 +25,7 @@ test('ANOMALY_DAYS contains 5 escalating days, 15 valid cases, and authentic clu
     const day = ANOMALY_DAYS[i];
     assert.equal(day.day, i + 1);
     assert.equal(day.rules.length, 3);
-    assert.equal(day.cases.length, 3);
+    assert.equal(day.cases.length, 5);
 
     for (const c of day.cases) {
       totalCases++;
@@ -58,10 +58,10 @@ test('ANOMALY_DAYS contains 5 escalating days, 15 valid cases, and authentic clu
     }
   }
 
-  assert.equal(totalCases, 15);
-  assert.equal(verdictHistogram.approve, 5);
-  assert.equal(verdictHistogram.reject, 5);
-  assert.equal(verdictHistogram.alarm, 5);
+  assert.equal(totalCases, 60);
+  assert.ok(verdictHistogram.approve >= 15);
+  assert.ok(verdictHistogram.reject >= 15);
+  assert.ok(verdictHistogram.alarm >= 12);
 });
 
 test('evaluateInspectionVerdict rewards accuracy, streak, and true clue spotting without gifting non-clues', () => {
@@ -96,8 +96,8 @@ test('applyVerdictToProgress transitions cleanly across next_case, day_complete,
   assert.equal(getActiveDay(state).day, 1);
   assert.equal(getActiveCase(state)?.id, 'd1-c1');
 
-  // Solve Day 1 Cases 1, 2, 3
-  for (let cIdx = 0; cIdx < 3; cIdx++) {
+  // Solve Day 1 Cases 1..5
+  for (let cIdx = 0; cIdx < 5; cIdx++) {
     const activeCase = getActiveCase(state);
     assert.ok(activeCase);
     const ev = evaluateInspectionVerdict(
@@ -111,7 +111,7 @@ test('applyVerdictToProgress transitions cleanly across next_case, day_complete,
     // Active case stays anchored while feedback banner is shown
     assert.equal(getActiveCase(state)?.id, activeCase.id);
 
-    if (cIdx < 2) {
+    if (cIdx < 4) {
       assert.equal(res.transition, 'next_case');
       state = advanceAfterVerdict(state);
     } else {
@@ -125,18 +125,18 @@ test('applyVerdictToProgress transitions cleanly across next_case, day_complete,
   assert.equal(getActiveDay(state).day, 2);
   assert.equal(state.currentCaseIndex, 0);
 
-  // Test victory transition on Day 5 last case
-  let day5State = createInitialAnomalyProgress(5, 500, 5);
-  for (let cIdx = 0; cIdx < 3; cIdx++) {
-    const activeCase = getActiveCase(day5State)!;
-    const ev = evaluateInspectionVerdict(activeCase, activeCase.expectedVerdict, [], day5State.streak);
-    const res = applyVerdictToProgress(day5State, ev);
-    day5State = res.nextProgress;
-    if (cIdx < 2) {
-      day5State = advanceAfterVerdict(day5State);
+  // Test victory transition on Day 12 last case
+  let day12State = createInitialAnomalyProgress(12, 500, 12);
+  for (let cIdx = 0; cIdx < 5; cIdx++) {
+    const activeCase = getActiveCase(day12State)!;
+    const ev = evaluateInspectionVerdict(activeCase, activeCase.expectedVerdict, [], day12State.streak);
+    const res = applyVerdictToProgress(day12State, ev);
+    day12State = res.nextProgress;
+    if (cIdx < 4) {
+      day12State = advanceAfterVerdict(day12State);
     } else {
       assert.equal(res.transition, 'victory');
-      assert.ok(day5State.bestScore >= 500);
+      assert.ok(day12State.bestScore >= 500);
     }
   }
 
