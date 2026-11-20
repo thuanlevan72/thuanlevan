@@ -13,6 +13,7 @@ import { LightboxModal } from './components/LightboxModal.tsx';
 import { ProjectsSection } from './components/ProjectsSection.tsx';
 import { SkillsSection } from './components/SkillsSection.tsx';
 import { GameHubSection } from './components/GameHubSection.tsx';
+import { LyricGrooveSketchpadSection } from './components/LyricGrooveSketchpadSection.tsx';
 import { TopBarAndHeader } from './components/TopBarAndHeader.tsx';
 import { GALLERY_ARTWORKS } from './data/portfolioData.ts';
 import {
@@ -233,6 +234,11 @@ export default function App() {
           />
         ) : activeRoute === 'game' ? (
           <GameHubSection
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
+          />
+        ) : activeRoute === 'studio' ? (
+          <LyricGrooveSketchpadSection
             theme={theme}
             onToggleTheme={handleToggleTheme}
           />

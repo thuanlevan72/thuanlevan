@@ -177,6 +177,17 @@ export function GlobalFooter({ theme, onToggleTheme, onNavigate }: GlobalFooterP
           </a>
           <span aria-hidden="true">·</span>
           <a
+            href="/studio"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('studio');
+            }}
+            className="hover:text-[#0369A1] dark:hover:text-[#38BDF8] hover:underline underline-offset-4 transition-colors"
+          >
+            Sáng Tác Nhạc
+          </a>
+          <span aria-hidden="true">·</span>
+          <a
             href="/game"
             onClick={(e) => {
               e.preventDefault();

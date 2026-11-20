@@ -50,16 +50,21 @@ test('parseAppRoute, getRoutePath, and getRouteSeoMeta separate profile, cv, and
   assert.equal(parseAppRoute('/game'), 'game');
   assert.equal(parseAppRoute('/co-tuong'), 'game');
   assert.equal(parseAppRoute('/xiangqi/'), 'game');
+  assert.equal(parseAppRoute('/studio'), 'studio');
+  assert.equal(parseAppRoute('/sang-tac/'), 'studio');
+  assert.equal(parseAppRoute('/', '#studio'), 'studio');
 
   assert.equal(getRoutePath('profile'), '/');
   assert.equal(getRoutePath('gallery'), '/trien-lam');
   assert.equal(getRoutePath('cv'), '/cv');
   assert.equal(getRoutePath('game'), '/game');
+  assert.equal(getRoutePath('studio'), '/studio');
 
   const galleryMeta = getRouteSeoMeta('gallery');
   const cvMeta = getRouteSeoMeta('cv');
   const profileMeta = getRouteSeoMeta('profile');
   const gameMeta = getRouteSeoMeta('game');
+  const studioMeta = getRouteSeoMeta('studio');
   assert.match(galleryMeta.title, /Triển Lãm/);
   assert.equal(galleryMeta.path, '/trien-lam');
   assert.match(cvMeta.title, /CV PDF/);
@@ -68,12 +73,15 @@ test('parseAppRoute, getRoutePath, and getRouteSeoMeta separate profile, cv, and
   assert.equal(profileMeta.path, '/');
   assert.match(gameMeta.title, /Khu Trò Chơi 2D/);
   assert.equal(gameMeta.path, '/game');
+  assert.match(studioMeta.title, /Lyric & Groove Sketchpad/);
+  assert.equal(studioMeta.path, '/studio');
 
   for (const [name, meta] of [
     ['profile', profileMeta],
     ['cv', cvMeta],
     ['gallery', galleryMeta],
     ['game', gameMeta],
+    ['studio', studioMeta],
   ] as const) {
     assert.ok(
       meta.title.length >= 30 && meta.title.length <= 60,

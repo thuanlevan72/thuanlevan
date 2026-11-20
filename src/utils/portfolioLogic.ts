@@ -1,6 +1,6 @@
 export type ThemeMode = 'light' | 'dark';
 
-export type AppRoute = 'profile' | 'gallery' | 'cv' | 'game';
+export type AppRoute = 'profile' | 'gallery' | 'cv' | 'game' | 'studio';
 
 export type GalleryCategory = 'all' | 'imperial' | 'poetic' | 'portrait' | 'moments';
 
@@ -190,6 +190,15 @@ export function parseAppRoute(pathname: string, hash = ''): AppRoute {
   ) {
     return 'game';
   }
+  if (
+    cleanPath === '/studio' ||
+    cleanPath === '/sang-tac' ||
+    cleanPath === '/lyric-groove' ||
+    cleanHash === 'studio' ||
+    cleanHash === 'sang-tac'
+  ) {
+    return 'studio';
+  }
   return 'profile';
 }
 
@@ -197,10 +206,23 @@ export function getRoutePath(route: AppRoute): string {
   if (route === 'gallery') return '/trien-lam';
   if (route === 'cv') return '/cv';
   if (route === 'game') return '/game';
+  if (route === 'studio') return '/studio';
   return '/';
 }
 
 export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
+  if (route === 'studio') {
+    return {
+      title: 'Lyric & Groove Sketchpad — Bàn Nháp Sáng Tác Nhạc',
+      description:
+        'Ứng dụng sáng tác nhạc tức thì ngay trên trình duyệt: gõ lời gắn hợp âm, đếm âm tiết, tô màu vần, đệm Groove Loop, ngân nga ra nốt MIDI & xuất PDF.',
+      keywords:
+        'Lyric Groove Sketchpad, bàn nháp sáng tác nhạc, gợi ý hợp âm, Tone.js, Tonal.js, Hum to MIDI, Piano Roll, Lead Sheet PDF',
+      ogType: 'website',
+      ogImageAlt: 'Lyric & Groove Sketchpad — Bàn Nháp Sáng Tác Tức Thì trên trình duyệt',
+      path: '/studio',
+    };
+  }
   if (route === 'gallery') {
     return {
       title: 'Triển Lãm Ảnh & Video — Thuận Lê (28 Tác Phẩm)',
@@ -605,6 +627,13 @@ export function buildStructuredDataGraph(origin: string, route: AppRoute) {
       name: 'Game · Khu Trò Chơi 2D',
       item: `${cleanOrigin}/game`,
     });
+  } else if (route === 'studio') {
+    breadcrumbItems.push({
+      '@type': 'ListItem',
+      position: 2,
+      name: 'Lyric & Groove Sketchpad',
+      item: `${cleanOrigin}/studio`,
+    });
   }
 
   return {
@@ -643,10 +672,10 @@ export function buildStructuredDataGraph(origin: string, route: AppRoute) {
       },
       {
         '@type':
-          route === 'gallery'
+          route === 'gallery' || route === 'game'
             ? 'CollectionPage'
-            : route === 'game'
-            ? 'CollectionPage'
+            : route === 'studio'
+            ? 'WebApplication'
             : 'ProfilePage',
         '@id': `${currentUrl}#webpage`,
         url: currentUrl,
