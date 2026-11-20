@@ -87,16 +87,16 @@ test('Halved wave counts, 2x wave durations, steeper per-wave difficulty, and wi
   assert.ok(setupBlitz.totalWaves < setupNormal.totalWaves);
   assert.ok(setupBossRush.startEnergy > setupNormal.startEnergy * 2);
 
-  // Verify 2x longer active duration per wave across Early / Mid / Late waves
+  // Verify 3.5x–3.8x longer active duration per wave across Early / Mid / Late waves (vs prior 26.5s / 45.2s / 59.8s)
   const w1Normal = buildWaveSpawns(1, setupNormal.totalWaves, 'normal', 'campaign');
   const w5Normal = buildWaveSpawns(5, setupNormal.totalWaves, 'normal', 'campaign');
   const w8Normal = buildWaveSpawns(8, setupNormal.totalWaves, 'normal', 'campaign');
   const w1Span = w1Normal[w1Normal.length - 1].delaySec;
   const w5Span = w5Normal[w5Normal.length - 1].delaySec;
   const w8Span = w8Normal[w8Normal.length - 1].delaySec;
-  assert.ok(w1Span >= 22, `W1 span=${w1Span}s should be ~2x longer (>=22s)`);
-  assert.ok(w5Span >= 36, `W5 span=${w5Span}s should be ~2x longer (>=36s)`);
-  assert.ok(w8Span >= 48, `W8 span=${w8Span}s should be ~2x longer (>=48s)`);
+  assert.ok(w1Span >= 85 && w1Span <= 115, `W1 span=${w1Span}s should be ~3.5x longer (85..115s)`);
+  assert.ok(w5Span >= 145 && w5Span <= 190, `W5 span=${w5Span}s should be ~3.5x longer (145..190s)`);
+  assert.ok(w8Span >= 195 && w8Span <= 255, `W8 span=${w8Span}s should be ~3.5x longer (195..255s)`);
 
   const w1BossRush = buildWaveSpawns(1, setupBossRush.totalWaves, 'normal', 'boss_rush');
   assert.ok(w1BossRush.some((s) => s.kind === 'boss'));
@@ -113,15 +113,15 @@ test('Halved wave counts, 2x wave durations, steeper per-wave difficulty, and wi
   assert.ok(bossHell.armorRatio > bossEasy.armorRatio);
   assert.ok(bossHell.scoreValue > bossEasy.scoreValue * 2);
 
-  // Verify Hell W1 total HP stays balanced across 2x wave length
+  // Verify Hell W1 total HP stays balanced across 3.5x wave length (~93s span)
   const w1Hell = buildWaveSpawns(1, setupHell.totalWaves, 'hell', 'campaign');
-  assert.equal(w1Hell.length, 24);
+  assert.equal(w1Hell.length, 64);
   const w1TotalHp = w1Hell.reduce(
     (sum, item, idx) =>
       sum + createEnemyForWave(idx + 1, item.kind, 1, map, item.isElite, 'hell', 'campaign').maxHp,
     0
   );
-  assert.ok(w1TotalHp > 2800 && w1TotalHp < 5800, `Hell W1 total HP=${w1TotalHp} should be challenging yet winnable`);
+  assert.ok(w1TotalHp > 7500 && w1TotalHp < 15500, `Hell W1 total HP=${w1TotalHp} across ~93s should stay balanced`);
 
   const hellMap16 = getEffectiveMapSetup(PRISM_MAPS[15], 'hell', 'campaign');
   assert.equal(hellMap16.totalWaves, 21);
@@ -316,4 +316,70 @@ test('Rebalanced steeper wave spawns and all 12 enemy archetypes & abilities wor
   const resJugg = stepEnemies([jugg], map, 0.2);
   assert.equal(resJugg.coreDamageTaken, 3);
 });
+
+test('All 16 guns unlock distinct Lv3/Lv5/Lv7/Lv10 combat profile milestones without broken ranges', () => {
+  const gat10 = getGunCombatProfile('gatling', 10);
+  assert.equal(gat10.projectilesPerShot, 5);
+  assert.equal(gat10.armorPierce, 1);
+  assert.ok(gat10.splashRadius > 0);
+
+  const sg10 = getGunCombatProfile('shotgun', 10);
+  assert.equal(sg10.projectilesPerShot, 11);
+  assert.ok(sg10.burnDps > 0);
+  assert.ok(sg10.rangePx <= 260, `Shotgun Lv10 rangePx=${sg10.rangePx} stays reachable by pellets`);
+
+  const fl10 = getGunCombatProfile('flamer', 10);
+  assert.ok(fl10.burnDps > 0 && fl10.slowPct > 0);
+
+  const cr10 = getGunCombatProfile('cryo', 10);
+  assert.ok(cr10.slowPct >= 0.65 && cr10.brittleBonus >= 0.42);
+
+  const te10 = getGunCombatProfile('tesla', 10);
+  assert.equal(te10.chainCount, 9);
+  assert.equal(te10.splashRadius, 48);
+
+  const mi10 = getGunCombatProfile('missile', 10);
+  assert.equal(mi10.projectilesPerShot, 4);
+  assert.ok(mi10.splashRadius >= 140);
+
+  const rg7 = getGunCombatProfile('railgun', 7);
+  const rg10 = getGunCombatProfile('railgun', 10);
+  assert.ok(rg7.splashRadius >= 46);
+  assert.equal(rg10.projectilesPerShot, 3);
+  assert.equal(rg10.armorPierce, 1);
+
+  const mo10 = getGunCombatProfile('mortar', 10);
+  assert.equal(mo10.projectilesPerShot, 2);
+  assert.ok(mo10.pullForce > 20);
+
+  const sn10 = getGunCombatProfile('sniper', 10);
+  assert.equal(sn10.projectilesPerShot, 2);
+  assert.equal(sn10.armorPierce, 1);
+
+  const ac10 = getGunCombatProfile('acid', 10);
+  assert.equal(ac10.projectilesPerShot, 2);
+  assert.equal(ac10.slowPct, 0.45);
+
+  const saw10 = getGunCombatProfile('saw', 10);
+  assert.equal(saw10.projectilesPerShot, 3);
+  assert.equal(saw10.chainCount, 11);
+
+  const cn10 = getGunCombatProfile('cannon', 10);
+  assert.equal(cn10.projectilesPerShot, 3);
+  assert.equal(cn10.splashRadius, 105);
+
+  const pl10 = getGunCombatProfile('plasma', 10);
+  assert.equal(pl10.projectilesPerShot, 3);
+  assert.equal(pl10.shieldMult, 2.4);
+
+  const cl10 = getGunCombatProfile('cluster', 10);
+  assert.equal(cl10.projectilesPerShot, 3);
+  assert.equal(cl10.splashRadius, 128);
+
+  const hu10 = getGunCombatProfile('hunter', 10);
+  assert.equal(hu10.projectilesPerShot, 5);
+  assert.equal(hu10.armorPierce, 1);
+  assert.equal(hu10.splashRadius, 24);
+});
+
 

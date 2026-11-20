@@ -249,7 +249,7 @@ export const GAME_MODE_CONFIGS: Record<GameModeId, GameModeConfig> = {
     label: 'Chiến Dịch',
     shortLabel: 'CHIẾN DỊCH',
     badgeColor: '#38BDF8',
-    description: '8–21 đợt tinh gọn · Mỗi đợt kéo dài x2 & độ khó leo thang cực gắt',
+    description: '8–21 đợt tinh gọn · Mỗi đợt kéo dài gấp 3.5× với từng toán quân dồn dập',
     waveCountMult: 1.0,
     spawnRateMult: 1.0,
     speedMult: 1.0,
@@ -448,10 +448,14 @@ export interface ProjectileItem {
   hitIds?: number[];
   life: number;
   maxLife: number;
+  age?: number;
+  destX?: number;
+  destY?: number;
   speed: number;
   color: string;
   visualTier: 1 | 2 | 3 | 4;
   spawnCluster?: boolean;
+  isClusterBomblet?: boolean;
 }
 
 export interface AcidPoolFx {
@@ -483,6 +487,7 @@ export interface RailBeamFx {
   alpha: number;
   color: string;
   visualTier: 1 | 2 | 3 | 4;
+  variant?: 'railgun' | 'sniper';
 }
 
 export interface FlameConeFx {
@@ -493,6 +498,7 @@ export interface FlameConeFx {
   halfArc: number;
   alpha: number;
   visualTier: 1 | 2 | 3 | 4;
+  isNova360?: boolean;
 }
 
 export interface ShockwaveRing {
@@ -819,7 +825,7 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     name: 'Màn 01 · Thung Lũng Khởi Đầu',
     recommendedDifficulty: 'easy',
     difficultyLabel: 'Dễ · 8 Đợt',
-    subtitle: 'Tuyến zic-zắc tinh gọn — mỗi đợt kéo dài x2 để nâng cấp súng lên Lv10.',
+    subtitle: 'Tuyến zic-zắc tinh gọn — mỗi đợt kéo dài gấp 3.5× để nâng cấp súng lên Lv10.',
     biome: 'cyber_cyan',
     cols: GRID_COLS,
     rows: GRID_ROWS,
@@ -1222,7 +1228,7 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     name: 'Màn 16 · Đế Chế Hư Không',
     recommendedDifficulty: 'hell',
     difficultyLabel: 'Địa Ngục · 18 Đợt',
-    subtitle: 'Chiến dịch 18–21 đợt tối thượng — mỗi đợt dài gấp đôi & độ khó cực đại cho pháo đài Lv10!',
+    subtitle: 'Chiến dịch 18–21 đợt tối thượng — mỗi đợt dài gấp 3.5× & độ khó cực đại cho pháo đài Lv10!',
     biome: 'violet_void',
     cols: GRID_COLS,
     rows: GRID_ROWS,
@@ -1516,7 +1522,8 @@ export interface WaveSpawnItem {
 }
 
 /**
- * Halved wave count (8..21) with 2x longer active duration per wave and accelerated archetype/boss escalation.
+ * Extended tactical waves (3.5x–3.7x longer active play duration per wave) with squad bursts,
+ * mid-wave mini-bosses, and accelerated archetype/boss escalation.
  */
 export function buildWaveSpawns(
   waveNumber: number,
@@ -1527,24 +1534,26 @@ export function buildWaveSpawns(
   const diffCfg = DIFFICULTY_CONFIGS[difficulty];
   const modeCfg = GAME_MODE_CONFIGS[mode];
   const items: WaveSpawnItem[] = [];
-  // Ramp difficulty bonus quickly over waves 1..3 for halved wave campaigns
+  // Ramp difficulty bonus quickly over waves 1..3
   const rampedBonus = Math.round(diffCfg.waveCountBonus * Math.min(1, Math.max(0, waveNumber - 1) / 2.5));
-  const rawCount =
+  const baseRaw =
     20 +
     Math.round(waveNumber * 4.0) +
     (waveNumber >= 5 ? (waveNumber - 4) * 2 : 0) +
     rampedBonus;
+  // ~2.65x longer squad composition paired with ~1.33x paced interval => ~3.55x wave play duration
+  const rawCount = Math.round(baseRaw * 2.65);
   const count =
     mode === 'boss_rush'
-      ? Math.max(10, Math.round(rawCount * 0.52))
+      ? Math.max(22, Math.round(rawCount * 0.52))
       : mode === 'blitz'
-        ? Math.max(24, Math.round(rawCount * 1.2))
+        ? Math.max(60, Math.round(rawCount * 1.2))
         : rawCount;
-  let elapsed = 0.2;
+  let elapsed = 0.25;
 
   for (let i = 0; i < count; i++) {
     let kind: EnemyKind = 'scout';
-    if (waveNumber >= 1 && waveNumber === 1 && i >= count - 3 && difficulty !== 'easy') kind = 'armored';
+    if (waveNumber >= 1 && waveNumber === 1 && i >= count - 6 && difficulty !== 'easy') kind = 'armored';
     if (waveNumber >= 2 && i % 4 === 2) kind = 'armored';
     if (waveNumber >= 2 && i % 5 === 1) kind = 'splitter';
     if (waveNumber >= 2 && i % 6 === 3) kind = 'stealth';
@@ -1569,14 +1578,14 @@ export function buildWaveSpawns(
         kind = 'shieldbearer';
       }
     } else {
-      // Halved campaign compresses Boss & Mini-boss intervals to every 2..3 waves + final wave
+      const isEarlyMiniBoss = waveNumber >= 8 && i === Math.floor(count / 3);
       const isMiniBossWave = waveNumber >= 4 && waveNumber % 2 === 0 && i === Math.floor(count / 2);
       const isMajorBossWave =
         waveNumber === totalWaves ||
         waveNumber % 3 === 0 ||
         waveNumber >= 10;
 
-      if ((isMajorBossWave && i === count - 1) || isMiniBossWave) {
+      if ((isMajorBossWave && i === count - 1) || isMiniBossWave || isEarlyMiniBoss) {
         kind = 'boss';
       }
       if (waveNumber >= 7 && isMajorBossWave && i >= count - 2) {
@@ -1595,20 +1604,22 @@ export function buildWaveSpawns(
         (difficulty === 'hell' && waveNumber >= 2 && i % 5 === 4));
     items.push({ kind, delaySec: Number(elapsed.toFixed(3)), isElite });
 
-    // ~2.0x wave duration via wider controlled lane spacing + extended squad length
+    // ~1.33x paced squad interval (~3.55x–3.66x total active duration vs prior baseline)
     const baseGap =
       Math.max(
-        0.34,
-        1.18 - waveNumber * 0.025 - (difficulty === 'hell' ? 0.05 : difficulty === 'hard' ? 0.025 : 0)
+        0.46,
+        1.56 - waveNumber * 0.032 - (difficulty === 'hell' ? 0.065 : difficulty === 'hard' ? 0.032 : 0)
       ) / modeCfg.spawnRateMult;
-    elapsed +=
+    const squadRhythm = i % 6 === 5 ? 1.48 : 0.92;
+    const roleSpacing =
       kind === 'splitter' || kind === 'berserker'
-        ? baseGap * 0.78
+        ? baseGap * 0.8
         : kind === 'stealth' || kind === 'teleporter'
-          ? baseGap * 0.85
+          ? baseGap * 0.86
           : kind === 'boss' || kind === 'juggernaut'
-            ? baseGap * 1.35
+            ? baseGap * 1.32
             : baseGap;
+    elapsed += roleSpacing * squadRhythm;
   }
   return items;
 }
@@ -1649,7 +1660,7 @@ export function createEnemyForWave(
   const shieldScale = baseScale * eliteMult * diffCfg.shieldMult * openingGrace * bossRushEarlyDamper;
   const speedBonus = Math.min(52, effectiveWave * 1.95);
   const totalSpeedMult = diffCfg.speedMult * modeCfg.speedMult;
-  const rewardScale = diffCfg.rewardMult * modeCfg.rewardMult * (isElite ? 1.35 : 1);
+  const rewardScale = diffCfg.rewardMult * modeCfg.rewardMult * (isElite ? 1.35 : 1) * 0.56;
   const scoreMultTotal = diffCfg.scoreMult * modeCfg.scoreMult;
   const armorAdd = waveNumber === 1 ? diffCfg.armorBonus * 0.3 : diffCfg.armorBonus;
 
