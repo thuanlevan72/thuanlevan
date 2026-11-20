@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { Code2, FileSearch, Gamepad2, Grid3X3, Layers, Sparkles, Terminal, Zap } from 'lucide-react';
+import { Code2, FileSearch, Gamepad2, Grid3X3, Layers, LayoutGrid, Sparkles, Zap } from 'lucide-react';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 import { AnomalyGameSection } from './AnomalyGameSection.tsx';
-import { BrowserBreakerGameSection } from './BrowserBreakerGameSection.tsx';
+import { AsmrOrganizerGameSection } from './AsmrOrganizerGameSection.tsx';
 import { LinuxHackerGameSection } from './LinuxHackerGameSection.tsx';
 import { PrismTdGameSection } from './PrismTdGameSection.tsx';
 import { XiangqiGameSection } from './XiangqiGameSection.tsx';
 
-type GameId = 'xiangqi' | 'anomaly' | 'browser_breaker' | 'prism_td' | 'linux_hacker';
+type GameId = 'xiangqi' | 'anomaly' | 'asmr_organizer' | 'prism_td' | 'linux_hacker';
 
 interface GameCatalogItem {
   id: string;
@@ -39,13 +39,13 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     gameKey: 'anomaly',
   },
   {
-    id: 'browser-breaker',
-    title: 'Phá Vỡ Trình Duyệt',
-    shortTitle: 'Phá Trình Duyệt',
-    subtitle: 'Browser-Breaking Meta-UI Puzzle · 8 Màn Giải Đố DOM',
-    badge: '8 Màn',
+    id: 'asmr-organizer',
+    title: 'Sắp Xếp Góc Nhỏ',
+    shortTitle: 'Chuẩn OCD',
+    subtitle: 'ASMR Aesthetic Organizer · Kéo xoay xếp góc pastel chuẩn OCD',
+    badge: '6 Góc ASMR',
     playable: true,
-    gameKey: 'browser_breaker',
+    gameKey: 'asmr_organizer',
   },
   {
     id: 'prism-td',
@@ -93,7 +93,9 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
     if (typeof window !== 'undefined') {
       const playParam = new URLSearchParams(window.location.search).get('play');
       if (playParam === 'anomaly') return 'anomaly';
-      if (playParam === 'browser' || playParam === 'browser-breaker') return 'browser_breaker';
+      if (playParam === 'asmr' || playParam === 'ocd' || playParam === 'organizer') {
+        return 'asmr_organizer';
+      }
       if (playParam === 'prism' || playParam === 'prism-td' || playParam === 'laser') return 'prism_td';
       if (playParam === 'linux' || playParam === 'ubuntu' || playParam === 'cli' || playParam === 'hacker') {
         return 'linux_hacker';
@@ -157,10 +159,10 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
                         }`}
                         aria-hidden="true"
                       />
-                    ) : item.gameKey === 'browser_breaker' ? (
-                      <Terminal
+                    ) : item.gameKey === 'asmr_organizer' ? (
+                      <LayoutGrid
                         className={`w-3.5 h-3.5 shrink-0 ${
-                          isSelected ? 'text-sky-300' : 'text-[#0284C7] dark:text-sky-400'
+                          isSelected ? 'text-emerald-200' : 'text-emerald-600 dark:text-emerald-400'
                         }`}
                         aria-hidden="true"
                       />
@@ -227,8 +229,8 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       {activeGame === 'anomaly' && (
         <AnomalyGameSection theme={theme} onToggleTheme={onToggleTheme} />
       )}
-      {activeGame === 'browser_breaker' && (
-        <BrowserBreakerGameSection theme={theme} onToggleTheme={onToggleTheme} />
+      {activeGame === 'asmr_organizer' && (
+        <AsmrOrganizerGameSection theme={theme} onToggleTheme={onToggleTheme} />
       )}
       {activeGame === 'prism_td' && (
         <PrismTdGameSection theme={theme} onToggleTheme={onToggleTheme} />
