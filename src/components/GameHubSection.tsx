@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { Code2, FileSearch, Gamepad2, Grid3X3, Layers, LayoutGrid, Network, Sparkles, Zap } from 'lucide-react';
+import { Code2, FileSearch, Gamepad2, Gift, Grid3X3, Layers, LayoutGrid, Network, Sparkles, Zap } from 'lucide-react';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 import { AnomalyGameSection } from './AnomalyGameSection.tsx';
 import { AsmrOrganizerGameSection } from './AsmrOrganizerGameSection.tsx';
+import { BlindBoxMergeGameSection } from './BlindBoxMergeGameSection.tsx';
 import { LinuxHackerGameSection } from './LinuxHackerGameSection.tsx';
 import { PrismTdGameSection } from './PrismTdGameSection.tsx';
 import { TrafficRouterGameSection } from './TrafficRouterGameSection.tsx';
 import { XiangqiGameSection } from './XiangqiGameSection.tsx';
 
-type GameId = 'xiangqi' | 'anomaly' | 'asmr_organizer' | 'prism_td' | 'linux_hacker' | 'traffic_router';
+type GameId = 'xiangqi' | 'anomaly' | 'asmr_organizer' | 'blind_box' | 'prism_td' | 'linux_hacker' | 'traffic_router';
 
 interface GameCatalogItem {
   id: string;
@@ -49,6 +50,15 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     gameKey: 'asmr_organizer',
   },
   {
+    id: 'blind-box-merge',
+    title: 'Tiệm Xé Túi Mù',
+    shortTitle: 'Túi Mù',
+    subtitle: 'Blind-Box Squishy Merge · Hợp nhất thú bông ASMR · Vuốt xé túi mù · Decor Phòng Mini',
+    badge: 'Mochi & Phòng',
+    playable: true,
+    gameKey: 'blind_box',
+  },
+  {
     id: 'prism-td',
     title: 'Thủ Thành Laser',
     shortTitle: 'Mạch Laser',
@@ -68,10 +78,10 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
   },
   {
     id: 'traffic-router',
-    title: 'Điều Phối Lưu Lượng',
-    shortTitle: 'Chống DDoS',
-    subtitle: 'Traffic Router & Load Balancer · WAF · Rate Limiter · Redis · Tránh 502 Bad Gateway',
-    badge: '5 Kịch Bản',
+    title: 'Thiết Kế Kiến Trúc',
+    shortTitle: 'Kiến Trúc',
+    subtitle: 'System Architecture Designer · 16 Hoàn Cảnh · Đa giải pháp · Đánh giá tối ưu S/A/B/C',
+    badge: '16 Màn · 4 Chương',
     playable: true,
     gameKey: 'traffic_router',
   },
@@ -106,11 +116,14 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       if (playParam === 'asmr' || playParam === 'ocd' || playParam === 'organizer') {
         return 'asmr_organizer';
       }
+      if (playParam === 'blindbox' || playParam === 'squishy' || playParam === 'tuimu') {
+        return 'blind_box';
+      }
       if (playParam === 'prism' || playParam === 'prism-td' || playParam === 'laser') return 'prism_td';
       if (playParam === 'linux' || playParam === 'ubuntu' || playParam === 'cli' || playParam === 'hacker') {
         return 'linux_hacker';
       }
-      if (playParam === 'traffic' || playParam === 'ddos' || playParam === 'lb' || playParam === 'router') {
+      if (playParam === 'traffic' || playParam === 'ddos' || playParam === 'arch' || playParam === 'architecture') {
         return 'traffic_router';
       }
     }
@@ -176,6 +189,13 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
                       <LayoutGrid
                         className={`w-3.5 h-3.5 shrink-0 ${
                           isSelected ? 'text-emerald-200' : 'text-emerald-600 dark:text-emerald-400'
+                        }`}
+                        aria-hidden="true"
+                      />
+                    ) : item.gameKey === 'blind_box' ? (
+                      <Gift
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          isSelected ? 'text-pink-200' : 'text-pink-600 dark:text-pink-400'
                         }`}
                         aria-hidden="true"
                       />
@@ -251,6 +271,9 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       )}
       {activeGame === 'asmr_organizer' && (
         <AsmrOrganizerGameSection theme={theme} onToggleTheme={onToggleTheme} />
+      )}
+      {activeGame === 'blind_box' && (
+        <BlindBoxMergeGameSection theme={theme} onToggleTheme={onToggleTheme} />
       )}
       {activeGame === 'prism_td' && (
         <PrismTdGameSection theme={theme} onToggleTheme={onToggleTheme} />

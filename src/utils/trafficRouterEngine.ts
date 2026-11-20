@@ -2017,7 +2017,7 @@ export function analyzeArchitectureDesign(
 }
 
 export interface CritiqueItem {
-  category: 'performance' | 'security' | 'cost' | 'architecture';
+  category: 'performance' | 'security' | 'cost' | 'architecture' | 'reliability';
   severity: 'critical' | 'warning';
   title: string;
   reason: string;
@@ -2277,16 +2277,51 @@ export function evaluateSolutionOptimization(
 
   const architectureFit = analysis.score;
 
+  const hasCritical = whyNotOptimal.some((c) => c.severity === 'critical');
+
+  // Ensure non-optimal solutions always explain why they aren't S-grade yet
+  if (
+    analysis.hasValidPath &&
+    whyNotOptimal.length === 0 &&
+    (analysis.matchedApproaches.length === 0 ||
+      performance * 0.28 + reliability * 0.3 + costEfficiency * 0.14 + architectureFit * 0.28 < 88)
+  ) {
+    if (analysis.matchedApproaches.length === 0) {
+      whyNotOptimal.push({
+        category: 'architecture',
+        severity: 'warning',
+        title: 'Chưa tối ưu đúng mẫu kiến trúc chuyên biệt cho hoàn cảnh này',
+        reason: `Kiến trúc hiện tại xử lý được tải nhưng chưa hội tụ đủ các thành phần cốt lõi của một trong ${level.approaches.length} phương án chuẩn cho "${level.domain}".`,
+        suggestion: `Mở mục "Các Cách Thiết Kế" để tham khảo ${level.approaches.map((a) => a.name).join(' hoặc ')}.`,
+      });
+    } else if (peakDbCpu >= 68) {
+      whyNotOptimal.push({
+        category: 'reliability',
+        severity: 'warning',
+        title: `Biên an toàn CPU Database còn mỏng (Đỉnh ${Math.round(peakDbCpu)}%)`,
+        reason: 'Mặc dù chưa chạm ngưỡng báo động đỏ, Database vẫn phải gánh nhiều truy vấn có thể giảm tải thêm.',
+        suggestion: 'Nâng cấp các node đệm/hàng đợi (Redis, CDN, Kafka) lên Lv2 để đưa đỉnh CPU về dưới 65%.',
+      });
+    } else {
+      whyNotOptimal.push({
+        category: 'performance',
+        severity: 'warning',
+        title: 'Vẫn còn dư địa giảm độ trễ phản hồi (Latency)',
+        reason: `Độ trễ trung bình ${avgLatencyMs}ms đã đạt SLA (${level.targetSlaMs}ms) nhưng chưa tối ưu tuyệt đối như cấp S.`,
+        suggestion: 'Rút gọn số bước nhảy tuần tự hoặc nâng cấp node xử lý chính lên Lv2.',
+      });
+    }
+  }
+
   const totalScore = Math.round(
     performance * 0.28 + reliability * 0.3 + costEfficiency * 0.14 + architectureFit * 0.28
   );
 
-  const hasCritical = whyNotOptimal.some((c) => c.severity === 'critical');
   const isOptimal =
     analysis.hasValidPath && !hasCritical && whyNotOptimal.length === 0 && totalScore >= 88;
 
   const grade: 'S' | 'A' | 'B' | 'C' =
-    totalScore >= 92 && !hasCritical
+    totalScore >= 92 && !hasCritical && whyNotOptimal.length === 0
       ? 'S'
       : totalScore >= 82 && !hasCritical
         ? 'A'

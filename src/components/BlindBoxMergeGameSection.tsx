@@ -650,7 +650,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
         id: nextBodyIdRef.current++,
         tier: currentTier,
         x: clampedX,
-        y: 36,
+        y: 40,
         vx: (Math.random() - 0.5) * 14,
         vy: 30,
         radius: tierDef.radius,
@@ -746,7 +746,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
         // Soft Glass Interior
         ctx.fillStyle = isDark ? '#252024' : '#FFF9F4';
         ctx.beginPath();
-        ctx.roundRect(4, 16, JAR_W - 8, JAR_H - 20, 22);
+        ctx.roundRect(4, 6, JAR_W - 8, JAR_H - 10, 22);
         ctx.fill();
 
         // Danger Overflow Line
@@ -772,12 +772,12 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
           ctx.lineWidth = 1.4;
           ctx.setLineDash([4, 5]);
           ctx.beginPath();
-          ctx.moveTo(clampedAim, 42);
+          ctx.moveTo(clampedAim, 48);
           ctx.lineTo(clampedAim, JAR_H - 16);
           ctx.stroke();
           ctx.restore();
 
-          drawKawaiiSquishy(ctx, clampedAim, 34, currentTier, 1, 1);
+          drawKawaiiSquishy(ctx, clampedAim, 40, currentTier, 1, 1);
         }
 
         // All Squishy Bodies
@@ -800,7 +800,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
         ctx.strokeStyle = isDark ? '#5C4D55' : '#E7D4DB';
         ctx.lineWidth = 3.5;
         ctx.beginPath();
-        ctx.roundRect(4, 16, JAR_W - 8, JAR_H - 20, 22);
+        ctx.roundRect(4, 6, JAR_W - 8, JAR_H - 10, 22);
         ctx.stroke();
       }
 
@@ -988,44 +988,44 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
           </div>
 
           {/* Sub-tab Switcher */}
-          <div className={`inline-flex items-center gap-1 p-1 rounded-xl border ${cardClass}`}>
+          <div className={`flex flex-wrap sm:inline-flex items-center gap-1 p-1 rounded-xl border w-full sm:w-auto ${cardClass}`}>
             <button
               type="button"
               data-testid="blindbox-tab-merge"
               onClick={() => setSubTab('merge')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+              className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 subTab === 'merge'
                   ? 'bg-[#E57399] text-white'
                   : 'hover:bg-[#FCEEF3] dark:hover:bg-[#3A2E35]'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5" />
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
               <span>Hũ Hợp Nhất</span>
             </button>
             <button
               type="button"
               data-testid="blindbox-tab-gacha"
               onClick={() => setSubTab('gacha')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+              className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 subTab === 'gacha'
                   ? 'bg-[#E57399] text-white'
                   : 'hover:bg-[#FCEEF3] dark:hover:bg-[#3A2E35]'
               }`}
             >
-              <Gift className="w-3.5 h-3.5" />
+              <Gift className="w-3.5 h-3.5 shrink-0" />
               <span>Kệ Xé Túi Mù</span>
             </button>
             <button
               type="button"
               data-testid="blindbox-tab-room"
               onClick={() => setSubTab('room')}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+              className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 subTab === 'room'
                   ? 'bg-[#E57399] text-white'
                   : 'hover:bg-[#FCEEF3] dark:hover:bg-[#3A2E35]'
               }`}
             >
-              <Home className="w-3.5 h-3.5" />
+              <Home className="w-3.5 h-3.5 shrink-0" />
               <span>Phòng Mini</span>
             </button>
           </div>
@@ -1050,7 +1050,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
           <div className="lg:col-span-7 flex flex-col items-center">
             <div className="w-full max-w-[380px] flex items-center justify-between gap-2 mb-2 text-xs tabular-nums">
               <div>
-                Điểm: <strong className="text-sm text-[#D16B8F] dark:text-[#F4A8C3]">{score}</strong>
+                Điểm: <strong data-testid="blindbox-score" className="text-sm text-[#D16B8F] dark:text-[#F4A8C3]">{score}</strong>
                 <span className="mx-2 opacity-40">·</span>
                 Kỷ lục: <strong>{profile.bestScore}</strong>
               </div>
@@ -1070,6 +1070,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
             <div className="relative w-full max-w-[360px]">
               <canvas
                 ref={jarCanvasRef}
+                data-testid="blindbox-jar-canvas"
                 width={JAR_W}
                 height={JAR_H}
                 onPointerMove={(e) => setAimX(mapPointerToJarX(e.clientX))}
@@ -1087,7 +1088,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
                   role="dialog"
                   aria-modal="true"
                   aria-label="Hũ đã đầy"
-                  className="absolute inset-0 rounded-3xl bg-[#201B1E]/75 backdrop-blur-xs flex items-center justify-center p-4"
+                  className="absolute inset-0 rounded-3xl bg-[#201B1E]/88 flex items-center justify-center p-4"
                 >
                   <div className={`w-full rounded-2xl border p-5 text-center space-y-3 ${cardClass}`}>
                     <p className="text-xs font-semibold text-[#E57399]">HŨ ĐÃ ĐẦY Ú Ụ!</p>
@@ -1252,11 +1253,15 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
                       data-testid="blindbox-tear-strip"
                       onPointerDown={(e) => {
                         tearStartRef.current = e.clientX;
-                        e.currentTarget.setPointerCapture(e.pointerId);
+                        try {
+                          e.currentTarget.setPointerCapture(e.pointerId);
+                        } catch {
+                          // Ignore synthetic pointer capture failure
+                        }
                       }}
                       onPointerMove={(e) => {
                         if (tearStartRef.current === null) return;
-                        const pct = computeTearProgress(tearStartRef.current, e.clientX, 175);
+                        const pct = computeTearProgress(tearStartRef.current, e.clientX, 145);
                         setTearProgress(pct);
                         const now = Date.now();
                         if (pct > 0.08 && now - lastCrinkleRef.current > 85) {
@@ -1269,6 +1274,9 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
                         }
                       }}
                       onPointerUp={() => {
+                        tearStartRef.current = null;
+                      }}
+                      onPointerCancel={() => {
                         tearStartRef.current = null;
                       }}
                       className="relative h-9 bg-[#FFF8FA] border-x-2 border-dashed border-[#52433B] flex items-center justify-between px-3 cursor-ew-resize"
@@ -1401,6 +1409,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
 
             <svg
               ref={roomSvgRef}
+              xmlns="http://www.w3.org/2000/svg"
               viewBox={`0 0 ${ROOM_W} ${ROOM_H}`}
               onPointerMove={(e) => {
                 const drag = roomDragRef.current;
