@@ -24,9 +24,11 @@ import {
   findKingPosition,
   getLegalMovesForPiece,
   getOppositeSide,
+  getXiangqiLevelConfig,
   isSideInCheck,
   PIECE_DISPLAY_INFO,
   PIECE_MATERIAL_VALUE,
+  XIANGQI_LEVELS,
   XiangqiBoard,
   XiangqiDifficulty,
   XiangqiGameResult,
@@ -126,12 +128,6 @@ const BOARD_THEMES: Record<BoardThemeId, BoardThemePalette> = {
     legalDot: '#34D399',
     captureRing: '#F87171',
   },
-};
-
-const DIFFICULTY_LABELS: Record<XiangqiDifficulty, { name: string; sub: string }> = {
-  easy: { name: 'Nhập Môn', sub: 'Thoải mái · Dễ' },
-  medium: { name: 'Kỳ Thủ', sub: 'Cân bằng · Nhanh' },
-  hard: { name: 'Đại Sư', sub: 'Sâu · Thử thách' },
 };
 
 interface Particle {
@@ -235,7 +231,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
     return 'title';
   });
 
-  const [difficulty, setDifficulty] = useState<XiangqiDifficulty>('medium');
+  const [difficulty, setDifficulty] = useState<XiangqiDifficulty>(5);
   const [playerSide, setPlayerSide] = useState<XiangqiSide>('red');
   const [boardTheme, setBoardTheme] = useState<BoardThemeId>('wood');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
@@ -313,6 +309,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
   const aiSide: XiangqiSide = getOppositeSide(playerSide);
   const isFlipped = playerSide === 'black';
   const palette = BOARD_THEMES[boardTheme];
+  const activeLevelInfo = getXiangqiLevelConfig(difficulty);
 
   const inCheckSide: XiangqiSide | null = useMemo(() => {
     if (isSideInCheck(board, 'red')) return 'red';
@@ -1052,7 +1049,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
       setIsAiThinking(false);
       if (!aiMove || matchTokenRef.current !== activeToken) return;
       commitMove(board, aiMove.from, aiMove.to, pliesWithoutCapture, snapshots, true);
-    }, 420);
+    }, 150);
 
     return () => clearAiTimer();
   }, [
@@ -1106,7 +1103,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
 
   const handleShowHint = useCallback(() => {
     if (gameState !== 'playing' || sideToMove !== playerSide || isAiThinking) return;
-    const best = findBestXiangqiMove(board, playerSide, 'medium');
+    const best = findBestXiangqiMove(board, playerSide, 8);
     if (best) {
       setHintMove(best);
       setSelectedSquare(best.from);
@@ -1281,7 +1278,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
       data-turn={sideToMove}
       data-difficulty={difficulty}
       data-board-theme={boardTheme}
-      className="pt-3 sm:pt-4 pb-6 space-y-3.5 sm:space-y-4"
+      className="pt-1 sm:pt-2 pb-6 space-y-3 sm:space-y-3.5"
     >
       {/* Top Game Utility Bar */}
       <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-[#DCE6F2] dark:border-[#1E2E4A] pb-3">
@@ -1356,11 +1353,11 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
               </div>
               <div className="min-w-0">
                 <p className="text-xs sm:text-sm font-semibold text-[#070B14] dark:text-[#F1F5F9] truncate">
-                  Máy AI · {DIFFICULTY_LABELS[difficulty].name}
+                  Máy AI · {activeLevelInfo.badge} ({activeLevelInfo.name})
                 </p>
                 <p className="text-[11px] text-[#64748B] dark:text-[#94A3B8] truncate">
                   {isAiThinking
-                    ? 'Đang tính nước đi...'
+                    ? `Đang tính nước đi (${activeLevelInfo.badge})...`
                     : sideToMove === aiSide && gameState === 'playing'
                     ? 'Đến lượt Máy'
                     : `Quân ${aiSide === 'black' ? 'Đen' : 'Đỏ'} · Ăn ${capturedStats.byAi.length} quân`}
@@ -1447,28 +1444,39 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                     </p>
                   </div>
 
-                  {/* Difficulty Selection */}
-                  <div className="space-y-1 text-left">
-                    <p className="text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-amber-300">
-                      1. Chọn Trình Độ Máy
-                    </p>
-                    <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
-                      {(['easy', 'medium', 'hard'] as XiangqiDifficulty[]).map((lvl) => (
+                  {/* Difficulty Selection (10 Levels) */}
+                  <div className="space-y-1.5 text-left">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-amber-300">
+                        1. Chọn Trình Độ Máy (10 Cấp)
+                      </p>
+                      <span className="text-[10px] sm:text-xs font-semibold text-amber-200">
+                        {activeLevelInfo.badge} · {activeLevelInfo.name}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {XIANGQI_LEVELS.map((cfg) => (
                         <button
-                          key={lvl}
+                          key={cfg.level}
                           type="button"
-                          onClick={() => setDifficulty(lvl)}
-                          className={`px-1.5 py-1.5 sm:px-2 sm:py-2.5 rounded-xl border text-center transition-all cursor-pointer ${
-                            difficulty === lvl
-                              ? 'bg-amber-500 text-slate-950 border-amber-300 font-bold'
+                          aria-label={`Chọn ${cfg.badge} ${cfg.name}`}
+                          onClick={() => setDifficulty(cfg.level)}
+                          className={`py-1.5 sm:py-2 rounded-lg border text-center transition-all cursor-pointer ${
+                            difficulty === cfg.level
+                              ? 'bg-amber-500 text-slate-950 border-amber-300 font-bold shadow-sm'
                               : 'bg-slate-900/90 text-slate-200 border-slate-700 hover:border-slate-500'
                           }`}
                         >
-                          <div className="text-[11px] sm:text-sm">{DIFFICULTY_LABELS[lvl].name}</div>
-                          <div className="text-[9px] sm:text-[10px] opacity-80">{DIFFICULTY_LABELS[lvl].sub}</div>
+                          <div className="text-[11px] sm:text-xs font-mono leading-tight">
+                            Cấp {cfg.level}
+                          </div>
                         </button>
                       ))}
                     </div>
+                    <p className="text-[10px] sm:text-[11px] text-slate-300 bg-slate-900/80 border border-slate-700/80 rounded-lg px-2.5 py-1.5 leading-snug">
+                      <strong className="text-amber-300">{activeLevelInfo.name}:</strong>{' '}
+                      {activeLevelInfo.summary}
+                    </p>
                   </div>
 
                   {/* Side Selection */}
@@ -1764,35 +1772,41 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
               </button>
             </div>
 
-            {/* Quick Difficulty + Side Switcher during play */}
-            <div className="pt-2 border-t border-[#DCE6F2] dark:border-[#1E2E4A] flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
-                {(['easy', 'medium', 'hard'] as XiangqiDifficulty[]).map((lvl) => (
+            {/* Quick 10-Level AI Selector + Resign during play */}
+            <div className="pt-2.5 border-t border-[#DCE6F2] dark:border-[#1E2E4A] space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-[#070B14] dark:text-[#F1F5F9]">
+                  Trình độ AI: <span className="text-[#0284C7] dark:text-[#38BDF8]">{activeLevelInfo.badge} · {activeLevelInfo.name}</span>
+                </span>
+                {gameState === 'playing' && (
                   <button
-                    key={lvl}
                     type="button"
-                    onClick={() => setDifficulty(lvl)}
-                    className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                      difficulty === lvl
-                        ? 'bg-[#0284C7] text-white'
+                    onClick={handleResign}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                  >
+                    <Flag className="w-3.5 h-3.5" />
+                    Xin Thua
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-5 gap-1.5" role="group" aria-label="Điều chỉnh nhanh cấp độ AI từ 1 đến 10">
+                {XIANGQI_LEVELS.map((cfg) => (
+                  <button
+                    key={cfg.level}
+                    type="button"
+                    title={`${cfg.badge} · ${cfg.name}`}
+                    aria-label={`Đổi độ khó ${cfg.badge} ${cfg.name}`}
+                    onClick={() => setDifficulty(cfg.level)}
+                    className={`py-1.5 rounded-lg text-xs font-mono font-semibold transition-colors cursor-pointer ${
+                      difficulty === cfg.level
+                        ? 'bg-[#0284C7] text-white shadow-sm'
                         : 'bg-[#F1F5F9] dark:bg-[#13203A] text-[#475569] dark:text-[#94A3B8] hover:text-[#070B14] dark:hover:text-white'
                     }`}
                   >
-                    {DIFFICULTY_LABELS[lvl].name}
+                    {cfg.level}
                   </button>
                 ))}
               </div>
-
-              {gameState === 'playing' && (
-                <button
-                  type="button"
-                  onClick={handleResign}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
-                >
-                  <Flag className="w-3.5 h-3.5" />
-                  Xin Thua
-                </button>
-              )}
             </div>
           </div>
 

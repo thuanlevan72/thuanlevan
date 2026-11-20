@@ -12,8 +12,8 @@ import { InteractiveTerminal } from './components/InteractiveTerminal.tsx';
 import { LightboxModal } from './components/LightboxModal.tsx';
 import { ProjectsSection } from './components/ProjectsSection.tsx';
 import { SkillsSection } from './components/SkillsSection.tsx';
+import { GameHubSection } from './components/GameHubSection.tsx';
 import { TopBarAndHeader } from './components/TopBarAndHeader.tsx';
-import { XiangqiGameSection } from './components/XiangqiGameSection.tsx';
 import { GALLERY_ARTWORKS } from './data/portfolioData.ts';
 import {
   AppRoute,
@@ -231,8 +231,8 @@ export default function App() {
             onToggleTheme={handleToggleTheme}
             onNavigate={handleNavigate}
           />
-        ) : activeRoute === 'xiangqi' ? (
-          <XiangqiGameSection
+        ) : activeRoute === 'game' ? (
+          <GameHubSection
             theme={theme}
             onToggleTheme={handleToggleTheme}
           />

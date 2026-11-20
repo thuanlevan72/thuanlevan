@@ -177,14 +177,14 @@ export function GlobalFooter({ theme, onToggleTheme, onNavigate }: GlobalFooterP
           </a>
           <span aria-hidden="true">·</span>
           <a
-            href="/co-tuong"
+            href="/game"
             onClick={(e) => {
               e.preventDefault();
-              onNavigate('xiangqi');
+              onNavigate('game');
             }}
             className="hover:text-[#0369A1] dark:hover:text-[#38BDF8] hover:underline underline-offset-4 transition-colors"
           >
-            Cờ Tướng
+            Game
           </a>
           <span aria-hidden="true">·</span>
           <a

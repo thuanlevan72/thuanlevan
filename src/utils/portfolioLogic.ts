@@ -1,6 +1,6 @@
 export type ThemeMode = 'light' | 'dark';
 
-export type AppRoute = 'profile' | 'gallery' | 'cv' | 'xiangqi';
+export type AppRoute = 'profile' | 'gallery' | 'cv' | 'game';
 
 export type GalleryCategory = 'all' | 'imperial' | 'poetic' | 'portrait' | 'moments';
 
@@ -180,12 +180,15 @@ export function parseAppRoute(pathname: string, hash = ''): AppRoute {
     return 'cv';
   }
   if (
+    cleanPath === '/game' ||
+    cleanPath === '/games' ||
+    cleanPath === '/tro-choi' ||
     cleanPath === '/co-tuong' ||
     cleanPath === '/xiangqi' ||
-    cleanPath === '/game' ||
+    cleanHash === 'game' ||
     cleanHash === 'co-tuong'
   ) {
-    return 'xiangqi';
+    return 'game';
   }
   return 'profile';
 }
@@ -193,7 +196,7 @@ export function parseAppRoute(pathname: string, hash = ''): AppRoute {
 export function getRoutePath(route: AppRoute): string {
   if (route === 'gallery') return '/trien-lam';
   if (route === 'cv') return '/cv';
-  if (route === 'xiangqi') return '/co-tuong';
+  if (route === 'game') return '/game';
   return '/';
 }
 
@@ -222,16 +225,16 @@ export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
       path: '/cv',
     };
   }
-  if (route === 'xiangqi') {
+  if (route === 'game') {
     return {
-      title: 'Cờ Tướng 2D Đấu Với Máy AI — Thuận Lê Studio',
+      title: 'Khu Trò Chơi 2D — Cờ Tướng AI & Kiểm Duyệt Hồ Sơ',
       description:
-        'Chơi game Cờ Tướng 2D đối kháng cùng máy AI Alpha-Beta (Nhập Môn, Kỳ Thủ, Đại Sư). Tối ưu cảm ứng điện thoại, tablet và máy tính.',
+        'Khám phá tab Game 2D đa thiết bị: chơi Cờ Tướng Đối Kháng AI 10 cấp độ và nhập vai Kiểm Duyệt Hồ Sơ Dị Biệt theo phong cách Papers, Please.',
       keywords:
-        'Cờ Tướng 2D, Chơi Cờ Tướng với máy, Game Cờ Tướng Online, Xiangqi AI, Sở Hà Hán Giới, Thuận Lê',
+        'Game 2D, Khu trò chơi, Cờ Tướng 2D, Chơi Cờ Tướng với máy 10 cấp độ, Kiểm Duyệt Hồ Sơ Dị Biệt, Papers Please tiếng Việt, Thuận Lê',
       ogType: 'website',
-      ogImageAlt: 'Bàn cờ Cờ Tướng 2D đối kháng với trí tuệ nhân tạo trên mọi thiết bị',
-      path: '/co-tuong',
+      ogImageAlt: 'Khu Trò Chơi 2D gồm Cờ Tướng AI 10 cấp độ và Kiểm Duyệt Hồ Sơ Dị Biệt',
+      path: '/game',
     };
   }
   return {
@@ -595,12 +598,12 @@ export function buildStructuredDataGraph(origin: string, route: AppRoute) {
       name: 'Triển Lãm Ảnh & Video',
       item: `${cleanOrigin}/trien-lam`,
     });
-  } else if (route === 'xiangqi') {
+  } else if (route === 'game') {
     breadcrumbItems.push({
       '@type': 'ListItem',
       position: 2,
-      name: 'Cờ Tướng 2D Đấu Với Máy',
-      item: `${cleanOrigin}/co-tuong`,
+      name: 'Game · Khu Trò Chơi 2D',
+      item: `${cleanOrigin}/game`,
     });
   }
 
@@ -642,8 +645,8 @@ export function buildStructuredDataGraph(origin: string, route: AppRoute) {
         '@type':
           route === 'gallery'
             ? 'CollectionPage'
-            : route === 'xiangqi'
-            ? 'WebPage'
+            : route === 'game'
+            ? 'CollectionPage'
             : 'ProfilePage',
         '@id': `${currentUrl}#webpage`,
         url: currentUrl,

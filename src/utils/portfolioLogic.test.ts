@@ -47,32 +47,33 @@ test('parseAppRoute, getRoutePath, and getRouteSeoMeta separate profile, cv, and
   assert.equal(parseAppRoute('/cv'), 'cv');
   assert.equal(parseAppRoute('/cv-pdf/'), 'cv');
   assert.equal(parseAppRoute('/', '#cv'), 'cv');
-  assert.equal(parseAppRoute('/co-tuong'), 'xiangqi');
-  assert.equal(parseAppRoute('/xiangqi/'), 'xiangqi');
+  assert.equal(parseAppRoute('/game'), 'game');
+  assert.equal(parseAppRoute('/co-tuong'), 'game');
+  assert.equal(parseAppRoute('/xiangqi/'), 'game');
 
   assert.equal(getRoutePath('profile'), '/');
   assert.equal(getRoutePath('gallery'), '/trien-lam');
   assert.equal(getRoutePath('cv'), '/cv');
-  assert.equal(getRoutePath('xiangqi'), '/co-tuong');
+  assert.equal(getRoutePath('game'), '/game');
 
   const galleryMeta = getRouteSeoMeta('gallery');
   const cvMeta = getRouteSeoMeta('cv');
   const profileMeta = getRouteSeoMeta('profile');
-  const xiangqiMeta = getRouteSeoMeta('xiangqi');
+  const gameMeta = getRouteSeoMeta('game');
   assert.match(galleryMeta.title, /Triển Lãm/);
   assert.equal(galleryMeta.path, '/trien-lam');
   assert.match(cvMeta.title, /CV PDF/);
   assert.equal(cvMeta.path, '/cv');
   assert.match(profileMeta.title, /Kỹ Sư Senior \.NET/);
   assert.equal(profileMeta.path, '/');
-  assert.match(xiangqiMeta.title, /Cờ Tướng/);
-  assert.equal(xiangqiMeta.path, '/co-tuong');
+  assert.match(gameMeta.title, /Khu Trò Chơi 2D/);
+  assert.equal(gameMeta.path, '/game');
 
   for (const [name, meta] of [
     ['profile', profileMeta],
     ['cv', cvMeta],
     ['gallery', galleryMeta],
-    ['xiangqi', xiangqiMeta],
+    ['game', gameMeta],
   ] as const) {
     assert.ok(
       meta.title.length >= 30 && meta.title.length <= 60,

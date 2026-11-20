@@ -100,15 +100,15 @@ export function TopBarAndHeader({ activeRoute, onNavigate }: TopBarAndHeaderProp
           </a>
 
           <a
-            href="/co-tuong"
-            aria-current={activeRoute === 'xiangqi' ? 'page' : undefined}
+            href="/game"
+            aria-current={activeRoute === 'game' ? 'page' : undefined}
             onClick={(e) => {
               e.preventDefault();
-              onNavigate('xiangqi');
+              onNavigate('game');
             }}
-            className={navLinkClass(activeRoute === 'xiangqi')}
+            className={navLinkClass(activeRoute === 'game')}
           >
-            Cờ Tướng
+            Game
           </a>
         </nav>
 
