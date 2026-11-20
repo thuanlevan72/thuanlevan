@@ -8,14 +8,18 @@ import {
   Box,
   CheckCircle2,
   Cloud,
+  Copy,
   Cpu,
+  Eraser,
   EyeOff,
   FolderOpen,
   HardDrive,
   Lightbulb,
+  Network,
   Pause,
   Play,
   RotateCcw,
+  Server,
   ShieldAlert,
   ShieldCheck,
   Snowflake,
@@ -26,7 +30,9 @@ import {
   Zap,
 } from 'lucide-react';
 import {
+  computeDomainProgressSummary,
   computeMissionRank,
+  computeServerTelemetrySnapshot,
   computeTraceRatePerSec,
   createInitialMissionState,
   executeHackerCommand,
@@ -189,6 +195,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
   const [codexUnlocked, setCodexUnlocked] = useState<string[]>(() => loadCodex());
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [sideTab, setSideTab] = useState<SideTab>('mission');
+  const [codexDomainFilter, setCodexDomainFilter] = useState<KnowledgeDomainId | 0>(0);
   const [revealedHintOnMission, setRevealedHintOnMission] = useState<boolean>(false);
 
   const [runtime, setRuntime] = useState<MissionRuntimeState>(() => createInitialMissionState(0));
@@ -217,6 +224,15 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
   const objectives = useMemo(() => getMissionObjectives(runtime), [runtime]);
   const traceRate = useMemo(() => computeTraceRatePerSec(runtime, hackerMode), [runtime, hackerMode]);
   const smartNextHint = useMemo(() => getSmartNextHint(runtime), [runtime]);
+  const telemetry = useMemo(() => computeServerTelemetrySnapshot(runtime), [runtime]);
+  const domainProgress = useMemo(() => computeDomainProgressSummary(codexUnlocked), [codexUnlocked]);
+  const completedStepsCount = useMemo(
+    () => objectives.steps.filter((s) => s.done).length,
+    [objectives.steps]
+  );
+  const objectivePct = objectives.steps.length > 0
+    ? Math.round((completedStepsCount / objectives.steps.length) * 100)
+    : 0;
   const autocompleteHint = useMemo(() => {
     const raw = getAutocompleteSuggestion(commandInput, runtime);
     if (!raw) return null;
@@ -564,12 +580,12 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
     return (
       <section
         aria-label="Màn hình khởi đầu Hacker Dòng Lệnh Linux Ubuntu"
-        className="relative rounded-2xl border border-emerald-500/40 bg-[#050A08] text-emerald-300 overflow-hidden shadow-[0_24px_60px_-20px_rgba(0,0,0,0.75)]"
+        className="relative rounded-2xl border border-emerald-500/40 bg-[#040907] text-emerald-300 overflow-hidden shadow-[0_24px_60px_-20px_rgba(0,0,0,0.75)]"
       >
         {/* Subtle CRT scanline overlay */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-20"
+          className="pointer-events-none absolute inset-0 opacity-15"
           style={{
             backgroundImage:
               'repeating-linear-gradient(0deg, rgba(16,185,129,0.14) 0px, rgba(16,185,129,0.14) 1px, transparent 1px, transparent 3px)',
@@ -578,100 +594,142 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
 
         <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-5 p-5 sm:p-7 lg:p-8 items-start">
           {/* Left Setup & 8-Domain Mission Selector */}
-          <div className="lg:col-span-7 space-y-3.5">
-            <div className="flex flex-wrap items-center gap-3 text-xs font-mono text-emerald-400/90">
-              <span>UBUNTU 24.04 LTS</span>
-              <span aria-hidden="true">·</span>
-              <span>16 MÀN · 8 LĨNH VỰC</span>
-              <span aria-hidden="true">·</span>
-              <span className="text-cyan-300">ĐÃ MỞ {codexUnlocked.length}/{UBUNTU_CODEX.length} LỆNH THỰC CHIẾN</span>
+          <div className="lg:col-span-7 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-900/70 pb-3">
+              <div className="flex flex-wrap items-center gap-2.5 text-xs font-mono text-emerald-400">
+                <span className="inline-flex items-center gap-1.5 text-emerald-200 font-bold">
+                  <Server className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
+                  UBUNTU 24.04 LTS · SRE WORKSTATION
+                </span>
+                <span aria-hidden="true">·</span>
+                <span>16 SỰ CỐ · 8 LĨNH VỰC</span>
+              </div>
+              <div className="text-xs font-mono text-cyan-300 tabular-nums">
+                LÀM CHỦ {domainProgress.totalUnlocked}/{domainProgress.totalCodex} NHÓM LỆNH ({domainProgress.pct}%)
+              </div>
             </div>
 
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-emerald-100 leading-tight max-w-xl">
-              Ubuntu CLI Production · Thực Chiến Sự Cố
-            </h2>
+            <div className="space-y-1.5">
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white leading-tight max-w-2xl">
+                Ubuntu CLI Production · Thực Chiến Sự Cố
+              </h2>
+              <p className="text-xs sm:text-sm text-emerald-100/80 max-w-2xl leading-relaxed">
+                Ứng cứu trực tiếp <strong className="text-cyan-300">16 sự cố hệ thống thực tế trên 8 trụ cột Ubuntu → DevOps</strong>:
+                từ đọc log, phân quyền Bash, xử lý đầy ổ đĩa, nối mạch port, Docker, Nginx, tường lửa UFW tới Kubernetes &amp; Terraform.
+              </p>
+            </div>
 
-            <p className="text-xs sm:text-sm text-emerald-200/85 max-w-2xl leading-relaxed">
-              Ứng cứu trực tiếp <strong className="text-cyan-300">16 sự cố Production trên 8 kỹ năng Ubuntu → DevOps</strong>:{' '}
-              <span className="text-amber-300">
-                Linux Cơ Bản · Bash Scripting · SysAdmin · Networking · Docker · Web Nginx · Security UFW · Kubernetes &amp; Terraform
-              </span>.
-            </p>
+            {/* 8-Domain SRE Skill Matrix */}
+            <div className="rounded-xl border border-emerald-900/80 bg-[#07110D] p-3 space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-mono">
+                <span className="text-emerald-300 font-bold uppercase tracking-wider">
+                  Ma Trận Năng Lực 8 Trụ Cột SRE
+                </span>
+                <span className="text-emerald-400/80">Nhấp để lọc theo lĩnh vực</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 font-mono">
+                {domainProgress.domains.map((dom) => {
+                  const isActive = activeDomainFilter === dom.domainId;
+                  return (
+                    <button
+                      key={dom.domainId}
+                      type="button"
+                      onClick={() => {
+                        const nextFilter = isActive ? 0 : dom.domainId;
+                        setActiveDomainFilter(nextFilter);
+                        if (nextFilter !== 0) {
+                          const firstInDom = LINUX_MISSIONS.find((m) => m.domainId === nextFilter);
+                          if (firstInDom) {
+                            const idx = firstInDom.id - 1;
+                            if (hackerMode === 'practice' || idx <= highestReachedMission) {
+                              setSelectedStartMission(idx);
+                            }
+                          }
+                        }
+                      }}
+                      className={`rounded-lg border p-2 text-left transition-colors cursor-pointer ${
+                        isActive
+                          ? 'bg-emerald-500/20 border-emerald-300 text-white'
+                          : 'bg-[#040B08] border-emerald-950/90 text-emerald-200 hover:border-emerald-500/70'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1 text-[10px] font-bold">
+                        <span className="truncate" style={{ color: dom.color }}>
+                          {dom.shortName}
+                        </span>
+                        <span className="text-emerald-400/90 tabular-nums shrink-0">
+                          {dom.unlockedCount}/{dom.totalCount}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-1 rounded-sm bg-black/70 overflow-hidden">
+                        <div
+                          className="h-full transition-all"
+                          style={{ width: `${dom.pct}%`, backgroundColor: dom.color }}
+                        />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             {/* Mode Selector */}
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setHackerMode('speed')}
-                className={`px-3.5 py-2 rounded-lg border font-mono text-xs transition-colors cursor-pointer ${
+                className={`p-3 rounded-xl border font-mono text-left transition-colors cursor-pointer ${
                   hackerMode === 'speed'
-                    ? 'bg-emerald-500 text-[#03120B] border-emerald-300 font-bold'
-                    : 'bg-[#091510] text-emerald-200 border-emerald-800 hover:border-emerald-500'
+                    ? 'bg-emerald-500/20 border-emerald-400 text-white'
+                    : 'bg-[#08130E] text-emerald-200 border-emerald-900 hover:border-emerald-500'
                 }`}
               >
-                Thực Chiến Production (SLA thực · Không lộ đáp án)
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className={hackerMode === 'speed' ? 'text-emerald-300' : ''}>
+                    Thực Chiến Production
+                  </span>
+                  <span className="text-[10px] text-amber-300">SLA thực</span>
+                </div>
+                <p className="text-[11px] text-emerald-200/75 mt-1 leading-snug">
+                  Tự điều tra log &amp; gõ lệnh chính xác, không lộ mã token.
+                </p>
               </button>
               <button
                 type="button"
                 onClick={() => setHackerMode('practice')}
-                className={`px-3.5 py-2 rounded-lg border font-mono text-xs transition-colors cursor-pointer ${
+                className={`p-3 rounded-xl border font-mono text-left transition-colors cursor-pointer ${
                   hackerMode === 'practice'
-                    ? 'bg-cyan-400 text-[#03120B] border-cyan-200 font-bold'
-                    : 'bg-[#091510] text-emerald-200 border-emerald-800 hover:border-cyan-500'
+                    ? 'bg-cyan-500/20 border-cyan-400 text-white'
+                    : 'bg-[#08130E] text-emerald-200 border-emerald-900 hover:border-cyan-500'
                 }`}
               >
-                Thực Tập Sandbox (SLA chậm 4x · Gợi ý từng bước · Mở 16/16)
+                <div className="flex items-center justify-between text-xs font-bold">
+                  <span className={hackerMode === 'practice' ? 'text-cyan-300' : ''}>
+                    Thực Tập Sandbox
+                  </span>
+                  <span className="text-[10px] text-cyan-300">Mở 16/16 · Gợi ý 4x chậm</span>
+                </div>
+                <p className="text-[11px] text-emerald-200/75 mt-1 leading-snug">
+                  Mở sẵn toàn bộ 16 sự cố, có hướng dẫn từng bước &amp; nút chạy mẫu.
+                </p>
               </button>
             </div>
 
-            {/* 8 Knowledge Domain Filter Tabs + Mission Picker */}
+            {/* Mission Picker */}
             <div className="space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[11px] font-mono uppercase tracking-wider text-emerald-400/85">
-                  Lộ trình 8 Lĩnh Vực ({hackerMode === 'practice' ? 'Mở toàn bộ 16 màn' : `Tiến độ: ${highestReachedMission + 1}/16`})
-                </p>
-              </div>
-
-              <div className="flex flex-wrap gap-1.5 font-mono text-[11px]">
-                <button
-                  type="button"
-                  onClick={() => setActiveDomainFilter(0)}
-                  className={`px-2.5 py-1 rounded-md border transition-colors cursor-pointer ${
-                    activeDomainFilter === 0
-                      ? 'bg-emerald-500/25 border-emerald-400 text-emerald-100 font-bold'
-                      : 'bg-[#07110C] border-emerald-900/70 text-emerald-400/80 hover:border-emerald-500'
-                  }`}
-                >
-                  Tất cả (16)
-                </button>
-                {KNOWLEDGE_DOMAINS.map((dom) => (
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
+                <span className="uppercase tracking-wider text-emerald-400 font-bold">
+                  Chọn Sự Cố ({activeDomainFilter === 0 ? 'Tất cả 16 màn' : `Lọc lĩnh vực #${activeDomainFilter}`})
+                </span>
+                {activeDomainFilter !== 0 && (
                   <button
-                    key={dom.id}
                     type="button"
-                    onClick={() => {
-                      setActiveDomainFilter(dom.id);
-                      const firstInDom = LINUX_MISSIONS.find((m) => m.domainId === dom.id);
-                      if (firstInDom) {
-                        const idx = firstInDom.id - 1;
-                        if (hackerMode === 'practice' || idx <= highestReachedMission) {
-                          setSelectedStartMission(idx);
-                        }
-                      }
-                    }}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-colors cursor-pointer ${
-                      activeDomainFilter === dom.id
-                        ? 'bg-emerald-500/20 border-emerald-300 text-white font-bold'
-                        : 'bg-[#07110C] border-emerald-900/70 text-emerald-300/80 hover:border-emerald-500'
-                    }`}
+                    onClick={() => setActiveDomainFilter(0)}
+                    className="text-cyan-300 hover:underline cursor-pointer"
                   >
-                    <span
-                      aria-hidden="true"
-                      className="w-2 h-2 rounded-full shrink-0"
-                      style={{ backgroundColor: dom.color }}
-                    />
-                    <span>{dom.shortName}</span>
+                    Hiện tất cả 16 màn
                   </button>
-                ))}
+                )}
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
@@ -688,10 +746,10 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                       onClick={() => setSelectedStartMission(idx)}
                       className={`px-2.5 py-2 rounded-lg border font-mono text-xs text-left transition-colors ${
                         locked
-                          ? 'opacity-40 cursor-not-allowed bg-[#060D0A] border-emerald-950 text-emerald-700'
+                          ? 'opacity-40 cursor-not-allowed bg-[#050C09] border-emerald-950 text-emerald-700'
                           : active
-                            ? 'bg-emerald-500/20 border-emerald-400 text-emerald-100 cursor-pointer'
-                            : 'bg-[#08120E] border-emerald-900/70 text-emerald-300/85 hover:border-emerald-500 cursor-pointer'
+                            ? 'bg-emerald-500/20 border-emerald-400 text-white cursor-pointer'
+                            : 'bg-[#08120E] border-emerald-900/80 text-emerald-200/90 hover:border-emerald-500 cursor-pointer'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-1 font-bold text-[11px]">
@@ -704,7 +762,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                         </span>
                       </div>
                       <div className="text-[11px] opacity-90 truncate mt-0.5">
-                        {m.title.replace(/^Màn \d+ · /, '')}
+                        {m.title.replace(/^Sự Cố \d+ · /, '').replace(/^Màn \d+ · /, '')}
                       </div>
                     </button>
                   );
@@ -717,7 +775,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 type="button"
                 data-start="true"
                 onClick={handleStartFromTitle}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-[#03120B] font-mono font-bold text-sm sm:text-base transition-colors cursor-pointer shadow-[0_0_24px_rgba(52,211,153,0.35)]"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-[#03120B] font-mono font-bold text-sm sm:text-base transition-colors cursor-pointer shadow-[0_0_24px_rgba(52,211,153,0.3)]"
               >
                 <Terminal className="w-4 h-4" aria-hidden="true" />
                 <span>Vào Màn {selectedMissionDef.id} &amp; Mở Terminal</span>
@@ -726,61 +784,86 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
 
               {bestScore > 0 && (
                 <div className="text-xs font-mono text-amber-300 tabular-nums">
-                  Kỷ lục: {bestScore} điểm
+                  Kỷ lục: {bestScore} điểm · Tiến độ: {highestReachedMission + 1}/16
                 </div>
               )}
             </div>
 
-            <p className="text-xs font-mono text-emerald-500/90">
+            <p className="text-[11px] font-mono text-emerald-400/85">
               Enter Bắt đầu · Tab Tự điền · ↑/↓ Lịch sử · Ctrl+L Dọn terminal · Ctrl+C Hủy dòng lệnh
             </p>
           </div>
 
-          {/* Right Live Mission Preview & Terminal Emblem */}
+          {/* Right Live Mission Preview & Production Architecture Schematic */}
           <div className="lg:col-span-5 flex flex-col gap-3">
             <div className="rounded-xl border border-emerald-500/35 bg-[#030705] p-4 font-mono text-xs space-y-3">
-              <div className="flex items-center justify-between border-b border-emerald-900/70 pb-2 text-emerald-400/80">
-                <span>tty1 :: ubuntu-kernel-shell</span>
-                <span className="text-cyan-300">{selectedMissionDef.codeName}</span>
+              <div className="flex items-center justify-between border-b border-emerald-900/70 pb-2 text-emerald-400/90">
+                <span className="inline-flex items-center gap-1.5">
+                  <Network className="w-3.5 h-3.5 text-cyan-300" aria-hidden="true" />
+                  <span>tty1 :: ubuntu-prod-cluster</span>
+                </span>
+                <span className="text-cyan-300 font-bold">{selectedMissionDef.codeName}</span>
               </div>
+
               <svg
-                viewBox="0 0 280 112"
+                viewBox="0 0 340 128"
                 className="w-full h-auto"
                 role="img"
-                aria-label="Biểu tượng Terminal Hacker Ubuntu với mạch cổng ASCII"
+                aria-label="Sơ đồ cụm máy chủ Production Ubuntu 5 lớp"
               >
-                <rect x="6" y="6" width="268" height="100" rx="10" fill="#06120D" stroke="#22C55E" strokeWidth="1.5" />
-                <path d="M24 34 L46 52 L24 70" fill="none" stroke="#4ADE80" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                <line x1="54" y1="70" x2="84" y2="70" stroke="#38BDF8" strokeWidth="4" strokeLinecap="round" />
-                <text x="100" y="38" fill="#86EFAC" fontSize="13" fontFamily="monospace" fontWeight="700">
-                  ubuntu@sec-node:~$
+                <rect x="4" y="4" width="332" height="120" rx="8" fill="#050F0B" stroke="#14532D" strokeWidth="1.2" />
+                {/* Connecting Bus */}
+                <line x1="48" y1="48" x2="292" y2="48" stroke="#1E3A2F" strokeWidth="2" strokeDasharray="4 3" />
+                {/* 5 Cluster Layer Nodes */}
+                {[
+                  { x: 22, label: 'UFW', color: '#F43F5E', sub: 'Edge' },
+                  { x: 86, label: 'PORT', color: '#38BDF8', sub: 'Net' },
+                  { x: 150, label: 'KERN', color: '#4ADE80', sub: 'PIDs' },
+                  { x: 214, label: 'SVC', color: '#F59E0B', sub: 'App/K8s' },
+                  { x: 278, label: 'NVMe', color: '#A78BFA', sub: 'VFS' },
+                ].map((n) => (
+                  <g key={n.label}>
+                    <rect x={n.x} y="24" width="44" height="44" rx="6" fill="#081812" stroke={n.color} strokeWidth="1.4" />
+                    <circle cx={n.x + 36} cy="32" r="3" fill={n.color} />
+                    <text x={n.x + 22} y="47" textAnchor="middle" fill="#E2E8F0" fontSize="10" fontFamily="monospace" fontWeight="700">
+                      {n.label}
+                    </text>
+                    <text x={n.x + 22} y="60" textAnchor="middle" fill={n.color} fontSize="8" fontFamily="monospace">
+                      {n.sub}
+                    </text>
+                  </g>
+                ))}
+                {/* Live prompt bar inside preview */}
+                <rect x="18" y="82" width="304" height="30" rx="5" fill="#020504" stroke="#166534" strokeWidth="1" />
+                <text x="28" y="100" fill="#4ADE80" fontSize="10.5" fontFamily="monospace" fontWeight="700">
+                  ubuntu@prod-node:{selectedMissionDef.initialCwd}$
                 </text>
-                <text x="100" y="58" fill="#FBBF24" fontSize="11" fontFamily="monospace">
-                  cat log | grep TOKEN
+                <text x="268" y="100" fill="#38BDF8" fontSize="9.5" fontFamily="monospace">
+                  {selectedMissionDef.requireTokenVerify ? 'VERIFY' : 'AUTO'}
                 </text>
-                <text x="100" y="78" fill="#38BDF8" fontSize="11" fontFamily="monospace">
-                  [ETH0]══╬[p80]══▶[CORE]
-                </text>
-                <rect x="100" y="88" width="146" height="6" rx="3" fill="#0F291E" />
-                <rect x="100" y="88" width="76" height="6" rx="3" fill="#22C55E" />
               </svg>
 
-              <div className="rounded-lg border border-emerald-900/80 bg-[#06100C] p-3 space-y-1.5">
+              <div className="rounded-lg border border-emerald-900/80 bg-[#06100C] p-3.5 space-y-2">
                 <div className="flex items-center justify-between text-[11px] font-bold">
                   <span style={{ color: selectedMissionDomain.color }}>
                     {selectedMissionDomain.title}
                   </span>
-                  <span className="text-amber-300">Màn {selectedMissionDef.id}/16</span>
+                  <span className="text-amber-300 tabular-nums">Màn {selectedMissionDef.id}/16</span>
                 </div>
-                <div className="text-xs text-white font-bold">
+                <div className="text-sm text-white font-bold leading-snug">
                   {selectedMissionDef.title}
                 </div>
                 <div className="text-[11px] text-cyan-300">
-                  Kỹ năng học: {selectedMissionDef.ubuntuTopic}
+                  Kỹ năng trọng tâm: {selectedMissionDef.ubuntuTopic}
                 </div>
-                <p className="text-[11px] text-emerald-200/80 leading-relaxed">
+                <p className="text-xs text-emerald-100/85 leading-relaxed">
                   {selectedMissionDef.briefing}
                 </p>
+                <div className="pt-1 border-t border-emerald-900/70 flex flex-wrap items-center justify-between gap-2 text-[10px] text-emerald-400">
+                  <span>Tiến trình lỗi: {selectedMissionDef.processes.filter((p) => p.isThreat).length} threat</span>
+                  <span>Cổng / Cầu: {selectedMissionDef.ports.length} port</span>
+                  <span>Tốc độ SLA: {selectedMissionDef.baseTracePerSec.toFixed(2)}%/s</span>
+                </div>
               </div>
             </div>
           </div>
@@ -913,15 +996,104 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
         </div>
       </div>
 
+      {/* Live Interactive Production Server Topology & Hardware Telemetry Strip */}
+      <div className="px-3 sm:px-4 pt-3 space-y-2">
+        <div className="rounded-xl border border-emerald-900/80 bg-[#040B08] p-2.5 sm:p-3 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-[11px]">
+            <div className="flex items-center gap-2">
+              <span
+                className={`px-2 py-0.5 rounded border font-bold tracking-wider ${
+                  telemetry.overallHealth === 'CRITICAL'
+                    ? 'border-rose-500/70 bg-rose-950/50 text-rose-300'
+                    : telemetry.overallHealth === 'DEGRADED'
+                      ? 'border-amber-500/70 bg-amber-950/50 text-amber-300'
+                      : 'border-emerald-500/70 bg-emerald-950/50 text-emerald-300'
+                }`}
+              >
+                NODE STATUS: {telemetry.overallHealth}
+              </span>
+              <span className="text-emerald-400/85 hidden sm:inline">
+                Nhấp từng lớp hạ tầng để kiểm tra trạng thái qua CLI
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 text-[11px] tabular-nums">
+              <span className={telemetry.cpuPct >= 75 ? 'text-rose-300 font-bold' : 'text-emerald-300'}>
+                CPU {telemetry.cpuPct}%
+              </span>
+              <span className={telemetry.ramPct >= 80 ? 'text-amber-300 font-bold' : 'text-sky-300'}>
+                RAM {telemetry.ramPct}%
+              </span>
+              <span className={telemetry.diskPct >= 85 ? 'text-rose-400 font-bold' : 'text-violet-300'}>
+                DISK {telemetry.diskPct}%
+              </span>
+              <span className={telemetry.securityScore >= 80 ? 'text-emerald-300 font-bold' : 'text-amber-300 font-bold'}>
+                SEC {telemetry.securityScore}/100
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 font-mono">
+            {telemetry.nodes.map((node) => {
+              const tone =
+                node.status === 'critical'
+                  ? 'border-rose-500/70 bg-rose-950/35 hover:border-rose-400 text-rose-100'
+                  : node.status === 'degraded'
+                    ? 'border-amber-500/65 bg-amber-950/30 hover:border-amber-400 text-amber-100'
+                    : 'border-emerald-600/50 bg-[#071610] hover:border-emerald-400 text-emerald-100';
+              const dot =
+                node.status === 'critical'
+                  ? 'bg-rose-400'
+                  : node.status === 'degraded'
+                    ? 'bg-amber-400'
+                    : 'bg-emerald-400';
+
+              return (
+                <button
+                  key={node.id}
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => {
+                    if (hackerMode === 'practice') {
+                      runCommandString(node.inspectCmd);
+                    } else {
+                      setCommandInput(node.inspectCmd);
+                    }
+                    inputRef.current?.focus();
+                  }}
+                  title={`Kiểm tra bằng lệnh "${node.inspectCmd}"`}
+                  className={`rounded-lg border px-2.5 py-2 text-left transition-colors cursor-pointer ${tone}`}
+                >
+                  <div className="flex items-center justify-between gap-1 text-[11px] font-bold">
+                    <span className="truncate">{node.label}</span>
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} aria-hidden="true" />
+                  </div>
+                  <div className="text-[10px] opacity-85 truncate mt-0.5">{node.sublabel}</div>
+                  <div className="flex items-center justify-between gap-1 mt-1 pt-1 border-t border-white/10 text-[10px]">
+                    <span className="text-cyan-300 font-semibold">{node.metricText}</span>
+                    <span className="opacity-70">{node.inspectCmd}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
       {/* Main 2-Column Workstation */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 sm:p-4">
         {/* LEFT: CRT Terminal + Power-ups + Guided Command Deck */}
         <div className="lg:col-span-8 flex flex-col rounded-xl border border-emerald-800/70 bg-[#030705] overflow-hidden">
           {/* Terminal Window Chrome & Mitigation Powerup Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-[#07110C] border-b border-emerald-900/70 font-mono text-[11px]">
-            <span className="text-emerald-400/90">
-              bash :: ubuntu@prod-node:{runtime.cwd}
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-[#07110C] border-b border-emerald-900/70 font-mono text-[11px]">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-emerald-300 font-bold truncate">
+                tty1 :: ubuntu@prod-node:{runtime.cwd}
+              </span>
+              <span className="text-[10px] text-emerald-500 hidden sm:inline">
+                ({currentMission.codeName})
+              </span>
+            </div>
             <div className="flex flex-wrap items-center gap-1.5">
               <button
                 type="button"
@@ -936,7 +1108,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 }`}
               >
                 <Snowflake className="w-3 h-3" aria-hidden="true" />
-                <span>Gia hạn SLA 6s (30EP)</span>
+                <span>Gia hạn 6s (30EP)</span>
               </button>
               <button
                 type="button"
@@ -951,7 +1123,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 }`}
               >
                 <EyeOff className="w-3 h-3" aria-hidden="true" />
-                <span>Giảm tải -22% (40EP)</span>
+                <span>Giảm -22% (40EP)</span>
               </button>
               <button
                 type="button"
@@ -963,14 +1135,27 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 <Lightbulb className="w-3 h-3" aria-hidden="true" />
                 <span>Gợi ý {hackerMode === 'practice' ? '(Free)' : '(15EP)'}</span>
               </button>
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => {
+                  runCommandString('clear');
+                  inputRef.current?.focus();
+                }}
+                title="Dọn terminal (Ctrl+L)"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-800 bg-[#0A1812] text-emerald-300 hover:border-emerald-400 cursor-pointer"
+              >
+                <Eraser className="w-3 h-3" aria-hidden="true" />
+                <span className="hidden sm:inline">Dọn</span>
+              </button>
             </div>
           </div>
 
           {/* Smart Live Step Mentor Bar */}
-          <div className="px-3 py-1.5 bg-[#06130E] border-b border-emerald-900/60 flex flex-wrap items-center justify-between gap-2 font-mono text-[11px]">
+          <div className="px-3 py-2 bg-[#06130E] border-b border-emerald-900/60 flex flex-wrap items-center justify-between gap-2 font-mono text-[11px]">
             <div className="flex items-center gap-2 min-w-0">
               <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold shrink-0">
-                {hackerMode === 'practice' ? 'BƯỚC TIẾP' : 'CHẾ ĐỘ THỰC CHIẾN'}
+                {hackerMode === 'practice' ? 'BƯỚC TIẾP' : 'THỰC CHIẾN'}
               </span>
               <span className="text-sky-200 truncate">
                 {hackerMode === 'practice' ? (
@@ -987,44 +1172,49 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 )}
               </span>
             </div>
-            {hackerMode === 'practice' && (
-              <button
-                type="button"
-                tabIndex={-1}
-                onClick={() => {
-                  runCommandString(smartNextHint.command);
-                  inputRef.current?.focus();
-                }}
-                className="px-2 py-0.5 rounded bg-amber-400 hover:bg-amber-300 text-[#03120B] font-bold shrink-0 cursor-pointer"
-              >
-                Chạy ngay →
-              </button>
-            )}
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[10px] text-emerald-400 tabular-nums">
+                Tiến độ: {completedStepsCount}/{objectives.steps.length} ({objectivePct}%)
+              </span>
+              {hackerMode === 'practice' && (
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => {
+                    runCommandString(smartNextHint.command);
+                    inputRef.current?.focus();
+                  }}
+                  className="px-2 py-0.5 rounded bg-amber-400 hover:bg-amber-300 text-[#03120B] font-bold cursor-pointer"
+                >
+                  Chạy ngay →
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Scrollable Terminal Log <pre> */}
           <div
             ref={logViewportRef}
             onClick={() => inputRef.current?.focus()}
-            className="h-[290px] sm:h-[335px] overflow-y-auto p-3 sm:p-4 font-mono text-xs sm:text-[13px] leading-relaxed space-y-1.5 cursor-text"
+            className="h-[300px] sm:h-[345px] overflow-y-auto p-3 sm:p-4 font-mono text-xs sm:text-[13px] leading-relaxed space-y-1.5 cursor-text"
           >
             {runtime.logs.map((line) => {
               const colorCls =
                 line.kind === 'cmd'
-                  ? 'text-emerald-100 font-semibold'
+                  ? 'text-white font-semibold border-l-2 border-emerald-400 pl-2.5 bg-emerald-950/20 py-0.5 rounded-r'
                   : line.kind === 'success'
-                    ? 'text-emerald-300'
+                    ? 'text-emerald-300 border-l-2 border-emerald-400 pl-2.5'
                     : line.kind === 'error'
-                      ? 'text-rose-400'
+                      ? 'text-rose-300 border-l-2 border-rose-500 pl-2.5 bg-rose-950/20 py-0.5 rounded-r'
                       : line.kind === 'warn'
-                        ? 'text-amber-300'
+                        ? 'text-amber-300 border-l-2 border-amber-400 pl-2.5'
                         : line.kind === 'ascii'
                           ? 'text-cyan-300 font-semibold'
                           : line.kind === 'hint'
-                            ? 'text-sky-300'
+                            ? 'text-sky-300 border-l-2 border-sky-400 pl-2.5 bg-sky-950/20 py-0.5 rounded-r'
                             : line.kind === 'noise'
-                              ? 'text-emerald-400/90 bg-emerald-950/35 border border-emerald-800/50 rounded-lg px-2.5 py-2'
-                              : 'text-emerald-300/90';
+                              ? 'text-emerald-300/95 bg-emerald-950/35 border border-emerald-800/60 rounded-lg px-2.5 py-2'
+                              : 'text-emerald-200/90';
 
               return (
                 <pre
@@ -1461,15 +1651,44 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
             </>
           ) : (
             /* 8-DOMAIN UBUNTU CODEX COLLECTIBLE VIEW */
-            <div className="rounded-xl border border-cyan-700/60 bg-[#051014] p-3 space-y-2.5 max-h-[520px] overflow-y-auto">
+            <div className="rounded-xl border border-cyan-700/60 bg-[#051014] p-3 space-y-2.5 max-h-[540px] flex flex-col">
               <div className="flex items-center justify-between text-xs font-mono">
                 <span className="font-bold text-cyan-300">KHO 8 LĨNH VỰC ĐÃ MỞ</span>
                 <span className="text-amber-300 tabular-nums font-bold">
                   {codexUnlocked.length}/{UBUNTU_CODEX.length}
                 </span>
               </div>
-              <div className="space-y-1.5 font-mono">
-                {UBUNTU_CODEX.map((entry) => {
+
+              <div className="flex flex-wrap gap-1 font-mono text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setCodexDomainFilter(0)}
+                  className={`px-2 py-0.5 rounded border cursor-pointer ${
+                    codexDomainFilter === 0
+                      ? 'border-cyan-400 bg-cyan-500/20 text-white font-bold'
+                      : 'border-slate-800 bg-[#030709] text-slate-400 hover:border-cyan-600'
+                  }`}
+                >
+                  Tất cả
+                </button>
+                {KNOWLEDGE_DOMAINS.map((dom) => (
+                  <button
+                    key={dom.id}
+                    type="button"
+                    onClick={() => setCodexDomainFilter(dom.id)}
+                    className={`px-2 py-0.5 rounded border cursor-pointer ${
+                      codexDomainFilter === dom.id
+                        ? 'border-cyan-400 bg-cyan-500/20 text-white font-bold'
+                        : 'border-slate-800 bg-[#030709] text-slate-400 hover:border-cyan-600'
+                    }`}
+                  >
+                    #{dom.id}
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-1.5 font-mono overflow-y-auto pr-0.5">
+                {UBUNTU_CODEX.filter((e) => codexDomainFilter === 0 || e.domainId === codexDomainFilter).map((entry) => {
                   const unlocked = codexUnlocked.includes(entry.key);
                   const dom = KNOWLEDGE_DOMAINS.find((d) => d.id === entry.domainId);
                   return (
@@ -1478,19 +1697,34 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                       className={`rounded-lg border px-2.5 py-2 transition-colors ${
                         unlocked
                           ? 'border-emerald-500/50 bg-[#071A13] text-emerald-100'
-                          : 'border-slate-800 bg-[#030709] text-slate-500'
+                          : 'border-slate-800 bg-[#030709] text-slate-400'
                       }`}
                     >
-                      <div className="flex items-center justify-between text-xs">
-                        <span className={unlocked ? 'font-bold text-amber-300' : 'font-semibold'}>
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className={unlocked ? 'font-bold text-amber-300' : 'font-semibold text-slate-300'}>
                           {entry.cmd}
                         </span>
-                        <span
-                          className="text-[10px]"
-                          style={{ color: unlocked ? dom?.color ?? '#4ADE80' : '#475569' }}
-                        >
-                          {dom?.shortName} · {unlocked ? '✓' : 'Chưa mở'}
-                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className="text-[10px]"
+                            style={{ color: unlocked ? dom?.color ?? '#4ADE80' : '#64748B' }}
+                          >
+                            {unlocked ? '✓ Đã mở' : dom?.shortName}
+                          </span>
+                          <button
+                            type="button"
+                            tabIndex={-1}
+                            onClick={() => {
+                              setCommandInput(`${entry.key} `);
+                              inputRef.current?.focus();
+                            }}
+                            title={`Nạp nhanh "${entry.key}" vào dòng lệnh`}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-cyan-700/60 bg-cyan-950/40 text-cyan-200 hover:border-cyan-400 text-[10px] cursor-pointer"
+                          >
+                            <Copy className="w-2.5 h-2.5" aria-hidden="true" />
+                            <span>Nạp</span>
+                          </button>
+                        </div>
                       </div>
                       <div className="text-[11px] opacity-90 mt-0.5">
                         <strong>{entry.title}:</strong> {entry.desc}
@@ -1571,19 +1805,24 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
         >
           <div className="w-full max-w-lg rounded-2xl border border-emerald-400/70 bg-[#07120D] p-6 font-mono space-y-4 text-center">
             <div className="flex items-center justify-center gap-3">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-400 text-emerald-300">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400 text-emerald-300">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
               <div className="px-3.5 py-1.5 rounded-xl bg-amber-400/20 border border-amber-400 text-amber-300 font-bold text-xl">
                 HẠNG {missionRank}
               </div>
             </div>
-            <h3 className="text-xl font-bold text-emerald-200">
-              Khắc Phục Sự Cố Màn {currentMission.id} Thành Công!
-            </h3>
-            <p className="text-xs text-emerald-300/85">
-              Đã làm chủ: <strong className="text-cyan-300">{currentMission.ubuntuTopic}</strong>
-            </p>
+            <div className="space-y-1">
+              <div className="text-[11px] uppercase tracking-wider text-emerald-400">
+                POST-MORTEM INCIDENT REPORT · {currentMission.codeName}
+              </div>
+              <h3 className="text-xl font-bold text-white">
+                Khắc Phục Sự Cố Màn {currentMission.id} Thành Công!
+              </h3>
+              <p className="text-xs text-emerald-300/85">
+                Đã làm chủ: <strong className="text-cyan-300">{currentMission.ubuntuTopic}</strong>
+              </p>
+            </div>
             <div className="text-left rounded-xl border border-cyan-500/40 bg-[#041014] p-3 space-y-1">
               <div className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">
                 Bài học thực chiến Production
@@ -1592,17 +1831,23 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 {currentMission.productionLesson}
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-xs">
+            <div className="grid grid-cols-4 gap-2 text-xs">
               <div className="rounded-lg bg-[#030906] border border-emerald-900 p-2">
-                <div className="text-emerald-500">ĐIỂM</div>
+                <div className="text-emerald-500 text-[10px]">ĐIỂM</div>
                 <div className="font-bold text-emerald-100 tabular-nums">{runtime.score}</div>
               </div>
               <div className="rounded-lg bg-[#030906] border border-emerald-900 p-2">
-                <div className="text-emerald-500">COMBO MAX</div>
+                <div className="text-emerald-500 text-[10px]">SLA DƯ</div>
+                <div className="font-bold text-emerald-300 tabular-nums">
+                  {Math.max(0, 100 - Math.round(runtime.tracePercent))}%
+                </div>
+              </div>
+              <div className="rounded-lg bg-[#030906] border border-emerald-900 p-2">
+                <div className="text-emerald-500 text-[10px]">COMBO MAX</div>
                 <div className="font-bold text-amber-300 tabular-nums">x{runtime.maxCombo}</div>
               </div>
               <div className="rounded-lg bg-[#030906] border border-emerald-900 p-2">
-                <div className="text-emerald-500">BỘ SƯU TẬP</div>
+                <div className="text-emerald-500 text-[10px]">LỆNH MỞ</div>
                 <div className="font-bold text-cyan-300 tabular-nums">
                   {codexUnlocked.length}/{UBUNTU_CODEX.length}
                 </div>

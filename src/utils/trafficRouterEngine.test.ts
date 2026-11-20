@@ -5,11 +5,15 @@ import {
   ARCH_MODES,
   buildBlueprintGraph,
   canAddEdge,
+  computeBezierPointAndTangent,
   computeBlueprintCost,
   createInitialNodes,
+  diagnoseArchitectureTelemetry,
+  distToCubicBezier,
   evaluatePacketAtNode,
   evaluateSolutionOptimization,
   getEffectiveScenarioConfig,
+  getNodeCapabilityDetails,
   getSellRefund,
   hasPathToDatabase,
   INFRA_NODE_CATALOG,
@@ -227,6 +231,123 @@ test('pickWeightedPacketKind and getSellRefund behave accurately', () => {
     heat: 0,
   };
   assert.equal(getSellRefund(upgradedRedis), Math.round((85 + 95) * 0.7));
+  assert.equal(getSellRefund(upgradedRedis, true), 85 + 95);
+});
+
+test('All 24 levels recommended approaches fit within FinOps tight_budget and survive deterministic wave simulation without 502', () => {
+  for (const lvl of TRAFFIC_LEVELS) {
+    const finOpsCfg = getEffectiveScenarioConfig(lvl, 'tight_budget');
+    const stdCfg = getEffectiveScenarioConfig(lvl, 'standard');
+
+    for (const ap of lvl.approaches) {
+      const bpCost = computeBlueprintCost(lvl, ap);
+      assert.ok(
+        bpCost <= finOpsCfg.startingBudget,
+        `Blueprint ${ap.id} ($${bpCost}) in ${lvl.code} must fit within tight_budget ($${finOpsCfg.startingBudget})`
+      );
+
+      // Deterministic full-wave simulation in standard mode
+      const bp = buildBlueprintGraph(lvl, ap);
+      const nodes = bp.nodes.map((n) => ({ ...n }));
+      const edges = bp.edges.map((e) => ({ ...e }));
+      let dbCpu = 10;
+      let peakDbCpu = 10;
+      let systemHealth = 100;
+      let breachedAttacks = 0;
+      let latencySum = 0;
+      let latencySamples = 0;
+      let rollCounter = 1;
+      const nextRoll = () => {
+        rollCounter = (rollCounter * 1664525 + 1013904223) >>> 0;
+        return rollCounter / 4294967296;
+      };
+
+      const dt = 0.2;
+      for (const wave of stdCfg.effectiveLevel.waves) {
+        let waveTime = wave.durationSec;
+        let spawnTimer = 0.15;
+        while (waveTime > 0) {
+          waveTime -= dt;
+          spawnTimer -= dt;
+          dbCpu = Math.max(6, dbCpu - stdCfg.dbCoolingPerSec * dt);
+          for (const n of nodes) {
+            n.heat = Math.max(0, n.heat - dt * 0.22);
+          }
+          if (spawnTimer <= 0) {
+            spawnTimer += wave.spawnIntervalSec;
+            const kind = pickWeightedPacketKind(wave.weights, nextRoll());
+            let curId: string | undefined = 'ingress';
+            let damping = 1;
+            let totalLat = 0;
+            let hops = 0;
+            while (curId && hops < 12) {
+              hops += 1;
+              const node = nodes.find((n) => n.id === curId);
+              if (!node) break;
+              const outEdges = edges.filter((e) => e.fromId === node.id);
+              const decision = evaluatePacketAtNode(
+                node,
+                kind,
+                nextRoll(),
+                outEdges.length,
+                damping,
+                stdCfg.heatPenaltyMult
+              );
+              node.heat = Math.min(1, node.heat + 0.04);
+              totalLat += decision.addedLatencyMs;
+              if (decision.writeDampingFactor !== undefined) {
+                damping = Math.min(damping, decision.writeDampingFactor);
+              }
+              if (decision.outcome === 'forward') {
+                const { edge, nextCursor } = selectOutgoingEdge(node, edges);
+                node.rrCursor = nextCursor;
+                curId = edge?.toId;
+              } else {
+                if (decision.outcome === 'delivered') {
+                  dbCpu = Math.min(100, dbCpu + decision.dbCpuDelta * stdCfg.cpuLoadMult);
+                  peakDbCpu = Math.max(peakDbCpu, dbCpu);
+                  if (decision.integrityDelta < 0) {
+                    systemHealth = Math.max(0, systemHealth + decision.integrityDelta);
+                    breachedAttacks += 1;
+                  }
+                }
+                latencySum += totalLat;
+                latencySamples += 1;
+                break;
+              }
+            }
+          }
+          if (dbCpu >= 96) {
+            systemHealth = Math.max(0, systemHealth - dt * 9);
+          } else if (dbCpu < 82 && systemHealth < 100) {
+            systemHealth = Math.min(100, systemHealth + dt * 2.5);
+          }
+        }
+      }
+
+      assert.ok(
+        systemHealth > 0,
+        `${lvl.code} (${ap.id}) crashed with 502 during standard simulation (peakDbCpu=${Math.round(peakDbCpu)}%, breached=${breachedAttacks})`
+      );
+
+      const avgLat = latencySamples > 0 ? Math.round(latencySum / latencySamples) : 30;
+      const evalResult = evaluateSolutionOptimization({
+        level: stdCfg.effectiveLevel,
+        nodes,
+        edges,
+        avgLatencyMs: avgLat,
+        peakDbCpu: Math.round(peakDbCpu),
+        breachedAttacks,
+        remainingBudget: stdCfg.startingBudget - bpCost,
+        strictSecurity: false,
+        modeName: stdCfg.mode.name,
+      });
+      assert.ok(
+        evalResult.grade === 'S' || evalResult.grade === 'A' || evalResult.grade === 'B',
+        `${lvl.code} (${ap.id}) received unexpected grade ${evalResult.grade} (score=${evalResult.totalScore}, peakCpu=${Math.round(peakDbCpu)}%, avgLat=${avgLat}ms, breached=${breachedAttacks})`
+      );
+    }
+  }
 });
 
 test('analyzeArchitectureDesign and evaluateSolutionOptimization enforce strictSecurity, modeName, and S/A/B/C verdicts', () => {
@@ -287,3 +408,51 @@ test('analyzeArchitectureDesign and evaluateSolutionOptimization enforce strictS
   assert.equal(optimalEval.grade, 'S');
   assert.equal(optimalEval.whyNotOptimal.length, 0);
 });
+
+test('Bezier geometry, Lv1/Lv2 node capability specs, and live bottleneck telemetry work accurately', () => {
+  const start = computeBezierPointAndTangent(100, 150, 400, 350, 0);
+  const mid = computeBezierPointAndTangent(100, 150, 400, 350, 0.5);
+  const end = computeBezierPointAndTangent(100, 150, 400, 350, 1);
+  assert.equal(Math.round(start.x), 100);
+  assert.equal(Math.round(start.y), 150);
+  assert.equal(Math.round(mid.x), 250);
+  assert.equal(Math.round(mid.y), 250);
+  assert.equal(Math.round(end.x), 400);
+  assert.equal(Math.round(end.y), 350);
+
+  // Midpoint lies right on the Bezier curve (< 3px distance)
+  assert.ok(distToCubicBezier(mid.x, mid.y, 100, 150, 400, 350) < 3);
+  assert.ok(distToCubicBezier(100, 350, 100, 150, 400, 350) > 60);
+
+  // Every catalog node provides Lv1/Lv2 capability specs with faster Lv2 latency
+  for (const item of INFRA_NODE_CATALOG) {
+    const spec = getNodeCapabilityDetails(item.type);
+    assert.ok(spec.lv2Value.length > 0);
+    assert.ok(spec.latencyLv2Ms < spec.latencyLv1Ms, `${item.type} Lv2 must be faster than Lv1`);
+  }
+
+  // Live telemetry detects hottest bottleneck and unused disconnected nodes
+  const nodes: InfraNode[] = [
+    { id: 'ingress', type: 'ingress', x: 76, y: 250, fixed: true, level: 1, rrCursor: 0, processedCount: 20, blockedCount: 0, cacheHitCount: 0, heat: 0 },
+    { id: 'app-hot', type: 'app', x: 385, y: 250, level: 1, rrCursor: 0, processedCount: 20, blockedCount: 0, cacheHitCount: 0, heat: 0.84 },
+    { id: 'redis-orphan', type: 'redis', x: 545, y: 120, level: 1, rrCursor: 0, processedCount: 0, blockedCount: 0, cacheHitCount: 0, heat: 0 },
+    { id: 'database', type: 'database', x: 844, y: 250, fixed: true, level: 1, rrCursor: 0, processedCount: 20, blockedCount: 0, cacheHitCount: 0, heat: 0.4 },
+  ];
+  const edges: InfraEdge[] = [
+    { id: 'e1', fromId: 'ingress', toId: 'app-hot' },
+    { id: 'e2', fromId: 'app-hot', toId: 'database' },
+  ];
+  const diag = diagnoseArchitectureTelemetry(nodes, edges, {
+    deliveredOk: 40,
+    cacheHits: 16,
+    blockedAttacks: 9,
+    breachedAttacks: 1,
+    dbCpu: 62,
+  });
+  assert.equal(diag.cacheHitRatePct, 40);
+  assert.equal(diag.threatBlockRatePct, 90);
+  assert.equal(diag.hottestNode?.id, 'app-hot');
+  assert.equal(diag.hottestNode?.heatPct, 84);
+  assert.deepEqual(diag.unusedNodeIds, ['redis-orphan']);
+});
+

@@ -7,6 +7,7 @@ import {
   Cable,
   CheckCircle2,
   Cpu,
+  Flame,
   Layers,
   Pause,
   Play,
@@ -29,10 +30,13 @@ import {
   CANVAS_W,
   computeBlueprintCost,
   createInitialNodes,
+  diagnoseArchitectureTelemetry,
+  distToCubicBezier,
   evaluatePacketAtNode,
   evaluateSolutionOptimization,
   getArchMode,
   getEffectiveScenarioConfig,
+  getNodeCapabilityDetails,
   getNodeCatalogEntry,
   getSellRefund,
   hasPathToDatabase,
@@ -47,11 +51,17 @@ import {
   type InfraEdge,
   type InfraNode,
   type InfraNodeType,
+  type LiveTelemetryDiagnosis,
   type PacketKind,
   type PlaceableNodeType,
   type RackSlot,
   type SolutionEvaluation,
 } from '../utils/trafficRouterEngine.ts';
+import {
+  renderArchitectureCanvas,
+  type CanvasShockwave,
+  type CanvasSpark,
+} from '../utils/trafficRouterCanvasFx.ts';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 
 interface TrafficRouterGameSectionProps {
@@ -96,6 +106,7 @@ interface HudSnapshot {
   waveActive: boolean;
   simStage: SimStage;
   waveTimeLeft: number;
+  waveDurationTotal: number;
   deliveredOk: number;
   cacheHits: number;
   blockedAttacks: number;
@@ -104,6 +115,9 @@ interface HudSnapshot {
   selectedNode: InfraNode | null;
   notice: string;
   topologyRev: number;
+  cpuHistory: number[];
+  latencyHistory: number[];
+  telemetry: LiveTelemetryDiagnosis;
 }
 
 type SavedGradesMap = Record<string, 'S' | 'A' | 'B' | 'C'>;
@@ -240,27 +254,72 @@ function getNodeVisualMeta(type: InfraNodeType): { label: string; color: string 
   return { label: entry.shortName, color: entry.color };
 }
 
-function distToSegment(
-  px: number,
-  py: number,
-  ax: number,
-  ay: number,
-  bx: number,
-  by: number
-): number {
-  const dx = bx - ax;
-  const dy = by - ay;
-  const lenSq = dx * dx + dy * dy;
-  if (lenSq === 0) return Math.hypot(px - ax, py - ay);
-  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
-  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
-}
-
 function gradeBadgeStyle(grade: 'S' | 'A' | 'B' | 'C'): string {
   if (grade === 'S') return 'bg-emerald-500/20 text-emerald-300 border-emerald-400/60';
   if (grade === 'A') return 'bg-sky-500/20 text-sky-300 border-sky-400/60';
   if (grade === 'B') return 'bg-amber-500/20 text-amber-300 border-amber-400/60';
   return 'bg-rose-500/20 text-rose-300 border-rose-400/60';
+}
+
+function TelemetrySparkline({
+  values,
+  maxVal,
+  stroke,
+  thresholdVal,
+  label,
+  currentDisplay,
+}: {
+  values: readonly number[];
+  maxVal: number;
+  stroke: string;
+  thresholdVal?: number;
+  label: string;
+  currentDisplay: string;
+}) {
+  const w = 160;
+  const h = 36;
+  const pts = values.length > 1 ? values : [values[0] ?? 0, values[0] ?? 0];
+  const safeMax = Math.max(1, maxVal);
+  const path = pts
+    .map((v, i) => {
+      const x = (i / Math.max(1, pts.length - 1)) * w;
+      const y = h - 3 - Math.min(1, Math.max(0, v / safeMax)) * (h - 6);
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+  const thresholdY =
+    thresholdVal !== undefined
+      ? h - 3 - Math.min(1, Math.max(0, thresholdVal / safeMax)) * (h - 6)
+      : null;
+
+  return (
+    <div className="flex items-center justify-between gap-2.5 px-2.5 py-1.5 rounded-lg bg-[#0B1320] border border-[#1E2E4A]">
+      <div className="min-w-0">
+        <span className="block text-[10px] font-mono text-slate-400">{label}</span>
+        <strong className="font-mono text-xs tabular-nums" style={{ color: stroke }}>
+          {currentDisplay}
+        </strong>
+      </div>
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        className="w-28 sm:w-36 h-9 shrink-0 overflow-visible"
+        aria-hidden="true"
+      >
+        {thresholdY !== null && (
+          <line
+            x1={0}
+            y1={thresholdY}
+            x2={w}
+            y2={thresholdY}
+            stroke="rgba(248, 113, 113, 0.45)"
+            strokeWidth={1}
+            strokeDasharray="3 3"
+          />
+        )}
+        <path d={path} fill="none" stroke={stroke} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -309,6 +368,16 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     return audioRef.current;
   }, []);
 
+  const initialNodes = createInitialNodes(TRAFFIC_LEVELS[0]);
+  const initialEdges = [...TRAFFIC_LEVELS[0].initialEdges];
+  const initialTelemetry = diagnoseArchitectureTelemetry(initialNodes, initialEdges, {
+    deliveredOk: 0,
+    cacheHits: 0,
+    blockedAttacks: 0,
+    breachedAttacks: 0,
+    dbCpu: 10,
+  });
+
   // Mutable simulation ref driven at 60fps
   const initialCfg = getEffectiveScenarioConfig(TRAFFIC_LEVELS[0], 'standard');
   const simRef = useRef({
@@ -319,10 +388,12 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     heatPenaltyMult: initialCfg.heatPenaltyMult,
     strictSecurity: initialCfg.mode.strictSecurity,
     modeName: initialCfg.mode.name,
-    nodes: createInitialNodes(TRAFFIC_LEVELS[0]),
-    edges: [...TRAFFIC_LEVELS[0].initialEdges],
+    nodes: initialNodes,
+    edges: initialEdges,
     packets: [] as ActivePacket[],
     fxs: [] as FloatingFx[],
+    shockwaves: [] as CanvasShockwave[],
+    sparks: [] as CanvasSpark[],
     budget: initialCfg.startingBudget,
     earnedBudgetTotal: initialCfg.startingBudget,
     dbCpu: 10,
@@ -334,6 +405,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     waveActive: false,
     simStage: 'DESIGNING' as SimStage,
     waveTimer: 0,
+    waveDurationTotal: initialCfg.effectiveLevel.waves[0]?.durationSec ?? 8,
     spawnTimer: 0,
     deliveredOk: 0,
     cacheHits: 0,
@@ -345,6 +417,10 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     nextPacketId: 1,
     nextNodeId: 1,
     dashOffset: 0,
+    timeSec: 0,
+    sampleAccum: 0,
+    cpuHistory: [10] as number[],
+    latencyHistory: [24] as number[],
     topologyRev: 1,
     notice: TRAFFIC_LEVELS[0].tacticalTip,
     outcome: null as 'victory' | 'gameover' | null,
@@ -361,6 +437,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     waveActive: false,
     simStage: 'DESIGNING',
     waveTimeLeft: 0,
+    waveDurationTotal: initialCfg.effectiveLevel.waves[0]?.durationSec ?? 8,
     deliveredOk: 0,
     cacheHits: 0,
     blockedAttacks: 0,
@@ -369,12 +446,22 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     selectedNode: null,
     notice: TRAFFIC_LEVELS[0].tacticalTip,
     topologyRev: 1,
+    cpuHistory: [10],
+    latencyHistory: [24],
+    telemetry: initialTelemetry,
   }));
 
   const syncHud = useCallback(() => {
     const s = simRef.current;
     const avgLat = s.latencySamples > 0 ? Math.round(s.latencySum / s.latencySamples) : 24;
     const sel = s.selectedNodeId ? s.nodes.find((n) => n.id === s.selectedNodeId) ?? null : null;
+    const telemetry = diagnoseArchitectureTelemetry(s.nodes, s.edges, {
+      deliveredOk: s.deliveredOk,
+      cacheHits: s.cacheHits,
+      blockedAttacks: s.blockedAttacks,
+      breachedAttacks: s.breachedAttacks,
+      dbCpu: s.dbCpu,
+    });
     setHud({
       budget: Math.round(s.budget),
       earnedBudgetTotal: Math.round(s.earnedBudgetTotal),
@@ -386,6 +473,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
       waveActive: s.waveActive,
       simStage: s.simStage,
       waveTimeLeft: Math.max(0, Math.ceil(s.waveTimer)),
+      waveDurationTotal: s.waveDurationTotal,
       deliveredOk: s.deliveredOk,
       cacheHits: s.cacheHits,
       blockedAttacks: s.blockedAttacks,
@@ -394,6 +482,9 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
       selectedNode: sel ? { ...sel } : null,
       notice: s.notice,
       topologyRev: s.topologyRev,
+      cpuHistory: [...s.cpuHistory],
+      latencyHistory: [...s.latencyHistory],
+      telemetry,
     });
   }, []);
 
@@ -440,6 +531,8 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
         edges: [...lvl.initialEdges],
         packets: [],
         fxs: [],
+        shockwaves: [],
+        sparks: [],
         budget: cfg.startingBudget,
         earnedBudgetTotal: cfg.startingBudget,
         dbCpu: 10,
@@ -451,6 +544,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
         waveActive: false,
         simStage: 'DESIGNING',
         waveTimer: 0,
+        waveDurationTotal: cfg.effectiveLevel.waves[0]?.durationSec ?? 8,
         spawnTimer: 0,
         deliveredOk: 0,
         cacheHits: 0,
@@ -462,6 +556,10 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
         nextPacketId: 1,
         nextNodeId: 1,
         dashOffset: 0,
+        timeSec: 0,
+        sampleAccum: 0,
+        cpuHistory: [10],
+        latencyHistory: [24],
         topologyRev: 1,
         notice: `${cfg.mode.name}: ${lvl.tacticalTip}`,
         outcome: null,
@@ -581,14 +679,20 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     s.waveIndex = 0;
     s.waveActive = true;
     s.waveTimer = waveDef.durationSec;
+    s.waveDurationTotal = waveDef.durationSec;
     s.spawnTimer = 0.15;
     s.packets = [];
     s.fxs = [];
+    s.shockwaves = [];
+    s.sparks = [];
     s.dbCpu = 10;
     s.peakDbCpu = 10;
     s.systemHealth = 100;
     s.latencySum = 0;
     s.latencySamples = 0;
+    s.sampleAccum = 0;
+    s.cpuHistory = [10];
+    s.latencyHistory = [24];
     s.deliveredOk = 0;
     s.cacheHits = 0;
     s.blockedAttacks = 0;
@@ -598,6 +702,25 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     s.notice = `Đang giả lập Đợt 1/${s.level.waves.length}: ${waveDef.label}`;
     setPaused(false);
     playRouterSfx(ensureAudio(), 'wave', muted);
+    syncHud();
+  }, [ensureAudio, muted, syncHud]);
+
+  const resetDesignToStarter = useCallback(() => {
+    const s = simRef.current;
+    if (s.simStage === 'SIMULATING') return;
+    s.nodes = createInitialNodes(s.baseLevel);
+    s.edges = [...s.baseLevel.initialEdges];
+    s.packets = [];
+    s.fxs = [];
+    s.shockwaves = [];
+    s.sparks = [];
+    s.selectedNodeId = null;
+    s.wireSourceId = null;
+    s.budget = s.level.startingBudget;
+    s.earnedBudgetTotal = s.level.startingBudget;
+    s.topologyRev += 1;
+    s.notice = 'Đã làm sạch sơ đồ về cấu trúc khởi đầu!';
+    playRouterSfx(ensureAudio(), 'block', muted);
     syncHud();
   }, [ensureAudio, muted, syncHud]);
 
@@ -623,13 +746,19 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     s.waveIndex = 0;
     s.waveActive = false;
     s.waveTimer = 0;
+    s.waveDurationTotal = s.level.waves[0]?.durationSec ?? 8;
     s.packets = [];
     s.fxs = [];
+    s.shockwaves = [];
+    s.sparks = [];
     s.dbCpu = 10;
     s.peakDbCpu = 10;
     s.systemHealth = 100;
     s.latencySum = 0;
     s.latencySamples = 0;
+    s.sampleAccum = 0;
+    s.cpuHistory = [10];
+    s.latencyHistory = [24];
     s.deliveredOk = 0;
     s.cacheHits = 0;
     s.blockedAttacks = 0;
@@ -690,9 +819,18 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     s.budget -= entry.upgradeCost;
     node.level = 2;
     s.topologyRev += 1;
+    s.shockwaves.push({
+      x: node.x,
+      y: node.y,
+      color: '#34D399',
+      radius: 12,
+      maxRadius: 56,
+      life: 0.45,
+      maxLife: 0.45,
+    });
     s.fxs.push({
       x: node.x,
-      y: node.y - 28,
+      y: node.y - 32,
       text: `${entry.shortName} LV2!`,
       color: '#34D399',
       life: 0.9,
@@ -713,14 +851,14 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     if (!s.selectedNodeId) return;
     const node = s.nodes.find((n) => n.id === s.selectedNodeId);
     if (!node || node.fixed) return;
-    const refund = getSellRefund(node);
+    const refund = getSellRefund(node, true);
     s.budget += refund;
     s.nodes = s.nodes.filter((n) => n.id !== node.id);
     s.edges = s.edges.filter((e) => e.fromId !== node.id && e.toId !== node.id);
     s.packets = s.packets.filter((p) => p.fromId !== node.id && p.toId !== node.id);
     s.selectedNodeId = null;
     s.topologyRev += 1;
-    s.notice = `Đã tháo node và hoàn lại +$${refund}.`;
+    s.notice = `Đã tháo node và hoàn lại 100% chi phí (+$${refund}).`;
     playRouterSfx(ensureAudio(), 'block', muted);
     syncHud();
   }, [ensureAudio, muted, syncHud]);
@@ -744,14 +882,19 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
   const handleCanvasPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (phase !== 'PLAYING') return;
     const s = simRef.current;
+    const pt = canvasCoords(e);
+    const clickedNode = s.nodes.find((n) => Math.hypot(pt.x - n.x, pt.y - n.y) <= 32);
+
     if (s.simStage === 'SIMULATING') {
-      s.notice = 'Đang chạy giả lập! Nhấn "Dừng & Sửa Thiết Kế" nếu muốn thay đổi sơ đồ.';
+      if (clickedNode) {
+        s.selectedNodeId = clickedNode.id;
+        s.notice = `Đang theo dõi ${getNodeVisualMeta(clickedNode.type).label} (chế độ đọc khi giả lập).`;
+      } else {
+        s.notice = 'Đang chạy giả lập! Nhấn "Dừng & Sửa Thiết Kế" nếu muốn thay đổi sơ đồ.';
+      }
       syncHud();
       return;
     }
-    const pt = canvasCoords(e);
-
-    const clickedNode = s.nodes.find((n) => Math.hypot(pt.x - n.x, pt.y - n.y) <= 30);
 
     if (tool === 'wire') {
       if (!clickedNode) {
@@ -768,7 +911,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
         }
         s.wireSourceId = clickedNode.id;
         s.selectedNodeId = clickedNode.id;
-        s.notice = `Đang kéo dây từ ${getNodeVisualMeta(clickedNode.type).label} — nhấp vào node đích!`;
+        s.notice = `Đang kéo dây từ ${getNodeVisualMeta(clickedNode.type).label} — nhấp vào node đích (viền xanh lá)!`;
         syncHud();
         return;
       }
@@ -800,7 +943,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
         const a = s.nodes.find((n) => n.id === edge.fromId);
         const b = s.nodes.find((n) => n.id === edge.toId);
         if (!a || !b) continue;
-        const d = distToSegment(pt.x, pt.y, a.x, a.y, b.x, b.y);
+        const d = distToCubicBezier(pt.x, pt.y, a.x, a.y, b.x, b.y);
         if (d < bestDist) {
           bestDist = d;
           hitEdge = edge;
@@ -871,7 +1014,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
       if (
         newNode.x > Math.min(a.x, b.x) + 20 &&
         newNode.x < Math.max(a.x, b.x) - 20 &&
-        distToSegment(newNode.x, newNode.y, a.x, a.y, b.x, b.y) <= 24
+        distToCubicBezier(newNode.x, newNode.y, a.x, a.y, b.x, b.y) <= 26
       ) {
         s.edges.splice(
           i,
@@ -885,9 +1028,18 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     }
 
     s.topologyRev += 1;
+    s.shockwaves.push({
+      x: newNode.x,
+      y: newNode.y,
+      color: entry.color,
+      radius: 10,
+      maxRadius: 48,
+      life: 0.4,
+      maxLife: 0.4,
+    });
     s.fxs.push({
       x: newNode.x,
-      y: newNode.y - 28,
+      y: newNode.y - 32,
       text: spliced ? `Nối tự động ${entry.shortName}` : `Đặt ${entry.shortName}`,
       color: entry.color,
       life: 0.9,
@@ -908,16 +1060,53 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     let lastTs = performance.now();
     let hudAccum = 0;
 
+    const spawnBurstSparks = (x: number, y: number, color: string, count: number) => {
+      const s = simRef.current;
+      if (s.sparks.length > 72) return;
+      for (let i = 0; i < count; i++) {
+        const ang = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.5;
+        const spd = 28 + Math.random() * 44;
+        s.sparks.push({
+          x,
+          y,
+          vx: Math.cos(ang) * spd,
+          vy: Math.sin(ang) * spd,
+          color,
+          size: 1.8 + Math.random() * 1.4,
+          life: 0.35 + Math.random() * 0.2,
+          maxLife: 0.55,
+        });
+      }
+    };
+
     const tick = (now: number) => {
       const rawDt = Math.min(0.05, Math.max(0.001, (now - lastTs) / 1000));
       lastTs = now;
       const s = simRef.current;
+      s.timeSec += rawDt;
       const isRunningSim = s.simStage === 'SIMULATING' && !paused && !s.outcome;
       const dt = isRunningSim ? rawDt * speedMult : 0;
 
       // Subtle slow dash animation during DESIGNING when route is valid
       if (s.simStage === 'DESIGNING') {
         s.dashOffset = (s.dashOffset - rawDt * 12) % 24;
+      }
+
+      // Advance shockwaves & sparks even cleanly during idle/designing
+      if (!paused) {
+        s.shockwaves = s.shockwaves
+          .map((sw) => ({ ...sw, life: sw.life - rawDt }))
+          .filter((sw) => sw.life > 0);
+        s.sparks = s.sparks
+          .map((sp) => ({
+            ...sp,
+            x: sp.x + sp.vx * rawDt,
+            y: sp.y + sp.vy * rawDt,
+            vx: sp.vx * 0.94,
+            vy: sp.vy * 0.94,
+            life: sp.life - rawDt,
+          }))
+          .filter((sp) => sp.life > 0);
       }
 
       // Advance simulation ONLY after player presses "Sẵn Sàng — Chạy Giả Lập"
@@ -929,6 +1118,15 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
         }
 
         s.dbCpu = Math.max(6, s.dbCpu - s.level.dbCoolingPerSec * dt);
+
+        // Rolling sparkline sampling every 0.4s
+        s.sampleAccum += dt;
+        if (s.sampleAccum >= 0.4) {
+          s.sampleAccum = 0;
+          const avgLat = s.latencySamples > 0 ? Math.round(s.latencySum / s.latencySamples) : 24;
+          s.cpuHistory = [...s.cpuHistory.slice(-35), Math.round(s.dbCpu)];
+          s.latencyHistory = [...s.latencyHistory.slice(-35), avgLat];
+        }
 
         if (s.waveActive) {
           const waveDef = s.level.waves[s.waveIndex];
@@ -973,6 +1171,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
               const nextWave = s.level.waves[s.waveIndex];
               s.waveActive = true;
               s.waveTimer = nextWave.durationSec;
+              s.waveDurationTotal = nextWave.durationSec;
               s.spawnTimer = 0.15;
               s.notice = `Đang giả lập Đợt ${nextWave.waveNumber}/${s.level.waves.length}: ${nextWave.label}`;
               playRouterSfx(ensureAudio(), 'wave', muted);
@@ -1011,9 +1210,21 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
             s.blockedAttacks += 1;
             s.budget += p.kind === 'sqli' ? 4 : 2;
             s.earnedBudgetTotal += p.kind === 'sqli' ? 4 : 2;
+            if (s.shockwaves.length < 18) {
+              s.shockwaves.push({
+                x: target.x,
+                y: target.y,
+                color: '#FB7185',
+                radius: 10,
+                maxRadius: 38,
+                life: 0.34,
+                maxLife: 0.34,
+              });
+            }
+            spawnBurstSparks(target.x, target.y, '#FB7185', 4);
             s.fxs.push({
               x: target.x,
-              y: target.y - 26,
+              y: target.y - 30,
               text: p.kind === 'sqli' ? 'CHẶN SQLi' : 'CHẶN DDoS',
               color: '#FB7185',
               life: 0.65,
@@ -1028,9 +1239,21 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
             s.latencySamples += 1;
             s.budget += 2;
             s.earnedBudgetTotal += 2;
+            if (s.shockwaves.length < 18) {
+              s.shockwaves.push({
+                x: target.x,
+                y: target.y,
+                color: '#22D3EE',
+                radius: 10,
+                maxRadius: 36,
+                life: 0.34,
+                maxLife: 0.34,
+              });
+            }
+            spawnBurstSparks(target.x, target.y, '#22D3EE', 3);
             s.fxs.push({
               x: target.x,
-              y: target.y - 26,
+              y: target.y - 30,
               text: `HIT ${totalLatency}ms`,
               color: '#22D3EE',
               life: 0.65,
@@ -1044,9 +1267,21 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
             if (decision.integrityDelta < 0) {
               s.breachedAttacks += 1;
               s.systemHealth = Math.max(0, s.systemHealth + decision.integrityDelta);
+              if (s.shockwaves.length < 18) {
+                s.shockwaves.push({
+                  x: target.x,
+                  y: target.y,
+                  color: '#EF4444',
+                  radius: 12,
+                  maxRadius: 50,
+                  life: 0.45,
+                  maxLife: 0.45,
+                });
+              }
+              spawnBurstSparks(target.x, target.y, '#EF4444', 6);
               s.fxs.push({
                 x: target.x,
-                y: target.y - 30,
+                y: target.y - 34,
                 text: p.kind === 'sqli' ? 'SQLi XÂM NHẬP!' : 'DDoS TRÀN DB!',
                 color: '#EF4444',
                 life: 0.9,
@@ -1083,9 +1318,9 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
         s.packets = nextPackets;
 
         if (s.dbCpu >= 96) {
-          s.systemHealth = Math.max(0, s.systemHealth - dt * 16);
-        } else if (s.dbCpu < 75 && s.systemHealth < 100 && s.waveActive) {
-          s.systemHealth = Math.min(100, s.systemHealth + dt * 1.4);
+          s.systemHealth = Math.max(0, s.systemHealth - dt * 9);
+        } else if (s.dbCpu < 82 && s.systemHealth < 100 && s.waveActive) {
+          s.systemHealth = Math.min(100, s.systemHealth + dt * 2.5);
         }
 
         if (s.systemHealth <= 0) {
@@ -1100,238 +1335,44 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
           .filter((fx) => fx.life > 0);
       }
 
-      // 3. Draw Canvas
+      // 3. HiDPI Canvas Render via trafficRouterCanvasFx
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext('2d');
       if (canvas && ctx) {
-        ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
-
-        ctx.fillStyle = '#0B1320';
-        ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-
-        // Subtle architectural grid
-        ctx.strokeStyle = 'rgba(56, 189, 248, 0.06)';
-        ctx.lineWidth = 1;
-        for (let gx = 40; gx < CANVAS_W; gx += 40) {
-          ctx.beginPath();
-          ctx.moveTo(gx, 0);
-          ctx.lineTo(gx, CANVAS_H);
-          ctx.stroke();
+        const dpr = Math.min(2, typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1);
+        const targetW = Math.round(CANVAS_W * dpr);
+        const targetH = Math.round(CANVAS_H * dpr);
+        if (canvas.width !== targetW || canvas.height !== targetH) {
+          canvas.width = targetW;
+          canvas.height = targetH;
         }
-        for (let gy = 40; gy < CANVAS_H; gy += 40) {
-          ctx.beginPath();
-          ctx.moveTo(0, gy);
-          ctx.lineTo(CANVAS_W, gy);
-          ctx.stroke();
-        }
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        // 6 architectural zone columns
-        const layers = [
-          { x: 76, label: 'USERS' },
-          { x: 225, label: 'EDGE / BẢO VỆ' },
-          { x: 385, label: 'CACHE / LB' },
-          { x: 545, label: 'COMPUTE / MQ' },
-          { x: 705, label: 'REPLICA / S3' },
-          { x: 844, label: 'DATABASE' },
-        ];
-        ctx.font = '600 10px ui-monospace, SFMono-Regular, monospace';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(148, 163, 184, 0.72)';
-        for (const l of layers) {
-          ctx.fillText(l.label, l.x, 24);
-        }
+        const liveDiag = diagnoseArchitectureTelemetry(s.nodes, s.edges, {
+          deliveredOk: s.deliveredOk,
+          cacheHits: s.cacheHits,
+          blockedAttacks: s.blockedAttacks,
+          breachedAttacks: s.breachedAttacks,
+          dbCpu: s.dbCpu,
+        });
 
-        // Empty Rack Slots (4 cols x 3 rows = 12 slots)
-        for (const slot of RACK_SLOTS) {
-          const isOccupied = s.nodes.some((n) => n.slotId === slot.id);
-          if (isOccupied) continue;
-          const isHover = s.hoverPos && Math.hypot(s.hoverPos.x - slot.x, s.hoverPos.y - slot.y) <= 34;
-          ctx.save();
-          ctx.strokeStyle = isHover ? '#38BDF8' : 'rgba(100, 116, 139, 0.35)';
-          ctx.fillStyle = isHover ? 'rgba(56, 189, 248, 0.1)' : 'rgba(15, 23, 42, 0.55)';
-          ctx.lineWidth = isHover ? 1.8 : 1.2;
-          ctx.setLineDash([5, 4]);
-          ctx.beginPath();
-          ctx.roundRect(slot.x - 28, slot.y - 24, 56, 48, 10);
-          ctx.fill();
-          ctx.stroke();
-          ctx.setLineDash([]);
-          ctx.fillStyle = isHover ? '#38BDF8' : 'rgba(148, 163, 184, 0.45)';
-          ctx.font = '500 15px sans-serif';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('+', slot.x, slot.y);
-          ctx.restore();
-        }
-
-        // Edges (Wires)
-        for (const edge of s.edges) {
-          const a = s.nodes.find((n) => n.id === edge.fromId);
-          const b = s.nodes.find((n) => n.id === edge.toId);
-          if (!a || !b) continue;
-
-          ctx.save();
-          ctx.strokeStyle = tool === 'cut' ? 'rgba(251, 113, 133, 0.65)' : 'rgba(56, 189, 248, 0.45)';
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
-          ctx.stroke();
-
-          ctx.strokeStyle = 'rgba(125, 211, 252, 0.85)';
-          ctx.lineWidth = 1.6;
-          ctx.setLineDash([6, 12]);
-          ctx.lineDashOffset = s.dashOffset;
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          const mx = (a.x + b.x) / 2;
-          const my = (a.y + b.y) / 2;
-          const ang = Math.atan2(b.y - a.y, b.x - a.x);
-          ctx.translate(mx, my);
-          ctx.rotate(ang);
-          ctx.fillStyle = '#38BDF8';
-          ctx.beginPath();
-          ctx.moveTo(6, 0);
-          ctx.lineTo(-4, -4);
-          ctx.lineTo(-4, 4);
-          ctx.closePath();
-          ctx.fill();
-          ctx.restore();
-        }
-
-        // Live Wire Preview
-        if (tool === 'wire' && s.wireSourceId && s.hoverPos) {
-          const src = s.nodes.find((n) => n.id === s.wireSourceId);
-          if (src) {
-            ctx.save();
-            ctx.strokeStyle = '#38BDF8';
-            ctx.lineWidth = 2.2;
-            ctx.setLineDash([6, 4]);
-            ctx.beginPath();
-            ctx.moveTo(src.x, src.y);
-            ctx.lineTo(s.hoverPos.x, s.hoverPos.y);
-            ctx.stroke();
-            ctx.restore();
-          }
-        }
-
-        // Moving Packets (all 5 kinds)
-        for (const p of s.packets) {
-          const a = s.nodes.find((n) => n.id === p.fromId);
-          const b = s.nodes.find((n) => n.id === p.toId);
-          if (!a || !b) continue;
-          const px = a.x + (b.x - a.x) * p.t;
-          const py = a.y + (b.y - a.y) * p.t;
-          const meta = PACKET_META[p.kind];
-
-          ctx.save();
-          ctx.translate(px, py);
-          ctx.fillStyle = meta.color;
-          ctx.globalAlpha = 0.28;
-          ctx.beginPath();
-          ctx.arc(0, 0, 9.5, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.globalAlpha = 1;
-
-          if (p.kind === 'read') {
-            ctx.beginPath();
-            ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
-            ctx.fill();
-          } else if (p.kind === 'write') {
-            ctx.fillRect(-5.5, -5.5, 11, 11);
-          } else if (p.kind === 'media') {
-            // Hexagon media packet
-            ctx.beginPath();
-            for (let k = 0; k < 6; k++) {
-              const ang = (Math.PI / 3) * k;
-              const rx = Math.cos(ang) * 6.5;
-              const ry = Math.sin(ang) * 6.5;
-              if (k === 0) ctx.moveTo(rx, ry);
-              else ctx.lineTo(rx, ry);
-            }
-            ctx.closePath();
-            ctx.fill();
-          } else if (p.kind === 'ddos') {
-            ctx.beginPath();
-            ctx.moveTo(0, -7);
-            ctx.lineTo(6.5, 5);
-            ctx.lineTo(-6.5, 5);
-            ctx.closePath();
-            ctx.fill();
-          } else {
-            ctx.beginPath();
-            ctx.moveTo(0, -7);
-            ctx.lineTo(7, 0);
-            ctx.lineTo(0, 7);
-            ctx.lineTo(-7, 0);
-            ctx.closePath();
-            ctx.fill();
-          }
-          ctx.restore();
-        }
-
-        // Nodes
-        for (const node of s.nodes) {
-          const meta = getNodeVisualMeta(node.type);
-          const isSelected = s.selectedNodeId === node.id;
-          const isWireSrc = s.wireSourceId === node.id;
-
-          ctx.save();
-          if (node.heat > 0.05) {
-            ctx.fillStyle =
-              node.type === 'database' && s.dbCpu > 85
-                ? `rgba(239, 68, 68, ${node.heat * 0.38})`
-                : `rgba(56, 189, 248, ${node.heat * 0.22})`;
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, 38, 0, Math.PI * 2);
-            ctx.fill();
-          }
-
-          ctx.fillStyle = '#0F1A2E';
-          ctx.strokeStyle = isWireSrc ? '#38BDF8' : isSelected ? '#FACC15' : meta.color;
-          ctx.lineWidth = isSelected || isWireSrc ? 2.6 : 1.8;
-          ctx.beginPath();
-          ctx.roundRect(node.x - 32, node.y - 26, 64, 52, 11);
-          ctx.fill();
-          ctx.stroke();
-
-          ctx.fillStyle = meta.color;
-          ctx.beginPath();
-          ctx.roundRect(node.x - 32, node.y - 26, 64, 6, [11, 11, 0, 0]);
-          ctx.fill();
-
-          ctx.fillStyle = '#F8FAFC';
-          ctx.font = '700 10px ui-monospace, SFMono-Regular, monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(meta.label, node.x, node.y + 1);
-
-          ctx.font = '600 9px ui-monospace, SFMono-Regular, monospace';
-          if (node.type === 'database') {
-            ctx.fillStyle = s.dbCpu >= 85 ? '#FCA5A5' : '#FDE68A';
-            ctx.fillText(`CPU ${Math.round(s.dbCpu)}%`, node.x, node.y + 16);
-          } else if (!node.fixed) {
-            ctx.fillStyle = node.level === 2 ? '#34D399' : '#94A3B8';
-            ctx.fillText(`LV.${node.level}`, node.x, node.y + 16);
-          } else {
-            ctx.fillStyle = '#7DD3FC';
-            ctx.fillText('INGRESS', node.x, node.y + 16);
-          }
-          ctx.restore();
-        }
-
-        for (const fx of s.fxs) {
-          ctx.save();
-          ctx.globalAlpha = Math.min(1, fx.life / Math.max(0.1, fx.maxLife * 0.5));
-          ctx.font = '700 10px ui-monospace, SFMono-Regular, monospace';
-          ctx.textAlign = 'center';
-          ctx.fillStyle = fx.color;
-          ctx.fillText(fx.text, fx.x, fx.y);
-          ctx.restore();
-        }
+        renderArchitectureCanvas(ctx, {
+          nodes: s.nodes,
+          edges: s.edges,
+          packets: s.packets,
+          fxs: s.fxs,
+          shockwaves: s.shockwaves,
+          sparks: s.sparks,
+          simStage: s.simStage,
+          tool,
+          selectedNodeId: s.selectedNodeId,
+          wireSourceId: s.wireSourceId,
+          hoverPos: s.hoverPos,
+          dashOffset: s.dashOffset,
+          dbCpu: s.dbCpu,
+          unusedNodeIds: new Set(liveDiag.unusedNodeIds),
+          timeSec: s.timeSec,
+        });
       }
 
       if (!paused && s.simStage === 'SIMULATING') {
@@ -1546,27 +1587,36 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                 </p>
               </div>
 
-              {/* Traffic Profile Mix (Mode-Adjusted) */}
-              <div className="grid grid-cols-5 gap-1.5 text-center text-[11px] font-mono tabular-nums">
-                <div className="p-1.5 rounded-lg bg-[#132138] border border-[#1E2E4A]">
-                  <span className="block text-sky-300">GET</span>
-                  <strong>{Math.round(firstWaveWeights.read * 100)}%</strong>
+              {/* Traffic Profile Mix (Visual Stacked Bar + Breakdown) */}
+              <div className="space-y-1.5">
+                <div className="h-2 w-full rounded-full overflow-hidden flex bg-[#132138] border border-[#1E2E4A]">
+                  <div className="bg-sky-400" style={{ width: `${firstWaveWeights.read * 100}%` }} title="GET" />
+                  <div className="bg-amber-400" style={{ width: `${firstWaveWeights.write * 100}%` }} title="POST" />
+                  <div className="bg-pink-400" style={{ width: `${firstWaveWeights.media * 100}%` }} title="MEDIA" />
+                  <div className="bg-rose-500" style={{ width: `${firstWaveWeights.ddos * 100}%` }} title="DDoS" />
+                  <div className="bg-purple-400" style={{ width: `${firstWaveWeights.sqli * 100}%` }} title="SQLi" />
                 </div>
-                <div className="p-1.5 rounded-lg bg-[#132138] border border-[#1E2E4A]">
-                  <span className="block text-amber-300">POST</span>
-                  <strong>{Math.round(firstWaveWeights.write * 100)}%</strong>
-                </div>
-                <div className="p-1.5 rounded-lg bg-[#132138] border border-[#1E2E4A]">
-                  <span className="block text-pink-300">MEDIA</span>
-                  <strong>{Math.round(firstWaveWeights.media * 100)}%</strong>
-                </div>
-                <div className="p-1.5 rounded-lg bg-[#132138] border border-[#1E2E4A]">
-                  <span className="block text-rose-400">DDoS</span>
-                  <strong>{Math.round(firstWaveWeights.ddos * 100)}%</strong>
-                </div>
-                <div className="p-1.5 rounded-lg bg-[#132138] border border-[#1E2E4A]">
-                  <span className="block text-purple-300">SQLi</span>
-                  <strong>{Math.round(firstWaveWeights.sqli * 100)}%</strong>
+                <div className="grid grid-cols-5 gap-1.5 text-center text-[11px] font-mono tabular-nums">
+                  <div className="p-1.5 rounded-lg bg-[#132138] border border-[#1E2E4A]">
+                    <span className="block text-sky-300">GET</span>
+                    <strong>{Math.round(firstWaveWeights.read * 100)}%</strong>
+                  </div>
+                  <div className="p-1.5 rounded-lg bg-[#132138] border border-[#1E2E4A]">
+                    <span className="block text-amber-300">POST</span>
+                    <strong>{Math.round(firstWaveWeights.write * 100)}%</strong>
+                  </div>
+                  <div className="p-1.5 rounded-lg bg-[#132138] border border-[#1E2E4A]">
+                    <span className="block text-pink-300">MEDIA</span>
+                    <strong>{Math.round(firstWaveWeights.media * 100)}%</strong>
+                  </div>
+                  <div className="p-1.5 rounded-lg bg-[#132138] border border-[#1E2E4A]">
+                    <span className="block text-rose-400">DDoS</span>
+                    <strong>{Math.round(firstWaveWeights.ddos * 100)}%</strong>
+                  </div>
+                  <div className="p-1.5 rounded-lg bg-[#132138] border border-[#1E2E4A]">
+                    <span className="block text-purple-300">SQLi</span>
+                    <strong>{Math.round(firstWaveWeights.sqli * 100)}%</strong>
+                  </div>
                 </div>
               </div>
 
@@ -1794,6 +1844,112 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
             />
           </div>
 
+          {/* Packet Legend & Live Wave Progress / Telemetry Sparkline Strip */}
+          <div className="rounded-xl border border-[#1E2E4A] bg-[#0F192B] p-2.5 space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-slate-300">
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-sky-400 inline-block" />
+                  GET (Đọc)
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block" />
+                  POST (Ghi)
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rotate-45 bg-pink-400 inline-block" />
+                  MEDIA
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-rose-400/40 inline-block" />
+                  DDoS
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rotate-45 bg-purple-400 inline-block" />
+                  SQLi
+                </span>
+              </div>
+              {hud.telemetry.hottestNode && hud.simStage === 'SIMULATING' && (
+                <span className="inline-flex items-center gap-1 text-amber-300 font-semibold">
+                  <Flame className="w-3.5 h-3.5 text-rose-400" />
+                  <span>
+                    Điểm nóng: {hud.telemetry.hottestNode.label} ({hud.telemetry.hottestNode.heatPct}%)
+                  </span>
+                </span>
+              )}
+            </div>
+
+            {hud.simStage === 'SIMULATING' && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2 text-[11px] font-mono text-slate-300">
+                  <span>
+                    Đợt {Math.min(hud.waveIndex + 1, effectiveConfig.waves.length)}/{effectiveConfig.waves.length}:{' '}
+                    <strong className="text-white">
+                      {effectiveConfig.waves[Math.min(hud.waveIndex, effectiveConfig.waves.length - 1)]?.label}
+                    </strong>
+                  </span>
+                  <span className="tabular-nums text-amber-300">Còn {hud.waveTimeLeft}s</span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-[#0B1320] overflow-hidden">
+                  <div
+                    className="h-full bg-sky-400 transition-all duration-150"
+                    style={{
+                      width: `${Math.max(
+                        0,
+                        Math.min(
+                          100,
+                          ((hud.waveDurationTotal - hud.waveTimeLeft) / Math.max(1, hud.waveDurationTotal)) * 100
+                        )
+                      )}%`,
+                    }}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <TelemetrySparkline
+                    values={hud.cpuHistory}
+                    maxVal={100}
+                    thresholdVal={85}
+                    stroke={hud.dbCpu >= 85 ? '#FB7185' : '#FBBF24'}
+                    label="BIỂU ĐỒ CPU DATABASE"
+                    currentDisplay={`${hud.dbCpu}% (Đỉnh ${hud.peakDbCpu}%)`}
+                  />
+                  <TelemetrySparkline
+                    values={hud.latencyHistory}
+                    maxVal={Math.max(120, effectiveConfig.targetSlaMs * 1.8)}
+                    thresholdVal={effectiveConfig.targetSlaMs}
+                    stroke={hud.avgLatencyMs <= effectiveConfig.targetSlaMs ? '#22D3EE' : '#F59E0B'}
+                    label={`BIỂU ĐỒ ĐỘ TRỄ (SLA ≤ ${effectiveConfig.targetSlaMs}ms)`}
+                    currentDisplay={`${hud.avgLatencyMs}ms`}
+                  />
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono tabular-nums">
+                  <div className="px-2.5 py-1.5 rounded-lg bg-[#0B1320] border border-[#1E2E4A] flex items-center justify-between">
+                    <span className="text-slate-400">ĐÃ PHỤC VỤ</span>
+                    <strong className="text-white">{hud.deliveredOk}</strong>
+                  </div>
+                  <div className="px-2.5 py-1.5 rounded-lg bg-[#0B1320] border border-[#1E2E4A] flex items-center justify-between">
+                    <span className="text-slate-400">CACHE HIT</span>
+                    <strong className="text-cyan-300">
+                      {hud.cacheHits} ({hud.telemetry.cacheHitRatePct}%)
+                    </strong>
+                  </div>
+                  <div className="px-2.5 py-1.5 rounded-lg bg-[#0B1320] border border-[#1E2E4A] flex items-center justify-between">
+                    <span className="text-slate-400">CHẶN TẤN CÔNG</span>
+                    <strong className="text-emerald-300">
+                      {hud.blockedAttacks} ({hud.telemetry.threatBlockRatePct}%)
+                    </strong>
+                  </div>
+                  <div className="px-2.5 py-1.5 rounded-lg bg-[#0B1320] border border-[#1E2E4A] flex items-center justify-between">
+                    <span className="text-slate-400">LỌT DB</span>
+                    <strong className={hud.breachedAttacks > 0 ? 'text-rose-400' : 'text-emerald-300'}>
+                      {hud.breachedAttacks}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* 10 Architecture Components + Wire / Cut Tools */}
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-1.5">
             {INFRA_NODE_CATALOG.map((item) => {
@@ -1863,11 +2019,43 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
             </button>
           </div>
 
-          {/* Selected Node Inspector + Ready / Simulate Trigger */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-2 border-t border-[#1E2E4A]">
-            <div className="flex flex-wrap items-center gap-2 min-w-0">
-              {hud.selectedNode && selectedEntry && hud.simStage === 'DESIGNING' && (
-                <>
+          {/* Selected Node Inspector (Lv1/Lv2 Spec + Live Runtime Stats) */}
+          {hud.selectedNode && (
+            <div className="rounded-xl border border-[#1E2E4A] bg-[#0F192B] p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2.5 text-xs">
+              <div className="space-y-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <strong className="text-white">
+                    {selectedEntry
+                      ? `${selectedEntry.name} (Lv.${hud.selectedNode.level})`
+                      : hud.selectedNode.type === 'ingress'
+                        ? 'Cổng Người Dùng (Users Ingress)'
+                        : 'Cụm Cơ Sở Dữ Liệu (Database Cluster)'}
+                  </strong>
+                  {selectedEntry && (() => {
+                    const spec = getNodeCapabilityDetails(selectedEntry.type);
+                    return (
+                      <span className="font-mono text-[11px] text-sky-300">
+                        {spec.primaryMetricLabel}:{' '}
+                        {hud.selectedNode!.level >= 2 ? spec.lv2Value : `${spec.lv1Value} → Lv2: ${spec.lv2Value}`}
+                      </span>
+                    );
+                  })()}
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-mono text-slate-300 tabular-nums">
+                  <span>Đã qua: <strong className="text-white">{hud.selectedNode.processedCount}</strong></span>
+                  <span>Cache Hit: <strong className="text-cyan-300">{hud.selectedNode.cacheHitCount}</strong></span>
+                  <span>Đã chặn: <strong className="text-rose-300">{hud.selectedNode.blockedCount}</strong></span>
+                  <span>
+                    Nhiệt:{' '}
+                    <strong className={hud.selectedNode.heat >= 0.7 ? 'text-rose-400' : 'text-emerald-300'}>
+                      {hud.selectedNode.type === 'database' ? `${hud.dbCpu}%` : `${Math.round(hud.selectedNode.heat * 100)}%`}
+                    </strong>
+                  </span>
+                </div>
+              </div>
+
+              {selectedEntry && hud.simStage === 'DESIGNING' && (
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
                     data-testid="traffic-upgrade-btn"
@@ -1888,23 +2076,37 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                     className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#1E2E4A] bg-[#111C33] hover:border-rose-400 text-rose-300 text-xs font-medium cursor-pointer whitespace-nowrap"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>Tháo (+${getSellRefund(hud.selectedNode)})</span>
+                    <span>Tháo (+${getSellRefund(hud.selectedNode, true)})</span>
                   </button>
-                </>
+                </div>
               )}
-              <p className="text-xs text-slate-300 truncate">{hud.notice}</p>
             </div>
+          )}
+
+          {/* Notice Bar + Action Triggers */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-2 border-t border-[#1E2E4A]">
+            <p className="text-xs text-slate-300 truncate min-w-0">{hud.notice}</p>
 
             {hud.simStage === 'DESIGNING' ? (
-              <button
-                type="button"
-                data-testid="traffic-ready-sim-btn"
-                onClick={startSimulationRun}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs sm:text-sm transition-colors cursor-pointer whitespace-nowrap shrink-0 shadow-sm"
-              >
-                <Zap className="w-4 h-4" />
-                <span>Sẵn Sàng — Chạy Giả Lập ({effectiveConfig.waves.length} Đợt)</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={resetDesignToStarter}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 text-slate-200 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Làm Sạch</span>
+                </button>
+                <button
+                  type="button"
+                  data-testid="traffic-ready-sim-btn"
+                  onClick={startSimulationRun}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs sm:text-sm transition-colors cursor-pointer whitespace-nowrap shadow-sm"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>Sẵn Sàng — Chạy Giả Lập ({effectiveConfig.waves.length} Đợt)</span>
+                </button>
+              </div>
             ) : (
               <div className="flex items-center gap-2 shrink-0">
                 <span className="px-3 py-2 rounded-xl bg-[#111C33] border border-amber-400/50 text-amber-300 font-mono text-xs font-semibold whitespace-nowrap">
@@ -2125,6 +2327,26 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Simulation Telemetry Summary Strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-mono tabular-nums">
+              <div className="px-3 py-2 rounded-xl bg-[#0B1320] border border-[#1E2E4A] flex items-center justify-between">
+                <span className="text-slate-400">Đã phục vụ</span>
+                <strong className="text-white">{hud.deliveredOk}</strong>
+              </div>
+              <div className="px-3 py-2 rounded-xl bg-[#0B1320] border border-[#1E2E4A] flex items-center justify-between">
+                <span className="text-slate-400">Cache Hit</span>
+                <strong className="text-cyan-300">{hud.cacheHits} ({hud.telemetry.cacheHitRatePct}%)</strong>
+              </div>
+              <div className="px-3 py-2 rounded-xl bg-[#0B1320] border border-[#1E2E4A] flex items-center justify-between">
+                <span className="text-slate-400">Đã chặn</span>
+                <strong className="text-emerald-300">{hud.blockedAttacks} ({hud.telemetry.threatBlockRatePct}%)</strong>
+              </div>
+              <div className="px-3 py-2 rounded-xl bg-[#0B1320] border border-[#1E2E4A] flex items-center justify-between">
+                <span className="text-slate-400">Lọt DB</span>
+                <strong className={hud.breachedAttacks > 0 ? 'text-rose-400' : 'text-emerald-300'}>{hud.breachedAttacks}</strong>
+              </div>
             </div>
 
             {/* Strengths & Why Not Optimal Critique */}

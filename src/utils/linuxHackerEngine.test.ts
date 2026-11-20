@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  computeDomainProgressSummary,
   computeMissionRank,
+  computeServerTelemetrySnapshot,
   computeTraceRatePerSec,
   createInitialMissionState,
   executeHackerCommand,
@@ -266,3 +268,46 @@ test('Powerups, man/history, smart hint, rank, and autocomplete work cleanly', (
   assert.equal(getAutocompleteSuggestion('grep E', state), 'grep ERR .auth_noise.log');
   assert.equal(getAutocompleteSuggestion('ls -', state), 'ls -la');
 });
+
+test('Live server telemetry snapshot & 8-domain codex mastery track remediation accurately', () => {
+  // Mission 5 (Disk full + rogue process 404)
+  let m5 = createInitialMissionState(4);
+  const m5Before = computeServerTelemetrySnapshot(m5);
+  assert.equal(m5Before.diskPct, 99);
+  assert.equal(m5Before.overallHealth, 'CRITICAL');
+  assert.equal(m5Before.nodes.find((n) => n.id === 'host_kernel')?.status, 'critical');
+  assert.equal(m5Before.nodes.find((n) => n.id === 'storage_vault')?.status, 'critical');
+
+  m5 = executeHackerCommand(m5, 'kill -9 404').nextState;
+  m5 = executeHackerCommand(m5, 'rm malware_bomb.tmp').nextState;
+  const m5After = computeServerTelemetrySnapshot(m5);
+  assert.equal(m5After.diskPct, 28);
+  assert.ok(m5After.cpuPct < m5Before.cpuPct);
+  assert.ok(m5After.securityScore > m5Before.securityScore);
+  assert.equal(m5After.overallHealth, 'HEALTHY');
+
+  // Mission 13 (UFW + chmod 600 + kill 805)
+  let m13 = createInitialMissionState(12);
+  assert.equal(computeServerTelemetrySnapshot(m13).nodes.find((n) => n.id === 'ingress_fw')?.status, 'critical');
+  m13 = executeHackerCommand(m13, 'ufw deny from 185.220.101.9').nextState;
+  m13 = executeHackerCommand(m13, 'chmod 600 id_rsa').nextState;
+  m13 = executeHackerCommand(m13, 'kill -9 805').nextState;
+  const m13After = computeServerTelemetrySnapshot(m13);
+  assert.equal(m13After.nodes.find((n) => n.id === 'ingress_fw')?.status, 'nominal');
+  assert.equal(m13After.securityScore, 100);
+
+  // Mission 15 (K8s CrashLoopBackOff -> Running)
+  let m15 = createInitialMissionState(14);
+  assert.equal(computeServerTelemetrySnapshot(m15).nodes.find((n) => n.id === 'service_runtime')?.status, 'critical');
+  m15 = executeHackerCommand(m15, 'kubectl scale --replicas=3').nextState;
+  m15 = executeHackerCommand(m15, 'kill -9 880').nextState;
+  assert.equal(computeServerTelemetrySnapshot(m15).nodes.find((n) => n.id === 'service_runtime')?.status, 'nominal');
+
+  // Domain mastery summary
+  const summary = computeDomainProgressSummary(['ls', 'grep', 'chmod', 'kill']);
+  assert.equal(summary.totalUnlocked, 4);
+  assert.equal(summary.totalCodex, 22);
+  assert.equal(summary.domains.length, 8);
+  assert.ok(summary.pct > 0 && summary.pct < 100);
+});
+

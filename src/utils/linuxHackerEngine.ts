@@ -2614,3 +2614,209 @@ export function getAutocompleteSuggestion(
   }
   return null;
 }
+
+export type ServerTopologyNodeStatus = 'nominal' | 'degraded' | 'critical';
+
+export interface ServerTopologyNode {
+  id: 'ingress_fw' | 'network_edge' | 'host_kernel' | 'service_runtime' | 'storage_vault';
+  label: string;
+  sublabel: string;
+  status: ServerTopologyNodeStatus;
+  metricText: string;
+  inspectCmd: string;
+}
+
+export interface ServerTelemetrySnapshot {
+  cpuPct: number;
+  ramPct: number;
+  diskPct: number;
+  securityScore: number;
+  overallHealth: 'HEALTHY' | 'DEGRADED' | 'CRITICAL';
+  nodes: ServerTopologyNode[];
+}
+
+export function computeServerTelemetrySnapshot(
+  state: MissionRuntimeState
+): ServerTelemetrySnapshot {
+  const def = LINUX_MISSIONS[state.missionIndex] ?? LINUX_MISSIONS[0];
+  const aliveThreats = state.processes.filter((p) => !p.killed && p.isThreat).length;
+  const unbypassedVulns = state.ports.filter((p) => !p.bypassed).length;
+  const openBridgesLeft = state.bridges.filter((b) => !b.connected).length;
+  const failingPods = state.k8sPods.filter((p) => p.status !== 'Running').length;
+  const unRestartedContainers = state.containers.filter((c) => !c.restarted).length;
+
+  const cpuPct = Math.min(
+    99,
+    Math.max(
+      14,
+      Math.round(
+        18 +
+          aliveThreats * 26 +
+          failingPods * 18 +
+          (def.requireNginxValidate && !state.nginxValidated ? 14 : 0) +
+          (def.requireServiceRestart && !state.restartedService ? 12 : 0) +
+          (state.tracePercent * 0.14)
+      )
+    )
+  );
+
+  const ramPct = Math.min(
+    98,
+    Math.max(
+      22,
+      Math.round(
+        26 +
+          aliveThreats * 18 +
+          unRestartedContainers * 19 +
+          failingPods * 16 +
+          (def.requirePm2Restart && !state.pm2Restarted ? 18 : 0)
+      )
+    )
+  );
+
+  const diskPct = state.diskUsagePct;
+
+  let penalties = 0;
+  if (aliveThreats > 0) penalties += aliveThreats * 14;
+  if (unbypassedVulns > 0) penalties += unbypassedVulns * 12;
+  if (openBridgesLeft > 0) penalties += openBridgesLeft * 10;
+  if (def.requireUfwHarden && !state.ufwHardened) penalties += 22;
+  if (def.requireChmod600 && !state.sshKeyHardened) penalties += 18;
+  if (def.requireSafeEnvVar && !state.safeEnvSet) penalties += 14;
+  if (def.requireJunkClean && !state.cleanedJunk) penalties += 14;
+  if (def.requireDockerInspectOrRestart && !state.dockerHandled) penalties += 16;
+  if (def.requireNginxValidate && !state.nginxValidated) penalties += 14;
+  if (def.requireK8sScale && !state.k8sScaled) penalties += 16;
+  if (def.requireTerraformApply && !state.terraformApplied) penalties += 16;
+  if (def.requireTokenVerify && !state.crackedToken) penalties += 15;
+
+  const securityScore = Math.max(8, Math.min(100, 100 - penalties));
+
+  const fwCritical = (def.requireUfwHarden && !state.ufwHardened) || Boolean(def.requireChmod600 && !state.sshKeyHardened);
+  const netCritical = unbypassedVulns > 0 || openBridgesLeft > 0;
+  const hostCritical = aliveThreats > 0 || Boolean(def.requireSafeEnvVar && !state.safeEnvSet);
+  const runtimeCritical =
+    failingPods > 0 ||
+    (def.requireDockerInspectOrRestart !== undefined && !state.dockerHandled) ||
+    (def.requireNginxValidate === true && !state.nginxValidated) ||
+    (def.requireServiceRestart !== undefined && !state.restartedService) ||
+    (def.requirePm2Restart === true && !state.pm2Restarted) ||
+    (def.requireTerraformApply === true && !state.terraformApplied);
+  const storageCritical =
+    diskPct >= 85 ||
+    (def.requireJunkClean === true && !state.cleanedJunk) ||
+    (def.requireExecFile !== undefined && !state.executedScript);
+
+  const serviceCmd = state.k8sPods.length > 0
+    ? 'kubectl get pods'
+    : state.containers.length > 0
+      ? 'docker ps'
+      : def.requireNginxValidate
+        ? 'nginx -t'
+        : def.requireTerraformApply
+          ? 'terraform apply'
+          : 'pm2 status';
+
+  const nodes: ServerTopologyNode[] = [
+    {
+      id: 'ingress_fw',
+      label: 'UFW & SSH',
+      sublabel: fwCritical ? 'Rủi ro biên' : 'Đã khóa chặt',
+      status: fwCritical ? 'critical' : state.ufwRules.length > 0 ? 'nominal' : 'degraded',
+      metricText: `${state.ufwRules.length} rule`,
+      inspectCmd: 'ufw status',
+    },
+    {
+      id: 'network_edge',
+      label: 'Ports & Socket',
+      sublabel: netCritical ? `${unbypassedVulns + openBridgesLeft} cổng hở` : 'Mạch thông suốt',
+      status: netCritical ? 'critical' : 'nominal',
+      metricText: `${state.ports.length} port`,
+      inspectCmd: 'ss -tulpn',
+    },
+    {
+      id: 'host_kernel',
+      label: 'Kernel & PIDs',
+      sublabel: aliveThreats > 0 ? `${aliveThreats} tiến trình lạ` : 'Tiến trình sạch',
+      status: aliveThreats > 0 ? 'critical' : hostCritical ? 'degraded' : 'nominal',
+      metricText: `CPU ${cpuPct}%`,
+      inspectCmd: 'ps aux',
+    },
+    {
+      id: 'service_runtime',
+      label: state.k8sPods.length > 0 ? 'K8s Cluster' : state.containers.length > 0 ? 'Docker Engine' : 'App Service',
+      sublabel: runtimeCritical ? 'Dịch vụ suy giảm' : 'Hoạt động ổn định',
+      status: runtimeCritical ? 'critical' : 'nominal',
+      metricText: `RAM ${ramPct}%`,
+      inspectCmd: serviceCmd,
+    },
+    {
+      id: 'storage_vault',
+      label: 'NVMe & Logs',
+      sublabel: diskPct >= 85 ? 'Ổ đĩa đầy!' : 'Lưu trữ an toàn',
+      status: diskPct >= 85 ? 'critical' : storageCritical ? 'degraded' : 'nominal',
+      metricText: `Disk ${diskPct}%`,
+      inspectCmd: diskPct >= 80 ? 'df -h' : 'ls -la',
+    },
+  ];
+
+  const criticalCount = nodes.filter((n) => n.status === 'critical').length;
+  const degradedCount = nodes.filter((n) => n.status === 'degraded').length;
+  const overallHealth: ServerTelemetrySnapshot['overallHealth'] =
+    criticalCount >= 2 || state.tracePercent >= 75
+      ? 'CRITICAL'
+      : criticalCount >= 1 || degradedCount >= 1
+        ? 'DEGRADED'
+        : 'HEALTHY';
+
+  return {
+    cpuPct,
+    ramPct,
+    diskPct,
+    securityScore,
+    overallHealth,
+    nodes,
+  };
+}
+
+export interface DomainMasteryItem {
+  domainId: KnowledgeDomainId;
+  title: string;
+  shortName: string;
+  color: string;
+  unlockedCount: number;
+  totalCount: number;
+  pct: number;
+}
+
+export function computeDomainProgressSummary(unlockedKeys: readonly string[]): {
+  totalUnlocked: number;
+  totalCodex: number;
+  pct: number;
+  domains: DomainMasteryItem[];
+} {
+  const unlockedSet = new Set(unlockedKeys);
+  const domains: DomainMasteryItem[] = KNOWLEDGE_DOMAINS.map((d) => {
+    const entries = UBUNTU_CODEX.filter((c) => c.domainId === d.id);
+    const unlockedCount = entries.filter((c) => unlockedSet.has(c.key)).length;
+    const totalCount = entries.length;
+    return {
+      domainId: d.id,
+      title: d.title,
+      shortName: d.shortName,
+      color: d.color,
+      unlockedCount,
+      totalCount,
+      pct: totalCount > 0 ? Math.round((unlockedCount / totalCount) * 100) : 0,
+    };
+  });
+  const totalCodex = UBUNTU_CODEX.length;
+  const totalUnlocked = domains.reduce((acc, d) => acc + d.unlockedCount, 0);
+  return {
+    totalUnlocked,
+    totalCodex,
+    pct: totalCodex > 0 ? Math.round((totalUnlocked / totalCodex) * 100) : 0,
+    domains,
+  };
+}
+

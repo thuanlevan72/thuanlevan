@@ -30,9 +30,9 @@ export const EXTRA_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Hệ thống bán vé không thể để user đập thẳng vào DB khóa ghế! Phải có Rate Limiter chặn bot phe vé, Redis giữ đếm ghế nóng, và Kafka Queue xếp hàng chốt vé công bằng.',
     tacticalTip:
       'Đặt Rate Limiter [2] + Redis [5] giữ trạng thái ghế, rồi nối qua Kafka [7] chống nghẽn POST!',
-    targetSlaMs: 60,
-    startingBudget: 490,
-    dbCoolingPerSec: 11.5,
+    targetSlaMs: 62,
+    startingBudget: 640,
+    dbCoolingPerSec: 19.5,
     ...stdStart,
     approaches: [
       {
@@ -129,9 +129,9 @@ export const EXTRA_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Độ trễ thấp dưới 52ms đòi hỏi ít bước nhảy tuần tự hoặc nâng cấp node lõi lên Lv2: Redis giữ bảng giá In-Memory, Kafka làm nhật ký lệnh (Order Log), WAF + Limiter giữ an toàn.',
     tacticalTip:
       'SLA siêu gắt ≤ 52ms! Ưu tiên WAF [1] + Rate Limiter [2] + Redis Lv2 [5] và nhánh ngắn nhất có thể.',
-    targetSlaMs: 52,
-    startingBudget: 720,
-    dbCoolingPerSec: 12.0,
+    targetSlaMs: 56,
+    startingBudget: 940,
+    dbCoolingPerSec: 19.8,
     ...stdStart,
     approaches: [
       {
@@ -229,9 +229,9 @@ export const EXTRA_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Livestream triệu người xem sống còn nhờ Edge CDN + Object Storage S3 giữ 96% luồng Media tại biên; chat/bình luận đi qua Kafka + Worker để không làm giật luồng phát.',
     tacticalTip:
       'CDN Lv2 [3] + S3 [0] là bắt buộc cho 55% MEDIA! Kết hợp Limiter [2] + Kafka [7] cho chat trực tiếp.',
-    targetSlaMs: 62,
-    startingBudget: 620,
-    dbCoolingPerSec: 12.0,
+    targetSlaMs: 64,
+    startingBudget: 800,
+    dbCoolingPerSec: 18.2,
     ...stdStart,
     approaches: [
       {
@@ -326,9 +326,9 @@ export const EXTRA_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Anti-Fraud cần WAF + Rate Limiter chặn tấn công ở biên, Redis giữ tập Blacklist/Rule nóng, và Kafka Lv2 + Worker Lv2 chạy mô hình chấm điểm bất đồng bộ.',
     tacticalTip:
       'Không được thiếu WAF [1] + Rate Limiter [2]! Kết hợp Redis [5] + Kafka [7] + Worker [8] để giữ DB an toàn.',
-    targetSlaMs: 65,
-    startingBudget: 700,
-    dbCoolingPerSec: 12.2,
+    targetSlaMs: 66,
+    startingBudget: 920,
+    dbCoolingPerSec: 18.4,
     ...stdStart,
     approaches: [
       {
@@ -432,9 +432,9 @@ export const EXTRA_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'LLM Gateway hiệu quả dùng WAF lọc Prompt/SQL injection, Rate Limiter giới hạn Token Quota, Redis làm Semantic Cache, và Kafka + Worker chạy embedding tài liệu nền.',
     tacticalTip:
       'Ghép WAF [1] + Limiter [2] + Redis [5] (Semantic Cache) + Kafka [7] cho luồng nạp tài liệu RAG!',
-    targetSlaMs: 65,
-    startingBudget: 700,
-    dbCoolingPerSec: 12.5,
+    targetSlaMs: 66,
+    startingBudget: 940,
+    dbCoolingPerSec: 18.6,
     ...stdStart,
     approaches: [
       {
@@ -532,9 +532,9 @@ export const EXTRA_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Kiến trúc Multi-Tenant SaaS sống còn nhờ Rate Limiter phân hạn mức theo Tenant, Read Replica tách luồng báo cáo nặng, và Kafka + Worker cô lập tác vụ hạch toán.',
     tacticalTip:
       'Bắt buộc có Rate Limiter Lv2 [2] chống Noisy Neighbor + WAF [1], phối hợp Read Replica [9] hoặc Kafka [7]!',
-    targetSlaMs: 65,
-    startingBudget: 740,
-    dbCoolingPerSec: 12.2,
+    targetSlaMs: 66,
+    startingBudget: 960,
+    dbCoolingPerSec: 20.0,
     ...stdStart,
     approaches: [
       {
@@ -637,9 +637,9 @@ export const EXTRA_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Kiến trúc Cloud Drive tách Block Storage S3 + CDN cho dữ liệu nhị phân khỏi Metadata DB, dùng Kafka + Worker kiểm tra hash đồng bộ và Redis giữ trạng thái phiên sync.',
     tacticalTip:
       'Bắt buộc tách MEDIA bằng CDN [3] + Object Storage S3 [0]! Thêm Kafka [7] cho xung sync metadata.',
-    targetSlaMs: 64,
-    startingBudget: 760,
-    dbCoolingPerSec: 12.5,
+    targetSlaMs: 66,
+    startingBudget: 980,
+    dbCoolingPerSec: 18.8,
     ...stdStart,
     approaches: [
       {
@@ -739,9 +739,9 @@ export const EXTRA_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Đỉnh cao Thiết Kế Hệ Thống không phải cố gắng sửa từng lỗi lẻ, mà là xây lưới Defense-in-Depth + Caching + Async + Storage không điểm nghẽn đơn (Zero-SPOF) chịu đựng thảm họa toàn cầu.',
     tacticalTip:
       'Toàn bộ 4 lớp Edge Shield + Cache/CDN + Async Queue/Worker + Storage/Replica ở Lv2 để vượt qua cơn bão cuối!',
-    targetSlaMs: 58,
-    startingBudget: 1100,
-    dbCoolingPerSec: 13.0,
+    targetSlaMs: 62,
+    startingBudget: 1440,
+    dbCoolingPerSec: 20.0,
     ...stdStart,
     approaches: [
       {

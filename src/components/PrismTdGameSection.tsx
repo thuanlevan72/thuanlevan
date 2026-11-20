@@ -799,7 +799,7 @@ function drawEnemySprite(
   ctx.save();
   const isKo = en.koTimer > 0;
   const koAlpha = isKo ? Math.max(0, en.koTimer / 0.28) : 1;
-  const koScale = isKo ? 1 + (1 - koAlpha) * 0.55 : 1;
+  const koScale = 1;
   const stealthFade =
     en.kind === 'stealth' && en.slowTimer <= 0 && en.burnTimer <= 0
       ? 0.48 + Math.sin(animTime * 9 + en.id) * 0.22
@@ -1395,6 +1395,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     particles: PooledParticle[];
     particleCursor: number;
     animTime: number;
+    visualTime: number;
     outcome: 'victory' | 'defeat' | null;
   }>({
     map: activeMap,
@@ -1451,6 +1452,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     })),
     particleCursor: 0,
     animTime: 0,
+    visualTime: 0,
     outcome: null,
   });
 
@@ -1579,6 +1581,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
       s.overdriveTimer = 0;
       s.speedMult = 1;
       s.shakeTrauma = 0;
+      s.visualTime = 0;
       s.hoverTile = null;
       s.selectedGunId = null;
       s.selectedGunVersion = 0;
@@ -2191,6 +2194,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
       if (gameState === 'playing') {
         const simDt = dt * s.speedMult;
         s.animTime += simDt;
+        s.visualTime += dt;
 
         if (s.overdriveTimer > 0) {
           s.overdriveTimer = Math.max(0, s.overdriveTimer - simDt);
@@ -2200,8 +2204,10 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           }
         }
 
-        if (s.shakeTrauma > 0) {
-          s.shakeTrauma = Math.max(0, s.shakeTrauma - dt * 1.6);
+        if (s.speedMult >= 2) {
+          s.shakeTrauma = 0;
+        } else if (s.shakeTrauma > 0) {
+          s.shakeTrauma = Math.max(0, s.shakeTrauma - dt * 2.2);
         }
 
         // 0. Auto-Wave Countdown (honoring Game Mode speed & Endless mode)
@@ -2609,7 +2615,6 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             const beamCount = profile.projectilesPerShot;
             const railColor = profile.visualTier === 4 ? '#FDE047' : profile.visualTier >= 3 ? '#F43F5E' : '#A78BFA';
             const beamLength = Math.max(profile.rangePx + 140, 560);
-            s.shakeTrauma = Math.min(1, s.shakeTrauma + 0.3 + profile.visualTier * 0.08);
 
             for (let b = 0; b < beamCount; b++) {
               const offsetAngle = beamCount === 1 ? 0 : (b - (beamCount - 1) / 2) * 0.065;
@@ -3155,7 +3160,6 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           if (hitEnemy) {
             const sourceGun = s.guns.find((g) => g.id === pr.sourceGunId);
             if (pr.kind === 'mortar') {
-              s.shakeTrauma = Math.min(1, s.shakeTrauma + 0.25 + pr.visualTier * 0.05);
               s.impactFlashes.push({
                 x: pr.x,
                 y: pr.y,
@@ -3337,7 +3341,6 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 pr.vy = Math.sin(curAngle) * pr.speed;
               }
             } else if (pr.kind === 'cannon') {
-              s.shakeTrauma = Math.min(1, s.shakeTrauma + 0.16);
               s.impactFlashes.push({
                 x: pr.x,
                 y: pr.y,
@@ -3751,8 +3754,8 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           p.vy *= 0.92;
         }
         s.shockwaves = s.shockwaves.filter((sw) => {
-          sw.radius += (sw.maxRadius - sw.radius) * Math.min(1, dt * 11) + (sw.maxRadius > sw.radius ? 55 : -55) * dt;
-          sw.alpha -= dt * 4.5;
+          sw.radius += (sw.maxRadius - sw.radius) * Math.min(1, fxDt * 11) + (sw.maxRadius > sw.radius ? 55 : -55) * fxDt;
+          sw.alpha -= fxDt * 4.5;
           return sw.alpha > 0.02;
         });
         s.lightningArcs = s.lightningArcs.filter((arc) => {
@@ -3790,8 +3793,8 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           return hr.alpha > 0.04;
         });
         s.floatingTexts = s.floatingTexts.filter((ft) => {
-          ft.y += ft.vy * dt;
-          ft.alpha -= dt * 1.45;
+          ft.y += ft.vy * fxDt;
+          ft.alpha -= fxDt * 1.45;
           return ft.alpha > 0.04;
         });
 
@@ -3856,10 +3859,12 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           }
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-          const shakeAmt = s.shakeTrauma * s.shakeTrauma * 10;
-          const sx = shakeAmt > 0.2 ? (Math.random() * 2 - 1) * shakeAmt : 0;
-          const sy = shakeAmt > 0.2 ? (Math.random() * 2 - 1) * shakeAmt : 0;
-          ctx.translate(sx, sy);
+          if (s.speedMult === 1 && s.shakeTrauma > 0.02) {
+            const shakeAmt = s.shakeTrauma * s.shakeTrauma * 4;
+            const sx = shakeAmt > 0.2 ? (Math.random() * 2 - 1) * shakeAmt : 0;
+            const sy = shakeAmt > 0.2 ? (Math.random() * 2 - 1) * shakeAmt : 0;
+            ctx.translate(sx, sy);
+          }
 
           const palette = BIOME_PALETTES[s.map.biome];
 
@@ -3910,7 +3915,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           ctx.strokeStyle = palette.trackGlow;
           ctx.lineWidth = 4;
           ctx.setLineDash([10, 8]);
-          ctx.lineDashOffset = -s.animTime * 34;
+          ctx.lineDashOffset = -s.visualTime * 34;
           ctx.beginPath();
           s.map.path.forEach((wp, i) => {
             const pt = gridToWorldCenter(wp.col, wp.row);
@@ -3929,7 +3934,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
 
           ctx.save();
           ctx.translate(spawnPt.x, spawnPt.y);
-          ctx.rotate(s.animTime * 2);
+          ctx.rotate(s.visualTime * 2);
           ctx.strokeStyle = '#FB7185';
           ctx.fillStyle = 'rgba(244, 63, 94, 0.24)';
           ctx.lineWidth = 2.5;
@@ -3945,10 +3950,10 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           ctx.textBaseline = 'middle';
           ctx.fillText('CỔNG', spawnPt.x, spawnPt.y);
 
-          const corePulse = 1 + Math.sin(s.animTime * 4) * 0.08;
+          const corePulse = s.speedMult > 1 ? 1 : 1 + Math.sin(s.visualTime * 4) * 0.05;
           ctx.save();
           ctx.translate(corePt.x, corePt.y);
-          ctx.rotate(-s.animTime * 1.4);
+          ctx.rotate(-s.visualTime * 1.4);
           ctx.strokeStyle = '#10B981';
           ctx.fillStyle = 'rgba(16, 185, 129, 0.24)';
           ctx.lineWidth = 2.5;
@@ -4871,7 +4876,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                   syncHudFromSim();
                 }}
                 aria-label="Đổi tốc độ mô phỏng (1x, 2x, 3x)"
-                className={`h-8 sm:h-9 px-2.5 rounded-lg border text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer ${
+                className={`h-8 sm:h-9 px-2.5 rounded-lg border text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer touch-manipulation select-none ${
                   hud.speedMult === 3
                     ? 'bg-amber-400 text-[#070B14] border-amber-300'
                     : hud.speedMult === 2

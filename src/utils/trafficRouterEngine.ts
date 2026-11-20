@@ -248,36 +248,36 @@ export const PACKET_META: Record<
     label: 'Request Đọc (GET)',
     short: 'GET',
     color: '#38BDF8',
-    dbCpuLoad: 5.0,
+    dbCpuLoad: 2.6,
     integrityPenalty: 0,
   },
   write: {
     label: 'Request Ghi Nặng (POST)',
     short: 'POST',
     color: '#F59E0B',
-    dbCpuLoad: 11.6,
+    dbCpuLoad: 5.4,
     integrityPenalty: 0,
   },
   media: {
     label: 'Tài nguyên Media/File',
     short: 'MEDIA',
     color: '#F472B6',
-    dbCpuLoad: 9.8,
+    dbCpuLoad: 4.8,
     integrityPenalty: 0,
   },
   ddos: {
     label: 'Bot DDoS Flood',
     short: 'DDoS',
     color: '#FB7185',
-    dbCpuLoad: 18.0,
-    integrityPenalty: 7,
+    dbCpuLoad: 9.5,
+    integrityPenalty: 2,
   },
   sqli: {
     label: 'SQL Injection',
     short: 'SQLi',
     color: '#C084FC',
-    dbCpuLoad: 26.5,
-    integrityPenalty: 20,
+    dbCpuLoad: 21.0,
+    integrityPenalty: 8,
   },
 };
 
@@ -412,9 +412,9 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Một bài toán Read-heavy có thể giải bằng 3 hướng: (1) Đặt Redis Cache-Aside trong RAM, (2) Đặt Read Replica tách đọc khỏi DB chính, hoặc (3) Kết hợp CDN biên + App song song.',
     tacticalTip:
       'Thử lắp Redis [5], Read Replica [9] hoặc CDN [3]. Nhấn "Các Cách Thiết Kế" để xem 3 giải pháp chuẩn.',
-    targetSlaMs: 52,
-    startingBudget: 280,
-    dbCoolingPerSec: 9.8,
+    targetSlaMs: 56,
+    startingBudget: 400,
+    dbCoolingPerSec: 14.5,
     ...stdStart,
     approaches: [
       {
@@ -497,9 +497,9 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Nguyên tắc vàng: KHÔNG BAO GIỜ lưu file Media nặng trong DB quan hệ! Hãy tách file ra Object Storage (S3/MinIO) hoặc chặn phân phối tại Edge CDN.',
     tacticalTip:
       'Đặt CDN [3] ở cột biên hoặc Object Storage S3 [0] ở cột lưu trữ để tách 90%+ file Media khỏi Database!',
-    targetSlaMs: 60,
-    startingBudget: 280,
-    dbCoolingPerSec: 10.0,
+    targetSlaMs: 62,
+    startingBudget: 400,
+    dbCoolingPerSec: 14.8,
     ...stdStart,
     approaches: [
       {
@@ -580,9 +580,9 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Chống bão Bot có nhiều cách: Dùng Rate Limiter cắt IP spam 92–99%, kết hợp Redis giữ tồn kho siêu tốc, hoặc Edge CDN + Queue làm vùng đệm trước Database.',
     tacticalTip:
       'Gắn Rate Limiter [2] ngay đầu vào để chặn Bot DDoS, thêm Redis [5], LB [4] hoặc Queue [7] cho người mua thật!',
-    targetSlaMs: 60,
-    startingBudget: 320,
-    dbCoolingPerSec: 10.4,
+    targetSlaMs: 62,
+    startingBudget: 440,
+    dbCoolingPerSec: 15.2,
     ...stdStart,
     approaches: [
       {
@@ -670,9 +670,9 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Bảo mật tầng Auth có 3 hướng phối hợp: (1) WAF + Rate Limiter khóa cứng vòng ngoài, (2) WAF + Redis Session tránh chạm DB khi kiểm tra token, hoặc (3) Phòng thủ toàn diện WAF + Limiter + Redis.',
     tacticalTip:
       'Bắt buộc phải có WAF [1] để chặn 100% SQLi! Kết hợp Rate Limiter [2] và Redis [5] để vừa sạch bot vừa đạt tốc độ tối đa.',
-    targetSlaMs: 60,
-    startingBudget: 340,
-    dbCoolingPerSec: 10.6,
+    targetSlaMs: 62,
+    startingBudget: 460,
+    dbCoolingPerSec: 15.5,
     ...stdStart,
     approaches: [
       {
@@ -764,8 +764,8 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
     tacticalTip:
       'Lắp Kafka/MQ [7] + Worker [8] để làm phẳng xung POST! Có thể nâng cấp Queue để giảm tới 70% tải DB.',
     targetSlaMs: 68,
-    startingBudget: 360,
-    dbCoolingPerSec: 10.6,
+    startingBudget: 480,
+    dbCoolingPerSec: 15.5,
     ...stdStart,
     approaches: [
       {
@@ -855,9 +855,9 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Kết hợp WAF ở ngoài cùng, sau đó tùy chọn: (1) Đẩy đơn qua Kafka + Worker, (2) Redis + Kafka CQRS, hoặc (3) Load Balancer chia nhánh Read Replica + Kafka.',
     tacticalTip:
       'Đừng quên WAF [1] chặn SQLi! Sau đó phối hợp Kafka [7] cùng Redis [5] hoặc Read Replica [9].',
-    targetSlaMs: 64,
-    startingBudget: 400,
-    dbCoolingPerSec: 11.0,
+    targetSlaMs: 66,
+    startingBudget: 540,
+    dbCoolingPerSec: 17.5,
     ...stdStart,
     approaches: [
       {
@@ -952,8 +952,8 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
     tacticalTip:
       'Kết hợp CDN [3] / S3 [0] cho Media, thêm Kafka [7] + Worker [8] cho luồng xử lý POST nặng!',
     targetSlaMs: 68,
-    startingBudget: 440,
-    dbCoolingPerSec: 11.2,
+    startingBudget: 560,
+    dbCoolingPerSec: 16.4,
     ...stdStart,
     approaches: [
       {
@@ -1048,8 +1048,8 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
     tacticalTip:
       'Xếp lớp: WAF [1] + Rate Limiter [2] ở đầu vào, nối vào Kafka [7] & Worker [8] trước khi chạm DB!',
     targetSlaMs: 68,
-    startingBudget: 440,
-    dbCoolingPerSec: 11.4,
+    startingBudget: 560,
+    dbCoolingPerSec: 16.6,
     ...stdStart,
     approaches: [
       {
@@ -1144,9 +1144,9 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Bảng tin MXH dùng mô hình Fan-out-on-Write: bài mới đẩy qua Kafka/Worker vào Redis Timeline, còn ảnh đi qua CDN/S3.',
     tacticalTip:
       'Kết hợp CDN [3] + Redis [5] cho Feed & Ảnh, hoặc Kafka [7] cho bài đăng mới + Read Replica [9]!',
-    targetSlaMs: 58,
-    startingBudget: 480,
-    dbCoolingPerSec: 11.4,
+    targetSlaMs: 62,
+    startingBudget: 600,
+    dbCoolingPerSec: 16.6,
     ...stdStart,
     approaches: [
       {
@@ -1240,9 +1240,9 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Fintech ưu tiên Security & Consistency: WAF + Rate Limiter là bắt buộc, sau đó tách tra cứu số dư (Read Replica / Redis) khỏi luồng ghi sổ cái hoặc dùng Queue kiểm soát đồng thời.',
     tacticalTip:
       'Bắt buộc phải có WAF [1] + Rate Limiter [2]! Kết hợp Read Replica [9], Redis [5] hoặc Queue [7] để bảo vệ DB lõi.',
-    targetSlaMs: 58,
-    startingBudget: 540,
-    dbCoolingPerSec: 11.6,
+    targetSlaMs: 62,
+    startingBudget: 660,
+    dbCoolingPerSec: 18.5,
     ...stdStart,
     approaches: [
       {
@@ -1336,9 +1336,9 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Kiến trúc Y tế (HIS) chuẩn kết hợp Kafka đồng bộ đa phân hệ (Xét nghiệm, Viện phí, Dược), Object Storage S3 lưu ảnh DICOM/X-Quang và WAF bảo vệ dữ liệu bệnh nhân.',
     tacticalTip:
       'Phối hợp WAF [1] + Kafka [7] cho sự kiện HIS + Object Storage S3 [0] cho ảnh X-Quang!',
-    targetSlaMs: 64,
-    startingBudget: 560,
-    dbCoolingPerSec: 11.8,
+    targetSlaMs: 66,
+    startingBudget: 680,
+    dbCoolingPerSec: 17.2,
     ...stdStart,
     approaches: [
       {
@@ -1435,9 +1435,9 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Dữ liệu GPS không cần ghi từng nhịp vào DB chính! Hãy hấp thụ nhịp GPS qua Kafka Queue + Worker hoặc lưu vị trí nóng trong Redis Geo.',
     tacticalTip:
       'Dùng Rate Limiter [2] chống bot, kết hợp Redis [5] + Kafka [7] để giảm 70% áp lực ghi GPS lên DB!',
-    targetSlaMs: 55,
-    startingBudget: 540,
-    dbCoolingPerSec: 12.0,
+    targetSlaMs: 60,
+    startingBudget: 660,
+    dbCoolingPerSec: 17.5,
     ...stdStart,
     approaches: [
       {
@@ -1536,8 +1536,8 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
     tacticalTip:
       'Nâng cấp Kafka [7] và Worker [8] lên Lv2! Đặt WAF [1] + Rate Limiter [2] ngay đầu vào.',
     targetSlaMs: 68,
-    startingBudget: 660,
-    dbCoolingPerSec: 12.2,
+    startingBudget: 800,
+    dbCoolingPerSec: 18.0,
     ...stdStart,
     approaches: [
       {
@@ -1637,8 +1637,8 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
     tacticalTip:
       'Kết hợp CDN [3] + Redis [5] + Kafka [7] + S3 [0] (hoặc Rate Limiter [2]) để không nghẽn API!',
     targetSlaMs: 68,
-    startingBudget: 680,
-    dbCoolingPerSec: 12.4,
+    startingBudget: 820,
+    dbCoolingPerSec: 18.2,
     ...stdStart,
     approaches: [
       {
@@ -1732,9 +1732,9 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Hệ thống toàn diện đòi hỏi Phòng thủ đa tầng (WAF + Rate Limiter Lv2), Bộ nhớ đệm (CDN/Redis), và Hàng đợi bất đồng bộ (Kafka).',
     tacticalTip:
       'Nâng cấp các node nòng cốt lên Lv2! Đảm bảo có WAF [1] + Rate Limiter [2] + Redis/CDN + Kafka [7].',
-    targetSlaMs: 60,
-    startingBudget: 860,
-    dbCoolingPerSec: 12.6,
+    targetSlaMs: 64,
+    startingBudget: 1020,
+    dbCoolingPerSec: 18.8,
     ...stdStart,
     approaches: [
       {
@@ -1834,9 +1834,9 @@ const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Không có một công cụ vạn năng nào — hệ thống cấp quốc gia là nghệ thuật phối hợp hài hòa: Edge Shield (WAF + Limiter + CDN) → Cache & Balance (Redis + LB) → Async Compute (Kafka + Worker) → Storage & Replica!',
     tacticalTip:
       'Huy động toàn bộ ngân sách để thiết kế hạ tầng Lv2 đa tầng hoàn chỉnh trước khi bấm Sẵn Sàng!',
-    targetSlaMs: 60,
-    startingBudget: 1080,
-    dbCoolingPerSec: 13.0,
+    targetSlaMs: 64,
+    startingBudget: 1380,
+    dbCoolingPerSec: 19.6,
     ...stdStart,
     approaches: [
       {
@@ -1947,10 +1947,11 @@ export function getNodeCatalogEntry(type: PlaceableNodeType): InfraNodeCatalogEn
   return INFRA_NODE_CATALOG.find((e) => e.type === type)!;
 }
 
-export function getSellRefund(node: InfraNode): number {
+export function getSellRefund(node: InfraNode, fullRefund = false): number {
   if (node.fixed || node.type === 'ingress' || node.type === 'database') return 0;
   const entry = getNodeCatalogEntry(node.type);
   const invested = entry.cost + (node.level === 2 ? entry.upgradeCost : 0);
+  if (fullRefund) return invested;
   return Math.round(invested * 0.7);
 }
 
@@ -2471,7 +2472,7 @@ export function evaluateSolutionOptimization(
       severity: 'warning',
       title: `Lãng phí ${deadNodes.length} node chưa nối dây vào luồng`,
       reason: `Bạn đã chi ngân sách đặt ${deadNodes.length} thành phần nhưng không có gói tin nào đi qua chúng.`,
-      suggestion: 'Nối dây qua các node này hoặc dùng nút "Tháo" để thu hồi 70% chi phí.',
+      suggestion: 'Nối dây qua các node này hoặc dùng nút "Tháo" để thu hồi 100% chi phí khi thiết kế.',
     });
   }
 
@@ -2501,7 +2502,7 @@ export function evaluateSolutionOptimization(
       reason: 'Hoàn cảnh hoặc chế độ chơi này có mã độc SQLi xâm nhập. Thiếu WAF khiến dữ liệu bị tổn hại và DB tốn CPU xử lý truy vấn độc.',
       suggestion: 'Đặt WAF Firewall [1] ngay tầng Edge sau Users để chặn 100% gói SQLi.',
     });
-  } else if (breachedAttacks > (strictSecurity ? 0 : 1)) {
+  } else if (breachedAttacks > (strictSecurity ? 0 : 3)) {
     whyNotOptimal.push({
       category: 'security',
       severity: strictSecurity ? 'critical' : 'warning',
@@ -2557,21 +2558,21 @@ export function evaluateSolutionOptimization(
     });
   }
 
-  // 5. Runtime performance & DB CPU checks
+  // 5. Runtime performance & DB CPU checks (more forgiving thresholds for learning)
   if (avgLatencyMs > level.targetSlaMs) {
     whyNotOptimal.push({
       category: 'performance',
-      severity: avgLatencyMs > level.targetSlaMs * 1.25 ? 'critical' : 'warning',
+      severity: avgLatencyMs > level.targetSlaMs * 1.3 ? 'critical' : 'warning',
       title: `Độ trễ ${avgLatencyMs}ms vượt ngưỡng SLA (${level.targetSlaMs}ms)`,
       reason: 'Đường đi qua quá nhiều bước tuần tự chậm hoặc node đơn tuyến bị nóng (heat cao) không kịp chia tải.',
       suggestion: 'Dùng Redis/CDN để trả kết quả sớm ở biên, thêm Load Balancer chia nhánh hoặc nâng cấp node lên Lv2.',
     });
   }
 
-  if (peakDbCpu >= 76) {
+  if (peakDbCpu >= 82) {
     whyNotOptimal.push({
       category: 'reliability',
-      severity: peakDbCpu >= 85 ? 'critical' : 'warning',
+      severity: peakDbCpu >= 90 ? 'critical' : 'warning',
       title: `Đỉnh CPU Database quá cao (${Math.round(peakDbCpu)}%)`,
       reason: 'Hệ thống tuy chưa sập nhưng sát ngưỡng nghẽn 100%, rất dễ trả lỗi 502 Bad Gateway khi xung tải kéo dài.',
       suggestion: 'Giảm tải DB bằng bộ ba: Redis/Replica (cho GET) + Kafka (cho POST) + CDN/S3 (cho MEDIA).',
@@ -2585,7 +2586,7 @@ export function evaluateSolutionOptimization(
   if (avgLatencyMs <= level.targetSlaMs && analysis.hasValidPath) {
     strengths.push(`Đạt SLA độ trễ (${avgLatencyMs}ms ≤ ${level.targetSlaMs}ms).`);
   }
-  if (peakDbCpu < 72 && analysis.hasValidPath) {
+  if (peakDbCpu < 78 && analysis.hasValidPath) {
     strengths.push(`Database luôn mát và an toàn (Đỉnh CPU chỉ ${Math.round(peakDbCpu)}%).`);
   }
   if (breachedAttacks === 0 && (avgSqli > 0 || avgDdos > 0)) {
@@ -2595,10 +2596,10 @@ export function evaluateSolutionOptimization(
     strengths.push('Không có thành phần dư thừa lãng phí ngân sách.');
   }
 
-  // Compute 4 pillars (tighter grading!)
+  // Compute 4 pillars (fair & encouraging for learning)
   const latDelta = Math.max(0, avgLatencyMs - level.targetSlaMs);
   const performance = analysis.hasValidPath
-    ? Math.max(20, Math.min(100, Math.round(100 - latDelta * 1.75 - (avgRead >= 0.38 && !activeTypes.has('redis') && !activeTypes.has('read_replica') ? 16 : 0))))
+    ? Math.max(20, Math.min(100, Math.round(100 - latDelta * 1.15 - (avgRead >= 0.38 && !activeTypes.has('redis') && !activeTypes.has('read_replica') && !activeTypes.has('cdn') ? 14 : 0))))
     : 10;
 
   const reliability = analysis.hasValidPath
@@ -2608,16 +2609,16 @@ export function evaluateSolutionOptimization(
           100,
           Math.round(
             100 -
-              Math.max(0, peakDbCpu - 54) * 1.45 -
-              breachedAttacks * (strictSecurity ? 9 : 6) -
-              (avgSqli >= 0.06 && !activeTypes.has('waf') ? 28 : 0)
+              Math.max(0, peakDbCpu - 62) * 1.15 -
+              breachedAttacks * (strictSecurity ? 8 : 4) -
+              (avgSqli >= 0.06 && !activeTypes.has('waf') ? 26 : 0)
           )
         )
       )
     : 10;
 
   const costEfficiency = analysis.hasValidPath
-    ? Math.max(25, Math.min(100, Math.round(100 - deadNodes.length * 20)))
+    ? Math.max(25, Math.min(100, Math.round(100 - deadNodes.length * 16)))
     : 20;
 
   const architectureFit = analysis.score;
@@ -2629,7 +2630,7 @@ export function evaluateSolutionOptimization(
     analysis.hasValidPath &&
     whyNotOptimal.length === 0 &&
     (analysis.matchedApproaches.length === 0 ||
-      performance * 0.28 + reliability * 0.3 + costEfficiency * 0.14 + architectureFit * 0.28 < 90)
+      performance * 0.28 + reliability * 0.3 + costEfficiency * 0.14 + architectureFit * 0.28 < 86)
   ) {
     if (analysis.matchedApproaches.length === 0) {
       whyNotOptimal.push({
@@ -2639,13 +2640,13 @@ export function evaluateSolutionOptimization(
         reason: `Kiến trúc hiện tại xử lý được tải nhưng chưa hội tụ đủ các thành phần cốt lõi của một trong ${level.approaches.length} phương án chuẩn cho "${level.domain}".`,
         suggestion: `Mở mục "Các Cách Thiết Kế" để tham khảo ${level.approaches.map((a) => a.name).join(' hoặc ')}.`,
       });
-    } else if (peakDbCpu >= 66) {
+    } else if (peakDbCpu >= 76) {
       whyNotOptimal.push({
         category: 'reliability',
         severity: 'warning',
         title: `Biên an toàn CPU Database còn mỏng (Đỉnh ${Math.round(peakDbCpu)}%)`,
         reason: 'Mặc dù chưa chạm ngưỡng báo động đỏ, Database vẫn phải gánh nhiều truy vấn có thể giảm tải thêm.',
-        suggestion: 'Nâng cấp các node đệm/hàng đợi (Redis, CDN, Kafka) lên Lv2 để đưa đỉnh CPU về dưới 62%.',
+        suggestion: 'Nâng cấp các node đệm/hàng đợi (Redis, CDN, Kafka) lên Lv2 để đưa đỉnh CPU về dưới 72%.',
       });
     } else {
       whyNotOptimal.push({
@@ -2663,14 +2664,14 @@ export function evaluateSolutionOptimization(
   );
 
   const isOptimal =
-    analysis.hasValidPath && !hasCritical && whyNotOptimal.length === 0 && totalScore >= 90;
+    analysis.hasValidPath && !hasCritical && whyNotOptimal.length === 0 && totalScore >= 86;
 
   const grade: 'S' | 'A' | 'B' | 'C' =
-    totalScore >= 92 && !hasCritical && whyNotOptimal.length === 0
+    totalScore >= 88 && !hasCritical && whyNotOptimal.length === 0
       ? 'S'
-      : totalScore >= 82 && !hasCritical
+      : totalScore >= 76 && !hasCritical
         ? 'A'
-        : totalScore >= 65
+        : totalScore >= 58
           ? 'B'
           : 'C';
 
@@ -2702,4 +2703,296 @@ export function evaluateSolutionOptimization(
     matchedApproachNames: analysis.matchedApproaches.map((a) => a.name),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Visual Geometry, Capability Comparison & Live Telemetry Diagnosis Helpers
+// ---------------------------------------------------------------------------
+export interface BezierPointSample {
+  x: number;
+  y: number;
+  angle: number;
+}
+
+export function getEdgeControlPoints(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number
+): { cp1x: number; cp1y: number; cp2x: number; cp2y: number } {
+  const dx = bx - ax;
+  if (Math.abs(dx) < 18) {
+    // Same-column vertical edge: bow smoothly to the right to stay readable
+    const bow = Math.max(42, Math.abs(by - ay) * 0.28);
+    return {
+      cp1x: ax + bow,
+      cp1y: ay + (by - ay) * 0.25,
+      cp2x: bx + bow,
+      cp2y: by - (by - ay) * 0.25,
+    };
+  }
+  const dir = dx >= 0 ? 1 : -1;
+  const offset = Math.max(38, Math.abs(dx) * 0.48) * dir;
+  return {
+    cp1x: ax + offset,
+    cp1y: ay,
+    cp2x: bx - offset,
+    cp2y: by,
+  };
+}
+
+export function computeBezierPointAndTangent(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  tRaw: number
+): BezierPointSample {
+  const t = Math.max(0, Math.min(1, tRaw));
+  const u = 1 - t;
+  const { cp1x, cp1y, cp2x, cp2y } = getEdgeControlPoints(ax, ay, bx, by);
+
+  const x =
+    u * u * u * ax +
+    3 * u * u * t * cp1x +
+    3 * u * t * t * cp2x +
+    t * t * t * bx;
+  const y =
+    u * u * u * ay +
+    3 * u * u * t * cp1y +
+    3 * u * t * t * cp2y +
+    t * t * t * by;
+
+  const dxdt =
+    3 * u * u * (cp1x - ax) +
+    6 * u * t * (cp2x - cp1x) +
+    3 * t * t * (bx - cp2x);
+  const dydt =
+    3 * u * u * (cp1y - ay) +
+    6 * u * t * (cp2y - cp1y) +
+    3 * t * t * (by - cp2y);
+
+  return {
+    x,
+    y,
+    angle: Math.atan2(dydt, dxdt),
+  };
+}
+
+export function distToCubicBezier(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  samples = 22
+): number {
+  let minDist = Infinity;
+  let prev = computeBezierPointAndTangent(ax, ay, bx, by, 0);
+  for (let i = 1; i <= samples; i++) {
+    const cur = computeBezierPointAndTangent(ax, ay, bx, by, i / samples);
+    const dx = cur.x - prev.x;
+    const dy = cur.y - prev.y;
+    const lenSq = dx * dx + dy * dy;
+    const proj = lenSq === 0 ? 0 : Math.max(0, Math.min(1, ((px - prev.x) * dx + (py - prev.y) * dy) / lenSq));
+    const d = Math.hypot(px - (prev.x + proj * dx), py - (prev.y + proj * dy));
+    if (d < minDist) minDist = d;
+    prev = cur;
+  }
+  return minDist;
+}
+
+export interface NodeCapabilitySpec {
+  primaryMetricLabel: string;
+  lv1Value: string;
+  lv2Value: string;
+  latencyLv1Ms: number;
+  latencyLv2Ms: number;
+  bestAgainst: string;
+}
+
+export function getNodeCapabilityDetails(type: PlaceableNodeType): NodeCapabilitySpec {
+  switch (type) {
+    case 'waf':
+      return {
+        primaryMetricLabel: 'Chặn SQLi / Lọc DDoS',
+        lv1Value: '100% SQLi · 25% DDoS',
+        lv2Value: '100% SQLi · 45% DDoS',
+        latencyLv1Ms: 6,
+        latencyLv2Ms: 3,
+        bestAgainst: 'SQLi & tấn công lớp ứng dụng',
+      };
+    case 'rate_limiter':
+      return {
+        primaryMetricLabel: 'Tỷ lệ chặn bão DDoS',
+        lv1Value: '91% DDoS',
+        lv2Value: '99% DDoS',
+        latencyLv1Ms: 5,
+        latencyLv2Ms: 2,
+        bestAgainst: 'Botnet DDoS & Spam API',
+      };
+    case 'cdn':
+      return {
+        primaryMetricLabel: 'Offload Media / GET tĩnh',
+        lv1Value: '87% Media · 27% GET · 26% DDoS',
+        lv2Value: '96% Media · 42% GET · 42% DDoS',
+        latencyLv1Ms: 6,
+        latencyLv2Ms: 3,
+        bestAgainst: 'Ảnh/Video & phân tán tải biên',
+      };
+    case 'load_balancer':
+      return {
+        primaryMetricLabel: 'Chia tải Round-Robin',
+        lv1Value: 'Đa nhánh · 4ms hop',
+        lv2Value: 'Siêu nhanh · 2ms hop',
+        latencyLv1Ms: 4,
+        latencyLv2Ms: 2,
+        bestAgainst: 'Chống nghẽn nóng trên 1 nhánh',
+      };
+    case 'redis':
+      return {
+        primaryMetricLabel: 'Cache Hit truy vấn GET',
+        lv1Value: '75% GET Hit (0% CPU DB)',
+        lv2Value: '90% GET Hit (0% CPU DB)',
+        latencyLv1Ms: 9,
+        latencyLv2Ms: 5,
+        bestAgainst: 'Bão đọc GET lặp lại & Flash Sale',
+      };
+    case 'app':
+      return {
+        primaryMetricLabel: 'Chịu tải xử lý nghiệp vụ',
+        lv1Value: 'Phạt nhiệt tối đa +44ms',
+        lv2Value: 'Phạt nhiệt tối đa +24ms',
+        latencyLv1Ms: 15,
+        latencyLv2Ms: 10,
+        bestAgainst: 'Xử lý logic giữa các tầng',
+      };
+    case 'queue':
+      return {
+        primaryMetricLabel: 'Giảm tải ghi POST xuống DB',
+        lv1Value: 'Giảm 52% CPU Ghi DB',
+        lv2Value: 'Giảm 66% CPU Ghi DB',
+        latencyLv1Ms: 9,
+        latencyLv2Ms: 5,
+        bestAgainst: 'Xung đột biến POST (Đơn hàng/IoT)',
+      };
+    case 'worker':
+      return {
+        primaryMetricLabel: 'Nén & xử lý bất đồng bộ',
+        lv1Value: 'Giảm thêm 22% tải Ghi',
+        lv2Value: 'Giảm thêm 36% tải Ghi',
+        latencyLv1Ms: 11,
+        latencyLv2Ms: 6,
+        bestAgainst: 'Kết hợp sau Kafka/MQ',
+      };
+    case 'read_replica':
+      return {
+        primaryMetricLabel: 'Gánh truy vấn GET khỏi DB chính',
+        lv1Value: '77% GET Offload',
+        lv2Value: '92% GET Offload',
+        latencyLv1Ms: 12,
+        latencyLv2Ms: 7,
+        bestAgainst: 'Đọc báo cáo nặng & Dashboard',
+      };
+    case 'object_storage':
+      return {
+        primaryMetricLabel: 'Lưu trữ Media ngoài DB',
+        lv1Value: '90% Media Offload',
+        lv2Value: '97% Media Offload',
+        latencyLv1Ms: 10,
+        latencyLv2Ms: 6,
+        bestAgainst: 'Video/Ảnh dung lượng lớn',
+      };
+  }
+}
+
+export interface LiveTelemetryDiagnosis {
+  totalHandled: number;
+  cacheHitRatePct: number;
+  threatBlockRatePct: number;
+  hottestNode: {
+    id: string;
+    type: InfraNodeType;
+    label: string;
+    heatPct: number;
+  } | null;
+  unusedNodeIds: string[];
+}
+
+export function diagnoseArchitectureTelemetry(
+  nodes: readonly InfraNode[],
+  edges: readonly InfraEdge[],
+  stats: {
+    deliveredOk: number;
+    cacheHits: number;
+    blockedAttacks: number;
+    breachedAttacks: number;
+    dbCpu: number;
+  }
+): LiveTelemetryDiagnosis {
+  const forwardReachable = new Set<string>();
+  const q1 = ['ingress'];
+  while (q1.length > 0) {
+    const cur = q1.shift()!;
+    if (forwardReachable.has(cur)) continue;
+    forwardReachable.add(cur);
+    for (const e of edges) {
+      if (e.fromId === cur) q1.push(e.toId);
+    }
+  }
+  const backwardReachable = new Set<string>();
+  const q2 = ['database'];
+  while (q2.length > 0) {
+    const cur = q2.shift()!;
+    if (backwardReachable.has(cur)) continue;
+    backwardReachable.add(cur);
+    for (const e of edges) {
+      if (e.toId === cur) q2.push(e.fromId);
+    }
+  }
+
+  const unusedNodeIds = nodes
+    .filter((n) => !n.fixed && (!forwardReachable.has(n.id) || !backwardReachable.has(n.id)))
+    .map((n) => n.id);
+
+  let hottest: LiveTelemetryDiagnosis['hottestNode'] = null;
+  let bestScore = 0;
+
+  for (const n of nodes) {
+    if (n.type === 'ingress') continue;
+    const effectivePct =
+      n.type === 'database'
+        ? Math.round(stats.dbCpu)
+        : Math.round(n.heat * 100);
+    if (effectivePct >= 55 && effectivePct > bestScore) {
+      bestScore = effectivePct;
+      const label =
+        n.type === 'database'
+          ? 'Database Cluster'
+          : getNodeCatalogEntry(n.type).shortName;
+      hottest = {
+        id: n.id,
+        type: n.type,
+        label,
+        heatPct: effectivePct,
+      };
+    }
+  }
+
+  const totalHandled = stats.deliveredOk + stats.blockedAttacks + stats.breachedAttacks;
+  const cacheHitRatePct =
+    stats.deliveredOk > 0 ? Math.min(100, Math.round((stats.cacheHits / stats.deliveredOk) * 100)) : 0;
+  const totalThreats = stats.blockedAttacks + stats.breachedAttacks;
+  const threatBlockRatePct =
+    totalThreats > 0 ? Math.round((stats.blockedAttacks / totalThreats) * 100) : 100;
+
+  return {
+    totalHandled,
+    cacheHitRatePct,
+    threatBlockRatePct,
+    hottestNode: hottest,
+    unusedNodeIds,
+  };
+}
+
 
