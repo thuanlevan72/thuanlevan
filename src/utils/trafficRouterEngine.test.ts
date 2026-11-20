@@ -32,7 +32,7 @@ test('TRAFFIC_LEVELS defines 16 valid scenarios across 4 chapters with multiple 
     assert.ok(nodes.some((n) => n.id === 'database' && n.fixed));
     assert.equal(hasPathToDatabase(nodes, lvl.initialEdges), true);
     assert.ok(lvl.waves.length >= 3);
-    assert.ok(lvl.approaches.length >= 2, `Level ${lvl.code} must offer at least 2 approaches`);
+    assert.ok(lvl.approaches.length >= 3, `Level ${lvl.code} must offer at least 3 diverse approaches`);
 
     for (const w of lvl.waves) {
       const totalWeight =
@@ -50,7 +50,11 @@ test('TRAFFIC_LEVELS defines 16 valid scenarios across 4 chapters with multiple 
         true,
         `Blueprint ${ap.id} in ${lvl.code} must connect ingress to database`
       );
-      assert.ok(computeBlueprintCost(lvl, ap) >= 0);
+      const bpCost = computeBlueprintCost(lvl, ap);
+      assert.ok(
+        bpCost <= lvl.startingBudget,
+        `Blueprint ${ap.id} ($${bpCost}) in ${lvl.code} must fit within upfront startingBudget ($${lvl.startingBudget})`
+      );
     }
   }
   assert.deepEqual([...chapters].sort(), [1, 2, 3, 4]);

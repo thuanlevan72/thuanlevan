@@ -6,7 +6,6 @@ import {
   BookOpen,
   Cable,
   CheckCircle2,
-  ClipboardCheck,
   Cpu,
   Layers,
   Pause,
@@ -58,6 +57,7 @@ interface TrafficRouterGameSectionProps {
 
 type ToolMode = PlaceableNodeType | 'wire' | 'cut';
 type GamePhase = 'TITLE' | 'PLAYING' | 'VICTORY' | 'GAME_OVER';
+type SimStage = 'DESIGNING' | 'SIMULATING';
 type ChapterFilter = 0 | 1 | 2 | 3 | 4;
 
 interface ActivePacket {
@@ -90,7 +90,7 @@ interface HudSnapshot {
   avgLatencyMs: number;
   waveIndex: number;
   waveActive: boolean;
-  waveCountdown: number;
+  simStage: SimStage;
   waveTimeLeft: number;
   deliveredOk: number;
   cacheHits: number;
@@ -264,12 +264,11 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
   const [chapterFilter, setChapterFilter] = useState<ChapterFilter>(0);
   const [levelIdx, setLevelIdx] = useState<number>(0);
   const [tool, setTool] = useState<ToolMode>('redis');
-  const [speedMult, setSpeedMult] = useState<1 | 2>(1);
+  const [speedMult, setSpeedMult] = useState<1 | 2 | 3>(2);
   const [paused, setPaused] = useState<boolean>(false);
   const [muted, setMuted] = useState<boolean>(false);
   const [savedGrades, setSavedGrades] = useState<SavedGradesMap>(() => loadSavedGrades());
   const [sideTab, setSideTab] = useState<'diagnosis' | 'approaches'>('diagnosis');
-  const [liveEvalModal, setLiveEvalModal] = useState<SolutionEvaluation | null>(null);
   const [endEvaluation, setEndEvaluation] = useState<SolutionEvaluation | null>(null);
 
   const currentLevel = TRAFFIC_LEVELS[levelIdx];
@@ -308,8 +307,8 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     latencySamples: 0,
     waveIndex: 0,
     waveActive: false,
+    simStage: 'DESIGNING' as SimStage,
     waveTimer: 0,
-    waveCountdown: 9,
     spawnTimer: 0,
     deliveredOk: 0,
     cacheHits: 0,
@@ -335,7 +334,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     avgLatencyMs: 24,
     waveIndex: 0,
     waveActive: false,
-    waveCountdown: 9,
+    simStage: 'DESIGNING',
     waveTimeLeft: 0,
     deliveredOk: 0,
     cacheHits: 0,
@@ -360,7 +359,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
       avgLatencyMs: avgLat,
       waveIndex: s.waveIndex,
       waveActive: s.waveActive,
-      waveCountdown: Math.ceil(s.waveCountdown),
+      simStage: s.simStage,
       waveTimeLeft: Math.max(0, Math.ceil(s.waveTimer)),
       deliveredOk: s.deliveredOk,
       cacheHits: s.cacheHits,
@@ -398,7 +397,6 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
       const clamped = Math.max(0, Math.min(TRAFFIC_LEVELS.length - 1, idx));
       const lvl = TRAFFIC_LEVELS[clamped];
       setLevelIdx(clamped);
-      setLiveEvalModal(null);
       setEndEvaluation(null);
       simRef.current = {
         level: lvl,
@@ -415,8 +413,8 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
         latencySamples: 0,
         waveIndex: 0,
         waveActive: false,
+        simStage: 'DESIGNING',
         waveTimer: 0,
-        waveCountdown: 9,
         spawnTimer: 0,
         deliveredOk: 0,
         cacheHits: 0,
@@ -442,22 +440,26 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
   const applyArchitectureBlueprint = useCallback(
     (approach: ArchitectureApproach) => {
       const s = simRef.current;
+      if (s.simStage === 'SIMULATING') {
+        s.notice = 'Đang chạy giả lập! Dừng giả lập để sửa hoặc đổi mẫu kiến trúc.';
+        syncHud();
+        return;
+      }
       const lvl = s.level;
       const fullCost = computeBlueprintCost(lvl, approach);
 
-      // Build either full blueprint (if within total earned budget) or Lv1 base version
       let effectiveApproach = approach;
       let effectiveCost = fullCost;
       let downgradedToLv1 = false;
 
-      if (fullCost > s.earnedBudgetTotal) {
+      if (fullCost > lvl.startingBudget) {
         const lv1Approach: ArchitectureApproach = {
           ...approach,
           blueprintNodes: approach.blueprintNodes.map((bn) => ({ ...bn, level: 1 })),
         };
         effectiveCost = computeBlueprintCost(lvl, lv1Approach);
-        if (effectiveCost > s.earnedBudgetTotal) {
-          s.notice = `Cần $${effectiveCost} để dựng mẫu "${approach.name}" (hiện có tổng $${s.earnedBudgetTotal}).`;
+        if (effectiveCost > lvl.startingBudget) {
+          s.notice = `Cần $${effectiveCost} để dựng mẫu "${approach.name}" (ngân sách $${lvl.startingBudget}).`;
           syncHud();
           return;
         }
@@ -471,33 +473,97 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
       s.packets = [];
       s.selectedNodeId = null;
       s.wireSourceId = null;
-      s.budget = Math.max(0, s.earnedBudgetTotal - effectiveCost);
+      s.budget = Math.max(0, lvl.startingBudget - effectiveCost);
+      s.earnedBudgetTotal = lvl.startingBudget;
       s.topologyRev += 1;
       s.notice = downgradedToLv1
-        ? `Đã áp dụng "${approach.name}" (Lv1, -$${effectiveCost}). Khi có thêm ngân sách hãy nâng cấp lên Lv2!`
-        : `Đã dựng mẫu "${approach.name}" (-$${effectiveCost})! Nhấn [Space] hoặc Gọi Đợt để kiểm chứng.`;
+        ? `Đã áp dụng "${approach.name}" (Lv1, -$${effectiveCost}). Nhấn "Sẵn Sàng — Chạy Giả Lập" để kiểm chứng!`
+        : `Đã dựng mẫu "${approach.name}" (-$${effectiveCost})! Nhấn "Sẵn Sàng — Chạy Giả Lập" để chạy test tải.`;
       playRouterSfx(ensureAudio(), 'build', muted);
       syncHud();
     },
     [ensureAudio, muted, syncHud]
   );
 
-  const launchNextWave = useCallback(() => {
+  const startSimulationRun = useCallback(() => {
     const s = simRef.current;
-    if (s.waveActive || s.outcome || s.waveIndex >= s.level.waves.length) return;
+    if (s.simStage === 'SIMULATING' || s.outcome) return;
     if (!hasPathToDatabase(s.nodes, s.edges)) {
-      s.notice = 'Cảnh báo: Chưa có đường dây nối từ Users → Database! Dùng [W] Nối Dây trước.';
+      s.notice = 'Chưa có đường dây nối từ Users → Database! Dùng [W] Nối Dây hoàn tất kiến trúc trước.';
       syncHud();
       return;
     }
-    const waveDef = s.level.waves[s.waveIndex];
+
+    // Reset runtime telemetry while locking current player architecture
+    for (const node of s.nodes) {
+      node.processedCount = 0;
+      node.blockedCount = 0;
+      node.cacheHitCount = 0;
+      node.heat = 0;
+    }
+    const waveDef = s.level.waves[0];
+    s.simStage = 'SIMULATING';
+    s.waveIndex = 0;
     s.waveActive = true;
     s.waveTimer = waveDef.durationSec;
-    s.spawnTimer = 0.2;
-    s.notice = `Đợt ${waveDef.waveNumber}/${s.level.waves.length}: ${waveDef.label}`;
+    s.spawnTimer = 0.15;
+    s.packets = [];
+    s.fxs = [];
+    s.dbCpu = 10;
+    s.peakDbCpu = 10;
+    s.systemHealth = 100;
+    s.latencySum = 0;
+    s.latencySamples = 0;
+    s.deliveredOk = 0;
+    s.cacheHits = 0;
+    s.blockedAttacks = 0;
+    s.breachedAttacks = 0;
+    s.wireSourceId = null;
+    s.outcome = null;
+    s.notice = `Đang giả lập Đợt 1/${s.level.waves.length}: ${waveDef.label}`;
+    setPaused(false);
     playRouterSfx(ensureAudio(), 'wave', muted);
     syncHud();
   }, [ensureAudio, muted, syncHud]);
+
+  const stopAndEditDesign = useCallback(() => {
+    const s = simRef.current;
+    for (const node of s.nodes) {
+      node.processedCount = 0;
+      node.blockedCount = 0;
+      node.cacheHitCount = 0;
+      node.heat = 0;
+    }
+    // Recompute remaining budget purely from placed nodes vs startingBudget so mid-sim packet coins don't inflate design budget
+    const spentCost = s.nodes.reduce((sum, n) => {
+      if (n.fixed || n.type === 'ingress' || n.type === 'database') return sum;
+      const entry = getNodeCatalogEntry(n.type);
+      return sum + entry.cost + (n.level >= 2 ? entry.upgradeCost : 0);
+    }, 0);
+    s.budget = Math.max(0, s.level.startingBudget - spentCost);
+    s.earnedBudgetTotal = s.level.startingBudget;
+    s.simStage = 'DESIGNING';
+    s.waveIndex = 0;
+    s.waveActive = false;
+    s.waveTimer = 0;
+    s.packets = [];
+    s.fxs = [];
+    s.dbCpu = 10;
+    s.peakDbCpu = 10;
+    s.systemHealth = 100;
+    s.latencySum = 0;
+    s.latencySamples = 0;
+    s.deliveredOk = 0;
+    s.cacheHits = 0;
+    s.blockedAttacks = 0;
+    s.breachedAttacks = 0;
+    s.outcome = null;
+    s.notice = 'Đã quay lại bước Thiết Kế — hãy tinh chỉnh sơ đồ rồi bấm "Sẵn Sàng — Chạy Giả Lập"!';
+    setEndEvaluation(null);
+    setPaused(false);
+    setPhase('PLAYING');
+    syncHud();
+  }, [syncHud]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -518,16 +584,21 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
         setPaused((v) => !v);
       } else if (e.key === ' ') {
         e.preventDefault();
-        launchNextWave();
+        startSimulationRun();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [launchNextWave, phase]);
+  }, [phase, startSimulationRun]);
 
-  // Actions on selected node
+  // Actions on selected node (locked during simulation)
   const upgradeSelectedNode = useCallback(() => {
     const s = simRef.current;
+    if (s.simStage === 'SIMULATING') {
+      s.notice = 'Khóa chỉnh sửa khi đang giả lập! Nhấn "Dừng & Sửa Thiết Kế" để nâng cấp.';
+      syncHud();
+      return;
+    }
     if (!s.selectedNodeId) return;
     const node = s.nodes.find((n) => n.id === s.selectedNodeId);
     if (!node || node.fixed || node.type === 'ingress' || node.type === 'database' || node.level >= 2) {
@@ -557,6 +628,11 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
 
   const sellSelectedNode = useCallback(() => {
     const s = simRef.current;
+    if (s.simStage === 'SIMULATING') {
+      s.notice = 'Khóa chỉnh sửa khi đang giả lập! Nhấn "Dừng & Sửa Thiết Kế" để tháo node.';
+      syncHud();
+      return;
+    }
     if (!s.selectedNodeId) return;
     const node = s.nodes.find((n) => n.id === s.selectedNodeId);
     if (!node || node.fixed) return;
@@ -591,6 +667,11 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
   const handleCanvasPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (phase !== 'PLAYING') return;
     const s = simRef.current;
+    if (s.simStage === 'SIMULATING') {
+      s.notice = 'Đang chạy giả lập! Nhấn "Dừng & Sửa Thiết Kế" nếu muốn thay đổi sơ đồ.';
+      syncHud();
+      return;
+    }
     const pt = canvasCoords(e);
 
     const clickedNode = s.nodes.find((n) => Math.hypot(pt.x - n.x, pt.y - n.y) <= 30);
@@ -753,29 +834,17 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     const tick = (now: number) => {
       const rawDt = Math.min(0.05, Math.max(0.001, (now - lastTs) / 1000));
       lastTs = now;
-      const dt = paused || liveEvalModal ? 0 : rawDt * speedMult;
       const s = simRef.current;
+      const isRunningSim = s.simStage === 'SIMULATING' && !paused && !s.outcome;
+      const dt = isRunningSim ? rawDt * speedMult : 0;
 
-      // 1. Auto-wave countdown when idle between waves
-      if (!paused && !liveEvalModal && !s.waveActive && !s.outcome && s.waveIndex < s.level.waves.length) {
-        s.waveCountdown = Math.max(0, s.waveCountdown - rawDt);
-        if (s.waveCountdown <= 0) {
-          if (hasPathToDatabase(s.nodes, s.edges)) {
-            const waveDef = s.level.waves[s.waveIndex];
-            s.waveActive = true;
-            s.waveTimer = waveDef.durationSec;
-            s.spawnTimer = 0.15;
-            s.notice = `Tự động phát Đợt ${waveDef.waveNumber}/${s.level.waves.length}: ${waveDef.label}`;
-            playRouterSfx(ensureAudio(), 'wave', muted);
-          } else {
-            s.waveCountdown = 5;
-            s.notice = 'Chưa có đường dây Users → DB! Nối dây để hệ thống tiếp nhận gói tin.';
-          }
-        }
+      // Subtle slow dash animation during DESIGNING when route is valid
+      if (s.simStage === 'DESIGNING') {
+        s.dashOffset = (s.dashOffset - rawDt * 12) % 24;
       }
 
-      // 2. Spawn & move packets during active wave
-      if (dt > 0 && !s.outcome) {
+      // Advance simulation ONLY after player presses "Sẵn Sàng — Chạy Giả Lập"
+      if (dt > 0) {
         s.dashOffset = (s.dashOffset - dt * 28) % 24;
 
         for (const node of s.nodes) {
@@ -813,20 +882,23 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
           }
 
           if (s.waveTimer <= 0 && s.packets.length === 0) {
-            s.waveActive = false;
-            s.budget += waveDef.rewardBudget;
-            s.earnedBudgetTotal += waveDef.rewardBudget;
             s.waveIndex += 1;
             if (s.waveIndex >= s.level.waves.length) {
+              s.waveActive = false;
               s.outcome = 'victory';
               playRouterSfx(ensureAudio(), 'win', muted);
               const evalResult = computeCurrentEvaluation();
               setEndEvaluation(evalResult);
               setSavedGrades((prev) => saveGrade(s.level.id, evalResult.grade, prev));
               setPhase('VICTORY');
+              syncHud();
             } else {
-              s.waveCountdown = 9;
-              s.notice = `Hoàn tất Đợt ${waveDef.waveNumber}! (+$${waveDef.rewardBudget}) · Đợt tiếp sau 9s.`;
+              const nextWave = s.level.waves[s.waveIndex];
+              s.waveActive = true;
+              s.waveTimer = nextWave.durationSec;
+              s.spawnTimer = 0.15;
+              s.notice = `Đang giả lập Đợt ${nextWave.waveNumber}/${s.level.waves.length}: ${nextWave.label}`;
+              playRouterSfx(ensureAudio(), 'wave', muted);
             }
           }
         }
@@ -1080,8 +1152,11 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
           ctx.save();
           ctx.translate(px, py);
           ctx.fillStyle = meta.color;
-          ctx.shadowColor = meta.color;
-          ctx.shadowBlur = 10;
+          ctx.globalAlpha = 0.28;
+          ctx.beginPath();
+          ctx.arc(0, 0, 9.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
 
           if (p.kind === 'read') {
             ctx.beginPath();
@@ -1181,9 +1256,9 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
         }
       }
 
-      if (!paused && !liveEvalModal) {
+      if (!paused && s.simStage === 'SIMULATING') {
         hudAccum += rawDt;
-        if (hudAccum >= 0.1) {
+        if (hudAccum >= 0.12) {
           hudAccum = 0;
           syncHud();
         }
@@ -1193,7 +1268,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
 
     rafId = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(rafId);
-  }, [computeCurrentEvaluation, liveEvalModal, muted, paused, phase, speedMult, syncHud, tool]);
+  }, [computeCurrentEvaluation, ensureAudio, muted, paused, phase, speedMult, syncHud, tool]);
 
   // -------------------------------------------------------------------------
   // Title Screen: 16 Scenarios across 4 Chapters + Multiple Approaches Preview
@@ -1309,7 +1384,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                 <span>Triển Khai {currentLevel.code} (Màn {levelIdx + 1}/16)</span>
               </button>
               <span className="text-xs text-slate-400">
-                Phím 1–9, 0 chọn node · W nối dây · X tháo dây · Space gọi đợt
+                Bước 1: Thiết kế kiến trúc &amp; nối dây · Bước 2: Bấm Sẵn Sàng giả lập · Bước 3: Chấm điểm tối ưu
               </span>
             </div>
           </div>
@@ -1401,8 +1476,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
       ? getNodeCatalogEntry(hud.selectedNode.type)
       : null;
 
-  const activeModalEval = endEvaluation ?? liveEvalModal;
-  const showReportModal = phase === 'VICTORY' || phase === 'GAME_OVER' || liveEvalModal !== null;
+  const showReportModal = (phase === 'VICTORY' || phase === 'GAME_OVER') && endEvaluation !== null;
 
   return (
     <section
@@ -1416,7 +1490,6 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
           <button
             type="button"
             onClick={() => {
-              setLiveEvalModal(null);
               setEndEvaluation(null);
               setPhase('TITLE');
             }}
@@ -1424,6 +1497,16 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
           >
             Menu ({levelIdx + 1}/{TRAFFIC_LEVELS.length})
           </button>
+
+          <span
+            className={`px-2 py-0.5 rounded-md font-mono text-[11px] font-semibold border whitespace-nowrap ${
+              hud.simStage === 'DESIGNING'
+                ? 'bg-sky-500/15 text-sky-300 border-sky-400/40'
+                : 'bg-amber-500/20 text-amber-300 border-amber-400/50'
+            }`}
+          >
+            {hud.simStage === 'DESIGNING' ? 'BƯỚC 1: THIẾT KẾ' : 'BƯỚC 2: GIẢ LẬP TẢI'}
+          </span>
 
           <span
             className="text-xs font-semibold text-sky-300 truncate max-w-[170px] 2xl:max-w-[230px]"
@@ -1435,6 +1518,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
           <div className="whitespace-nowrap">
             <span className="text-slate-400 text-[11px] mr-1">NGÂN SÁCH</span>
             <strong className="font-mono text-amber-300">${hud.budget}</strong>
+            <span className="text-[10px] text-slate-400 font-mono">/${currentLevel.startingBudget}</span>
           </div>
 
           <div className="flex items-center gap-1 whitespace-nowrap">
@@ -1472,8 +1556,9 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
           <div className="whitespace-nowrap">
             <span className="text-slate-400 text-[11px] mr-1">ĐỢT</span>
             <strong className="font-mono text-white">
-              {Math.min(hud.waveIndex + (hud.waveActive ? 1 : 0), currentLevel.waves.length)}/
-              {currentLevel.waves.length}
+              {hud.simStage === 'DESIGNING'
+                ? `0/${currentLevel.waves.length}`
+                : `${Math.min(hud.waveIndex + 1, currentLevel.waves.length)}/${currentLevel.waves.length}`}
             </strong>
           </div>
         </div>
@@ -1481,17 +1566,9 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            data-testid="traffic-evaluate-btn"
-            onClick={() => setLiveEvalModal(computeCurrentEvaluation())}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-400/50 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-xs font-semibold cursor-pointer whitespace-nowrap"
-          >
-            <ClipboardCheck className="w-3.5 h-3.5" />
-            <span>Đánh Giá Giải Pháp</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setSpeedMult((s) => (s === 1 ? 2 : 1))}
+            onClick={() => setSpeedMult((s) => (s === 1 ? 2 : s === 2 ? 3 : 1))}
             className="px-2.5 py-1.5 rounded-lg border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 font-mono text-xs font-semibold cursor-pointer whitespace-nowrap"
+            title="Tốc độ chạy giả lập (1× / 2× / 3×)"
           >
             {speedMult}×
           </button>
@@ -1506,15 +1583,16 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
           <button
             type="button"
             onClick={() => setPaused((p) => !p)}
-            aria-label={paused ? 'Tiếp tục' : 'Tạm dừng'}
-            className="p-1.5 rounded-lg border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 cursor-pointer"
+            disabled={hud.simStage !== 'SIMULATING'}
+            aria-label={paused ? 'Tiếp tục giả lập' : 'Tạm dừng giả lập'}
+            className="p-1.5 rounded-lg border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 disabled:opacity-40 cursor-pointer"
           >
             {paused ? <Play className="w-4 h-4 text-emerald-400" /> : <Pause className="w-4 h-4" />}
           </button>
           <button
             type="button"
             onClick={() => startScenario(levelIdx)}
-            aria-label="Chơi lại kịch bản này"
+            aria-label="Làm lại từ đầu"
             className="p-1.5 rounded-lg border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 cursor-pointer"
           >
             <RotateCcw className="w-4 h-4" />
@@ -1608,10 +1686,10 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
             </button>
           </div>
 
-          {/* Selected Node Inspector + Wave Trigger */}
+          {/* Selected Node Inspector + Ready / Simulate Trigger */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-2 border-t border-[#1E2E4A]">
             <div className="flex flex-wrap items-center gap-2 min-w-0">
-              {hud.selectedNode && selectedEntry && (
+              {hud.selectedNode && selectedEntry && hud.simStage === 'DESIGNING' && (
                 <>
                   <button
                     type="button"
@@ -1640,22 +1718,31 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
               <p className="text-xs text-slate-300 truncate">{hud.notice}</p>
             </div>
 
-            <button
-              type="button"
-              data-testid="traffic-wave-btn"
-              disabled={hud.waveActive || hud.waveIndex >= currentLevel.waves.length}
-              onClick={launchNextWave}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 disabled:bg-slate-800 disabled:text-slate-400 text-slate-950 font-bold text-xs sm:text-sm transition-colors cursor-pointer whitespace-nowrap shrink-0"
-            >
-              <Zap className="w-4 h-4" />
-              <span>
-                {hud.waveActive
-                  ? `Đang chịu tải Đợt ${hud.waveIndex + 1}/${currentLevel.waves.length} (${hud.waveTimeLeft}s)`
-                  : hud.waveIndex >= currentLevel.waves.length
-                    ? 'Hoàn tất mọi đợt'
-                    : `Gọi Đợt ${hud.waveIndex + 1}/${currentLevel.waves.length} (Tự gọi: ${hud.waveCountdown}s)`}
-              </span>
-            </button>
+            {hud.simStage === 'DESIGNING' ? (
+              <button
+                type="button"
+                data-testid="traffic-ready-sim-btn"
+                onClick={startSimulationRun}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs sm:text-sm transition-colors cursor-pointer whitespace-nowrap shrink-0 shadow-sm"
+              >
+                <Zap className="w-4 h-4" />
+                <span>Sẵn Sàng — Chạy Giả Lập ({currentLevel.waves.length} Đợt)</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="px-3 py-2 rounded-xl bg-[#111C33] border border-amber-400/50 text-amber-300 font-mono text-xs font-semibold whitespace-nowrap">
+                  Đang test Đợt {Math.min(hud.waveIndex + 1, currentLevel.waves.length)}/{currentLevel.waves.length} ({hud.waveTimeLeft}s)
+                </span>
+                <button
+                  type="button"
+                  data-testid="traffic-stop-edit-btn"
+                  onClick={stopAndEditDesign}
+                  className="px-3 py-2 rounded-xl border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 text-sky-300 text-xs font-semibold cursor-pointer whitespace-nowrap"
+                >
+                  Dừng &amp; Sửa Thiết Kế
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1673,7 +1760,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
               }`}
             >
               <Wrench className="w-3.5 h-3.5 shrink-0" />
-              <span>Phân Tích ({liveAnalysis.score}/100)</span>
+              <span>Sơ Bộ ({liveAnalysis.diagnostics.length === 0 ? 'Sẵn sàng' : `${liveAnalysis.diagnostics.length} lưu ý`})</span>
             </button>
             <button
               type="button"
@@ -1693,40 +1780,30 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
           {sideTab === 'diagnosis' ? (
             <div className="space-y-3 text-xs">
               <div className="p-3 rounded-xl bg-[#132138] border border-[#1E2E4A] space-y-1">
-                <span className="text-[11px] font-mono text-sky-400">HOÀN CẢNH BÀI TOÁN</span>
+                <span className="text-[11px] font-mono text-sky-400">ĐỀ BÀI &amp; HOÀN CẢNH</span>
                 <p className="font-semibold text-white">{currentLevel.domain}</p>
                 <p className="text-slate-300 leading-relaxed">{currentLevel.contextDescription}</p>
               </div>
 
               <div className="p-3 rounded-xl bg-[#132138] border border-[#1E2E4A] space-y-1.5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-mono text-emerald-400">KIẾN TRÚC HIỆN TẠI</span>
-                  <strong className="font-mono text-white tabular-nums">{liveAnalysis.score}/100</strong>
+                  <span className="text-[11px] font-mono text-emerald-400">HƯỚNG KIẾN TRÚC ĐANG LẮP</span>
+                  <span className="font-mono text-[11px] text-slate-400">
+                    {hud.simStage === 'DESIGNING' ? 'Chưa chấm (Chờ giả lập)' : 'Đang kiểm chứng...'}
+                  </span>
                 </div>
                 <p className="text-sm font-bold text-white">{liveAnalysis.detectedPatternLabel}</p>
-                <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                  <div
-                    className={`h-full transition-all ${
-                      liveAnalysis.score >= 85
-                        ? 'bg-emerald-400'
-                        : liveAnalysis.score >= 60
-                          ? 'bg-sky-400'
-                          : 'bg-amber-400'
-                    }`}
-                    style={{ width: `${liveAnalysis.score}%` }}
-                  />
-                </div>
               </div>
 
               <div className="space-y-1.5">
                 <p className="font-semibold text-slate-200">
                   {liveAnalysis.diagnostics.length === 0
-                    ? 'Đánh giá tức thời: Rất tốt!'
-                    : `Điểm chưa tối ưu phát hiện (${liveAnalysis.diagnostics.length}):`}
+                    ? 'Kiểm tra sơ bộ trước giả lập: Đã hợp lệ!'
+                    : `Rủi ro sơ bộ phát hiện (${liveAnalysis.diagnostics.length}):`}
                 </p>
                 {liveAnalysis.diagnostics.length === 0 ? (
                   <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-400/30 text-emerald-200 leading-relaxed">
-                    Kiến trúc của bạn đã đáp ứng đầy đủ đặc thù lưu lượng của màn này! Hãy gọi đợt hoặc nhấn &ldquo;Đánh Giá Giải Pháp&rdquo; để xem điểm tối ưu.
+                    Cấu trúc mạng đã nối thông. Nhấn <strong>Sẵn Sàng — Chạy Giả Lập</strong> để chạy thử tải thực tế và nhận đánh giá tối ưu S/A/B/C!
                   </div>
                 ) : (
                   <div className="space-y-1.5 max-h-[210px] overflow-y-auto pr-1">
@@ -1783,10 +1860,13 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                       <button
                         type="button"
                         data-testid={`apply-approach-${ap.id}`}
+                        disabled={hud.simStage === 'SIMULATING'}
                         onClick={() => applyArchitectureBlueprint(ap)}
-                        className="w-full py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/35 border border-sky-400/50 text-sky-200 font-semibold text-xs transition-colors cursor-pointer"
+                        className="w-full py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/35 disabled:opacity-45 border border-sky-400/50 text-sky-200 font-semibold text-xs transition-colors cursor-pointer"
                       >
-                        Áp dụng mẫu này lên sơ đồ (${bpCost})
+                        {hud.simStage === 'SIMULATING'
+                          ? 'Đang giả lập (dừng để đổi mẫu)'
+                          : `Áp dụng mẫu này lên sơ đồ ($${bpCost})`}
                       </button>
                     </div>
                   );
@@ -1797,12 +1877,12 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
         </aside>
       </div>
 
-      {/* Optimization Report / Victory / 502 Bad Gateway Modal */}
-      {showReportModal && activeModalEval && (
+      {/* Post-Simulation Optimization Report / Victory / 502 Bad Gateway Modal */}
+      {showReportModal && endEvaluation && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-label={activeModalEval.verdictTitle}
+          aria-label={endEvaluation.verdictTitle}
           className="fixed inset-0 z-40 bg-slate-950/80 flex items-center justify-center p-4 overflow-y-auto"
         >
           <div className="w-full max-w-2xl rounded-2xl border border-[#1E2E4A] bg-[#0F192B] p-5 sm:p-6 space-y-4 shadow-2xl my-auto">
@@ -1813,29 +1893,29 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                   className={`w-12 h-12 rounded-2xl border flex items-center justify-center font-mono text-2xl font-bold shrink-0 ${
                     phase === 'GAME_OVER'
                       ? 'bg-rose-500/20 text-rose-300 border-rose-400/60'
-                      : gradeBadgeStyle(activeModalEval.grade)
+                      : gradeBadgeStyle(endEvaluation.grade)
                   }`}
                 >
-                  {phase === 'GAME_OVER' ? '502' : activeModalEval.grade}
+                  {phase === 'GAME_OVER' ? '502' : endEvaluation.grade}
                 </div>
                 <div>
                   <p
                     className={`text-xs font-mono ${
                       phase === 'GAME_OVER'
                         ? 'text-rose-400'
-                        : activeModalEval.isOptimal
+                        : endEvaluation.isOptimal
                           ? 'text-emerald-400'
                           : 'text-amber-300'
                     }`}
                   >
                     {phase === 'GAME_OVER'
                       ? '502 BAD GATEWAY · DATABASE QUÁ TẢI 100% CPU'
-                      : `${currentLevel.code} · ĐIỂM TỐI ƯU ${activeModalEval.totalScore}/100 · HẠNG ${activeModalEval.grade}`}
+                      : `${currentLevel.code} · KẾT QUẢ GIẢ LẬP ${endEvaluation.totalScore}/100 · HẠNG ${endEvaluation.grade}`}
                   </p>
                   <h3 className="text-lg sm:text-xl font-bold text-white">
                     {phase === 'GAME_OVER'
-                      ? 'Hệ thống sập trước áp lực tải!'
-                      : activeModalEval.verdictTitle}
+                      ? 'Hệ thống sập khi chạy giả lập!'
+                      : endEvaluation.verdictTitle}
                   </h3>
                 </div>
               </div>
@@ -1847,16 +1927,16 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
             </div>
 
             <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
-              {activeModalEval.verdictSummary}
+              {endEvaluation.verdictSummary}
             </p>
 
             {/* 4 Pillars Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs tabular-nums">
               {[
-                { label: 'Hiệu năng & SLA', val: activeModalEval.pillars.performance, color: 'bg-cyan-400' },
-                { label: 'An toàn & Tin cậy', val: activeModalEval.pillars.reliability, color: 'bg-emerald-400' },
-                { label: 'Tối ưu Chi phí', val: activeModalEval.pillars.costEfficiency, color: 'bg-amber-400' },
-                { label: 'Khớp Hoàn Cảnh', val: activeModalEval.pillars.architectureFit, color: 'bg-sky-400' },
+                { label: 'Hiệu năng & SLA', val: endEvaluation.pillars.performance, color: 'bg-cyan-400' },
+                { label: 'An toàn & Tin cậy', val: endEvaluation.pillars.reliability, color: 'bg-emerald-400' },
+                { label: 'Tối ưu Chi phí', val: endEvaluation.pillars.costEfficiency, color: 'bg-amber-400' },
+                { label: 'Khớp Hoàn Cảnh', val: endEvaluation.pillars.architectureFit, color: 'bg-sky-400' },
               ].map((pillar) => (
                 <div key={pillar.label} className="p-2.5 rounded-xl bg-[#132138] border border-[#1E2E4A] space-y-1.5">
                   <div className="flex items-center justify-between gap-1">
@@ -1875,10 +1955,10 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
               <div className="space-y-2">
                 <p className="font-bold text-emerald-300 flex items-center gap-1.5">
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Điểm mạnh giải pháp</span>
+                  <span>Điểm đạt được trong giả lập</span>
                 </p>
-                {activeModalEval.strengths.length > 0 ? (
-                  activeModalEval.strengths.map((st, idx) => (
+                {endEvaluation.strengths.length > 0 ? (
+                  endEvaluation.strengths.map((st, idx) => (
                     <div
                       key={idx}
                       className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-400/25 text-emerald-100 leading-relaxed"
@@ -1888,7 +1968,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                   ))
                 ) : (
                   <div className="p-2.5 rounded-xl bg-[#132138] border border-[#1E2E4A] text-slate-400">
-                    Chưa đạt mốc chuẩn nào nổi bật — hãy thử lắp thêm thành phần chuyên trách bên dưới.
+                    Chưa đạt mốc chuẩn nào nổi bật — hãy quay lại sửa sơ đồ bên dưới.
                   </div>
                 )}
               </div>
@@ -1897,13 +1977,13 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                 <p className="font-bold text-amber-300 flex items-center gap-1.5">
                   <AlertTriangle className="w-3.5 h-3.5" />
                   <span>
-                    {activeModalEval.whyNotOptimal.length > 0
-                      ? `Tại sao chưa tối ưu? (${activeModalEval.whyNotOptimal.length} điểm)`
-                      : 'Đạt chuẩn Tối Ưu Toàn Diện!'}
+                    {endEvaluation.whyNotOptimal.length > 0
+                      ? `Tại sao chưa tối ưu & Cần làm gì? (${endEvaluation.whyNotOptimal.length})`
+                      : 'Thiết kế đã Tối Ưu Toàn Diện!'}
                   </span>
                 </p>
-                {activeModalEval.whyNotOptimal.length > 0 ? (
-                  activeModalEval.whyNotOptimal.map((crit, idx) => (
+                {endEvaluation.whyNotOptimal.length > 0 ? (
+                  endEvaluation.whyNotOptimal.map((crit, idx) => (
                     <div
                       key={idx}
                       className={`p-2.5 rounded-xl border space-y-1 leading-relaxed ${
@@ -1914,12 +1994,12 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                     >
                       <p className="font-bold">{crit.title}</p>
                       <p className="opacity-90">{crit.reason}</p>
-                      <p className="text-sky-300 font-medium">Gợi ý: {crit.suggestion}</p>
+                      <p className="text-sky-300 font-medium">Cần làm gì: {crit.suggestion}</p>
                     </div>
                   ))
                 ) : (
                   <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-400/30 text-emerald-100 leading-relaxed">
-                    Không phát hiện điểm nghẽn nào! Kiến trúc của bạn đạt điểm S cho bối cảnh {currentLevel.domain}.
+                    Không phát hiện điểm nghẽn nào! Kiến trúc của bạn đạt điểm S tối ưu cho bối cảnh {currentLevel.domain}.
                   </div>
                 )}
               </div>
@@ -1933,43 +2013,37 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
 
             {/* Footer Actions */}
             <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
-              {liveEvalModal && phase === 'PLAYING' && (
+              <button
+                type="button"
+                onClick={() => setPhase('TITLE')}
+                className="px-3.5 py-2 rounded-xl border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 text-xs sm:text-sm font-semibold text-slate-200 cursor-pointer"
+              >
+                Danh Sách 16 Màn
+              </button>
+              <button
+                type="button"
+                data-testid="arch-back-to-design-btn"
+                onClick={stopAndEditDesign}
+                className="px-4 py-2 rounded-xl border border-sky-400/60 bg-sky-500/20 hover:bg-sky-500/30 text-xs sm:text-sm font-bold text-sky-200 cursor-pointer"
+              >
+                Quay Lại Sửa Thiết Kế
+              </button>
+              <button
+                type="button"
+                onClick={() => startScenario(levelIdx)}
+                className="px-4 py-2 rounded-xl border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 text-xs sm:text-sm font-semibold text-white cursor-pointer"
+              >
+                Làm Lại Từ Đầu
+              </button>
+              {phase === 'VICTORY' && levelIdx + 1 < TRAFFIC_LEVELS.length && (
                 <button
                   type="button"
-                  onClick={() => setLiveEvalModal(null)}
-                  className="px-4 py-2 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs sm:text-sm font-bold cursor-pointer"
+                  data-testid="arch-next-level-btn"
+                  onClick={() => startScenario(levelIdx + 1)}
+                  className="px-5 py-2 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs sm:text-sm font-bold cursor-pointer"
                 >
-                  Tiếp Tục Thiết Kế
+                  Sang Màn {levelIdx + 2}/{TRAFFIC_LEVELS.length} →
                 </button>
-              )}
-
-              {(phase === 'VICTORY' || phase === 'GAME_OVER') && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setPhase('TITLE')}
-                    className="px-4 py-2 rounded-xl border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 text-xs sm:text-sm font-semibold text-slate-200 cursor-pointer"
-                  >
-                    Danh Sách 16 Màn
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => startScenario(levelIdx)}
-                    className="px-4 py-2 rounded-xl border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 text-xs sm:text-sm font-semibold text-white cursor-pointer"
-                  >
-                    Thiết Kế Lại Màn Này
-                  </button>
-                  {phase === 'VICTORY' && levelIdx + 1 < TRAFFIC_LEVELS.length && (
-                    <button
-                      type="button"
-                      data-testid="arch-next-level-btn"
-                      onClick={() => startScenario(levelIdx + 1)}
-                      className="px-5 py-2 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs sm:text-sm font-bold cursor-pointer"
-                    >
-                      Sang Màn {levelIdx + 2}/{TRAFFIC_LEVELS.length} →
-                    </button>
-                  )}
-                </>
               )}
             </div>
           </div>

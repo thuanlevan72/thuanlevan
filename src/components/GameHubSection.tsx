@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { Code2, FileSearch, Gamepad2, Gift, Grid3X3, Layers, LayoutGrid, Network, Sparkles, Zap } from 'lucide-react';
+import { Code2, FileSearch, Gamepad2, Gift, Grid3X3, Layers, LayoutGrid, Network, Sparkles, Swords, Zap } from 'lucide-react';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 import { AnomalyGameSection } from './AnomalyGameSection.tsx';
 import { AsmrOrganizerGameSection } from './AsmrOrganizerGameSection.tsx';
 import { BlindBoxMergeGameSection } from './BlindBoxMergeGameSection.tsx';
+import { GearArenaGameSection } from './GearArenaGameSection.tsx';
 import { LinuxHackerGameSection } from './LinuxHackerGameSection.tsx';
 import { PrismTdGameSection } from './PrismTdGameSection.tsx';
 import { TrafficRouterGameSection } from './TrafficRouterGameSection.tsx';
 import { XiangqiGameSection } from './XiangqiGameSection.tsx';
 
-type GameId = 'xiangqi' | 'anomaly' | 'asmr_organizer' | 'blind_box' | 'prism_td' | 'linux_hacker' | 'traffic_router';
+type GameId = 'xiangqi' | 'anomaly' | 'asmr_organizer' | 'blind_box' | 'prism_td' | 'linux_hacker' | 'traffic_router' | 'gear_arena';
 
 interface GameCatalogItem {
   id: string;
@@ -86,6 +87,15 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     gameKey: 'traffic_router',
   },
   {
+    id: 'gear-arena',
+    title: 'Đấu Trường Ba Lô',
+    shortTitle: 'Ba Lô Cơ Khí',
+    subtitle: 'Gear-Grid Auto Arena · Xếp Ba Lô 5×5 Cộng Hưởng + Càn Quét Quái & Đấu Bóng Ma PvP',
+    badge: '5×5 · PvP Ghost',
+    playable: true,
+    gameKey: 'gear_arena',
+  },
+  {
     id: 'gomoku-planned',
     title: 'Cờ Caro 5 Ô',
     shortTitle: 'Cờ Caro',
@@ -125,6 +135,9 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       }
       if (playParam === 'traffic' || playParam === 'ddos' || playParam === 'arch' || playParam === 'architecture') {
         return 'traffic_router';
+      }
+      if (playParam === 'gear' || playParam === 'arena' || playParam === 'backpack' || playParam === 'balo') {
+        return 'gear_arena';
       }
     }
     return 'xiangqi';
@@ -220,6 +233,13 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
                         }`}
                         aria-hidden="true"
                       />
+                    ) : item.gameKey === 'gear_arena' ? (
+                      <Swords
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          isSelected ? 'text-rose-300' : 'text-rose-600 dark:text-rose-400'
+                        }`}
+                        aria-hidden="true"
+                      />
                     ) : (
                       <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true" />
                     )}
@@ -283,6 +303,9 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       )}
       {activeGame === 'traffic_router' && (
         <TrafficRouterGameSection theme={theme} onToggleTheme={onToggleTheme} />
+      )}
+      {activeGame === 'gear_arena' && (
+        <GearArenaGameSection theme={theme} onToggleTheme={onToggleTheme} />
       )}
     </div>
   );
