@@ -227,13 +227,13 @@ export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
   }
   if (route === 'game') {
     return {
-      title: 'Khu Trò Chơi 2D — Cờ Tướng, Hồ Sơ, Phá DOM & Laser',
+      title: 'Khu Trò Chơi 2D — Cờ Tướng, Hồ Sơ, Laser & Linux CLI',
       description:
-        'Chơi 4 game 2D độc đáo: Cờ Tướng AI 10 cấp, Kiểm Duyệt Hồ Sơ 12 ngày, Phá Vỡ Trình Duyệt và Thủ Thành Gương Phản Xạ Mạch Laser.',
+        'Chơi 5 game 2D độc đáo: Cờ Tướng AI 10 cấp, Kiểm Duyệt Hồ Sơ, Phá Vỡ Trình Duyệt, Thủ Thành Laser và Hacker Dòng Lệnh Linux Ubuntu.',
       keywords:
-        'Game 2D, Cờ Tướng 10 cấp độ, Kiểm Duyệt Hồ Sơ Dị Biệt, Phá Vỡ Trình Duyệt, Thủ Thành Laser, Prism Circuit TD, Thuận Lê',
+        'Game 2D, Cờ Tướng 10 cấp độ, Kiểm Duyệt Hồ Sơ Dị Biệt, Phá Vỡ Trình Duyệt, Thủ Thành Laser, Hacker Linux Ubuntu CLI, Thuận Lê',
       ogType: 'website',
-      ogImageAlt: 'Khu Trò Chơi 2D gồm Cờ Tướng AI, Kiểm Duyệt Hồ Sơ, Phá Vỡ Trình Duyệt và Thủ Thành Mạch Laser',
+      ogImageAlt: 'Khu Trò Chơi 2D gồm Cờ Tướng AI, Kiểm Duyệt Hồ Sơ, Phá Vỡ Trình Duyệt, Thủ Thành Laser và Hacker Linux Ubuntu CLI',
       path: '/game',
     };
   }

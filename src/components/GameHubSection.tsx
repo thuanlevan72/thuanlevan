@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { FileSearch, Gamepad2, Grid3X3, Layers, Sparkles, Terminal, Zap } from 'lucide-react';
+import { Code2, FileSearch, Gamepad2, Grid3X3, Layers, Sparkles, Terminal, Zap } from 'lucide-react';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 import { AnomalyGameSection } from './AnomalyGameSection.tsx';
 import { BrowserBreakerGameSection } from './BrowserBreakerGameSection.tsx';
+import { LinuxHackerGameSection } from './LinuxHackerGameSection.tsx';
 import { PrismTdGameSection } from './PrismTdGameSection.tsx';
 import { XiangqiGameSection } from './XiangqiGameSection.tsx';
 
-type GameId = 'xiangqi' | 'anomaly' | 'browser_breaker' | 'prism_td';
+type GameId = 'xiangqi' | 'anomaly' | 'browser_breaker' | 'prism_td' | 'linux_hacker';
 
 interface GameCatalogItem {
   id: string;
@@ -50,10 +51,19 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     id: 'prism-td',
     title: 'Thủ Thành Laser',
     shortTitle: 'Mạch Laser',
-    subtitle: 'Prism & Mirror Circuit TD · Bẻ cong tia laser quét quái',
-    badge: '3 Mạch',
+    subtitle: 'Prism & Mirror Circuit TD · 10 Bản đồ · 10 Vũ khí nâng cấp Lv3 · Tự động gọi đợt 10s',
+    badge: '10 Bản đồ',
     playable: true,
     gameKey: 'prism_td',
+  },
+  {
+    id: 'linux-hacker',
+    title: 'Hacker Ubuntu CLI',
+    shortTitle: 'Ubuntu CLI',
+    subtitle: 'Học Như Chơi · 8 Lĩnh Vực Linux → Docker → Cloud DevOps (16 Màn)',
+    badge: '16 Màn · 8 Lĩnh Vực',
+    playable: true,
+    gameKey: 'linux_hacker',
   },
   {
     id: 'gomoku-planned',
@@ -85,6 +95,9 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       if (playParam === 'anomaly') return 'anomaly';
       if (playParam === 'browser' || playParam === 'browser-breaker') return 'browser_breaker';
       if (playParam === 'prism' || playParam === 'prism-td' || playParam === 'laser') return 'prism_td';
+      if (playParam === 'linux' || playParam === 'ubuntu' || playParam === 'cli' || playParam === 'hacker') {
+        return 'linux_hacker';
+      }
     }
     return 'xiangqi';
   });
@@ -158,6 +171,13 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
                         }`}
                         aria-hidden="true"
                       />
+                    ) : item.gameKey === 'linux_hacker' ? (
+                      <Code2
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          isSelected ? 'text-emerald-300' : 'text-emerald-600 dark:text-emerald-400'
+                        }`}
+                        aria-hidden="true"
+                      />
                     ) : (
                       <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true" />
                     )}
@@ -212,6 +232,9 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       )}
       {activeGame === 'prism_td' && (
         <PrismTdGameSection theme={theme} onToggleTheme={onToggleTheme} />
+      )}
+      {activeGame === 'linux_hacker' && (
+        <LinuxHackerGameSection theme={theme} onToggleTheme={onToggleTheme} />
       )}
     </div>
   );
