@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { Code2, FileSearch, Gamepad2, Grid3X3, Layers, LayoutGrid, Sparkles, Zap } from 'lucide-react';
+import { Code2, FileSearch, Gamepad2, Grid3X3, Layers, LayoutGrid, Network, Sparkles, Zap } from 'lucide-react';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 import { AnomalyGameSection } from './AnomalyGameSection.tsx';
 import { AsmrOrganizerGameSection } from './AsmrOrganizerGameSection.tsx';
 import { LinuxHackerGameSection } from './LinuxHackerGameSection.tsx';
 import { PrismTdGameSection } from './PrismTdGameSection.tsx';
+import { TrafficRouterGameSection } from './TrafficRouterGameSection.tsx';
 import { XiangqiGameSection } from './XiangqiGameSection.tsx';
 
-type GameId = 'xiangqi' | 'anomaly' | 'asmr_organizer' | 'prism_td' | 'linux_hacker';
+type GameId = 'xiangqi' | 'anomaly' | 'asmr_organizer' | 'prism_td' | 'linux_hacker' | 'traffic_router';
 
 interface GameCatalogItem {
   id: string;
@@ -66,6 +67,15 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     gameKey: 'linux_hacker',
   },
   {
+    id: 'traffic-router',
+    title: 'Điều Phối Lưu Lượng',
+    shortTitle: 'Chống DDoS',
+    subtitle: 'Traffic Router & Load Balancer · WAF · Rate Limiter · Redis · Tránh 502 Bad Gateway',
+    badge: '5 Kịch Bản',
+    playable: true,
+    gameKey: 'traffic_router',
+  },
+  {
     id: 'gomoku-planned',
     title: 'Cờ Caro 5 Ô',
     shortTitle: 'Cờ Caro',
@@ -99,6 +109,9 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       if (playParam === 'prism' || playParam === 'prism-td' || playParam === 'laser') return 'prism_td';
       if (playParam === 'linux' || playParam === 'ubuntu' || playParam === 'cli' || playParam === 'hacker') {
         return 'linux_hacker';
+      }
+      if (playParam === 'traffic' || playParam === 'ddos' || playParam === 'lb' || playParam === 'router') {
+        return 'traffic_router';
       }
     }
     return 'xiangqi';
@@ -180,6 +193,13 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
                         }`}
                         aria-hidden="true"
                       />
+                    ) : item.gameKey === 'traffic_router' ? (
+                      <Network
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          isSelected ? 'text-sky-300' : 'text-sky-600 dark:text-sky-400'
+                        }`}
+                        aria-hidden="true"
+                      />
                     ) : (
                       <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true" />
                     )}
@@ -237,6 +257,9 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       )}
       {activeGame === 'linux_hacker' && (
         <LinuxHackerGameSection theme={theme} onToggleTheme={onToggleTheme} />
+      )}
+      {activeGame === 'traffic_router' && (
+        <TrafficRouterGameSection theme={theme} onToggleTheme={onToggleTheme} />
       )}
     </div>
   );

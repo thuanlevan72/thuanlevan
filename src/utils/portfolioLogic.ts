@@ -227,13 +227,13 @@ export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
   }
   if (route === 'game') {
     return {
-      title: 'Khu Trò Chơi 2D — Cờ Tướng, Laser, ASMR & Linux CLI',
+      title: 'Khu Trò Chơi 2D — 6 Game Trí Tuệ, ASMR, Laser & DevOps',
       description:
-        'Chơi 5 game 2D độc đáo: Cờ Tướng AI 10 cấp, Kiểm Duyệt Hồ Sơ, Sắp Xếp Góc Nhỏ Chuẩn OCD ASMR, Thủ Thành Laser và Hacker Ubuntu CLI.',
+        'Chơi 6 game 2D: Cờ Tướng AI, Kiểm Duyệt Hồ Sơ, Sắp Xếp Chuẩn OCD ASMR, Thủ Thành Laser, Hacker Ubuntu CLI và Điều Phối DDoS.',
       keywords:
-        'Game 2D, Cờ Tướng 10 cấp độ, Kiểm Duyệt Hồ Sơ Dị Biệt, Sắp Xếp Góc Nhỏ Chuẩn OCD, ASMR Organizer, Thủ Thành Laser, Hacker Linux CLI, Thuận Lê',
+        'Game 2D, Cờ Tướng AI, Kiểm Duyệt Hồ Sơ, Sắp Xếp Chuẩn OCD ASMR, Thủ Thành Laser, Hacker Linux CLI, Điều Phối Lưu Lượng Chống DDoS, Thuận Lê',
       ogType: 'website',
-      ogImageAlt: 'Khu Trò Chơi 2D gồm Cờ Tướng AI, Kiểm Duyệt Hồ Sơ, Sắp Xếp Chuẩn OCD ASMR, Thủ Thành Laser và Hacker Linux Ubuntu CLI',
+      ogImageAlt: 'Khu Trò Chơi 2D gồm Cờ Tướng AI, Kiểm Duyệt Hồ Sơ, Sắp Xếp ASMR, Thủ Thành Laser, Hacker CLI và Điều Phối DDoS',
       path: '/game',
     };
   }
