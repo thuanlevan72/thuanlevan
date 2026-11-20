@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import {
   analyzeArchitectureDesign,
+  ARCH_MODES,
   buildBlueprintGraph,
   canAddEdge,
   CANVAS_H,
@@ -30,6 +31,8 @@ import {
   createInitialNodes,
   evaluatePacketAtNode,
   evaluateSolutionOptimization,
+  getArchMode,
+  getEffectiveScenarioConfig,
   getNodeCatalogEntry,
   getSellRefund,
   hasPathToDatabase,
@@ -40,6 +43,7 @@ import {
   selectOutgoingEdge,
   TRAFFIC_LEVELS,
   type ArchitectureApproach,
+  type ArchModeId,
   type InfraEdge,
   type InfraNode,
   type InfraNodeType,
@@ -58,7 +62,7 @@ interface TrafficRouterGameSectionProps {
 type ToolMode = PlaceableNodeType | 'wire' | 'cut';
 type GamePhase = 'TITLE' | 'PLAYING' | 'VICTORY' | 'GAME_OVER';
 type SimStage = 'DESIGNING' | 'SIMULATING';
-type ChapterFilter = 0 | 1 | 2 | 3 | 4;
+type ChapterFilter = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
 interface ActivePacket {
   id: number;
@@ -104,7 +108,7 @@ interface HudSnapshot {
 
 type SavedGradesMap = Record<string, 'S' | 'A' | 'B' | 'C'>;
 
-const SAVE_GRADES_KEY = 'thuanle-arch-grades-v2';
+const SAVE_GRADES_KEY = 'thuanle-arch-grades-v3';
 
 function loadSavedGrades(): SavedGradesMap {
   if (typeof window === 'undefined') return {};
@@ -119,9 +123,18 @@ function loadSavedGrades(): SavedGradesMap {
   }
 }
 
-function saveGrade(levelId: number, grade: 'S' | 'A' | 'B' | 'C', prev: SavedGradesMap): SavedGradesMap {
+function gradeKey(levelId: number, modeId: ArchModeId): string {
+  return `${levelId}:${modeId}`;
+}
+
+function saveGrade(
+  levelId: number,
+  modeId: ArchModeId,
+  grade: 'S' | 'A' | 'B' | 'C',
+  prev: SavedGradesMap
+): SavedGradesMap {
   const rank: Record<'S' | 'A' | 'B' | 'C', number> = { S: 4, A: 3, B: 2, C: 1 };
-  const key = String(levelId);
+  const key = gradeKey(levelId, modeId);
   const existing = prev[key];
   const nextGrade = existing && rank[existing] >= rank[grade] ? existing : grade;
   const next = { ...prev, [key]: nextGrade };
@@ -263,6 +276,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
   });
   const [chapterFilter, setChapterFilter] = useState<ChapterFilter>(0);
   const [levelIdx, setLevelIdx] = useState<number>(0);
+  const [modeId, setModeId] = useState<ArchModeId>('standard');
   const [tool, setTool] = useState<ToolMode>('redis');
   const [speedMult, setSpeedMult] = useState<1 | 2 | 3>(2);
   const [paused, setPaused] = useState<boolean>(false);
@@ -272,6 +286,10 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
   const [endEvaluation, setEndEvaluation] = useState<SolutionEvaluation | null>(null);
 
   const currentLevel = TRAFFIC_LEVELS[levelIdx];
+  const effectiveConfig = useMemo(
+    () => getEffectiveScenarioConfig(currentLevel, modeId),
+    [currentLevel, modeId]
+  );
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioRef = useRef<AudioContext | null>(null);
 
@@ -292,14 +310,21 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
   }, []);
 
   // Mutable simulation ref driven at 60fps
+  const initialCfg = getEffectiveScenarioConfig(TRAFFIC_LEVELS[0], 'standard');
   const simRef = useRef({
-    level: TRAFFIC_LEVELS[0],
+    baseLevel: TRAFFIC_LEVELS[0],
+    level: initialCfg.effectiveLevel,
+    modeId: 'standard' as ArchModeId,
+    cpuLoadMult: initialCfg.cpuLoadMult,
+    heatPenaltyMult: initialCfg.heatPenaltyMult,
+    strictSecurity: initialCfg.mode.strictSecurity,
+    modeName: initialCfg.mode.name,
     nodes: createInitialNodes(TRAFFIC_LEVELS[0]),
     edges: [...TRAFFIC_LEVELS[0].initialEdges],
     packets: [] as ActivePacket[],
     fxs: [] as FloatingFx[],
-    budget: TRAFFIC_LEVELS[0].startingBudget,
-    earnedBudgetTotal: TRAFFIC_LEVELS[0].startingBudget,
+    budget: initialCfg.startingBudget,
+    earnedBudgetTotal: initialCfg.startingBudget,
     dbCpu: 10,
     peakDbCpu: 10,
     systemHealth: 100,
@@ -326,8 +351,8 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
   });
 
   const [hud, setHud] = useState<HudSnapshot>(() => ({
-    budget: TRAFFIC_LEVELS[0].startingBudget,
-    earnedBudgetTotal: TRAFFIC_LEVELS[0].startingBudget,
+    budget: initialCfg.startingBudget,
+    earnedBudgetTotal: initialCfg.startingBudget,
     dbCpu: 10,
     peakDbCpu: 10,
     systemHealth: 100,
@@ -374,9 +399,9 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
 
   const liveAnalysis = useMemo(() => {
     const s = simRef.current;
-    return analyzeArchitectureDesign(currentLevel, s.nodes, s.edges);
+    return analyzeArchitectureDesign(effectiveConfig.effectiveLevel, s.nodes, s.edges);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentLevel, hud.topologyRev]);
+  }, [effectiveConfig, hud.topologyRev]);
 
   const computeCurrentEvaluation = useCallback((): SolutionEvaluation => {
     const s = simRef.current;
@@ -389,23 +414,34 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
       peakDbCpu: s.peakDbCpu,
       breachedAttacks: s.breachedAttacks,
       remainingBudget: s.budget,
+      strictSecurity: s.strictSecurity,
+      modeName: s.modeName,
     });
   }, []);
 
   const startScenario = useCallback(
-    (idx: number) => {
+    (idx: number, overrideModeId?: ArchModeId) => {
       const clamped = Math.max(0, Math.min(TRAFFIC_LEVELS.length - 1, idx));
       const lvl = TRAFFIC_LEVELS[clamped];
+      const nextModeId = overrideModeId ?? modeId;
+      const cfg = getEffectiveScenarioConfig(lvl, nextModeId);
       setLevelIdx(clamped);
+      if (overrideModeId) setModeId(overrideModeId);
       setEndEvaluation(null);
       simRef.current = {
-        level: lvl,
+        baseLevel: lvl,
+        level: cfg.effectiveLevel,
+        modeId: nextModeId,
+        cpuLoadMult: cfg.cpuLoadMult,
+        heatPenaltyMult: cfg.heatPenaltyMult,
+        strictSecurity: cfg.mode.strictSecurity,
+        modeName: cfg.mode.name,
         nodes: createInitialNodes(lvl),
         edges: [...lvl.initialEdges],
         packets: [],
         fxs: [],
-        budget: lvl.startingBudget,
-        earnedBudgetTotal: lvl.startingBudget,
+        budget: cfg.startingBudget,
+        earnedBudgetTotal: cfg.startingBudget,
         dbCpu: 10,
         peakDbCpu: 10,
         systemHealth: 100,
@@ -427,11 +463,50 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
         nextNodeId: 1,
         dashOffset: 0,
         topologyRev: 1,
-        notice: lvl.tacticalTip,
+        notice: `${cfg.mode.name}: ${lvl.tacticalTip}`,
         outcome: null,
       };
       setPaused(false);
       setPhase('PLAYING');
+      syncHud();
+    },
+    [modeId, syncHud]
+  );
+
+  const switchDesignMode = useCallback(
+    (nextModeId: ArchModeId) => {
+      const s = simRef.current;
+      if (s.simStage === 'SIMULATING') return;
+      const cfg = getEffectiveScenarioConfig(s.baseLevel, nextModeId);
+      setModeId(nextModeId);
+      s.modeId = nextModeId;
+      s.level = cfg.effectiveLevel;
+      s.cpuLoadMult = cfg.cpuLoadMult;
+      s.heatPenaltyMult = cfg.heatPenaltyMult;
+      s.strictSecurity = cfg.mode.strictSecurity;
+      s.modeName = cfg.mode.name;
+
+      const spentCost = s.nodes.reduce((sum, n) => {
+        if (n.fixed || n.type === 'ingress' || n.type === 'database') return sum;
+        const entry = getNodeCatalogEntry(n.type);
+        const isStarterFree = n.id === 'app-init' && n.level === 1;
+        if (isStarterFree) return sum;
+        const starterUpgradeOnly = n.id === 'app-init' && n.level >= 2;
+        return sum + (starterUpgradeOnly ? entry.upgradeCost : entry.cost + (n.level >= 2 ? entry.upgradeCost : 0));
+      }, 0);
+
+      if (spentCost > cfg.startingBudget) {
+        s.nodes = createInitialNodes(s.baseLevel);
+        s.edges = [...s.baseLevel.initialEdges];
+        s.selectedNodeId = null;
+        s.budget = cfg.startingBudget;
+        s.notice = `Đổi sang ${cfg.mode.name} ($${cfg.startingBudget}) — đã làm mới sơ đồ cho khớp ngân sách!`;
+      } else {
+        s.budget = cfg.startingBudget - spentCost;
+        s.notice = `Đã chuyển chế độ: ${cfg.mode.name} (${cfg.mode.ruleSummary})`;
+      }
+      s.earnedBudgetTotal = cfg.startingBudget;
+      s.topologyRev += 1;
       syncHud();
     },
     [syncHud]
@@ -537,7 +612,9 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     // Recompute remaining budget purely from placed nodes vs startingBudget so mid-sim packet coins don't inflate design budget
     const spentCost = s.nodes.reduce((sum, n) => {
       if (n.fixed || n.type === 'ingress' || n.type === 'database') return sum;
+      if (n.id === 'app-init' && n.level === 1) return sum;
       const entry = getNodeCatalogEntry(n.type);
+      if (n.id === 'app-init' && n.level >= 2) return sum + entry.upgradeCost;
       return sum + entry.cost + (n.level >= 2 ? entry.upgradeCost : 0);
     }, 0);
     s.budget = Math.max(0, s.level.startingBudget - spentCost);
@@ -889,7 +966,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
               playRouterSfx(ensureAudio(), 'win', muted);
               const evalResult = computeCurrentEvaluation();
               setEndEvaluation(evalResult);
-              setSavedGrades((prev) => saveGrade(s.level.id, evalResult.grade, prev));
+              setSavedGrades((prev) => saveGrade(s.level.id, s.modeId, evalResult.grade, prev));
               setPhase('VICTORY');
               syncHud();
             } else {
@@ -921,7 +998,8 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
             p.kind,
             Math.random(),
             outgoing.length,
-            p.writeDamping
+            p.writeDamping,
+            s.heatPenaltyMult
           );
           const totalLatency = p.latencyMs + decision.addedLatencyMs;
           const nextDamping = decision.writeDampingFactor
@@ -961,7 +1039,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
             playRouterSfx(ensureAudio(), 'cache', muted);
           } else if (decision.outcome === 'delivered') {
             target.processedCount += 1;
-            s.dbCpu = Math.min(100, s.dbCpu + decision.dbCpuDelta);
+            s.dbCpu = Math.min(100, s.dbCpu + decision.dbCpuDelta * s.cpuLoadMult);
             s.peakDbCpu = Math.max(s.peakDbCpu, s.dbCpu);
             if (decision.integrityDelta < 0) {
               s.breachedAttacks += 1;
@@ -1281,28 +1359,37 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     [chapterFilter]
   );
 
-  const clearedCount = Object.keys(savedGrades).length;
+  const clearedStagesCount = useMemo(() => {
+    const ids = new Set<string>();
+    for (const k of Object.keys(savedGrades)) {
+      const stageId = k.split(':')[0];
+      if (stageId) ids.add(stageId);
+    }
+    return ids.size;
+  }, [savedGrades]);
+  const clearedModesCount = Object.keys(savedGrades).length;
 
   if (phase === 'TITLE') {
-    const firstWaveWeights = currentLevel.waves[0].weights;
+    const firstWaveWeights = effectiveConfig.waves[0].weights;
+    const activeMode = effectiveConfig.mode;
     return (
       <section
         id="traffic-router-section"
-        aria-label="Thiết Kế Kiến Trúc Hệ Thống — 16 Hoàn Cảnh & Đánh Giá Tối Ưu"
+        aria-label={`Thiết Kế Kiến Trúc Hệ Thống — ${TRAFFIC_LEVELS.length} Hoàn Cảnh & ${ARCH_MODES.length} Chế Độ Chơi`}
         className="rounded-2xl border border-[#1E2E4A] bg-[#0B1320] text-[#F1F5F9] p-5 sm:p-7 shadow-sm"
       >
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left 7 cols: Chapter tabs & 16-level catalog */}
+          {/* Left 7 cols: Chapter tabs & 24-level catalog */}
           <div className="lg:col-span-7 space-y-4">
             <div className="space-y-1.5">
               <p className="text-xs font-mono tracking-wide text-sky-400">
-                System Architecture Designer · 16 Hoàn Cảnh Thực Tế · Đa Giải Pháp &amp; Đánh Giá Tối Ưu
+                System Architecture Designer · {TRAFFIC_LEVELS.length} Hoàn Cảnh Thực Tế · {ARCH_MODES.length} Chế Độ Chơi / Màn · Chấm Điểm Tối Ưu
               </p>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight [text-wrap:balance]">
                 Thiết Kế Kiến Trúc Hệ Thống
               </h1>
               <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                Phân tích từng hoàn cảnh thực tế (Tin tức, Media, Flash Sale, Ngân hàng, Bệnh viện HIS, GPS, IoT, AI API...), tự do thiết kế bằng nhiều cách khác nhau và nhận chấm điểm <strong>S / A / B / C</strong> kèm phân tích <em>vì sao giải pháp chưa tối ưu</em>.
+                Chinh phục <strong>{TRAFFIC_LEVELS.length} tình huống thực tế</strong> (Tin tức, Flash Sale, Chứng khoán, AI RAG, Multi-Tenant ERP, Active-Active...) qua <strong>{ARCH_MODES.length} chế độ chơi</strong> mỗi màn và nhận phân tích <em>tại sao giải pháp chưa tối ưu</em>.
               </p>
             </div>
 
@@ -1312,8 +1399,10 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                 { id: 0 as ChapterFilter, label: `Tất cả (${TRAFFIC_LEVELS.length})` },
                 { id: 1 as ChapterFilter, label: 'Ch.1 Web & Cache' },
                 { id: 2 as ChapterFilter, label: 'Ch.2 Queue & Async' },
-                { id: 3 as ChapterFilter, label: 'Ch.3 Hệ Thống Đặc Thù' },
+                { id: 3 as ChapterFilter, label: 'Ch.3 Đặc Thù' },
                 { id: 4 as ChapterFilter, label: 'Ch.4 Quy Mô Lớn' },
+                { id: 5 as ChapterFilter, label: 'Ch.5 Thời Gian Thực' },
+                { id: 6 as ChapterFilter, label: 'Ch.6 AI & Toàn Cầu' },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -1331,16 +1420,19 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                 </button>
               ))}
               <span className="ml-auto text-xs font-mono text-slate-400 tabular-nums">
-                Hoàn thành: {clearedCount}/{TRAFFIC_LEVELS.length}
+                Màn: {clearedStagesCount}/{TRAFFIC_LEVELS.length} · Huy hiệu: {clearedModesCount}/{TRAFFIC_LEVELS.length * ARCH_MODES.length}
               </span>
             </div>
 
             {/* Scenario Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[380px] overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[410px] overflow-y-auto pr-1">
               {filteredLevels.map((lvl) => {
                 const idx = TRAFFIC_LEVELS.findIndex((x) => x.id === lvl.id);
                 const isSelected = idx === levelIdx;
-                const savedGrade = savedGrades[String(lvl.id)];
+                const savedGrade = savedGrades[gradeKey(lvl.id, modeId)];
+                const clearedModesForLvl = ARCH_MODES.filter(
+                  (m) => Boolean(savedGrades[gradeKey(lvl.id, m.id)])
+                ).length;
                 return (
                   <button
                     key={lvl.id}
@@ -1355,7 +1447,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                   >
                     <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
                       <span className="font-mono">
-                        {lvl.code} · {lvl.difficulty} · {lvl.approaches.length} Cách
+                        {lvl.code} · {lvl.difficulty} · {clearedModesForLvl}/{ARCH_MODES.length} Chế độ
                       </span>
                       {savedGrade && (
                         <span
@@ -1381,30 +1473,80 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-sm transition-colors cursor-pointer"
               >
                 <Play className="w-4 h-4" aria-hidden="true" />
-                <span>Triển Khai {currentLevel.code} (Màn {levelIdx + 1}/16)</span>
+                <span>
+                  Triển Khai {currentLevel.code} · {activeMode.shortName} (Màn {levelIdx + 1}/{TRAFFIC_LEVELS.length})
+                </span>
               </button>
               <span className="text-xs text-slate-400">
-                Bước 1: Thiết kế kiến trúc &amp; nối dây · Bước 2: Bấm Sẵn Sàng giả lập · Bước 3: Chấm điểm tối ưu
+                Bước 1: Chọn chế độ &amp; thiết kế · Bước 2: Sẵn Sàng giả lập · Bước 3: Chấm điểm tối ưu
               </span>
             </div>
           </div>
 
-          {/* Right 5 cols: Scenario Context, Approaches & Lesson Briefing */}
+          {/* Right 5 cols: Game Mode Selector + Scenario Context & Approaches */}
           <div className="lg:col-span-5 space-y-3">
             <div className="rounded-2xl border border-[#1E2E4A] bg-[#0F192B] p-4 sm:p-5 space-y-3.5">
-              <div className="flex items-center justify-between gap-2 text-xs font-mono text-sky-400">
+              {/* Per-Stage Game Mode Selector */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Chọn Chế Độ Chơi Cho {currentLevel.code} ({ARCH_MODES.length} chế độ):</span>
+                  </span>
+                  <span className="text-[11px] font-mono text-slate-300">
+                    ${effectiveConfig.startingBudget} · {effectiveConfig.waves.length} Đợt
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                  {ARCH_MODES.map((m) => {
+                    const active = m.id === modeId;
+                    const modeGrade = savedGrades[gradeKey(currentLevel.id, m.id)];
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        data-testid={`arch-mode-${m.id}`}
+                        onClick={() => setModeId(m.id)}
+                        className={`px-2.5 py-2 rounded-xl border text-left transition-colors cursor-pointer ${
+                          active
+                            ? 'bg-sky-500/20 border-sky-400 text-white'
+                            : 'bg-[#132138] border-[#1E2E4A] hover:border-sky-500/60 text-slate-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 text-[11px] font-bold">
+                          <span className="truncate" style={{ color: active ? '#FFFFFF' : m.color }}>
+                            {m.shortName}
+                          </span>
+                          {modeGrade && (
+                            <span className={`px-1 rounded text-[9px] font-mono border ${gradeBadgeStyle(modeGrade)}`}>
+                              {modeGrade}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-slate-400 truncate mt-0.5">{m.badge}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] text-slate-300 bg-[#132138] border border-[#1E2E4A] rounded-lg px-2.5 py-1.5 leading-snug">
+                  <strong style={{ color: activeMode.color }}>{activeMode.name}:</strong>{' '}
+                  {activeMode.description}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 text-xs font-mono text-sky-400 pt-1 border-t border-[#1E2E4A]">
                 <span>{currentLevel.chapterTitle}</span>
-                <span>SLA ≤ {currentLevel.targetSlaMs}ms</span>
+                <span>SLA ≤ {effectiveConfig.targetSlaMs}ms · DB Cool {effectiveConfig.dbCoolingPerSec}/s</span>
               </div>
 
               <div>
                 <h2 className="text-lg font-bold text-white">{currentLevel.title}</h2>
-                <p className="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                <p className="text-xs text-slate-300 mt-1 leading-relaxed">
                   {currentLevel.contextDescription}
                 </p>
               </div>
 
-              {/* Traffic Profile Mix */}
+              {/* Traffic Profile Mix (Mode-Adjusted) */}
               <div className="grid grid-cols-5 gap-1.5 text-center text-[11px] font-mono tabular-nums">
                 <div className="p-1.5 rounded-lg bg-[#132138] border border-[#1E2E4A]">
                   <span className="block text-sky-300">GET</span>
@@ -1429,16 +1571,16 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
               </div>
 
               {/* Multiple Design Approaches Preview */}
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <p className="text-xs font-semibold text-emerald-300 flex items-center gap-1.5">
                   <Layers className="w-3.5 h-3.5" />
                   <span>Các cách thiết kế khả thi ({currentLevel.approaches.length} phương án):</span>
                 </p>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 max-h-[175px] overflow-y-auto pr-1">
                   {currentLevel.approaches.map((ap) => (
                     <div
                       key={ap.id}
-                      className="p-2.5 rounded-xl bg-[#132138] border border-[#1E2E4A] text-xs space-y-0.5"
+                      className="p-2 rounded-xl bg-[#132138] border border-[#1E2E4A] text-xs space-y-0.5"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <strong className="text-white truncate">{ap.name}</strong>
@@ -1451,10 +1593,10 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
               </div>
 
               {/* Architectural Learning Lesson */}
-              <div className="p-3 rounded-xl bg-sky-500/10 border border-sky-400/30 text-xs space-y-1">
+              <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-400/30 text-xs space-y-0.5">
                 <p className="font-semibold text-sky-300 flex items-center gap-1.5">
                   <BookOpen className="w-3.5 h-3.5" />
-                  <span>Bài học kiến trúc rút ra:</span>
+                  <span>Bài học kiến trúc:</span>
                 </p>
                 <p className="text-slate-200 leading-relaxed">{currentLevel.learningLesson}</p>
               </div>
@@ -1476,12 +1618,13 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
       ? getNodeCatalogEntry(hud.selectedNode.type)
       : null;
 
+  const activeMode = getArchMode(modeId);
   const showReportModal = (phase === 'VICTORY' || phase === 'GAME_OVER') && endEvaluation !== null;
 
   return (
     <section
       id="traffic-router-section"
-      aria-label={`Thiết Kế Kiến Trúc — ${currentLevel.title}`}
+      aria-label={`Thiết Kế Kiến Trúc — ${currentLevel.title} (${activeMode.name})`}
       className="relative rounded-2xl border border-[#1E2E4A] bg-[#0B1320] text-[#F1F5F9] p-3.5 sm:p-5 shadow-sm"
     >
       {/* Top Telemetry HUD */}
@@ -1509,6 +1652,13 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
           </span>
 
           <span
+            className="px-2 py-0.5 rounded-md font-mono text-[11px] font-bold border whitespace-nowrap bg-[#132138]"
+            style={{ color: activeMode.color, borderColor: `${activeMode.color}66` }}
+          >
+            {activeMode.shortName}
+          </span>
+
+          <span
             className="text-xs font-semibold text-sky-300 truncate max-w-[170px] 2xl:max-w-[230px]"
             title={`${currentLevel.code} · ${currentLevel.title}`}
           >
@@ -1518,7 +1668,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
           <div className="whitespace-nowrap">
             <span className="text-slate-400 text-[11px] mr-1">NGÂN SÁCH</span>
             <strong className="font-mono text-amber-300">${hud.budget}</strong>
-            <span className="text-[10px] text-slate-400 font-mono">/${currentLevel.startingBudget}</span>
+            <span className="text-[10px] text-slate-400 font-mono">/${effectiveConfig.startingBudget}</span>
           </div>
 
           <div className="flex items-center gap-1 whitespace-nowrap">
@@ -1545,20 +1695,20 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
             <span className="text-slate-400 text-[11px]">TRỄ</span>
             <strong
               className={`font-mono ${
-                hud.avgLatencyMs <= currentLevel.targetSlaMs ? 'text-cyan-300' : 'text-amber-300'
+                hud.avgLatencyMs <= effectiveConfig.targetSlaMs ? 'text-cyan-300' : 'text-amber-300'
               }`}
             >
               {hud.avgLatencyMs}ms
             </strong>
-            <span className="text-[10px] text-slate-400 font-mono">/{currentLevel.targetSlaMs}ms</span>
+            <span className="text-[10px] text-slate-400 font-mono">/{effectiveConfig.targetSlaMs}ms</span>
           </div>
 
           <div className="whitespace-nowrap">
             <span className="text-slate-400 text-[11px] mr-1">ĐỢT</span>
             <strong className="font-mono text-white">
               {hud.simStage === 'DESIGNING'
-                ? `0/${currentLevel.waves.length}`
-                : `${Math.min(hud.waveIndex + 1, currentLevel.waves.length)}/${currentLevel.waves.length}`}
+                ? `0/${effectiveConfig.waves.length}`
+                : `${Math.min(hud.waveIndex + 1, effectiveConfig.waves.length)}/${effectiveConfig.waves.length}`}
             </strong>
           </div>
         </div>
@@ -1598,6 +1748,33 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
             <RotateCcw className="w-4 h-4" />
           </button>
         </div>
+      </div>
+
+      {/* Mode Switcher Bar (Active during Designing Phase) */}
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs">
+        <span className="text-[11px] font-mono text-slate-400 mr-1">CHẾ ĐỘ MÀN NÀY:</span>
+        {ARCH_MODES.map((m) => {
+          const active = m.id === modeId;
+          return (
+            <button
+              key={m.id}
+              type="button"
+              disabled={hud.simStage === 'SIMULATING'}
+              onClick={() => switchDesignMode(m.id)}
+              title={m.ruleSummary}
+              className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap ${
+                active
+                  ? 'bg-sky-500/25 border-sky-400 text-white'
+                  : 'bg-[#111C33] border-[#1E2E4A] hover:border-sky-400/60 text-slate-300'
+              }`}
+            >
+              <span style={{ color: active ? '#FFFFFF' : m.color }}>{m.shortName}</span>
+            </button>
+          );
+        })}
+        <span className="ml-auto text-[11px] text-slate-400 font-mono hidden md:inline">
+          {activeMode.ruleSummary}
+        </span>
       </div>
 
       {/* Main Split Workspace: Canvas + Right Inspector */}
@@ -1726,12 +1903,12 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs sm:text-sm transition-colors cursor-pointer whitespace-nowrap shrink-0 shadow-sm"
               >
                 <Zap className="w-4 h-4" />
-                <span>Sẵn Sàng — Chạy Giả Lập ({currentLevel.waves.length} Đợt)</span>
+                <span>Sẵn Sàng — Chạy Giả Lập ({effectiveConfig.waves.length} Đợt)</span>
               </button>
             ) : (
               <div className="flex items-center gap-2 shrink-0">
                 <span className="px-3 py-2 rounded-xl bg-[#111C33] border border-amber-400/50 text-amber-300 font-mono text-xs font-semibold whitespace-nowrap">
-                  Đang test Đợt {Math.min(hud.waveIndex + 1, currentLevel.waves.length)}/{currentLevel.waves.length} ({hud.waveTimeLeft}s)
+                  Đang test Đợt {Math.min(hud.waveIndex + 1, effectiveConfig.waves.length)}/{effectiveConfig.waves.length} ({hud.waveTimeLeft}s)
                 </span>
                 <button
                   type="button"
@@ -2018,7 +2195,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                 onClick={() => setPhase('TITLE')}
                 className="px-3.5 py-2 rounded-xl border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 text-xs sm:text-sm font-semibold text-slate-200 cursor-pointer"
               >
-                Danh Sách 16 Màn
+                Danh Sách {TRAFFIC_LEVELS.length} Màn
               </button>
               <button
                 type="button"
@@ -2028,6 +2205,20 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
               >
                 Quay Lại Sửa Thiết Kế
               </button>
+              {modeId !== 'chaos_hell' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextOrder: ArchModeId[] = ['standard', 'flash_surge', 'cyber_siege', 'tight_budget', 'chaos_hell'];
+                    const curIdx = nextOrder.indexOf(modeId);
+                    const nextMode = nextOrder[Math.min(nextOrder.length - 1, curIdx + 1)];
+                    startScenario(levelIdx, nextMode);
+                  }}
+                  className="px-4 py-2 rounded-xl border border-purple-400/60 bg-purple-500/20 hover:bg-purple-500/30 text-xs sm:text-sm font-bold text-purple-200 cursor-pointer"
+                >
+                  Thử Chế Độ Khó Hơn →
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => startScenario(levelIdx)}

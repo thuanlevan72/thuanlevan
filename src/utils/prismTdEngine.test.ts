@@ -3,111 +3,156 @@ import assert from 'node:assert/strict';
 import {
   applyDamageToEnemy,
   BIOME_PALETTES,
-  computeMirrorReflectionDir,
+  buildWaveSpawns,
   createEnemyForWave,
+  DIFFICULTY_CONFIGS,
+  DIFFICULTY_ORDER,
+  getEffectiveMapSetup,
+  getGunCombatProfile,
+  getGunSellRefund,
+  getGunTotalInvested,
+  getGunUpgradeCost,
   getMapPathTileSet,
-  getOpticSellRefund,
-  getOpticUpgradeCost,
   getTileKind,
-  gridToWorldCenter,
-  OPTIC_CATALOG,
-  PlacedOptic,
-  pointToSegmentDistSq,
+  GUN_CATALOG,
+  MAX_GUN_LEVEL,
   PRISM_MAPS,
-  stepEnemiesWithLasers,
-  traceLaserNetwork,
+  stepEnemies,
 } from './prismTdEngine.ts';
 
-test('PRISM_MAPS define 10 valid 12x8 biome circuit maps and 10 optic/weapon tools', () => {
-  assert.equal(PRISM_MAPS.length, 10);
-  assert.equal(OPTIC_CATALOG.length, 10);
+test('PRISM_MAPS define 16 valid 12x8 tactical pure-gun maps with long 15-35 wave campaigns', () => {
+  assert.equal(PRISM_MAPS.length, 16);
+  assert.equal(GUN_CATALOG.length, 8);
+  assert.equal(MAX_GUN_LEVEL, 10);
+  assert.deepEqual(DIFFICULTY_ORDER, ['easy', 'normal', 'hard', 'hell']);
+
   for (const map of PRISM_MAPS) {
     assert.equal(map.cols, 12);
     assert.equal(map.rows, 8);
     assert.ok(BIOME_PALETTES[map.biome]);
-    assert.ok(map.emitters.length >= 1 && map.emitters.length <= 3);
+    assert.ok(DIFFICULTY_CONFIGS[map.recommendedDifficulty]);
+    assert.ok(map.totalWaves >= 15 && map.totalWaves <= 35, `${map.id} waves should be 15..35`);
     const pathSet = getMapPathTileSet(map);
-    assert.ok(pathSet.size >= 10);
-
-    for (const em of map.emitters) {
-      assert.ok(em.col >= 0 && em.col < map.cols);
-      assert.ok(em.row >= 0 && em.row < map.rows);
-      assert.equal(pathSet.has(`${em.col},${em.row}`), false);
+    assert.ok(pathSet.size >= 14);
+    assert.equal(getTileKind(map, map.path[0].col, map.path[0].row), 'spawn');
+    assert.equal(
+      getTileKind(map, map.path[map.path.length - 1].col, map.path[map.path.length - 1].row),
+      'core'
+    );
+    for (const w of map.walls) {
+      assert.equal(pathSet.has(`${w.col},${w.row}`), false);
     }
-    for (const op of map.starterOptics) {
-      assert.equal(getTileKind(map, op.col, op.row), 'empty');
+  }
+});
+
+test('4 difficulty tiers scale wave counts, core HP, energy, and enemy stats monotonically', () => {
+  const map = PRISM_MAPS[0];
+  const setupEasy = getEffectiveMapSetup(map, 'easy');
+  const setupNormal = getEffectiveMapSetup(map, 'normal');
+  const setupHard = getEffectiveMapSetup(map, 'hard');
+  const setupHell = getEffectiveMapSetup(map, 'hell');
+
+  assert.equal(setupEasy.totalWaves, 15);
+  assert.equal(setupNormal.totalWaves, 17);
+  assert.equal(setupHard.totalWaves, 19);
+  assert.equal(setupHell.totalWaves, 21);
+
+  assert.ok(setupEasy.startCoreHp > setupNormal.startCoreHp);
+  assert.ok(setupNormal.startCoreHp > setupHard.startCoreHp);
+  assert.ok(setupHard.startCoreHp > setupHell.startCoreHp);
+
+  assert.ok(setupEasy.startEnergy > setupNormal.startEnergy);
+  assert.ok(setupNormal.startEnergy > setupHard.startEnergy);
+  assert.ok(setupHard.startEnergy > setupHell.startEnergy);
+
+  const bossEasy = createEnemyForWave(1, 'boss', 10, map, false, 'easy');
+  const bossNormal = createEnemyForWave(2, 'boss', 10, map, false, 'normal');
+  const bossHard = createEnemyForWave(3, 'boss', 10, map, false, 'hard');
+  const bossHell = createEnemyForWave(4, 'boss', 10, map, false, 'hell');
+
+  assert.ok(bossNormal.maxHp > bossEasy.maxHp);
+  assert.ok(bossHard.maxHp > bossNormal.maxHp);
+  assert.ok(bossHell.maxHp > bossHard.maxHp);
+  assert.ok(bossHell.speed > bossHard.speed);
+  assert.ok(bossHell.armorRatio > bossEasy.armorRatio);
+  assert.ok(bossHell.scoreValue > bossEasy.scoreValue * 2);
+
+  const hellMap16 = getEffectiveMapSetup(PRISM_MAPS[15], 'hell');
+  assert.equal(hellMap16.totalWaves, 41);
+
+  const w5Easy = buildWaveSpawns(5, setupEasy.totalWaves, 'easy');
+  const w5Hell = buildWaveSpawns(5, setupHell.totalWaves, 'hell');
+  assert.ok(w5Hell.length > w5Easy.length);
+  assert.ok(w5Hell.some((s) => s.kind === 'boss'));
+});
+
+test('Pure Gun Lv1..Lv10 progression scales monotonically and unlocks milestone skills cleanly', () => {
+  for (const gun of GUN_CATALOG) {
+    assert.equal(gun.milestones.length, 4);
+    let prevDps = 0;
+    let prevDmg = 0;
+
+    for (let lv = 1; lv <= MAX_GUN_LEVEL; lv++) {
+      const profile = getGunCombatProfile(gun.type, lv);
+      assert.equal(profile.level, lv);
+      assert.ok(profile.damage > prevDmg, `${gun.type} lv${lv} damage should increase`);
+      assert.ok(profile.dpsEstimate > prevDps, `${gun.type} lv${lv} dps should increase`);
+      prevDmg = profile.damage;
+      prevDps = profile.dpsEstimate;
+
+      if (lv < MAX_GUN_LEVEL) {
+        const upCost = getGunUpgradeCost(gun.type, lv);
+        assert.ok(upCost !== null && upCost > 0);
+      } else {
+        assert.equal(getGunUpgradeCost(gun.type, lv), null);
+        assert.equal(profile.visualTier, 4);
+        assert.equal(profile.unlockedSkills.length, 4);
+        assert.equal(profile.nextSkill, null);
+      }
     }
   }
 
-  const starterTrace = traceLaserNetwork(
-    PRISM_MAPS[0],
-    PRISM_MAPS[0].starterOptics.map((s, idx) => ({
-      id: `s-${idx}`,
-      col: s.col,
-      row: s.row,
-      type: s.type,
-      rot: s.rot,
-      level: 1,
-      chargeTimer: 0,
-      hitCount: 0,
-      aimAngle: 0,
-      recoil: 0,
-    }))
-  );
-  assert.ok(starterTrace.segments.length >= 2);
+  const lv1Cost = getGunUpgradeCost('gatling', 1)!;
+  const lv9Cost = getGunUpgradeCost('gatling', 9)!;
+  assert.ok(lv9Cost > lv1Cost * 3);
+  const investedLv3 = getGunTotalInvested('cryo', 3);
+  const refundLv3 = getGunSellRefund({ type: 'cryo', level: 3 });
+  assert.equal(refundLv3, Math.round(investedLv3 * 0.72));
 });
 
-test('computeMirrorReflectionDir reflects cardinal and 45-deg beams accurately across 8 orientations', () => {
-  assert.equal(computeMirrorReflectionDir(2, 6), 0); // South -> East!
-  assert.equal(computeMirrorReflectionDir(2, 2), 4); // South -> West!
-  assert.equal(computeMirrorReflectionDir(0, 2), 6); // East -> North!
-  assert.equal(computeMirrorReflectionDir(0, 3), 7); // East -> North-East 45°!
-});
-
-test('traceLaserNetwork handles mirror bounces, 1->3 prism splitting, amplifier boost, energized gun passthrough, and loops', () => {
+test('Rebalanced wave spawns and enemy scaling challenge late-game waves and support all enemy abilities', () => {
   const map = PRISM_MAPS[0];
-  const optics: PlacedOptic[] = [
-    { id: 'm1', col: 1, row: 4, type: 'mirror', rot: 6, level: 1, chargeTimer: 0, hitCount: 0, aimAngle: 0, recoil: 0 },
-    { id: 'g1', col: 2, row: 4, type: 'flamer', rot: 0, level: 1, chargeTimer: 0, hitCount: 0, aimAngle: 0, recoil: 0 },
-    { id: 'amp1', col: 3, row: 4, type: 'amp', rot: 0, level: 1, chargeTimer: 0, hitCount: 0, aimAngle: 0, recoil: 0 },
-    { id: 'p1', col: 5, row: 4, type: 'prism', rot: 0, level: 1, chargeTimer: 0, hitCount: 0, aimAngle: 0, recoil: 0 },
-  ];
+  const wave1 = buildWaveSpawns(1, map.totalWaves, 'normal');
+  const wave15 = buildWaveSpawns(15, 25, 'hard');
+  assert.ok(wave1.length >= 16);
+  assert.ok(wave15.length >= 60);
+  assert.ok(wave15.some((s) => s.kind === 'boss'));
 
-  const trace = traceLaserNetwork(map, optics, false);
-  assert.ok(trace.energizedGunIds.includes('g1'));
-  assert.ok(trace.segments.length >= 6);
-  const ampSeg = trace.segments.find((s) => s.tier === 2);
-  assert.ok(ampSeg);
-  assert.ok(ampSeg.power > 55);
+  const scoutW1 = createEnemyForWave(1, 'scout', 1, map, false, 'normal');
+  const scoutW8 = createEnemyForWave(2, 'scout', 8, map, false, 'normal');
+  const bossW15 = createEnemyForWave(3, 'boss', 15, map, false, 'hard');
+  assert.ok(scoutW8.maxHp > scoutW1.maxHp * 4);
+  assert.ok(bossW15.maxHp > 20000);
+  assert.ok(bossW15.maxShield > 6000);
 
-  const eastFromPrism = trace.segments.find(
-    (s) =>
-      Math.abs(s.x1 - gridToWorldCenter(5, 4).x) < 1 &&
-      Math.abs(s.y1 - gridToWorldCenter(5, 4).y) < 1 &&
-      Math.abs(s.y2 - s.y1) < 1
-  );
-  assert.ok(eastFromPrism);
-  assert.ok(eastFromPrism.x2 < gridToWorldCenter(6, 4).x);
+  // Armor pierce & brittle interaction
+  const tank = createEnemyForWave(4, 'armored', 5, map, false, 'normal');
+  tank.shield = 0;
+  const startHp = tank.hp;
+  const rawHit = applyDamageToEnemy(tank, 100, { armorPierce: 0 });
+  const apHit = applyDamageToEnemy(tank, 100, { armorPierce: 1 });
+  assert.ok(apHit.actualDamage > rawHit.actualDamage * 1.5);
+  assert.ok(tank.hp < startHp);
 
-  const loopOptics: PlacedOptic[] = [
-    { id: 'lm1', col: 1, row: 4, type: 'mirror', rot: 2, level: 1, chargeTimer: 0, hitCount: 0, aimAngle: 0, recoil: 0 },
-    { id: 'lm2', col: 1, row: 1, type: 'mirror', rot: 4, level: 1, chargeTimer: 0, hitCount: 0, aimAngle: 0, recoil: 0 },
-  ];
-  const loopTrace = traceLaserNetwork(map, loopOptics, false);
-  assert.ok(loopTrace.segments.length <= 84);
-});
+  // Shield multiplier (Tesla EMP)
+  const aegis = createEnemyForWave(5, 'shieldbearer', 6, map, false, 'normal');
+  const initShield = aegis.shield;
+  applyDamageToEnemy(aegis, 50, { shieldMult: 2 });
+  assert.equal(initShield - aegis.shield, 100);
 
-test('pointToSegmentDistSq, shields, burn DoT, healer pulse, and teleporter phase blink work cleanly', () => {
-  assert.equal(pointToSegmentDistSq(50, 10, 0, 0, 100, 0), 100);
-
-  const map = PRISM_MAPS[0];
-  const shieldbearer = createEnemyForWave(10, 'shieldbearer', 6, map);
-  assert.ok(shieldbearer.shield > 100);
-  assert.equal(applyDamageToEnemy(shieldbearer, 40), false);
-  assert.ok(shieldbearer.shield < shieldbearer.maxShield);
-
-  const healer = createEnemyForWave(11, 'healer', 4, map);
-  const woundedAlly = createEnemyForWave(12, 'armored', 4, map);
+  // Healer pulse, burn DoT bypass, and teleporter phase blink
+  const healer = createEnemyForWave(10, 'healer', 4, map, false, 'normal');
+  const woundedAlly = createEnemyForWave(11, 'armored', 4, map, false, 'normal');
   woundedAlly.hp = Math.round(woundedAlly.maxHp * 0.4);
   healer.x = 200;
   healer.y = 200;
@@ -115,35 +160,16 @@ test('pointToSegmentDistSq, shields, burn DoT, healer pulse, and teleporter phas
   woundedAlly.x = 230;
   woundedAlly.y = 200;
   woundedAlly.burnTimer = 2;
-  woundedAlly.burnDps = 20;
+  woundedAlly.burnDps = 25;
 
-  const resHeal = stepEnemiesWithLasers([healer, woundedAlly], [], map, 0.2);
+  const resHeal = stepEnemies([healer, woundedAlly], map, 0.2);
   assert.equal(resHeal.outcome.healedEvents.length, 1);
   assert.ok(resHeal.outcome.totalDamageDealt > 0);
 
-  const blinker = createEnemyForWave(13, 'teleporter', 5, map);
+  const blinker = createEnemyForWave(12, 'teleporter', 5, map, false, 'normal');
   const startX = blinker.x;
   blinker.abilityCooldown = 0.05;
-  const resBlink = stepEnemiesWithLasers([blinker], [], map, 0.1);
+  const resBlink = stepEnemies([blinker], map, 0.1);
   assert.equal(resBlink.outcome.blinkEvents.length, 1);
   assert.ok(blinker.x > startX + 30);
-});
-
-test('upgrade cost and sell refund math stay consistent across levels 1..3 including new guns', () => {
-  assert.equal(getOpticUpgradeCost('mirror', 1), 30);
-  assert.equal(getOpticUpgradeCost('mortar', 2), 120);
-  assert.equal(getOpticUpgradeCost('flamer', 3), null);
-  const refundLv2 = getOpticSellRefund({
-    id: 'x',
-    col: 0,
-    row: 0,
-    type: 'cryo',
-    rot: 0,
-    level: 2,
-    chargeTimer: 0,
-    hitCount: 0,
-    aimAngle: 0,
-    recoil: 0,
-  });
-  assert.equal(refundLv2, Math.round((65 + 50) * 0.7));
 });

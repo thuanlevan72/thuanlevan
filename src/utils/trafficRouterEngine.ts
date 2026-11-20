@@ -87,7 +87,7 @@ export interface TrafficWaveDef {
 
 export interface TrafficLevelDef {
   id: number;
-  chapter: 1 | 2 | 3 | 4;
+  chapter: 1 | 2 | 3 | 4 | 5 | 6;
   chapterTitle: string;
   code: string;
   title: string;
@@ -248,36 +248,36 @@ export const PACKET_META: Record<
     label: 'Request Đọc (GET)',
     short: 'GET',
     color: '#38BDF8',
-    dbCpuLoad: 4.4,
+    dbCpuLoad: 5.0,
     integrityPenalty: 0,
   },
   write: {
     label: 'Request Ghi Nặng (POST)',
     short: 'POST',
     color: '#F59E0B',
-    dbCpuLoad: 10.2,
+    dbCpuLoad: 11.6,
     integrityPenalty: 0,
   },
   media: {
     label: 'Tài nguyên Media/File',
     short: 'MEDIA',
     color: '#F472B6',
-    dbCpuLoad: 8.8,
+    dbCpuLoad: 9.8,
     integrityPenalty: 0,
   },
   ddos: {
     label: 'Bot DDoS Flood',
     short: 'DDoS',
     color: '#FB7185',
-    dbCpuLoad: 15.5,
-    integrityPenalty: 5,
+    dbCpuLoad: 18.0,
+    integrityPenalty: 7,
   },
   sqli: {
     label: 'SQL Injection',
     short: 'SQLi',
     color: '#C084FC',
-    dbCpuLoad: 23.0,
-    integrityPenalty: 16,
+    dbCpuLoad: 26.5,
+    integrityPenalty: 20,
   },
 };
 
@@ -381,9 +381,20 @@ export function computeBlueprintCost(
   return total;
 }
 
+import { EXTRA_TRAFFIC_LEVELS } from './trafficRouterExtraLevels.ts';
+export {
+  ARCH_MODES,
+  ARCH_MODE_MAP,
+  getArchMode,
+  getEffectiveScenarioConfig,
+  type ArchModeDef,
+  type ArchModeId,
+  type EffectiveScenarioConfig,
+} from './trafficRouterModes.ts';
+
 const stdStart = makeStandardStart();
 
-export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
+const BASE_TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
   // =========================================================================
   // CHƯƠNG 1: NỀN TẢNG WEB & TỐI ƯU ĐỌC/GHI (MÀN 1–4)
   // =========================================================================
@@ -401,9 +412,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Một bài toán Read-heavy có thể giải bằng 3 hướng: (1) Đặt Redis Cache-Aside trong RAM, (2) Đặt Read Replica tách đọc khỏi DB chính, hoặc (3) Kết hợp CDN biên + App song song.',
     tacticalTip:
       'Thử lắp Redis [5], Read Replica [9] hoặc CDN [3]. Nhấn "Các Cách Thiết Kế" để xem 3 giải pháp chuẩn.',
-    targetSlaMs: 55,
+    targetSlaMs: 52,
     startingBudget: 280,
-    dbCoolingPerSec: 12.0,
+    dbCoolingPerSec: 9.8,
     ...stdStart,
     approaches: [
       {
@@ -466,9 +477,10 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       },
     ],
     waves: [
-      { waveNumber: 1, label: 'Độc giả buổi sáng', durationSec: 8, spawnIntervalSec: 0.65, weights: { read: 0.65, write: 0.15, media: 0.2, ddos: 0, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 2, label: 'Tin nóng lan truyền', durationSec: 9, spawnIntervalSec: 0.48, weights: { read: 0.62, write: 0.16, media: 0.22, ddos: 0, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Giờ cao điểm đọc tin', durationSec: 10, spawnIntervalSec: 0.38, weights: { read: 0.6, write: 0.2, media: 0.2, ddos: 0, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 1, label: 'Độc giả buổi sáng', durationSec: 8, spawnIntervalSec: 0.48, weights: { read: 0.65, write: 0.15, media: 0.2, ddos: 0, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 2, label: 'Tin nóng lan truyền', durationSec: 9, spawnIntervalSec: 0.36, weights: { read: 0.6, write: 0.18, media: 0.22, ddos: 0, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Giờ cao điểm đọc tin', durationSec: 9, spawnIntervalSec: 0.28, weights: { read: 0.58, write: 0.2, media: 0.22, ddos: 0, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Bùng nổ Breaking News', durationSec: 10, spawnIntervalSec: 0.23, weights: { read: 0.56, write: 0.22, media: 0.22, ddos: 0, sqli: 0 }, rewardBudget: 0 },
     ],
   },
   {
@@ -485,9 +497,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Nguyên tắc vàng: KHÔNG BAO GIỜ lưu file Media nặng trong DB quan hệ! Hãy tách file ra Object Storage (S3/MinIO) hoặc chặn phân phối tại Edge CDN.',
     tacticalTip:
       'Đặt CDN [3] ở cột biên hoặc Object Storage S3 [0] ở cột lưu trữ để tách 90%+ file Media khỏi Database!',
-    targetSlaMs: 65,
+    targetSlaMs: 60,
     startingBudget: 280,
-    dbCoolingPerSec: 12.5,
+    dbCoolingPerSec: 10.0,
     ...stdStart,
     approaches: [
       {
@@ -548,9 +560,10 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       },
     ],
     waves: [
-      { waveNumber: 1, label: 'Upload ảnh buổi trưa', durationSec: 8, spawnIntervalSec: 0.62, weights: { read: 0.35, write: 0.2, media: 0.45, ddos: 0, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 2, label: 'Video trend bùng nổ', durationSec: 9, spawnIntervalSec: 0.46, weights: { read: 0.3, write: 0.2, media: 0.5, ddos: 0, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Cao điểm chia sẻ clip', durationSec: 10, spawnIntervalSec: 0.36, weights: { read: 0.28, write: 0.22, media: 0.5, ddos: 0, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 1, label: 'Upload ảnh buổi trưa', durationSec: 8, spawnIntervalSec: 0.46, weights: { read: 0.35, write: 0.2, media: 0.45, ddos: 0, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 2, label: 'Video trend bùng nổ', durationSec: 9, spawnIntervalSec: 0.35, weights: { read: 0.28, write: 0.22, media: 0.5, ddos: 0, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Cao điểm chia sẻ clip', durationSec: 9, spawnIntervalSec: 0.27, weights: { read: 0.26, write: 0.22, media: 0.52, ddos: 0, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Cơn bão Clip Viral', durationSec: 10, spawnIntervalSec: 0.22, weights: { read: 0.24, write: 0.24, media: 0.52, ddos: 0, sqli: 0 }, rewardBudget: 0 },
     ],
   },
   {
@@ -567,9 +580,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Chống bão Bot có nhiều cách: Dùng Rate Limiter cắt IP spam 92–99%, kết hợp Redis giữ tồn kho siêu tốc, hoặc Edge CDN + Queue làm vùng đệm trước Database.',
     tacticalTip:
       'Gắn Rate Limiter [2] ngay đầu vào để chặn Bot DDoS, thêm Redis [5], LB [4] hoặc Queue [7] cho người mua thật!',
-    targetSlaMs: 65,
+    targetSlaMs: 60,
     startingBudget: 320,
-    dbCoolingPerSec: 13.0,
+    dbCoolingPerSec: 10.4,
     ...stdStart,
     approaches: [
       {
@@ -637,9 +650,10 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       },
     ],
     waves: [
-      { waveNumber: 1, label: 'Đếm ngược 23:59', durationSec: 8, spawnIntervalSec: 0.56, weights: { read: 0.5, write: 0.25, media: 0.1, ddos: 0.15, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 2, label: 'Bão Bot Săn Deal', durationSec: 9, spawnIntervalSec: 0.42, weights: { read: 0.35, write: 0.2, media: 0.1, ddos: 0.35, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Đỉnh 00:00 Flash Sale', durationSec: 10, spawnIntervalSec: 0.32, weights: { read: 0.3, write: 0.25, media: 0.05, ddos: 0.4, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 1, label: 'Đếm ngược 23:59', durationSec: 8, spawnIntervalSec: 0.43, weights: { read: 0.48, write: 0.25, media: 0.1, ddos: 0.17, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 2, label: 'Bão Bot Săn Deal', durationSec: 9, spawnIntervalSec: 0.32, weights: { read: 0.34, write: 0.22, media: 0.08, ddos: 0.36, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Đỉnh 00:00 Flash Sale', durationSec: 9, spawnIntervalSec: 0.25, weights: { read: 0.28, write: 0.26, media: 0.06, ddos: 0.4, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Xung Chốt Đơn Săn Sale', durationSec: 10, spawnIntervalSec: 0.21, weights: { read: 0.28, write: 0.28, media: 0.04, ddos: 0.4, sqli: 0 }, rewardBudget: 0 },
     ],
   },
   {
@@ -656,9 +670,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Bảo mật tầng Auth có 3 hướng phối hợp: (1) WAF + Rate Limiter khóa cứng vòng ngoài, (2) WAF + Redis Session tránh chạm DB khi kiểm tra token, hoặc (3) Phòng thủ toàn diện WAF + Limiter + Redis.',
     tacticalTip:
       'Bắt buộc phải có WAF [1] để chặn 100% SQLi! Kết hợp Rate Limiter [2] và Redis [5] để vừa sạch bot vừa đạt tốc độ tối đa.',
-    targetSlaMs: 65,
+    targetSlaMs: 60,
     startingBudget: 340,
-    dbCoolingPerSec: 13.5,
+    dbCoolingPerSec: 10.6,
     ...stdStart,
     approaches: [
       {
@@ -725,9 +739,10 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       },
     ],
     waves: [
-      { waveNumber: 1, label: 'Rà quét SQLi', durationSec: 8, spawnIntervalSec: 0.55, weights: { read: 0.5, write: 0.25, media: 0, ddos: 0.1, sqli: 0.15 }, rewardBudget: 0 },
-      { waveNumber: 2, label: 'Brute-force + SQLi', durationSec: 9, spawnIntervalSec: 0.42, weights: { read: 0.4, write: 0.22, media: 0, ddos: 0.18, sqli: 0.2 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Tấn công cổng Auth', durationSec: 10, spawnIntervalSec: 0.34, weights: { read: 0.34, write: 0.22, media: 0, ddos: 0.22, sqli: 0.22 }, rewardBudget: 0 },
+      { waveNumber: 1, label: 'Rà quét SQLi', durationSec: 8, spawnIntervalSec: 0.42, weights: { read: 0.48, write: 0.24, media: 0, ddos: 0.12, sqli: 0.16 }, rewardBudget: 0 },
+      { waveNumber: 2, label: 'Brute-force + SQLi', durationSec: 9, spawnIntervalSec: 0.32, weights: { read: 0.38, write: 0.22, media: 0, ddos: 0.18, sqli: 0.22 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Tấn công cổng Auth', durationSec: 9, spawnIntervalSec: 0.26, weights: { read: 0.32, write: 0.24, media: 0, ddos: 0.22, sqli: 0.22 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Credential Stuffing Toàn Diện', durationSec: 10, spawnIntervalSec: 0.21, weights: { read: 0.3, write: 0.24, media: 0, ddos: 0.24, sqli: 0.22 }, rewardBudget: 0 },
     ],
   },
 
@@ -748,9 +763,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Thay vì xử lý đồng bộ (Synchronous), hãy đẩy yêu cầu vào Message Queue (Kafka/RabbitMQ) để Worker xử lý nền (Asynchronous), hoặc phân tán qua Load Balancer + Worker.',
     tacticalTip:
       'Lắp Kafka/MQ [7] + Worker [8] để làm phẳng xung POST! Có thể nâng cấp Queue để giảm tới 70% tải DB.',
-    targetSlaMs: 75,
+    targetSlaMs: 68,
     startingBudget: 360,
-    dbCoolingPerSec: 13.5,
+    dbCoolingPerSec: 10.6,
     ...stdStart,
     approaches: [
       {
@@ -820,9 +835,10 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       },
     ],
     waves: [
-      { waveNumber: 1, label: 'Bắn thông báo chiến dịch A', durationSec: 8, spawnIntervalSec: 0.5, weights: { read: 0.35, write: 0.65, media: 0, ddos: 0, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 2, label: 'Đồng loạt Email & Push', durationSec: 9, spawnIntervalSec: 0.38, weights: { read: 0.25, write: 0.75, media: 0, ddos: 0, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Bão ghi Webhook', durationSec: 10, spawnIntervalSec: 0.3, weights: { read: 0.2, write: 0.75, media: 0, ddos: 0.05, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 1, label: 'Bắn thông báo chiến dịch A', durationSec: 8, spawnIntervalSec: 0.4, weights: { read: 0.32, write: 0.68, media: 0, ddos: 0, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 2, label: 'Đồng loạt Email & Push', durationSec: 9, spawnIntervalSec: 0.3, weights: { read: 0.24, write: 0.76, media: 0, ddos: 0, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Bão ghi Webhook', durationSec: 9, spawnIntervalSec: 0.24, weights: { read: 0.2, write: 0.72, media: 0, ddos: 0.08, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Đỉnh Xung Thông Báo Toàn Hệ Thống', durationSec: 10, spawnIntervalSec: 0.19, weights: { read: 0.18, write: 0.72, media: 0, ddos: 0.1, sqli: 0 }, rewardBudget: 0 },
     ],
   },
   {
@@ -839,9 +855,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Kết hợp WAF ở ngoài cùng, sau đó tùy chọn: (1) Đẩy đơn qua Kafka + Worker, (2) Redis + Kafka CQRS, hoặc (3) Load Balancer chia nhánh Read Replica + Kafka.',
     tacticalTip:
       'Đừng quên WAF [1] chặn SQLi! Sau đó phối hợp Kafka [7] cùng Redis [5] hoặc Read Replica [9].',
-    targetSlaMs: 70,
+    targetSlaMs: 64,
     startingBudget: 400,
-    dbCoolingPerSec: 14.0,
+    dbCoolingPerSec: 11.0,
     ...stdStart,
     approaches: [
       {
@@ -915,9 +931,10 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       },
     ],
     waves: [
-      { waveNumber: 1, label: 'Đặt đơn giờ nghỉ trưa', durationSec: 8, spawnIntervalSec: 0.5, weights: { read: 0.4, write: 0.45, media: 0, ddos: 0.05, sqli: 0.1 }, rewardBudget: 0 },
-      { waveNumber: 2, label: 'Chèn SQLi vào mã giảm giá', durationSec: 9, spawnIntervalSec: 0.38, weights: { read: 0.35, write: 0.42, media: 0, ddos: 0.08, sqli: 0.15 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Cao điểm chốt đơn tối', durationSec: 10, spawnIntervalSec: 0.3, weights: { read: 0.3, write: 0.45, media: 0, ddos: 0.1, sqli: 0.15 }, rewardBudget: 0 },
+      { waveNumber: 1, label: 'Đặt đơn giờ nghỉ trưa', durationSec: 8, spawnIntervalSec: 0.39, weights: { read: 0.4, write: 0.45, media: 0, ddos: 0.05, sqli: 0.1 }, rewardBudget: 0 },
+      { waveNumber: 2, label: 'Chèn SQLi vào mã giảm giá', durationSec: 9, spawnIntervalSec: 0.29, weights: { read: 0.34, write: 0.42, media: 0, ddos: 0.09, sqli: 0.15 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Cao điểm chốt đơn tối', durationSec: 9, spawnIntervalSec: 0.23, weights: { read: 0.3, write: 0.44, media: 0, ddos: 0.11, sqli: 0.15 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Bão Thanh Toán Cuối Ngày', durationSec: 10, spawnIntervalSec: 0.19, weights: { read: 0.28, write: 0.44, media: 0, ddos: 0.13, sqli: 0.15 }, rewardBudget: 0 },
     ],
   },
   {
@@ -934,9 +951,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Kiến trúc Video hiện đại tách đôi rõ ràng: Edge CDN + Object Storage S3 lo 100% luồng phát Video, trong khi Kafka + Worker lo nén/encode video nền.',
     tacticalTip:
       'Kết hợp CDN [3] / S3 [0] cho Media, thêm Kafka [7] + Worker [8] cho luồng xử lý POST nặng!',
-    targetSlaMs: 75,
+    targetSlaMs: 68,
     startingBudget: 440,
-    dbCoolingPerSec: 14.5,
+    dbCoolingPerSec: 11.2,
     ...stdStart,
     approaches: [
       {
@@ -1010,9 +1027,10 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       },
     ],
     waves: [
-      { waveNumber: 1, label: 'Stream giờ vàng', durationSec: 8, spawnIntervalSec: 0.48, weights: { read: 0.25, write: 0.3, media: 0.45, ddos: 0, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 2, label: 'Bùng nổ Creator Upload', durationSec: 9, spawnIntervalSec: 0.36, weights: { read: 0.2, write: 0.35, media: 0.45, ddos: 0, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Livestream Triệu View', durationSec: 10, spawnIntervalSec: 0.29, weights: { read: 0.25, write: 0.25, media: 0.45, ddos: 0.05, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 1, label: 'Stream giờ vàng', durationSec: 8, spawnIntervalSec: 0.38, weights: { read: 0.25, write: 0.3, media: 0.45, ddos: 0, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 2, label: 'Bùng nổ Creator Upload', durationSec: 9, spawnIntervalSec: 0.28, weights: { read: 0.2, write: 0.35, media: 0.45, ddos: 0, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Livestream Triệu View', durationSec: 9, spawnIntervalSec: 0.23, weights: { read: 0.24, write: 0.26, media: 0.44, ddos: 0.06, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Đỉnh Băng Thông 4K', durationSec: 10, spawnIntervalSec: 0.18, weights: { read: 0.22, write: 0.28, media: 0.42, ddos: 0.08, sqli: 0 }, rewardBudget: 0 },
     ],
   },
   {
@@ -1029,9 +1047,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Webhook Gateway cần 3 lớp: WAF chặn payload bẩn, Rate Limiter cắt bão retry, và Kafka Queue + Worker (hoặc Redis Idempotency) làm bộ đệm hấp thụ cơn bão POST.',
     tacticalTip:
       'Xếp lớp: WAF [1] + Rate Limiter [2] ở đầu vào, nối vào Kafka [7] & Worker [8] trước khi chạm DB!',
-    targetSlaMs: 75,
+    targetSlaMs: 68,
     startingBudget: 440,
-    dbCoolingPerSec: 14.5,
+    dbCoolingPerSec: 11.4,
     ...stdStart,
     approaches: [
       {
@@ -1102,9 +1120,10 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       },
     ],
     waves: [
-      { waveNumber: 1, label: 'Webhook đồng bộ', durationSec: 8, spawnIntervalSec: 0.45, weights: { read: 0.15, write: 0.55, media: 0, ddos: 0.2, sqli: 0.1 }, rewardBudget: 0 },
-      { waveNumber: 2, label: 'Bão Retry Storm', durationSec: 9, spawnIntervalSec: 0.34, weights: { read: 0.1, write: 0.52, media: 0, ddos: 0.26, sqli: 0.12 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Tấn công giả mạo Webhook', durationSec: 10, spawnIntervalSec: 0.27, weights: { read: 0.1, write: 0.48, media: 0, ddos: 0.26, sqli: 0.16 }, rewardBudget: 0 },
+      { waveNumber: 1, label: 'Webhook đồng bộ', durationSec: 8, spawnIntervalSec: 0.37, weights: { read: 0.15, write: 0.55, media: 0, ddos: 0.2, sqli: 0.1 }, rewardBudget: 0 },
+      { waveNumber: 2, label: 'Bão Retry Storm', durationSec: 9, spawnIntervalSec: 0.27, weights: { read: 0.1, write: 0.52, media: 0, ddos: 0.26, sqli: 0.12 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Tấn công giả mạo Webhook', durationSec: 9, spawnIntervalSec: 0.21, weights: { read: 0.1, write: 0.48, media: 0, ddos: 0.26, sqli: 0.16 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Xung Callback Đối Tác Hàng Loạt', durationSec: 10, spawnIntervalSec: 0.18, weights: { read: 0.1, write: 0.48, media: 0, ddos: 0.26, sqli: 0.16 }, rewardBudget: 0 },
     ],
   },
 
@@ -1125,9 +1144,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Bảng tin MXH dùng mô hình Fan-out-on-Write: bài mới đẩy qua Kafka/Worker vào Redis Timeline, còn ảnh đi qua CDN/S3.',
     tacticalTip:
       'Kết hợp CDN [3] + Redis [5] cho Feed & Ảnh, hoặc Kafka [7] cho bài đăng mới + Read Replica [9]!',
-    targetSlaMs: 65,
+    targetSlaMs: 58,
     startingBudget: 480,
-    dbCoolingPerSec: 15.0,
+    dbCoolingPerSec: 11.4,
     ...stdStart,
     approaches: [
       {
@@ -1201,9 +1220,10 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       },
     ],
     waves: [
-      { waveNumber: 1, label: 'Lướt Newsfeed tối', durationSec: 8, spawnIntervalSec: 0.44, weights: { read: 0.45, write: 0.2, media: 0.25, ddos: 0.1, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 2, label: 'Trend Viral bùng nổ', durationSec: 9, spawnIntervalSec: 0.33, weights: { read: 0.4, write: 0.22, media: 0.26, ddos: 0.12, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Spam Bot & Cao điểm', durationSec: 10, spawnIntervalSec: 0.26, weights: { read: 0.36, write: 0.22, media: 0.24, ddos: 0.18, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 1, label: 'Lướt Newsfeed tối', durationSec: 8, spawnIntervalSec: 0.35, weights: { read: 0.45, write: 0.2, media: 0.25, ddos: 0.1, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 2, label: 'Trend Viral bùng nổ', durationSec: 9, spawnIntervalSec: 0.26, weights: { read: 0.4, write: 0.22, media: 0.26, ddos: 0.12, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Spam Bot & Cao điểm', durationSec: 9, spawnIntervalSec: 0.2, weights: { read: 0.36, write: 0.22, media: 0.24, ddos: 0.18, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Hashtag Nóng Toàn Quốc', durationSec: 10, spawnIntervalSec: 0.17, weights: { read: 0.34, write: 0.24, media: 0.22, ddos: 0.2, sqli: 0 }, rewardBudget: 0 },
     ],
   },
   {
@@ -1220,9 +1240,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Fintech ưu tiên Security & Consistency: WAF + Rate Limiter là bắt buộc, sau đó tách tra cứu số dư (Read Replica / Redis) khỏi luồng ghi sổ cái hoặc dùng Queue kiểm soát đồng thời.',
     tacticalTip:
       'Bắt buộc phải có WAF [1] + Rate Limiter [2]! Kết hợp Read Replica [9], Redis [5] hoặc Queue [7] để bảo vệ DB lõi.',
-    targetSlaMs: 65,
+    targetSlaMs: 58,
     startingBudget: 540,
-    dbCoolingPerSec: 15.5,
+    dbCoolingPerSec: 11.6,
     ...stdStart,
     approaches: [
       {
@@ -1296,9 +1316,10 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       },
     ],
     waves: [
-      { waveNumber: 1, label: 'Giao dịch đầu ngày', durationSec: 8, spawnIntervalSec: 0.42, weights: { read: 0.35, write: 0.35, media: 0, ddos: 0.15, sqli: 0.15 }, rewardBudget: 0 },
-      { waveNumber: 2, label: 'Trả lương + Thăm dò SQLi', durationSec: 9, spawnIntervalSec: 0.32, weights: { read: 0.3, write: 0.36, media: 0, ddos: 0.16, sqli: 0.18 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Đột kích Ngân hàng số', durationSec: 10, spawnIntervalSec: 0.25, weights: { read: 0.28, write: 0.34, media: 0, ddos: 0.2, sqli: 0.18 }, rewardBudget: 0 },
+      { waveNumber: 1, label: 'Giao dịch đầu ngày', durationSec: 8, spawnIntervalSec: 0.34, weights: { read: 0.35, write: 0.35, media: 0, ddos: 0.15, sqli: 0.15 }, rewardBudget: 0 },
+      { waveNumber: 2, label: 'Trả lương + Thăm dò SQLi', durationSec: 9, spawnIntervalSec: 0.25, weights: { read: 0.3, write: 0.36, media: 0, ddos: 0.16, sqli: 0.18 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Đột kích Ngân hàng số', durationSec: 9, spawnIntervalSec: 0.2, weights: { read: 0.28, write: 0.34, media: 0, ddos: 0.2, sqli: 0.18 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Bão Chuyển Khoản Liên Ngân Hàng', durationSec: 10, spawnIntervalSec: 0.16, weights: { read: 0.26, write: 0.36, media: 0, ddos: 0.2, sqli: 0.18 }, rewardBudget: 0 },
     ],
   },
   {
@@ -1315,9 +1336,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Kiến trúc Y tế (HIS) chuẩn kết hợp Kafka đồng bộ đa phân hệ (Xét nghiệm, Viện phí, Dược), Object Storage S3 lưu ảnh DICOM/X-Quang và WAF bảo vệ dữ liệu bệnh nhân.',
     tacticalTip:
       'Phối hợp WAF [1] + Kafka [7] cho sự kiện HIS + Object Storage S3 [0] cho ảnh X-Quang!',
-    targetSlaMs: 70,
+    targetSlaMs: 64,
     startingBudget: 560,
-    dbCoolingPerSec: 15.5,
+    dbCoolingPerSec: 11.8,
     ...stdStart,
     approaches: [
       {
@@ -1394,9 +1415,10 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       },
     ],
     waves: [
-      { waveNumber: 1, label: 'Tiếp đón khám sáng', durationSec: 8, spawnIntervalSec: 0.42, weights: { read: 0.25, write: 0.35, media: 0.3, ddos: 0, sqli: 0.1 }, rewardBudget: 0 },
-      { waveNumber: 2, label: 'Đổ kết quả xét nghiệm & MRI', durationSec: 9, spawnIntervalSec: 0.32, weights: { read: 0.22, write: 0.36, media: 0.3, ddos: 0, sqli: 0.12 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Cao điểm + Khai thác SQLi', durationSec: 10, spawnIntervalSec: 0.25, weights: { read: 0.2, write: 0.35, media: 0.28, ddos: 0.05, sqli: 0.12 }, rewardBudget: 0 },
+      { waveNumber: 1, label: 'Tiếp đón khám sáng', durationSec: 8, spawnIntervalSec: 0.34, weights: { read: 0.25, write: 0.35, media: 0.3, ddos: 0, sqli: 0.1 }, rewardBudget: 0 },
+      { waveNumber: 2, label: 'Đổ kết quả xét nghiệm & MRI', durationSec: 9, spawnIntervalSec: 0.25, weights: { read: 0.22, write: 0.36, media: 0.3, ddos: 0, sqli: 0.12 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Cao điểm + Khai thác SQLi', durationSec: 9, spawnIntervalSec: 0.2, weights: { read: 0.2, write: 0.35, media: 0.28, ddos: 0.05, sqli: 0.12 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Đồng bộ HIS Toàn Bệnh Viện', durationSec: 10, spawnIntervalSec: 0.16, weights: { read: 0.2, write: 0.35, media: 0.27, ddos: 0.06, sqli: 0.12 }, rewardBudget: 0 },
     ],
   },
   {
@@ -1413,9 +1435,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Dữ liệu GPS không cần ghi từng nhịp vào DB chính! Hãy hấp thụ nhịp GPS qua Kafka Queue + Worker hoặc lưu vị trí nóng trong Redis Geo.',
     tacticalTip:
       'Dùng Rate Limiter [2] chống bot, kết hợp Redis [5] + Kafka [7] để giảm 70% áp lực ghi GPS lên DB!',
-    targetSlaMs: 60,
+    targetSlaMs: 55,
     startingBudget: 540,
-    dbCoolingPerSec: 16.0,
+    dbCoolingPerSec: 12.0,
     ...stdStart,
     approaches: [
       {
@@ -1489,9 +1511,10 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       },
     ],
     waves: [
-      { waveNumber: 1, label: 'Giờ đi làm sáng', durationSec: 8, spawnIntervalSec: 0.4, weights: { read: 0.35, write: 0.45, media: 0, ddos: 0.2, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 2, label: 'Trời mưa tan tầm', durationSec: 9, spawnIntervalSec: 0.3, weights: { read: 0.32, write: 0.46, media: 0, ddos: 0.22, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Bão GPS + Bot Fake', durationSec: 10, spawnIntervalSec: 0.24, weights: { read: 0.3, write: 0.45, media: 0, ddos: 0.25, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 1, label: 'Giờ đi làm sáng', durationSec: 8, spawnIntervalSec: 0.32, weights: { read: 0.35, write: 0.45, media: 0, ddos: 0.2, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 2, label: 'Trời mưa tan tầm', durationSec: 9, spawnIntervalSec: 0.24, weights: { read: 0.32, write: 0.46, media: 0, ddos: 0.22, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Bão GPS + Bot Fake', durationSec: 9, spawnIntervalSec: 0.19, weights: { read: 0.3, write: 0.45, media: 0, ddos: 0.25, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Cao điểm Đêm Giông Bão', durationSec: 10, spawnIntervalSec: 0.16, weights: { read: 0.28, write: 0.46, media: 0, ddos: 0.26, sqli: 0 }, rewardBudget: 0 },
     ],
   },
 
@@ -1512,9 +1535,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Với IoT Write-Extreme, Queue (Kafka) + Worker nâng cấp Lv2 là xương sống bắt buộc để gom hàng triệu bản ghi trước khi đẩy xuống DB.',
     tacticalTip:
       'Nâng cấp Kafka [7] và Worker [8] lên Lv2! Đặt WAF [1] + Rate Limiter [2] ngay đầu vào.',
-    targetSlaMs: 75,
+    targetSlaMs: 68,
     startingBudget: 660,
-    dbCoolingPerSec: 16.5,
+    dbCoolingPerSec: 12.2,
     ...stdStart,
     approaches: [
       {
@@ -1593,9 +1616,10 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       },
     ],
     waves: [
-      { waveNumber: 1, label: 'Đồng bộ cảm biến', durationSec: 8, spawnIntervalSec: 0.36, weights: { read: 0.15, write: 0.6, media: 0, ddos: 0.15, sqli: 0.1 }, rewardBudget: 0 },
-      { waveNumber: 2, label: 'Bão mất kết nối & Reconnect', durationSec: 9, spawnIntervalSec: 0.27, weights: { read: 0.1, write: 0.6, media: 0, ddos: 0.2, sqli: 0.1 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Botnet IoT Mirai', durationSec: 10, spawnIntervalSec: 0.22, weights: { read: 0.1, write: 0.55, media: 0, ddos: 0.25, sqli: 0.1 }, rewardBudget: 0 },
+      { waveNumber: 1, label: 'Đồng bộ cảm biến', durationSec: 8, spawnIntervalSec: 0.3, weights: { read: 0.15, write: 0.6, media: 0, ddos: 0.15, sqli: 0.1 }, rewardBudget: 0 },
+      { waveNumber: 2, label: 'Bão mất kết nối & Reconnect', durationSec: 9, spawnIntervalSec: 0.22, weights: { read: 0.1, write: 0.6, media: 0, ddos: 0.2, sqli: 0.1 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Botnet IoT Mirai', durationSec: 9, spawnIntervalSec: 0.18, weights: { read: 0.1, write: 0.55, media: 0, ddos: 0.25, sqli: 0.1 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Triệu Thiết Bị Gửi Telemetry Đồng Loạt', durationSec: 10, spawnIntervalSec: 0.15, weights: { read: 0.1, write: 0.55, media: 0, ddos: 0.25, sqli: 0.1 }, rewardBudget: 0 },
     ],
   },
   {
@@ -1612,9 +1636,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Kiến trúc AI Media chuẩn gồm: Rate Limiter bảo vệ GPU quota, Redis giữ trạng thái Job, Kafka + Worker điều phối GPU render, và S3 + CDN trả ảnh thành phẩm!',
     tacticalTip:
       'Kết hợp CDN [3] + Redis [5] + Kafka [7] + S3 [0] (hoặc Rate Limiter [2]) để không nghẽn API!',
-    targetSlaMs: 75,
+    targetSlaMs: 68,
     startingBudget: 680,
-    dbCoolingPerSec: 17.0,
+    dbCoolingPerSec: 12.4,
     ...stdStart,
     approaches: [
       {
@@ -1688,9 +1712,10 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       },
     ],
     waves: [
-      { waveNumber: 1, label: 'Render ảnh hàng loạt', durationSec: 8, spawnIntervalSec: 0.36, weights: { read: 0.2, write: 0.3, media: 0.35, ddos: 0.15, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 2, label: 'Tạo Video AI giờ cao điểm', durationSec: 9, spawnIntervalSec: 0.27, weights: { read: 0.2, write: 0.3, media: 0.35, ddos: 0.15, sqli: 0 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Bot cào API + Prompt Flood', durationSec: 10, spawnIntervalSec: 0.22, weights: { read: 0.18, write: 0.28, media: 0.32, ddos: 0.22, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 1, label: 'Render ảnh hàng loạt', durationSec: 8, spawnIntervalSec: 0.3, weights: { read: 0.2, write: 0.3, media: 0.35, ddos: 0.15, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 2, label: 'Tạo Video AI giờ cao điểm', durationSec: 9, spawnIntervalSec: 0.22, weights: { read: 0.2, write: 0.3, media: 0.35, ddos: 0.15, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Bot cào API + Prompt Flood', durationSec: 9, spawnIntervalSec: 0.18, weights: { read: 0.18, write: 0.28, media: 0.32, ddos: 0.22, sqli: 0 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Bão Render Video 4K Toàn Cầu', durationSec: 10, spawnIntervalSec: 0.15, weights: { read: 0.18, write: 0.28, media: 0.32, ddos: 0.22, sqli: 0 }, rewardBudget: 0 },
     ],
   },
   {
@@ -1707,9 +1732,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Hệ thống toàn diện đòi hỏi Phòng thủ đa tầng (WAF + Rate Limiter Lv2), Bộ nhớ đệm (CDN/Redis), và Hàng đợi bất đồng bộ (Kafka).',
     tacticalTip:
       'Nâng cấp các node nòng cốt lên Lv2! Đảm bảo có WAF [1] + Rate Limiter [2] + Redis/CDN + Kafka [7].',
-    targetSlaMs: 65,
+    targetSlaMs: 60,
     startingBudget: 860,
-    dbCoolingPerSec: 17.5,
+    dbCoolingPerSec: 12.6,
     ...stdStart,
     approaches: [
       {
@@ -1789,9 +1814,10 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       },
     ],
     waves: [
-      { waveNumber: 1, label: 'Mở cổng Black Friday', durationSec: 8, spawnIntervalSec: 0.34, weights: { read: 0.32, write: 0.24, media: 0.2, ddos: 0.14, sqli: 0.1 }, rewardBudget: 0 },
-      { waveNumber: 2, label: 'Xung tải + SQLi đa điểm', durationSec: 9, spawnIntervalSec: 0.25, weights: { read: 0.28, write: 0.26, media: 0.2, ddos: 0.14, sqli: 0.12 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Cơn bão 00:00', durationSec: 10, spawnIntervalSec: 0.2, weights: { read: 0.28, write: 0.25, media: 0.18, ddos: 0.17, sqli: 0.12 }, rewardBudget: 0 },
+      { waveNumber: 1, label: 'Mở cổng Black Friday', durationSec: 8, spawnIntervalSec: 0.28, weights: { read: 0.32, write: 0.24, media: 0.2, ddos: 0.14, sqli: 0.1 }, rewardBudget: 0 },
+      { waveNumber: 2, label: 'Xung tải + SQLi đa điểm', durationSec: 9, spawnIntervalSec: 0.21, weights: { read: 0.28, write: 0.26, media: 0.2, ddos: 0.14, sqli: 0.12 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Cơn bão 00:00', durationSec: 9, spawnIntervalSec: 0.17, weights: { read: 0.26, write: 0.26, media: 0.18, ddos: 0.18, sqli: 0.12 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Flash Deal Cuối Đêm', durationSec: 10, spawnIntervalSec: 0.14, weights: { read: 0.24, write: 0.28, media: 0.18, ddos: 0.18, sqli: 0.12 }, rewardBudget: 0 },
     ],
   },
   {
@@ -1808,9 +1834,9 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
       'Không có một công cụ vạn năng nào — hệ thống cấp quốc gia là nghệ thuật phối hợp hài hòa: Edge Shield (WAF + Limiter + CDN) → Cache & Balance (Redis + LB) → Async Compute (Kafka + Worker) → Storage & Replica!',
     tacticalTip:
       'Huy động toàn bộ ngân sách để thiết kế hạ tầng Lv2 đa tầng hoàn chỉnh trước khi bấm Sẵn Sàng!',
-    targetSlaMs: 65,
+    targetSlaMs: 60,
     startingBudget: 1080,
-    dbCoolingPerSec: 18.5,
+    dbCoolingPerSec: 13.0,
     ...stdStart,
     approaches: [
       {
@@ -1895,9 +1921,15 @@ export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
     waves: [
       { waveNumber: 1, label: 'Đợt tổng lực 1', durationSec: 8, spawnIntervalSec: 0.3, weights: { read: 0.28, write: 0.24, media: 0.18, ddos: 0.18, sqli: 0.12 }, rewardBudget: 0 },
       { waveNumber: 2, label: 'Xung kích đa tầng', durationSec: 9, spawnIntervalSec: 0.22, weights: { read: 0.25, write: 0.26, media: 0.18, ddos: 0.18, sqli: 0.13 }, rewardBudget: 0 },
-      { waveNumber: 3, label: 'Đỉnh cao 99.99% Uptime', durationSec: 10, spawnIntervalSec: 0.18, weights: { read: 0.26, write: 0.25, media: 0.17, ddos: 0.19, sqli: 0.13 }, rewardBudget: 0 },
+      { waveNumber: 3, label: 'Đỉnh cao 99.99% Uptime', durationSec: 10, spawnIntervalSec: 0.16, weights: { read: 0.25, write: 0.25, media: 0.17, ddos: 0.2, sqli: 0.13 }, rewardBudget: 0 },
+      { waveNumber: 4, label: 'Cơn bão Chủ quyền Toàn cầu', durationSec: 11, spawnIntervalSec: 0.14, weights: { read: 0.23, write: 0.25, media: 0.17, ddos: 0.21, sqli: 0.14 }, rewardBudget: 0 },
     ],
   },
+];
+
+export const TRAFFIC_LEVELS: readonly TrafficLevelDef[] = [
+  ...BASE_TRAFFIC_LEVELS,
+  ...EXTRA_TRAFFIC_LEVELS,
 ];
 
 export function createInitialNodes(level: TrafficLevelDef): InfraNode[] {
@@ -1999,9 +2031,11 @@ export function evaluatePacketAtNode(
   kind: PacketKind,
   roll: number,
   outgoingCount: number,
-  packetWriteDamping = 1
+  packetWriteDamping = 1,
+  heatPenaltyMult = 1
 ): NodePacketDecision {
   const lv = node.level;
+  const h = node.heat * heatPenaltyMult;
 
   if (node.type === 'ingress') {
     return outgoingCount > 0
@@ -2010,7 +2044,7 @@ export function evaluatePacketAtNode(
   }
 
   if (node.type === 'waf') {
-    const latency = lv === 2 ? 3 : 5;
+    const latency = (lv === 2 ? 3 : 6) + Math.round(h * 6);
     if (kind === 'sqli') {
       return { outcome: 'blocked', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
     }
@@ -2026,9 +2060,9 @@ export function evaluatePacketAtNode(
   }
 
   if (node.type === 'rate_limiter') {
-    const latency = lv === 2 ? 2 : 4;
+    const latency = (lv === 2 ? 2 : 5) + Math.round(h * 5);
     if (kind === 'ddos') {
-      const blockRate = lv === 2 ? 0.99 : 0.92;
+      const blockRate = lv === 2 ? 0.99 : 0.91;
       if (roll < blockRate) {
         return { outcome: 'blocked', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
       }
@@ -2039,21 +2073,21 @@ export function evaluatePacketAtNode(
   }
 
   if (node.type === 'cdn') {
-    const latency = lv === 2 ? 3 : 5;
+    const latency = (lv === 2 ? 3 : 6) + Math.round(h * 6);
     if (kind === 'media') {
-      const hitChance = lv === 2 ? 0.96 : 0.88;
+      const hitChance = lv === 2 ? 0.96 : 0.87;
       if (roll < hitChance) {
         return { outcome: 'cache_hit', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
       }
     }
     if (kind === 'read') {
-      const staticReadHit = lv === 2 ? 0.42 : 0.28;
+      const staticReadHit = lv === 2 ? 0.42 : 0.27;
       if (roll < staticReadHit) {
         return { outcome: 'cache_hit', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
       }
     }
     if (kind === 'ddos') {
-      const edgeDrop = lv === 2 ? 0.42 : 0.28;
+      const edgeDrop = lv === 2 ? 0.42 : 0.26;
       if (roll < edgeDrop) {
         return { outcome: 'blocked', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
       }
@@ -2064,9 +2098,9 @@ export function evaluatePacketAtNode(
   }
 
   if (node.type === 'redis') {
-    const latency = lv === 2 ? 5 : 8;
+    const latency = (lv === 2 ? 5 : 9) + Math.round(h * (lv === 2 ? 6 : 12));
     if (kind === 'read') {
-      const hitChance = lv === 2 ? 0.9 : 0.76;
+      const hitChance = lv === 2 ? 0.9 : 0.75;
       if (roll < hitChance) {
         return { outcome: 'cache_hit', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
       }
@@ -2084,15 +2118,15 @@ export function evaluatePacketAtNode(
   }
 
   if (node.type === 'app') {
-    const heatPenalty = Math.round(node.heat * (lv === 2 ? 20 : 36));
-    const latency = (lv === 2 ? 9 : 14) + heatPenalty;
+    const heatPenalty = Math.round(h * (lv === 2 ? 24 : 44));
+    const latency = (lv === 2 ? 10 : 15) + heatPenalty;
     return outgoingCount > 0
       ? { outcome: 'forward', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 }
       : { outcome: 'dropped_no_route', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
   }
 
   if (node.type === 'queue') {
-    const latency = lv === 2 ? 5 : 8;
+    const latency = (lv === 2 ? 5 : 9) + Math.round(h * (lv === 2 ? 8 : 16));
     const damping = lv === 2 ? 0.34 : 0.48;
     return outgoingCount > 0
       ? {
@@ -2106,8 +2140,8 @@ export function evaluatePacketAtNode(
   }
 
   if (node.type === 'worker') {
-    const latency = lv === 2 ? 6 : 10;
-    const damping = lv === 2 ? 0.65 : 0.78;
+    const latency = (lv === 2 ? 6 : 11) + Math.round(h * (lv === 2 ? 9 : 18));
+    const damping = lv === 2 ? 0.64 : 0.78;
     return outgoingCount > 0
       ? {
           outcome: 'forward',
@@ -2120,9 +2154,9 @@ export function evaluatePacketAtNode(
   }
 
   if (node.type === 'read_replica') {
-    const latency = lv === 2 ? 7 : 11;
+    const latency = (lv === 2 ? 7 : 12) + Math.round(h * (lv === 2 ? 10 : 18));
     if (kind === 'read') {
-      const offloadChance = lv === 2 ? 0.92 : 0.78;
+      const offloadChance = lv === 2 ? 0.92 : 0.77;
       if (roll < offloadChance) {
         return { outcome: 'cache_hit', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
       }
@@ -2133,9 +2167,9 @@ export function evaluatePacketAtNode(
   }
 
   if (node.type === 'object_storage') {
-    const latency = lv === 2 ? 6 : 9;
+    const latency = (lv === 2 ? 6 : 10) + Math.round(h * (lv === 2 ? 7 : 14));
     if (kind === 'media') {
-      const offloadChance = lv === 2 ? 0.97 : 0.91;
+      const offloadChance = lv === 2 ? 0.97 : 0.9;
       if (roll < offloadChance) {
         return { outcome: 'cache_hit', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
       }
@@ -2149,11 +2183,11 @@ export function evaluatePacketAtNode(
   const meta = PACKET_META[kind];
   const effectiveCpu =
     kind === 'write'
-      ? Math.max(2.2, meta.dbCpuLoad * packetWriteDamping)
+      ? Math.max(2.4, meta.dbCpuLoad * packetWriteDamping)
       : meta.dbCpuLoad;
   return {
     outcome: 'delivered',
-    addedLatencyMs: kind === 'write' ? 22 : kind === 'media' ? 20 : 14,
+    addedLatencyMs: (kind === 'write' ? 24 : kind === 'media' ? 22 : 15) + Math.round(h * 12),
     dbCpuDelta: effectiveCpu,
     integrityDelta: -meta.integrityPenalty,
   };
@@ -2341,6 +2375,8 @@ export interface SolutionEvaluationInput {
   peakDbCpu: number;
   breachedAttacks: number;
   remainingBudget: number;
+  strictSecurity?: boolean;
+  modeName?: string;
 }
 
 export interface SolutionEvaluation {
@@ -2363,7 +2399,7 @@ export interface SolutionEvaluation {
 export function evaluateSolutionOptimization(
   input: SolutionEvaluationInput
 ): SolutionEvaluation {
-  const { level, nodes, edges, avgLatencyMs, peakDbCpu, breachedAttacks } = input;
+  const { level, nodes, edges, avgLatencyMs, peakDbCpu, breachedAttacks, strictSecurity, modeName } = input;
   const analysis = analyzeArchitectureDesign(level, nodes, edges);
 
   const forwardReachable = new Set<string>();
@@ -2457,36 +2493,36 @@ export function evaluateSolutionOptimization(
   }
 
   // 3. Check security flaws
-  if (avgSqli >= 0.08 && !activeTypes.has('waf')) {
+  if (avgSqli >= 0.06 && !activeTypes.has('waf')) {
     whyNotOptimal.push({
       category: 'security',
       severity: 'critical',
       title: 'Lỗ hổng SQL Injection nghiêm trọng',
-      reason: 'Hoàn cảnh này có mã độc SQLi xâm nhập. Thiếu WAF khiến dữ liệu bị tổn hại và DB tốn CPU xử lý truy vấn độc.',
+      reason: 'Hoàn cảnh hoặc chế độ chơi này có mã độc SQLi xâm nhập. Thiếu WAF khiến dữ liệu bị tổn hại và DB tốn CPU xử lý truy vấn độc.',
       suggestion: 'Đặt WAF Firewall [1] ngay tầng Edge sau Users để chặn 100% gói SQLi.',
     });
-  } else if (breachedAttacks > 0) {
+  } else if (breachedAttacks > (strictSecurity ? 0 : 1)) {
     whyNotOptimal.push({
       category: 'security',
-      severity: 'warning',
+      severity: strictSecurity ? 'critical' : 'warning',
       title: `Còn ${breachedAttacks} gói tấn công lọt tới Database`,
-      reason: 'Một phần Bot DDoS hoặc SQLi đã vượt qua lớp biên do Rate Limiter/WAF chưa đặt ở tuyến đầu hoặc chưa nâng cấp Lv2.',
+      reason: 'Bot DDoS hoặc SQLi đã xuyên qua tầng biên do thiếu lá chắn đầu vào hoặc chưa nâng cấp Rate Limiter lên Lv2.',
       suggestion: 'Đặt Rate Limiter [2] + WAF [1] ngay sau Users và nâng cấp lên Lv2 (chặn 99% DDoS).',
     });
   }
 
-  if (avgDdos >= 0.14 && !activeTypes.has('rate_limiter') && !activeTypes.has('cdn')) {
+  if (avgDdos >= 0.12 && !activeTypes.has('rate_limiter') && !activeTypes.has('cdn')) {
     whyNotOptimal.push({
       category: 'security',
       severity: 'critical',
       title: 'Thiếu lớp cắt bão Bot DDoS',
       reason: 'Bão request rác đang dội thẳng vào App/Database làm tăng đột biến CPU và độ trễ của người dùng thật.',
-      suggestion: 'Bổ sung Rate Limiter [2] (chặn 92–99% DDoS) hoặc Edge CDN [3].',
+      suggestion: 'Bổ sung Rate Limiter [2] (chặn 91–99% DDoS) hoặc Edge CDN [3].',
     });
   }
 
   // 4. Context-specific architectural optimality
-  if (avgMedia >= 0.25 && !activeTypes.has('cdn') && !activeTypes.has('object_storage')) {
+  if (avgMedia >= 0.24 && !activeTypes.has('cdn') && !activeTypes.has('object_storage')) {
     whyNotOptimal.push({
       category: 'architecture',
       severity: 'critical',
@@ -2496,7 +2532,7 @@ export function evaluateSolutionOptimization(
     });
   }
 
-  if (avgWrite >= 0.35 && !activeTypes.has('queue')) {
+  if (avgWrite >= 0.34 && !activeTypes.has('queue')) {
     whyNotOptimal.push({
       category: 'architecture',
       severity: 'warning',
@@ -2507,7 +2543,7 @@ export function evaluateSolutionOptimization(
   }
 
   if (
-    avgRead >= 0.4 &&
+    avgRead >= 0.38 &&
     !activeTypes.has('redis') &&
     !activeTypes.has('read_replica') &&
     !activeTypes.has('cdn')
@@ -2517,7 +2553,7 @@ export function evaluateSolutionOptimization(
       severity: 'warning',
       title: 'Chưa có cơ chế Cache hoặc Read Replica cho truy vấn Đọc',
       reason: 'Mọi request GET lặp lại đều phải truy vấn trực tiếp Database gốc gây lãng phí tài nguyên.',
-      suggestion: 'Đặt Redis Cache [5] hoặc Read Replica [9] để gánh 76–92% lượng đọc.',
+      suggestion: 'Đặt Redis Cache [5] hoặc Read Replica [9] để gánh 75–92% lượng đọc.',
     });
   }
 
@@ -2525,19 +2561,19 @@ export function evaluateSolutionOptimization(
   if (avgLatencyMs > level.targetSlaMs) {
     whyNotOptimal.push({
       category: 'performance',
-      severity: 'warning',
+      severity: avgLatencyMs > level.targetSlaMs * 1.25 ? 'critical' : 'warning',
       title: `Độ trễ ${avgLatencyMs}ms vượt ngưỡng SLA (${level.targetSlaMs}ms)`,
-      reason: 'Đường đi qua quá nhiều bước tuần tự chậm hoặc App Server bị nóng (heat cao) không kịp chia tải.',
-      suggestion: 'Dùng Redis/CDN để trả kết quả sớm ở biên hoặc nâng cấp App/LB lên Lv2.',
+      reason: 'Đường đi qua quá nhiều bước tuần tự chậm hoặc node đơn tuyến bị nóng (heat cao) không kịp chia tải.',
+      suggestion: 'Dùng Redis/CDN để trả kết quả sớm ở biên, thêm Load Balancer chia nhánh hoặc nâng cấp node lên Lv2.',
     });
   }
 
-  if (peakDbCpu >= 82) {
+  if (peakDbCpu >= 76) {
     whyNotOptimal.push({
       category: 'reliability',
-      severity: 'critical',
+      severity: peakDbCpu >= 85 ? 'critical' : 'warning',
       title: `Đỉnh CPU Database quá cao (${Math.round(peakDbCpu)}%)`,
-      reason: 'Hệ thống tuy chưa sập nhưng sát ngưỡng nghẽn 100%, rất dễ trả lỗi 502 Bad Gateway nếu traffic tăng thêm 10%.',
+      reason: 'Hệ thống tuy chưa sập nhưng sát ngưỡng nghẽn 100%, rất dễ trả lỗi 502 Bad Gateway khi xung tải kéo dài.',
       suggestion: 'Giảm tải DB bằng bộ ba: Redis/Replica (cho GET) + Kafka (cho POST) + CDN/S3 (cho MEDIA).',
     });
   }
@@ -2549,7 +2585,7 @@ export function evaluateSolutionOptimization(
   if (avgLatencyMs <= level.targetSlaMs && analysis.hasValidPath) {
     strengths.push(`Đạt SLA độ trễ (${avgLatencyMs}ms ≤ ${level.targetSlaMs}ms).`);
   }
-  if (peakDbCpu < 75 && analysis.hasValidPath) {
+  if (peakDbCpu < 72 && analysis.hasValidPath) {
     strengths.push(`Database luôn mát và an toàn (Đỉnh CPU chỉ ${Math.round(peakDbCpu)}%).`);
   }
   if (breachedAttacks === 0 && (avgSqli > 0 || avgDdos > 0)) {
@@ -2559,29 +2595,29 @@ export function evaluateSolutionOptimization(
     strengths.push('Không có thành phần dư thừa lãng phí ngân sách.');
   }
 
-  // Compute 4 pillars
+  // Compute 4 pillars (tighter grading!)
   const latDelta = Math.max(0, avgLatencyMs - level.targetSlaMs);
   const performance = analysis.hasValidPath
-    ? Math.max(25, Math.min(100, Math.round(100 - latDelta * 1.4 - (avgRead >= 0.4 && !activeTypes.has('redis') && !activeTypes.has('read_replica') ? 15 : 0))))
+    ? Math.max(20, Math.min(100, Math.round(100 - latDelta * 1.75 - (avgRead >= 0.38 && !activeTypes.has('redis') && !activeTypes.has('read_replica') ? 16 : 0))))
     : 10;
 
   const reliability = analysis.hasValidPath
     ? Math.max(
-        20,
+        15,
         Math.min(
           100,
           Math.round(
             100 -
-              Math.max(0, peakDbCpu - 60) * 1.3 -
-              breachedAttacks * 6 -
-              (avgSqli >= 0.08 && !activeTypes.has('waf') ? 25 : 0)
+              Math.max(0, peakDbCpu - 54) * 1.45 -
+              breachedAttacks * (strictSecurity ? 9 : 6) -
+              (avgSqli >= 0.06 && !activeTypes.has('waf') ? 28 : 0)
           )
         )
       )
     : 10;
 
   const costEfficiency = analysis.hasValidPath
-    ? Math.max(30, Math.min(100, Math.round(100 - deadNodes.length * 18)))
+    ? Math.max(25, Math.min(100, Math.round(100 - deadNodes.length * 20)))
     : 20;
 
   const architectureFit = analysis.score;
@@ -2593,7 +2629,7 @@ export function evaluateSolutionOptimization(
     analysis.hasValidPath &&
     whyNotOptimal.length === 0 &&
     (analysis.matchedApproaches.length === 0 ||
-      performance * 0.28 + reliability * 0.3 + costEfficiency * 0.14 + architectureFit * 0.28 < 88)
+      performance * 0.28 + reliability * 0.3 + costEfficiency * 0.14 + architectureFit * 0.28 < 90)
   ) {
     if (analysis.matchedApproaches.length === 0) {
       whyNotOptimal.push({
@@ -2603,13 +2639,13 @@ export function evaluateSolutionOptimization(
         reason: `Kiến trúc hiện tại xử lý được tải nhưng chưa hội tụ đủ các thành phần cốt lõi của một trong ${level.approaches.length} phương án chuẩn cho "${level.domain}".`,
         suggestion: `Mở mục "Các Cách Thiết Kế" để tham khảo ${level.approaches.map((a) => a.name).join(' hoặc ')}.`,
       });
-    } else if (peakDbCpu >= 68) {
+    } else if (peakDbCpu >= 66) {
       whyNotOptimal.push({
         category: 'reliability',
         severity: 'warning',
         title: `Biên an toàn CPU Database còn mỏng (Đỉnh ${Math.round(peakDbCpu)}%)`,
         reason: 'Mặc dù chưa chạm ngưỡng báo động đỏ, Database vẫn phải gánh nhiều truy vấn có thể giảm tải thêm.',
-        suggestion: 'Nâng cấp các node đệm/hàng đợi (Redis, CDN, Kafka) lên Lv2 để đưa đỉnh CPU về dưới 65%.',
+        suggestion: 'Nâng cấp các node đệm/hàng đợi (Redis, CDN, Kafka) lên Lv2 để đưa đỉnh CPU về dưới 62%.',
       });
     } else {
       whyNotOptimal.push({
@@ -2627,7 +2663,7 @@ export function evaluateSolutionOptimization(
   );
 
   const isOptimal =
-    analysis.hasValidPath && !hasCritical && whyNotOptimal.length === 0 && totalScore >= 88;
+    analysis.hasValidPath && !hasCritical && whyNotOptimal.length === 0 && totalScore >= 90;
 
   const grade: 'S' | 'A' | 'B' | 'C' =
     totalScore >= 92 && !hasCritical && whyNotOptimal.length === 0
@@ -2638,15 +2674,16 @@ export function evaluateSolutionOptimization(
           ? 'B'
           : 'C';
 
+  const modeTag = modeName ? ` (${modeName})` : '';
   const verdictTitle = isOptimal
-    ? 'Kiến Trúc Tối Ưu Toàn Diện!'
+    ? `Kiến Trúc Tối Ưu Toàn Diện${modeTag}!`
     : grade === 'A'
-      ? 'Giải Pháp Tốt — Còn Có Thể Tối Ưu Thêm'
-      : 'Giải Pháp Chưa Tối Ưu Cho Hoàn Cảnh Này';
+      ? `Giải Pháp Tốt${modeTag} — Còn Có Thể Tối Ưu Thêm`
+      : `Giải Pháp Chưa Tối Ưu${modeTag}`;
 
   const verdictSummary = isOptimal
-    ? `Bạn đã phối hợp đúng kiến trúc cho bối cảnh "${level.domain}", đạt độ trễ ${avgLatencyMs}ms và giữ đỉnh CPU DB ở mức an toàn ${Math.round(peakDbCpu)}%.`
-    : `Kiến trúc hiện tại vẫn vận hành nhưng còn ${whyNotOptimal.length} điểm nghẽn hoặc lãng phí cần cải thiện để đạt chuẩn Production.`;
+    ? `Bạn đã phối hợp đúng kiến trúc cho bối cảnh "${level.domain}"${modeTag}, đạt độ trễ ${avgLatencyMs}ms và giữ đỉnh CPU DB ở mức an toàn ${Math.round(peakDbCpu)}%.`
+    : `Kiến trúc hiện tại vẫn vận hành nhưng còn ${whyNotOptimal.length} điểm nghẽn hoặc lỗ hổng cần cải thiện để đạt chuẩn Production${modeTag}.`;
 
   return {
     isOptimal,

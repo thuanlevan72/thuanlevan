@@ -61,10 +61,10 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
   },
   {
     id: 'prism-td',
-    title: 'Thủ Thành Laser',
-    shortTitle: 'Mạch Laser',
-    subtitle: 'Prism & Mirror Circuit TD · 10 Bản đồ · 10 Vũ khí nâng cấp Lv3 · Tự động gọi đợt 10s',
-    badge: '10 Bản đồ',
+    title: 'Thủ Thành Pháo Đài',
+    shortTitle: 'Pháo Đài',
+    subtitle: 'Pure Gun TD · 16 Màn (15–41 Đợt) · 4 Cấp (Dễ→Địa Ngục) · 8 Súng Thuần Lv10',
+    badge: '4 Cấp · 15–41 Đợt',
     playable: true,
     gameKey: 'prism_td',
   },
@@ -81,8 +81,8 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     id: 'traffic-router',
     title: 'Thiết Kế Kiến Trúc',
     shortTitle: 'Kiến Trúc',
-    subtitle: 'System Architecture Designer · 16 Hoàn Cảnh · Đa giải pháp · Đánh giá tối ưu S/A/B/C',
-    badge: '16 Màn · 4 Chương',
+    subtitle: 'System Architecture Designer · 24 Hoàn Cảnh · 5 Chế Độ Chơi · Đa giải pháp S/A/B/C',
+    badge: '24 Màn · 5 Chế Độ',
     playable: true,
     gameKey: 'traffic_router',
   },
@@ -129,7 +129,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       if (playParam === 'blindbox' || playParam === 'squishy' || playParam === 'tuimu') {
         return 'blind_box';
       }
-      if (playParam === 'prism' || playParam === 'prism-td' || playParam === 'laser') return 'prism_td';
+      if (playParam === 'prism' || playParam === 'prism-td' || playParam === 'laser' || playParam === 'gun' || playParam === 'td' || playParam === 'turret') return 'prism_td';
       if (playParam === 'linux' || playParam === 'ubuntu' || playParam === 'cli' || playParam === 'hacker') {
         return 'linux_hacker';
       }
