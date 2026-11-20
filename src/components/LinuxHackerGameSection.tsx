@@ -10,12 +10,14 @@ import {
   Cloud,
   Cpu,
   EyeOff,
+  FolderOpen,
   HardDrive,
   Lightbulb,
   Pause,
   Play,
   RotateCcw,
   ShieldAlert,
+  ShieldCheck,
   Snowflake,
   Terminal,
   Trophy,
@@ -215,10 +217,27 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
   const objectives = useMemo(() => getMissionObjectives(runtime), [runtime]);
   const traceRate = useMemo(() => computeTraceRatePerSec(runtime, hackerMode), [runtime, hackerMode]);
   const smartNextHint = useMemo(() => getSmartNextHint(runtime), [runtime]);
-  const autocompleteHint = useMemo(
-    () => getAutocompleteSuggestion(commandInput, runtime),
-    [commandInput, runtime]
-  );
+  const autocompleteHint = useMemo(() => {
+    const raw = getAutocompleteSuggestion(commandInput, runtime);
+    if (!raw) return null;
+    if (
+      hackerMode === 'speed' &&
+      !revealedHintOnMission &&
+      currentMission.requireTokenVerify &&
+      raw.toUpperCase().includes(currentMission.targetToken)
+    ) {
+      return null;
+    }
+    return raw;
+  }, [commandInput, currentMission.requireTokenVerify, currentMission.targetToken, hackerMode, revealedHintOnMission, runtime]);
+
+  const ghostSuffix = useMemo(() => {
+    if (!autocompleteHint || !commandInput) return '';
+    if (autocompleteHint.toLowerCase().startsWith(commandInput.toLowerCase())) {
+      return autocompleteHint.slice(commandInput.length);
+    }
+    return '';
+  }, [autocompleteHint, commandInput]);
 
   // Merge codex permanently
   useEffect(() => {
@@ -436,6 +455,25 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
   };
 
   const handleInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.ctrlKey && e.key.toLowerCase() === 'l') {
+      e.preventDefault();
+      runCommandString('clear');
+      return;
+    }
+
+    if (e.ctrlKey && e.key.toLowerCase() === 'c') {
+      e.preventDefault();
+      const canceledText = `ubuntu@prod-node:${runtime.cwd}$ ${commandInput}^C`;
+      setCommandInput('');
+      setHistoryCursor(-1);
+      setRuntime((prev) => ({
+        ...prev,
+        logs: [...prev.logs, { id: `ctrlc-${Date.now()}`, kind: 'warn' as const, text: canceledText }].slice(-150),
+      }));
+      playTerminalFx('tick', soundEnabled, audioCtxRef);
+      return;
+    }
+
     if (e.key === 'Tab') {
       e.preventDefault();
       if (autocompleteHint) {
@@ -550,11 +588,11 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
             </div>
 
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-emerald-100 leading-tight max-w-xl">
-              Hacker Dòng Lệnh Thời Gian Thực
+              Ubuntu CLI Production · Thực Chiến Sự Cố
             </h2>
 
             <p className="text-xs sm:text-sm text-emerald-200/85 max-w-2xl leading-relaxed">
-              Học như chơi, chơi mà như học trọn bộ <strong className="text-cyan-300">8 kỹ năng Linux → DevOps Cloud</strong>:{' '}
+              Ứng cứu trực tiếp <strong className="text-cyan-300">16 sự cố Production trên 8 kỹ năng Ubuntu → DevOps</strong>:{' '}
               <span className="text-amber-300">
                 Linux Cơ Bản · Bash Scripting · SysAdmin · Networking · Docker · Web Nginx · Security UFW · Kubernetes &amp; Terraform
               </span>.
@@ -571,7 +609,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                     : 'bg-[#091510] text-emerald-200 border-emerald-800 hover:border-emerald-500'
                 }`}
               >
-                Tốc Độ Hacker (Trace thực · Săn Rank S)
+                Thực Chiến Production (SLA thực · Không lộ đáp án)
               </button>
               <button
                 type="button"
@@ -582,7 +620,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                     : 'bg-[#091510] text-emerald-200 border-emerald-800 hover:border-cyan-500'
                 }`}
               >
-                Học Như Chơi (Trace chậm 4x · Gợi ý từng bước · Mở 16/16)
+                Thực Tập Sandbox (SLA chậm 4x · Gợi ý từng bước · Mở 16/16)
               </button>
             </div>
 
@@ -694,7 +732,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
             </div>
 
             <p className="text-xs font-mono text-emerald-500/90">
-              Enter Bắt đầu · Tab Tự điền lệnh · ↑/↓ Lịch sử · Gõ 3 lệnh đúng = Đóng băng Trace + EP Kỹ năng
+              Enter Bắt đầu · Tab Tự điền · ↑/↓ Lịch sử · Ctrl+L Dọn terminal · Ctrl+C Hủy dòng lệnh
             </p>
           </div>
 
@@ -785,15 +823,15 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
           </div>
         </div>
 
-        {/* Center: Hero TRACE Meter */}
+        {/* Center: Hero SLA Alert Meter */}
         <div className="flex-1 min-w-[200px] max-w-md space-y-1">
           <div className="flex items-center justify-between font-mono text-xs">
             <span className={`font-bold uppercase tracking-wider ${traceTone.split(' ')[0]}`}>
               {runtime.traceFreezeTimer > 0
-                ? `ĐÓNG BĂNG TRACE (${runtime.traceFreezeTimer.toFixed(1)}s)`
+                ? `GIA HẠN SLA (${runtime.traceFreezeTimer.toFixed(1)}s)`
                 : runtime.tracePercent >= 75
-                  ? 'NGUY HIỂM · SẮP BỊ LỘ IP!'
-                  : `TRUY VẾT (TRACE +${traceRate.toFixed(1)}%/s)`}
+                  ? 'NGUY HIỂM · QUÁ HẠN SLA!'
+                  : `SLA ALERT (+${traceRate.toFixed(1)}%/s)`}
             </span>
             <span className="font-bold text-sm tabular-nums text-emerald-100">
               {Math.round(runtime.tracePercent)}%
@@ -801,7 +839,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
           </div>
           <div
             role="progressbar"
-            aria-label="Thanh truy vết Trace"
+            aria-label="Thanh cảnh báo SLA"
             aria-valuenow={Math.round(runtime.tracePercent)}
             aria-valuemin={0}
             aria-valuemax={100}
@@ -879,10 +917,10 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 sm:p-4">
         {/* LEFT: CRT Terminal + Power-ups + Guided Command Deck */}
         <div className="lg:col-span-8 flex flex-col rounded-xl border border-emerald-800/70 bg-[#030705] overflow-hidden">
-          {/* Terminal Window Chrome & Exploit Powerup Bar */}
+          {/* Terminal Window Chrome & Mitigation Powerup Bar */}
           <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 bg-[#07110C] border-b border-emerald-900/70 font-mono text-[11px]">
             <span className="text-emerald-400/90">
-              bash :: ubuntu@sec-node:{runtime.cwd}
+              bash :: ubuntu@prod-node:{runtime.cwd}
             </span>
             <div className="flex flex-wrap items-center gap-1.5">
               <button
@@ -890,7 +928,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 tabIndex={-1}
                 disabled={runtime.exploitPoints < 30}
                 onClick={() => triggerPowerup('freeze')}
-                title="Đóng băng thanh Trace 6 giây (gõ 'freeze')"
+                title="Gia hạn & đóng băng SLA 6 giây (gõ 'freeze')"
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border transition-colors ${
                   runtime.exploitPoints >= 30
                     ? 'border-cyan-500/60 bg-cyan-950/50 text-cyan-200 hover:bg-cyan-500/20 cursor-pointer'
@@ -898,14 +936,14 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 }`}
               >
                 <Snowflake className="w-3 h-3" aria-hidden="true" />
-                <span>Băng 6s (30EP)</span>
+                <span>Gia hạn SLA 6s (30EP)</span>
               </button>
               <button
                 type="button"
                 tabIndex={-1}
                 disabled={runtime.exploitPoints < 40}
                 onClick={() => triggerPowerup('cloak')}
-                title="Đổi IP ẩn thân giảm -22% Trace (gõ 'cloak')"
+                title="Chuyển tải dự phòng giảm -22% SLA Alert (gõ 'cloak')"
                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border transition-colors ${
                   runtime.exploitPoints >= 40
                     ? 'border-violet-500/60 bg-violet-950/50 text-violet-200 hover:bg-violet-500/20 cursor-pointer'
@@ -913,13 +951,13 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 }`}
               >
                 <EyeOff className="w-3 h-3" aria-hidden="true" />
-                <span>Ẩn VPN -22% (40EP)</span>
+                <span>Giảm tải -22% (40EP)</span>
               </button>
               <button
                 type="button"
                 tabIndex={-1}
                 onClick={() => triggerPowerup('hint')}
-                title="Soi chính xác bước tiếp theo (gõ 'hint')"
+                title="Xem hướng xử lý tiếp theo (gõ 'hint' hoặc 'man')"
                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-amber-500/60 bg-amber-950/40 text-amber-200 hover:bg-amber-500/20 cursor-pointer"
               >
                 <Lightbulb className="w-3 h-3" aria-hidden="true" />
@@ -932,19 +970,24 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
           <div className="px-3 py-1.5 bg-[#06130E] border-b border-emerald-900/60 flex flex-wrap items-center justify-between gap-2 font-mono text-[11px]">
             <div className="flex items-center gap-2 min-w-0">
               <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold shrink-0">
-                BƯỚC TIẾP
+                {hackerMode === 'practice' ? 'BƯỚC TIẾP' : 'CHẾ ĐỘ THỰC CHIẾN'}
               </span>
               <span className="text-sky-200 truncate">
-                {shouldHighlightHint ? (
+                {hackerMode === 'practice' ? (
                   <>
                     Gõ <strong className="text-amber-300">{smartNextHint.command}</strong> — {smartNextHint.reason}
                   </>
+                ) : revealedHintOnMission ? (
+                  <>
+                    Hướng dẫn: {smartNextHint.reason.replace(currentMission.targetToken, '<MÃ_TỪ_LOG>')} (bắt đầu bằng{' '}
+                    <strong className="text-amber-300">{smartNextHint.command.split(' ')[0]}</strong>)
+                  </>
                 ) : (
-                  <>{smartNextHint.reason}</>
+                  <>Tự chẩn đoán sự cố bằng CLI (ls -la, cat, grep, ps aux, df -h, ss, ufw, man &lt;lệnh&gt;).</>
                 )}
               </span>
             </div>
-            {shouldHighlightHint && (
+            {hackerMode === 'practice' && (
               <button
                 type="button"
                 tabIndex={-1}
@@ -997,7 +1040,11 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
           {/* Quick Clickable Ubuntu Learning Command Deck */}
           <div className="px-3 py-2 bg-[#060F0B] border-t border-emerald-900/70 space-y-1.5">
             <div className="flex items-center justify-between text-[11px] font-mono text-emerald-400/80">
-              <span>Thẻ lệnh nhanh Ubuntu (nhấp để chạy hoặc gõ tay nhận thêm nhịp combo):</span>
+              <span>
+                {hackerMode === 'practice'
+                  ? 'Thẻ lệnh Sandbox (nhấp để chạy hoặc gõ tay nhận combo):'
+                  : 'Lệnh chẩn đoán nhanh (nhấp để điền vào terminal — tự điều tra tham số & mã):'}
+              </span>
               {autocompleteHint && (
                 <button
                   type="button"
@@ -1013,15 +1060,22 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
               )}
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {currentMission.quickCommands.map((qCmd) => {
-                const isSuggested = shouldHighlightHint && smartNextHint.command === qCmd;
+              {(hackerMode === 'practice'
+                ? currentMission.quickCommands
+                : ['ls -la', 'ps aux', 'df -h', 'ss -tulpn', 'man', 'history', 'clear']
+              ).map((qCmd) => {
+                const isSuggested = hackerMode === 'practice' && smartNextHint.command === qCmd;
                 return (
                   <button
                     key={qCmd}
                     type="button"
                     tabIndex={-1}
                     onClick={() => {
-                      runCommandString(qCmd);
+                      if (hackerMode === 'practice') {
+                        runCommandString(qCmd);
+                      } else {
+                        setCommandInput(qCmd);
+                      }
                       inputRef.current?.focus();
                     }}
                     className={`px-2.5 py-1 rounded-md border font-mono text-xs transition-colors cursor-pointer ${
@@ -1037,7 +1091,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
             </div>
           </div>
 
-          {/* Active Command Line Input */}
+          {/* Active Command Line Input with Ghost Tab Autocomplete */}
           <form
             onSubmit={handleSubmitForm}
             className="flex items-center gap-2 px-3 py-2.5 bg-[#020504] border-t border-emerald-700/60"
@@ -1046,22 +1100,33 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
               htmlFor="linux-hacker-cli-input"
               className="font-mono text-xs sm:text-sm font-bold text-emerald-400 whitespace-nowrap shrink-0"
             >
-              ubuntu@sec:{runtime.cwd}$
+              ubuntu@prod-node:{runtime.cwd}$
             </label>
-            <input
-              id="linux-hacker-cli-input"
-              ref={inputRef}
-              type="text"
-              value={commandInput}
-              onChange={(e) => setCommandInput(e.target.value)}
-              onKeyDown={handleInputKeyDown}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="none"
-              spellCheck={false}
-              placeholder="Gõ lệnh Ubuntu (ls -la, cat, grep, ps aux, kill -9, crack...) + Enter"
-              className="flex-1 min-w-0 bg-transparent text-emerald-100 placeholder:text-emerald-700 font-mono text-xs sm:text-sm focus:outline-none"
-            />
+            <div className="relative flex-1 min-w-0 flex items-center">
+              {ghostSuffix && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 flex items-center font-mono text-xs sm:text-sm whitespace-pre overflow-hidden"
+                >
+                  <span className="invisible">{commandInput}</span>
+                  <span className="text-emerald-600/80">{ghostSuffix}</span>
+                </div>
+              )}
+              <input
+                id="linux-hacker-cli-input"
+                ref={inputRef}
+                type="text"
+                value={commandInput}
+                onChange={(e) => setCommandInput(e.target.value)}
+                onKeyDown={handleInputKeyDown}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                placeholder="Gõ lệnh Ubuntu (ls -la, grep, ps aux, ufw, verify...) · Tab · Ctrl+L"
+                className="relative z-10 w-full bg-transparent text-emerald-100 placeholder:text-emerald-700 font-mono text-xs sm:text-sm focus:outline-none"
+              />
+            </div>
             <button
               type="submit"
               className="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-[#03120B] font-mono font-bold text-xs whitespace-nowrap shrink-0 cursor-pointer"
@@ -1108,31 +1173,66 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
               {/* 1. Mission Checklist */}
               <div className="rounded-xl border border-emerald-800/70 bg-[#07110C] p-3 space-y-2">
                 <div className="flex items-center justify-between text-xs font-mono font-bold text-emerald-300">
-                  <span>MỤC TIÊU PHÁ KHÓA</span>
+                  <span>MỤC TIÊU KHẮC PHỤC SỰ CỐ</span>
                   <span className="text-amber-300 tabular-nums">
                     {objectives.steps.filter((s) => s.done).length}/{objectives.steps.length}
                   </span>
                 </div>
                 <ul className="space-y-1.5 font-mono text-xs">
-                  {objectives.steps.map((step) => (
-                    <li
-                      key={step.id}
-                      className={`flex items-start gap-2 rounded-lg px-2 py-1.5 border ${
-                        step.done
-                          ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200 line-through opacity-80'
-                          : 'bg-[#040B08] border-emerald-900/70 text-emerald-100'
-                      }`}
-                    >
-                      <CheckCircle2
-                        className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
-                          step.done ? 'text-emerald-400' : 'text-emerald-800'
+                  {objectives.steps.map((step) => {
+                    const safeLabel =
+                      hackerMode === 'speed' && !shouldHighlightHint
+                        ? step.label.replace(currentMission.targetToken, '<MÃ_TỪ_LOG>')
+                        : step.label;
+                    return (
+                      <li
+                        key={step.id}
+                        className={`flex items-start gap-2 rounded-lg px-2 py-1.5 border ${
+                          step.done
+                            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200 line-through opacity-80'
+                            : 'bg-[#040B08] border-emerald-900/70 text-emerald-100'
                         }`}
-                        aria-hidden="true"
-                      />
-                      <span>{step.label}</span>
-                    </li>
-                  ))}
+                      >
+                        <CheckCircle2
+                          className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
+                            step.done ? 'text-emerald-400' : 'text-emerald-800'
+                          }`}
+                          aria-hidden="true"
+                        />
+                        <span>{safeLabel}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
+              </div>
+
+              {/* 1b. Live VFS & Active UFW Firewall Status */}
+              <div className="rounded-xl border border-emerald-800/70 bg-[#07110C] p-3 space-y-1.5 font-mono text-[11px]">
+                <div className="flex items-center justify-between text-emerald-300 font-bold text-xs">
+                  <span className="inline-flex items-center gap-1.5">
+                    <FolderOpen className="w-3.5 h-3.5" aria-hidden="true" />
+                    VFS · {runtime.cwd}
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[10px] text-cyan-300">
+                    <ShieldCheck className="w-3 h-3" aria-hidden="true" />
+                    UFW ({runtime.ufwRules.length})
+                  </span>
+                </div>
+                <div className="text-emerald-200/80 space-y-0.5">
+                  {runtime.files
+                    .filter((f) => !f.deleted && f.dir === runtime.cwd && (!f.hidden || runtime.learnedCommands.includes('ls')))
+                    .slice(0, 4)
+                    .map((f) => (
+                      <div key={f.path} className="flex items-center justify-between gap-2 truncate">
+                        <span className="truncate text-emerald-100">{f.name}</span>
+                        <span className="text-[10px] text-emerald-400/80 shrink-0">{f.permissions}</span>
+                      </div>
+                    ))}
+                  {runtime.files.some((f) => !f.deleted && f.dir === runtime.cwd && f.hidden) &&
+                    !runtime.learnedCommands.includes('ls') && (
+                      <div className="text-[10px] text-amber-300/85">Có tệp ẩn (.) — dùng ls -la để kiểm tra</div>
+                    )}
+                </div>
               </div>
 
               {/* 2. Disk Alert Widget when mission involves df -h / rm */}
@@ -1330,7 +1430,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 <div className="flex items-center justify-between text-xs font-mono font-bold text-sky-300">
                   <span className="inline-flex items-center gap-1.5">
                     <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
-                    SỔ TAY MÀN {currentMission.id}
+                    RUNBOOK MÀN {currentMission.id}
                   </span>
                 </div>
                 <div className="space-y-1.5">
@@ -1339,12 +1439,20 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                       key={tip.cmd}
                       type="button"
                       onClick={() => {
-                        setCommandInput(tip.cmd);
+                        setCommandInput(
+                          hackerMode === 'practice'
+                            ? tip.cmd
+                            : `${tip.cmd.split(/\s+/)[0]} `
+                        );
                         inputRef.current?.focus();
                       }}
                       className="w-full text-left rounded-lg border border-emerald-900/70 bg-[#040B08] hover:border-sky-500/70 px-2.5 py-1.5 transition-colors cursor-pointer"
                     >
-                      <div className="font-mono text-xs font-bold text-amber-300">{tip.syntax}</div>
+                      <div className="font-mono text-xs font-bold text-amber-300">
+                        {hackerMode === 'practice'
+                          ? tip.syntax
+                          : tip.syntax.replace(currentMission.targetToken, '<MÃ>')}
+                      </div>
                       <div className="text-[11px] text-emerald-200/80 leading-snug">{tip.meaning}</div>
                     </button>
                   ))}
@@ -1405,9 +1513,9 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
           className="absolute inset-0 z-30 bg-black/85 flex items-center justify-center p-4"
         >
           <div className="w-full max-w-md rounded-2xl border border-emerald-500/60 bg-[#07120D] p-6 font-mono space-y-4 text-center">
-            <h3 className="text-xl font-bold text-emerald-200">Tạm Dừng Xâm Nhập</h3>
+            <h3 className="text-xl font-bold text-emerald-200">Tạm Dừng Phiên Ứng Cứu</h3>
             <p className="text-xs text-emerald-300/80">
-              Thanh truy vết Trace đang giữ nguyên tại {Math.round(runtime.tracePercent)}%.
+              Thanh cảnh báo SLA đang giữ nguyên tại {Math.round(runtime.tracePercent)}%.
             </p>
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div className="rounded-lg bg-[#030906] border border-emerald-900 p-2">
@@ -1433,7 +1541,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 onClick={() => setScreenState('playing')}
                 className="w-full py-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-[#03120B] font-bold text-sm cursor-pointer"
               >
-                Tiếp Tục Trò Chơi
+                Tiếp Tục Xử Lý
               </button>
               <button
                 type="button"
@@ -1458,10 +1566,10 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Phá khóa thành công"
+          aria-label="Khắc phục sự cố thành công"
           className="absolute inset-0 z-30 bg-black/85 flex items-center justify-center p-4"
         >
-          <div className="w-full max-w-md rounded-2xl border border-emerald-400/70 bg-[#07120D] p-6 font-mono space-y-4 text-center">
+          <div className="w-full max-w-lg rounded-2xl border border-emerald-400/70 bg-[#07120D] p-6 font-mono space-y-4 text-center">
             <div className="flex items-center justify-center gap-3">
               <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-400 text-emerald-300">
                 <CheckCircle2 className="w-6 h-6" />
@@ -1471,11 +1579,19 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
               </div>
             </div>
             <h3 className="text-xl font-bold text-emerald-200">
-              Phá Khóa Màn {currentMission.id} Thành Công!
+              Khắc Phục Sự Cố Màn {currentMission.id} Thành Công!
             </h3>
             <p className="text-xs text-emerald-300/85">
               Đã làm chủ: <strong className="text-cyan-300">{currentMission.ubuntuTopic}</strong>
             </p>
+            <div className="text-left rounded-xl border border-cyan-500/40 bg-[#041014] p-3 space-y-1">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-cyan-300">
+                Bài học thực chiến Production
+              </div>
+              <p className="text-xs text-emerald-100/90 leading-relaxed">
+                {currentMission.productionLesson}
+              </p>
+            </div>
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div className="rounded-lg bg-[#030906] border border-emerald-900 p-2">
                 <div className="text-emerald-500">ĐIỂM</div>
@@ -1542,14 +1658,14 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
               }`}
             >
               {endResultKind === 'victory'
-                ? 'Chiếm Quyền Root Thành Công!'
-                : 'Bị Truy Vết 100% — Ngắt Kết Nối!'}
+                ? 'Khắc Phục Toàn Bộ 16 Sự Cố Production!'
+                : 'Quá Hạn SLA 100% — Hệ Thống Ngưng Trệ!'}
             </h3>
 
             <p className="text-xs text-slate-300">
               {endResultKind === 'victory'
-                ? `Bạn đã chinh phục cả ${LINUX_MISSIONS.length} màn Hacker Dòng Lệnh Ubuntu và mở khóa ${codexUnlocked.length}/${UBUNTU_CODEX.length} lệnh!`
-                : 'Hệ thống phòng thủ phát hiện lưu lượng bất thường. Hãy dùng nút Băng 6s / Ẩn VPN hoặc chuyển chế độ Học Như Chơi để luyện trước!'}
+                ? `Bạn đã xử lý thành công cả ${LINUX_MISSIONS.length} sự cố Production Ubuntu và làm chủ ${codexUnlocked.length}/${UBUNTU_CODEX.length} nhóm lệnh SRE!`
+                : 'Cảnh báo SLA chạm ngưỡng 100%. Hãy dùng Gia hạn SLA 6s / Giảm tải -22% hoặc chuyển sang Thực Tập Sandbox để luyện quy trình xử lý!'}
             </p>
 
             <div className="grid grid-cols-3 gap-2 text-xs">

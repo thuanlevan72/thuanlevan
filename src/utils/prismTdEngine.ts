@@ -6,7 +6,15 @@ export type GunType =
   | 'tesla'
   | 'missile'
   | 'railgun'
-  | 'mortar';
+  | 'mortar'
+  | 'sniper'
+  | 'acid'
+  | 'saw'
+  | 'beacon'
+  | 'cannon'
+  | 'plasma'
+  | 'cluster'
+  | 'hunter';
 
 export type TargetPriority = 'first' | 'strongest' | 'weakest';
 
@@ -18,7 +26,11 @@ export type EnemyKind =
   | 'healer'
   | 'teleporter'
   | 'shieldbearer'
-  | 'boss';
+  | 'boss'
+  | 'berserker'
+  | 'juggernaut'
+  | 'summoner'
+  | 'leech';
 
 export type MapBiome =
   | 'cyber_cyan'
@@ -138,13 +150,13 @@ export const DIFFICULTY_CONFIGS: Record<DifficultyId, DifficultyConfig> = {
     label: 'Dễ',
     shortLabel: 'DỄ',
     badgeColor: '#34D399',
-    description: 'Khởi đầu vững vàng · Lõi +20% máu · Quái tiêu chuẩn',
-    hpMult: 1.0,
-    shieldMult: 1.0,
-    speedMult: 1.0,
+    description: 'Khởi đầu vững +20% · Lõi +15% máu · Quái 1.2× HP',
+    hpMult: 1.2,
+    shieldMult: 1.2,
+    speedMult: 1.04,
     armorBonus: 0,
     startEnergyMult: 1.15,
-    coreHpMult: 1.2,
+    coreHpMult: 1.15,
     rewardMult: 1.05,
     scoreMult: 1.0,
     extraWaves: 0,
@@ -156,17 +168,17 @@ export const DIFFICULTY_CONFIGS: Record<DifficultyId, DifficultyConfig> = {
     label: 'Trung Bình',
     shortLabel: 'TRUNG BÌNH',
     badgeColor: '#38BDF8',
-    description: 'Chiến trường chuẩn · Quái +55% HP & +8% tốc độ · +2 Đợt',
-    hpMult: 1.55,
-    shieldMult: 1.3,
-    speedMult: 1.08,
+    description: 'Chiến trường gắt · Quái 1.8× HP & +10% tốc độ · +1 Đợt',
+    hpMult: 1.8,
+    shieldMult: 1.5,
+    speedMult: 1.1,
     armorBonus: 0.06,
     startEnergyMult: 1.0,
     coreHpMult: 1.0,
-    rewardMult: 0.95,
+    rewardMult: 0.96,
     scoreMult: 1.35,
-    extraWaves: 2,
-    waveCountBonus: 3,
+    extraWaves: 1,
+    waveCountBonus: 2,
     eliteChanceBoost: 0.06,
   },
   hard: {
@@ -174,17 +186,17 @@ export const DIFFICULTY_CONFIGS: Record<DifficultyId, DifficultyConfig> = {
     label: 'Khó',
     shortLabel: 'KHÓ',
     badgeColor: '#F97316',
-    description: 'Áp lực cao · Quái +135% HP, +18% tốc độ, +12% giáp · +4 Đợt',
-    hpMult: 2.35,
-    shieldMult: 1.75,
+    description: 'Áp lực cao · Quái 2.64× HP, +18% tốc độ, +12% giáp · +2 Đợt',
+    hpMult: 2.64,
+    shieldMult: 1.98,
     speedMult: 1.18,
     armorBonus: 0.12,
-    startEnergyMult: 0.9,
+    startEnergyMult: 0.92,
     coreHpMult: 0.85,
-    rewardMult: 0.88,
+    rewardMult: 0.9,
     scoreMult: 1.85,
-    extraWaves: 4,
-    waveCountBonus: 6,
+    extraWaves: 2,
+    waveCountBonus: 4,
     eliteChanceBoost: 0.14,
   },
   hell: {
@@ -192,18 +204,101 @@ export const DIFFICULTY_CONFIGS: Record<DifficultyId, DifficultyConfig> = {
     label: 'Địa Ngục',
     shortLabel: 'ĐỊA NGỤC',
     badgeColor: '#FB7185',
-    description: 'Cực hạn sinh tồn · Quái +265% HP, +30% tốc độ, Bão Tinh Anh · +6 Đợt',
-    hpMult: 3.65,
-    shieldMult: 2.35,
-    speedMult: 1.3,
-    armorBonus: 0.2,
-    startEnergyMult: 0.82,
-    coreHpMult: 0.7,
-    rewardMult: 0.8,
+    description: 'Cực hạn sinh tồn · Quái 3.84× HP, +26% tốc độ, Bão Tinh Anh · +3 Đợt',
+    hpMult: 3.84,
+    shieldMult: 2.58,
+    speedMult: 1.26,
+    armorBonus: 0.19,
+    startEnergyMult: 0.88,
+    coreHpMult: 0.75,
+    rewardMult: 0.86,
     scoreMult: 2.6,
-    extraWaves: 6,
-    waveCountBonus: 10,
+    extraWaves: 3,
+    waveCountBonus: 6,
     eliteChanceBoost: 0.24,
+  },
+};
+
+export type GameModeId = 'campaign' | 'blitz' | 'boss_rush' | 'endless';
+
+export interface GameModeConfig {
+  readonly id: GameModeId;
+  readonly label: string;
+  readonly shortLabel: string;
+  readonly badgeColor: string;
+  readonly description: string;
+  readonly waveCountMult: number;
+  readonly spawnRateMult: number;
+  readonly speedMult: number;
+  readonly startEnergyMult: number;
+  readonly rewardMult: number;
+  readonly scoreMult: number;
+  readonly waveDelaySec: number;
+}
+
+export const GAME_MODE_ORDER: readonly GameModeId[] = [
+  'campaign',
+  'blitz',
+  'boss_rush',
+  'endless',
+];
+
+export const GAME_MODE_CONFIGS: Record<GameModeId, GameModeConfig> = {
+  campaign: {
+    id: 'campaign',
+    label: 'Chiến Dịch',
+    shortLabel: 'CHIẾN DỊCH',
+    badgeColor: '#38BDF8',
+    description: '8–21 đợt tinh gọn · Mỗi đợt kéo dài x2 & độ khó leo thang cực gắt',
+    waveCountMult: 1.0,
+    spawnRateMult: 1.0,
+    speedMult: 1.0,
+    startEnergyMult: 1.0,
+    rewardMult: 1.0,
+    scoreMult: 1.0,
+    waveDelaySec: 8,
+  },
+  blitz: {
+    id: 'blitz',
+    label: 'Bão Tốc Độ',
+    shortLabel: 'BLITZ',
+    badgeColor: '#F59E0B',
+    description: 'Ít đợt hơn (-35%) nhưng quái ra dồn dập +18% tốc độ & +25% thưởng',
+    waveCountMult: 0.65,
+    spawnRateMult: 1.55,
+    speedMult: 1.18,
+    startEnergyMult: 1.25,
+    rewardMult: 1.25,
+    scoreMult: 1.3,
+    waveDelaySec: 4,
+  },
+  boss_rush: {
+    id: 'boss_rush',
+    label: 'Săn Boss',
+    shortLabel: 'BOSS RUSH',
+    badgeColor: '#F43F5E',
+    description: '+120% năng lượng khởi đầu · Boss & Tinh Anh xuất trận ngay từ Đợt 1',
+    waveCountMult: 0.6,
+    spawnRateMult: 0.9,
+    speedMult: 0.95,
+    startEnergyMult: 2.2,
+    rewardMult: 1.35,
+    scoreMult: 1.6,
+    waveDelaySec: 9,
+  },
+  endless: {
+    id: 'endless',
+    label: 'Vô Tận',
+    shortLabel: 'ENDLESS',
+    badgeColor: '#A855F7',
+    description: 'Không giới hạn số đợt · Quái mạnh dần vô cực sau mốc chiến thắng',
+    waveCountMult: 1.0,
+    spawnRateMult: 1.05,
+    speedMult: 1.0,
+    startEnergyMult: 1.1,
+    rewardMult: 1.0,
+    scoreMult: 1.25,
+    waveDelaySec: 7,
   },
 };
 
@@ -229,11 +324,17 @@ export interface EffectiveMapSetup {
   readonly startCoreHp: number;
 }
 
-export function getEffectiveMapSetup(map: TdMapDef, difficulty: DifficultyId): EffectiveMapSetup {
+export function getEffectiveMapSetup(
+  map: TdMapDef,
+  difficulty: DifficultyId,
+  mode: GameModeId = 'campaign'
+): EffectiveMapSetup {
   const cfg = DIFFICULTY_CONFIGS[difficulty];
+  const modeCfg = GAME_MODE_CONFIGS[mode];
+  const baseWaves = map.totalWaves + cfg.extraWaves;
   return {
-    totalWaves: map.totalWaves + cfg.extraWaves,
-    startEnergy: Math.round((map.startEnergy * cfg.startEnergyMult) / 5) * 5,
+    totalWaves: Math.max(5, Math.round(baseWaves * modeCfg.waveCountMult)),
+    startEnergy: Math.round((map.startEnergy * cfg.startEnergyMult * modeCfg.startEnergyMult) / 5) * 5,
     startCoreHp: Math.max(8, Math.round(map.startCoreHp * cfg.coreHpMult)),
   };
 }
@@ -321,11 +422,12 @@ export interface TdEnemy {
   hitFlash: number;
   koTimer: number;
   isElite?: boolean;
+  enraged?: boolean;
 }
 
 export interface ProjectileItem {
   id: number;
-  kind: 'bullet' | 'pellet' | 'missile' | 'mortar' | 'bomblet';
+  kind: 'bullet' | 'pellet' | 'missile' | 'mortar' | 'bomblet' | 'acid' | 'sawblade' | 'cannon' | 'plasma' | 'cluster' | 'hunter';
   sourceGunId: string;
   x: number;
   y: number;
@@ -341,6 +443,8 @@ export interface ProjectileItem {
   burnDuration: number;
   slowAmount: number;
   pierceLeft: number;
+  bounceLeft?: number;
+  acidShred?: number;
   hitIds?: number[];
   life: number;
   maxLife: number;
@@ -348,6 +452,20 @@ export interface ProjectileItem {
   color: string;
   visualTier: 1 | 2 | 3 | 4;
   spawnCluster?: boolean;
+}
+
+export interface AcidPoolFx {
+  x: number;
+  y: number;
+  radius: number;
+  life: number;
+  maxLife: number;
+  dps: number;
+  shred: number;
+  slowPct: number;
+  tickAccum: number;
+  sourceGunId: string;
+  visualTier: 1 | 2 | 3 | 4;
 }
 
 export interface LightningArc {
@@ -549,6 +667,150 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
       { level: 10, name: 'Siêu Tân Tinh Hư Không', summary: 'Phóng 2 quả cầu hố đen + kéo sập đội hình' },
     ],
   },
+  {
+    type: 'sniper',
+    hotkey: '9',
+    name: 'Pháo Bắn Tỉa Chí Mạng',
+    shortName: 'Bắn Tỉa',
+    roleClue: 'Tầm cực xa · Chí mạng săn Boss',
+    accentColor: '#34D399',
+    cost: 95,
+    baseDamage: 88,
+    baseCooldown: 1.55,
+    rangeTiles: 6.4,
+    milestones: [
+      { level: 3, name: 'Đạn Xuyên Giáp 85%', summary: 'Xuyên 85% giáp & phá 145% khiên' },
+      { level: 5, name: 'Chí Mạng Tử Thần', summary: 'Tỉ lệ chí mạng cao ×2.1 sát thương' },
+      { level: 7, name: 'Ám Sát Chỉ Huy', summary: '+45% sát thương lên Boss, Healer & Tinh Anh' },
+      { level: 10, name: 'Họng Súng Thần Chết', summary: 'Bắn 2 phát liên hoàn · Chí mạng ×2.6 & 100% xuyên giáp' },
+    ],
+  },
+  {
+    type: 'acid',
+    hotkey: '0',
+    name: 'Súng Phóng Axit',
+    shortName: 'Axit',
+    roleClue: 'Vũng axit bào giáp & làm chậm',
+    accentColor: '#A3E635',
+    cost: 80,
+    baseDamage: 26,
+    baseCooldown: 1.05,
+    rangeTiles: 3.0,
+    milestones: [
+      { level: 3, name: 'Vũng Axit Đậm Đặc', summary: 'Bào mòn 45% giáp vĩnh viễn khi dẫm vũng' },
+      { level: 5, name: 'Dung Dịch Kéo Dài', summary: 'Vũng axit rộng 72px, tồn tại 4.8s & làm chậm -34%' },
+      { level: 7, name: 'Phản Ứng Dây Chuyền', summary: 'Bắn 2 quả cầu axit cùng lúc bao phủ khúc cua' },
+      { level: 10, name: 'Biển Axit Hủy Diệt', summary: 'Bào mòn 75% giáp + làm chậm -45% & đốt DoT cực gắt' },
+    ],
+  },
+  {
+    type: 'saw',
+    hotkey: 'q',
+    name: 'Máy Cưa Đĩa Nảy',
+    shortName: 'Cưa Đĩa',
+    roleClue: 'Đĩa cưa nảy bầy + rỉa máu',
+    accentColor: '#F43F5E',
+    cost: 85,
+    baseDamage: 38,
+    baseCooldown: 1.12,
+    rangeTiles: 3.2,
+    milestones: [
+      { level: 3, name: 'Lưỡi Thép Hợp Kim', summary: 'Lưỡi cưa nảy qua tối đa 5 kẻ địch liên tiếp' },
+      { level: 5, name: 'Răng Cưa Gây Xuất Huyết', summary: 'Gây hiệu ứng chảy máu & xuyên 55% giáp' },
+      { level: 7, name: 'Song Đĩa Hủy Diệt', summary: 'Phóng 2 đĩa cưa cùng lúc, nảy tối đa 7 mục tiêu' },
+      { level: 10, name: 'Bão Cưa Plasma Đỏ', summary: '3 đĩa cưa siêu tốc nảy 11 mục tiêu không hụt nhịp' },
+    ],
+  },
+  {
+    type: 'beacon',
+    hotkey: 'e',
+    name: 'Tháp Cộng Hưởng',
+    shortName: 'Cộng Hưởng',
+    roleClue: 'Buff tốc bắn & sát thương cho súng lân cận',
+    accentColor: '#FACC15',
+    cost: 90,
+    baseDamage: 24,
+    baseCooldown: 1.38,
+    rangeTiles: 2.85,
+    milestones: [
+      { level: 3, name: 'Trường Tăng Tốc +20%', summary: 'Súng trong tầm nhận +20% tốc bắn & +12% sát thương' },
+      { level: 5, name: 'Xung Sóng Cộng Hưởng', summary: 'Sóng xung kích gây sát thương diện rộng + lộ tàng hình' },
+      { level: 7, name: 'Trường Overclock +32%', summary: 'Tăng +32% tốc bắn & +24% sát thương đồng minh' },
+      { level: 10, name: 'Lõi Thái Dương Tối Thượng', summary: '+45% tốc bắn & +38% sát thương quanh tháp + sóng vàng' },
+    ],
+  },
+  {
+    type: 'cannon',
+    hotkey: 'z',
+    name: 'Pháo Nặng Titan',
+    shortName: 'Pháo Nặng',
+    roleClue: 'Đạn xuyên phá & làm choáng nặng',
+    accentColor: '#F59E0B',
+    cost: 110,
+    baseDamage: 96,
+    baseCooldown: 1.72,
+    rangeTiles: 3.85,
+    milestones: [
+      { level: 3, name: 'Đạn Phá Thành 75%', summary: 'Xuyên 75% giáp & nổ sóng xung kích 55px' },
+      { level: 5, name: 'Chấn Động Làm Choáng', summary: 'Làm choáng mục tiêu 0.55s & nổ lan 75px' },
+      { level: 7, name: 'Pháo Hạm Nòng Kép', summary: 'Bắn 2 quả đại bác xuyên giáp liên tiếp' },
+      { level: 10, name: 'Đại Bác Titan Hủy Diệt', summary: '3 quả đại bác 100% xuyên giáp + choáng 0.8s + nổ 105px' },
+    ],
+  },
+  {
+    type: 'plasma',
+    hotkey: 'x',
+    name: 'Súng Plasma Xoáy',
+    shortName: 'Plasma',
+    roleClue: 'Cầu plasma phá khiên & thiêu đốt',
+    accentColor: '#EC4899',
+    cost: 95,
+    baseDamage: 34,
+    baseCooldown: 0.62,
+    rangeTiles: 3.15,
+    milestones: [
+      { level: 3, name: 'Lõi Plasma Phá Khiên', summary: '185% sát thương lên khiên + đốt cháy kẻ địch' },
+      { level: 5, name: 'Quả Cầu Nổ Xoáy', summary: 'Nổ plasma 64px & hút nhẹ mục tiêu vào tâm' },
+      { level: 7, name: 'Bão Plasma Kép', summary: 'Phóng 2 cầu plasma hồng tốc độ cao cùng lúc' },
+      { level: 10, name: 'Hạch Nhân Plasma Hồng', summary: '3 cầu plasma + 240% phá khiên + nổ 92px' },
+    ],
+  },
+  {
+    type: 'cluster',
+    hotkey: 'c',
+    name: 'Pháo Cối Bom Bi',
+    shortName: 'Bom Bi',
+    roleClue: 'Rải bom bi phủ kín đường đi',
+    accentColor: '#10B981',
+    cost: 105,
+    baseDamage: 58,
+    baseCooldown: 1.45,
+    rangeTiles: 4.4,
+    milestones: [
+      { level: 3, name: 'Mưa Bom Bi 5 Mảnh', summary: 'Phát nổ rải bom bi thứ cấp phủ vùng 85px' },
+      { level: 5, name: 'Bom Napalm Diện Rộng', summary: 'Thiêu đốt DoT cực gắt mọi quái trong bán kính' },
+      { level: 7, name: 'Bệ Phóng Cối Đôi', summary: 'Bắn 2 quả cối rải thảm bom bi mỗi lượt' },
+      { level: 10, name: 'Oanh Tạc Thảm Xanh', summary: '3 quả cối + nổ 128px + phá 50% giáp vùng' },
+    ],
+  },
+  {
+    type: 'hunter',
+    hotkey: 'v',
+    name: 'Súng Săn Drone Tự Hành',
+    shortName: 'Săn Drone',
+    roleClue: 'Tên lửa mini tầm xa khắc chế Tàng Hình & Nhảy Pha',
+    accentColor: '#22D3EE',
+    cost: 90,
+    baseDamage: 30,
+    baseCooldown: 0.72,
+    rangeTiles: 5.1,
+    milestones: [
+      { level: 3, name: 'Radar Phá Tàng Hình', summary: 'Bắn 2 tên lửa mini dẫn đường + 160% phá khiên' },
+      { level: 5, name: 'Đạn Đuổi Chí Mạng', summary: '+35% sát thương lên Tàng Hình, Nhảy Pha & Tàu Mẹ' },
+      { level: 7, name: 'Bầy Ong 3 Nòng', summary: 'Phóng 3 tên lửa truy đuổi mục tiêu liên hoàn' },
+      { level: 10, name: 'Quần Đàn Hunter V10', summary: '5 tên lửa truy đuổi + 100% xuyên giáp' },
+    ],
+  },
 ];
 
 export const PRISM_MAPS: readonly TdMapDef[] = [
@@ -556,14 +818,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-01',
     name: 'Màn 01 · Thung Lũng Khởi Đầu',
     recommendedDifficulty: 'easy',
-    difficultyLabel: 'Dễ · 15 Đợt',
-    subtitle: 'Tuyến zic-zắc kéo dài — khởi đầu chiến dịch dài hơi và nâng cấp súng lên Lv10.',
+    difficultyLabel: 'Dễ · 8 Đợt',
+    subtitle: 'Tuyến zic-zắc tinh gọn — mỗi đợt kéo dài x2 để nâng cấp súng lên Lv10.',
     biome: 'cyber_cyan',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 170,
     startCoreHp: 20,
-    totalWaves: 15,
+    totalWaves: 8,
     path: [
       { col: 0, row: 2 },
       { col: 3, row: 2 },
@@ -584,14 +846,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-02',
     name: 'Màn 02 · Giao Lộ Ma Trận',
     recommendedDifficulty: 'easy',
-    difficultyLabel: 'Dễ · 16 Đợt',
+    difficultyLabel: 'Dễ · 8 Đợt',
     subtitle: 'Hai khúc cua sâu đối xứng — đặt Phun Lửa + Băng Cryo ngay trọng tâm để khóa chặt quái.',
     biome: 'emerald_matrix',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 180,
     startCoreHp: 20,
-    totalWaves: 16,
+    totalWaves: 8,
     path: [
       { col: 0, row: 1 },
       { col: 3, row: 1 },
@@ -609,14 +871,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-03',
     name: 'Màn 03 · Lò Rèn Huyết Thép',
     recommendedDifficulty: 'easy',
-    difficultyLabel: 'Dễ · 17 Đợt',
+    difficultyLabel: 'Dễ · 9 Đợt',
     subtitle: 'Bức tường thép chắn giữa bản đồ — tận dụng Tên Lửa & Hố Đen bắn vượt tường.',
     biome: 'crimson_forge',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 190,
     startCoreHp: 20,
-    totalWaves: 17,
+    totalWaves: 9,
     path: [
       { col: 0, row: 6 },
       { col: 2, row: 6 },
@@ -636,14 +898,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-04',
     name: 'Màn 04 · Đại Lộ Hư Không',
     recommendedDifficulty: 'easy',
-    difficultyLabel: 'Dễ · 18 Đợt',
+    difficultyLabel: 'Dễ · 9 Đợt',
     subtitle: 'Đường thẳng dài hai tầng — thiên đường của Pháo Railgun xuyên cả hàng Thiết Giáp.',
     biome: 'violet_void',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 200,
     startCoreHp: 20,
-    totalWaves: 18,
+    totalWaves: 9,
     path: [
       { col: 0, row: 1 },
       { col: 10, row: 1 },
@@ -661,14 +923,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-05',
     name: 'Màn 05 · Sa Mạc Răng Cưa',
     recommendedDifficulty: 'normal',
-    difficultyLabel: 'Trung Bình · 20 Đợt',
+    difficultyLabel: 'Trung Bình · 10 Đợt',
     subtitle: 'Bốn khúc cua răng cưa liên hoàn — dùng Tesla ngắt chiêu Kẻ Nhảy Pha và Tàu Yểm Trợ.',
     biome: 'amber_desert',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 210,
     startCoreHp: 20,
-    totalWaves: 20,
+    totalWaves: 10,
     path: [
       { col: 0, row: 1 },
       { col: 3, row: 1 },
@@ -688,14 +950,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-06',
     name: 'Màn 06 · Lõi Băng Cực Quang',
     recommendedDifficulty: 'normal',
-    difficultyLabel: 'Trung Bình · 21 Đợt',
-    subtitle: 'Đường xoắn ốc hội tụ vào Lõi giữa bản đồ — giữ nhịp sát thương xuyên suốt 21+ đợt.',
+    difficultyLabel: 'Trung Bình · 11 Đợt',
+    subtitle: 'Đường xoắn ốc hội tụ vào Lõi giữa bản đồ — giữ nhịp sát thương xuyên suốt 11+ đợt dài.',
     biome: 'arctic_core',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 220,
     startCoreHp: 20,
-    totalWaves: 21,
+    totalWaves: 11,
     path: [
       { col: 0, row: 6 },
       { col: 10, row: 6 },
@@ -713,14 +975,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-07',
     name: 'Màn 07 · Xoáy Lốc Bào Mòn',
     recommendedDifficulty: 'normal',
-    difficultyLabel: 'Trung Bình · 22 Đợt',
+    difficultyLabel: 'Trung Bình · 11 Đợt',
     subtitle: 'Quái đi qua trung tâm 2 lần — nâng cấp Pháo Phun Lửa & Hố Đen để hủy diệt hàng loạt.',
     biome: 'cyber_cyan',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 230,
     startCoreHp: 22,
-    totalWaves: 22,
+    totalWaves: 11,
     path: [
       { col: 0, row: 3 },
       { col: 9, row: 3 },
@@ -740,14 +1002,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-08',
     name: 'Màn 08 · Pháo Đài Kép Titan',
     recommendedDifficulty: 'normal',
-    difficultyLabel: 'Trung Bình · 23 Đợt',
+    difficultyLabel: 'Trung Bình · 12 Đợt',
     subtitle: 'Tuyến hào chữ U kép bọc thép đối đầu liên quân Thiết Giáp & Khiên Aegis.',
     biome: 'crimson_forge',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 240,
     startCoreHp: 22,
-    totalWaves: 23,
+    totalWaves: 12,
     path: [
       { col: 0, row: 1 },
       { col: 5, row: 1 },
@@ -767,14 +1029,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-09',
     name: 'Màn 09 · Ma Trận Tam Giáp',
     recommendedDifficulty: 'hard',
-    difficultyLabel: 'Khó · 25 Đợt',
+    difficultyLabel: 'Khó · 13 Đợt',
     subtitle: 'Ba bậc thang hỏa lực — kết hợp Cryo Giòn Vỡ Lv5+ cùng Vulcan & Railgun.',
     biome: 'emerald_matrix',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 250,
     startCoreHp: 22,
-    totalWaves: 25,
+    totalWaves: 13,
     path: [
       { col: 0, row: 5 },
       { col: 3, row: 5 },
@@ -794,14 +1056,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-10',
     name: 'Màn 10 · Hẻm Núi Thiên Thạch',
     recommendedDifficulty: 'hard',
-    difficultyLabel: 'Khó · 26 Đợt',
+    difficultyLabel: 'Khó · 13 Đợt',
     subtitle: 'Đá chắn chia đôi sườn núi — bố trí pháo tầm xa ở hai đầu và Shrapnel ở các khúc gắt.',
     biome: 'amber_desert',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 265,
     startCoreHp: 22,
-    totalWaves: 26,
+    totalWaves: 13,
     path: [
       { col: 0, row: 2 },
       { col: 2, row: 2 },
@@ -823,14 +1085,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-11',
     name: 'Màn 11 · Cầu Băng Vỡ Vụn',
     recommendedDifficulty: 'hard',
-    difficultyLabel: 'Khó · 27 Đợt',
+    difficultyLabel: 'Khó · 14 Đợt',
     subtitle: 'Hành lang hẹp băng giá — quái chạy cực nhanh, buộc phải nâng Cryo & Tesla lên Lv7+.',
     biome: 'arctic_core',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 275,
     startCoreHp: 24,
-    totalWaves: 27,
+    totalWaves: 14,
     path: [
       { col: 0, row: 0 },
       { col: 10, row: 0 },
@@ -849,14 +1111,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-12',
     name: 'Màn 12 · Lò Luyện Ngục Hỏa',
     recommendedDifficulty: 'hard',
-    difficultyLabel: 'Khó · 28 Đợt',
+    difficultyLabel: 'Khó · 14 Đợt',
     subtitle: 'Đường chữ M ngược cắt chéo — dồn sát thương nổ chùm tên lửa ở 3 đỉnh tam giác.',
     biome: 'crimson_forge',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 285,
     startCoreHp: 24,
-    totalWaves: 28,
+    totalWaves: 14,
     path: [
       { col: 0, row: 7 },
       { col: 2, row: 7 },
@@ -877,14 +1139,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-13',
     name: 'Màn 13 · Tổ Ong Bóng Đêm',
     recommendedDifficulty: 'hell',
-    difficultyLabel: 'Địa Ngục · 30 Đợt',
+    difficultyLabel: 'Địa Ngục · 15 Đợt',
     subtitle: 'Nhiều cụm vách chắn chia ô — chọn lọc vị trí vàng cho Pháo Cối Hố Đen Lv10.',
     biome: 'violet_void',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 300,
     startCoreHp: 24,
-    totalWaves: 30,
+    totalWaves: 15,
     path: [
       { col: 1, row: 0 },
       { col: 1, row: 5 },
@@ -906,14 +1168,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-14',
     name: 'Màn 14 · Tuyến Phòng Thủ Omega',
     recommendedDifficulty: 'hell',
-    difficultyLabel: 'Địa Ngục · 32 Đợt',
+    difficultyLabel: 'Địa Ngục · 16 Đợt',
     subtitle: 'Hành lang tấn công trực diện dồn dập — cân bằng hoàn hảo giữa công đơn thể & AoE.',
     biome: 'cyber_cyan',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 315,
     startCoreHp: 24,
-    totalWaves: 32,
+    totalWaves: 16,
     path: [
       { col: 0, row: 4 },
       { col: 3, row: 4 },
@@ -932,14 +1194,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-15',
     name: 'Màn 15 · Vành Đai Sinh Tử',
     recommendedDifficulty: 'hell',
-    difficultyLabel: 'Địa Ngục · 33 Đợt',
+    difficultyLabel: 'Địa Ngục · 17 Đợt',
     subtitle: 'Đoàn quân Boss & Khiên Aegis hành quân liên tục — cần tối thiểu 3–4 súng đạt Lv10!',
     biome: 'emerald_matrix',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 330,
     startCoreHp: 25,
-    totalWaves: 33,
+    totalWaves: 17,
     path: [
       { col: 0, row: 1 },
       { col: 10, row: 1 },
@@ -959,14 +1221,14 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     id: 'sector-16',
     name: 'Màn 16 · Đế Chế Hư Không',
     recommendedDifficulty: 'hell',
-    difficultyLabel: 'Địa Ngục · 35 Đợt',
-    subtitle: 'Chiến dịch trường kỳ 35+ đợt tối thượng — thử thách giới hạn pháo đài Mythic Lv10!',
+    difficultyLabel: 'Địa Ngục · 18 Đợt',
+    subtitle: 'Chiến dịch 18–21 đợt tối thượng — mỗi đợt dài gấp đôi & độ khó cực đại cho pháo đài Lv10!',
     biome: 'violet_void',
     cols: GRID_COLS,
     rows: GRID_ROWS,
     startEnergy: 350,
     startCoreHp: 26,
-    totalWaves: 35,
+    totalWaves: 18,
     path: [
       { col: 0, row: 6 },
       { col: 4, row: 6 },
@@ -1123,6 +1385,52 @@ export function getGunCombatProfile(type: GunType, rawLevel: number): GunCombatP
     pullForce = level >= 3 ? 16 + (level - 2) * 3 : 8;
     slowPct = level >= 5 ? 0.45 : 0.2;
     burnDps = level >= 5 ? Math.round(damage * 0.22) : 0;
+  } else if (type === 'sniper') {
+    armorPierce = level >= 10 ? 1 : level >= 3 ? 0.85 : 0.55;
+    projectilesPerShot = level >= 10 ? 2 : 1;
+    shieldMult = level >= 3 ? 1.45 : 1.15;
+    splashRadius = 0;
+  } else if (type === 'acid') {
+    armorPierce = 0.9;
+    projectilesPerShot = level >= 7 ? 2 : 1;
+    splashRadius = level >= 5 ? 74 : 56 + lvOffset * 3;
+    slowPct = level >= 10 ? 0.45 : level >= 5 ? 0.34 : 0.24;
+    burnDps = Math.round(damage * (level >= 10 ? 0.88 : 0.62));
+    shieldMult = 1.1;
+  } else if (type === 'saw') {
+    armorPierce = level >= 5 ? 0.68 : 0.38;
+    projectilesPerShot = level >= 10 ? 3 : level >= 7 ? 2 : 1;
+    chainCount = level >= 10 ? 11 : level >= 7 ? 7 : level >= 3 ? 5 : 3;
+    burnDps = level >= 5 ? Math.round(damage * 0.45) : 0;
+    shieldMult = 1.15;
+  } else if (type === 'beacon') {
+    armorPierce = 0.75;
+    splashRadius = Math.round((item.rangeTiles + rangeBonusTiles) * TILE_SIZE);
+    slowPct = level >= 5 ? 0.22 : 0;
+    shieldMult = 1.35;
+  } else if (type === 'cannon') {
+    armorPierce = level >= 10 ? 1 : level >= 3 ? 0.75 : 0.45;
+    projectilesPerShot = level >= 10 ? 3 : level >= 7 ? 2 : 1;
+    splashRadius = level >= 10 ? 105 : level >= 5 ? 75 : level >= 3 ? 55 : 36;
+    shieldMult = 1.25;
+  } else if (type === 'plasma') {
+    armorPierce = 0.55 + lvOffset * 0.04;
+    projectilesPerShot = level >= 10 ? 3 : level >= 7 ? 2 : 1;
+    splashRadius = level >= 10 ? 92 : level >= 5 ? 64 : 38;
+    shieldMult = level >= 10 ? 2.4 : level >= 3 ? 1.85 : 1.45;
+    burnDps = level >= 3 ? Math.round(damage * 0.55) : Math.round(damage * 0.25);
+    pullForce = level >= 5 ? 10 : 0;
+  } else if (type === 'cluster') {
+    armorPierce = level >= 10 ? 0.65 : 0.38;
+    projectilesPerShot = level >= 10 ? 3 : level >= 7 ? 2 : 1;
+    splashRadius = level >= 10 ? 128 : level >= 3 ? 88 + (level - 3) * 6 : 68;
+    burnDps = level >= 5 ? Math.round(damage * 0.68) : 0;
+    shieldMult = 1.15;
+  } else if (type === 'hunter') {
+    armorPierce = level >= 10 ? 1 : 0.45 + lvOffset * 0.05;
+    projectilesPerShot = level >= 10 ? 5 : level >= 7 ? 3 : level >= 3 ? 2 : 1;
+    shieldMult = level >= 3 ? 1.6 : 1.25;
+    splashRadius = 24;
   }
 
   const visualTier: 1 | 2 | 3 | 4 =
@@ -1139,9 +1447,11 @@ export function getGunCombatProfile(type: GunType, rawLevel: number): GunCombatP
   const effectiveShots =
     type === 'shotgun'
       ? projectilesPerShot * 0.65
-      : type === 'tesla'
-        ? Math.min(3.5, 1 + (chainCount - 1) * 0.35)
-        : projectilesPerShot;
+      : type === 'tesla' || type === 'saw'
+        ? projectilesPerShot * Math.min(3.4, 1 + (chainCount - 1) * 0.32)
+        : type === 'sniper'
+          ? projectilesPerShot * (level >= 10 ? 1.85 : level >= 5 ? 1.55 : 1.2)
+          : projectilesPerShot;
   const dpsEstimate = Math.round((damage * effectiveShots) / cooldownSec);
 
   const unlockedSkills = item.milestones.filter((m) => level >= m.level);
@@ -1170,6 +1480,35 @@ export function getGunCombatProfile(type: GunType, rawLevel: number): GunCombatP
   };
 }
 
+export function computeBeaconBuffAtTile(
+  guns: readonly PlacedGun[],
+  col: number,
+  row: number
+): { speedMult: number; damageMult: number } {
+  let speedBonus = 0;
+  let dmgBonus = 0;
+  const targetPt = gridToWorldCenter(col, row);
+
+  for (const g of guns) {
+    if (g.type !== 'beacon') continue;
+    if (g.col === col && g.row === row) continue;
+    const beaconProfile = getGunCombatProfile('beacon', g.level);
+    const gPt = gridToWorldCenter(g.col, g.row);
+    const dist = Math.hypot(gPt.x - targetPt.x, gPt.y - targetPt.y);
+    if (dist <= beaconProfile.rangePx + 4) {
+      const sp = g.level >= 10 ? 0.45 : g.level >= 7 ? 0.32 : g.level >= 3 ? 0.2 : 0.12;
+      const dm = g.level >= 10 ? 0.38 : g.level >= 7 ? 0.24 : g.level >= 3 ? 0.12 : 0.08;
+      speedBonus += sp;
+      dmgBonus += dm;
+    }
+  }
+
+  return {
+    speedMult: Number(Math.min(1.55, 1 + speedBonus).toFixed(2)),
+    damageMult: Number(Math.min(1.5, 1 + dmgBonus).toFixed(2)),
+  };
+}
+
 export interface WaveSpawnItem {
   readonly kind: EnemyKind;
   readonly delaySec: number;
@@ -1177,70 +1516,106 @@ export interface WaveSpawnItem {
 }
 
 /**
- * Extended, punishing wave composition supporting 15..41 waves & 4 Difficulty Tiers.
+ * Halved wave count (8..21) with 2x longer active duration per wave and accelerated archetype/boss escalation.
  */
 export function buildWaveSpawns(
   waveNumber: number,
-  totalWaves = 25,
-  difficulty: DifficultyId = 'normal'
+  totalWaves = 12,
+  difficulty: DifficultyId = 'normal',
+  mode: GameModeId = 'campaign'
 ): WaveSpawnItem[] {
   const diffCfg = DIFFICULTY_CONFIGS[difficulty];
+  const modeCfg = GAME_MODE_CONFIGS[mode];
   const items: WaveSpawnItem[] = [];
+  // Ramp difficulty bonus quickly over waves 1..3 for halved wave campaigns
+  const rampedBonus = Math.round(diffCfg.waveCountBonus * Math.min(1, Math.max(0, waveNumber - 1) / 2.5));
+  const rawCount =
+    20 +
+    Math.round(waveNumber * 4.0) +
+    (waveNumber >= 5 ? (waveNumber - 4) * 2 : 0) +
+    rampedBonus;
   const count =
-    14 +
-    Math.round(waveNumber * 3.1) +
-    (waveNumber >= 10 ? (waveNumber - 9) * 2 : 0) +
-    diffCfg.waveCountBonus;
+    mode === 'boss_rush'
+      ? Math.max(10, Math.round(rawCount * 0.52))
+      : mode === 'blitz'
+        ? Math.max(24, Math.round(rawCount * 1.2))
+        : rawCount;
   let elapsed = 0.2;
 
   for (let i = 0; i < count; i++) {
     let kind: EnemyKind = 'scout';
+    if (waveNumber >= 1 && waveNumber === 1 && i >= count - 3 && difficulty !== 'easy') kind = 'armored';
     if (waveNumber >= 2 && i % 4 === 2) kind = 'armored';
-    if (waveNumber >= 3 && i % 4 === 1) kind = 'splitter';
-    if (waveNumber >= 3 && i % 5 === 3) kind = 'stealth';
-    if (waveNumber >= 4 && i % 6 === 4) kind = 'healer';
-    if (waveNumber >= 4 && i % 6 === 5) kind = 'teleporter';
-    if (waveNumber >= 5 && i % 5 === 0 && i > 0) kind = 'shieldbearer';
+    if (waveNumber >= 2 && i % 5 === 1) kind = 'splitter';
+    if (waveNumber >= 2 && i % 6 === 3) kind = 'stealth';
+    if (waveNumber >= 3 && i % 6 === 4) kind = 'healer';
+    if (waveNumber >= 3 && i % 6 === 5) kind = 'teleporter';
+    if (waveNumber >= 3 && i % 5 === 0 && i > 0) kind = 'shieldbearer';
+    if (waveNumber >= 2 && i % 7 === 6) kind = 'berserker';
+    if (waveNumber >= 4 && i % 8 === 7) kind = 'leech';
+    if (waveNumber >= 4 && i % 9 === 8) kind = 'juggernaut';
+    if (waveNumber >= 5 && i % 10 === 9) kind = 'summoner';
 
-    // Boss & Mini-boss intervals throughout long 15-41 wave campaigns
-    const isMiniBossWave = waveNumber >= 6 && waveNumber % 3 === 1 && i === Math.floor(count / 2);
-    const isMajorBossWave =
-      waveNumber === totalWaves ||
-      waveNumber % 5 === 0 ||
-      (waveNumber >= 18 && waveNumber % 2 === 0);
+    if (mode === 'boss_rush') {
+      if (i % 5 === 4 || i === count - 1) {
+        kind = 'boss';
+      } else if (i % 4 === 0) {
+        kind = 'juggernaut';
+      } else if (i % 4 === 1) {
+        kind = 'summoner';
+      } else if (i % 4 === 2) {
+        kind = 'berserker';
+      } else {
+        kind = 'shieldbearer';
+      }
+    } else {
+      // Halved campaign compresses Boss & Mini-boss intervals to every 2..3 waves + final wave
+      const isMiniBossWave = waveNumber >= 4 && waveNumber % 2 === 0 && i === Math.floor(count / 2);
+      const isMajorBossWave =
+        waveNumber === totalWaves ||
+        waveNumber % 3 === 0 ||
+        waveNumber >= 10;
 
-    if ((isMajorBossWave && i === count - 1) || isMiniBossWave) {
-      kind = 'boss';
-    }
-    if (waveNumber >= 12 && isMajorBossWave && i >= count - 2) {
-      kind = 'boss';
-    }
-    if (waveNumber >= 22 && i >= count - (difficulty === 'hell' ? 4 : 3)) {
-      kind = 'boss';
+      if ((isMajorBossWave && i === count - 1) || isMiniBossWave) {
+        kind = 'boss';
+      }
+      if (waveNumber >= 7 && isMajorBossWave && i >= count - 2) {
+        kind = 'boss';
+      }
+      if (waveNumber >= 12 && i >= count - (difficulty === 'hell' ? 4 : 3)) {
+        kind = 'boss';
+      }
     }
 
-    const eliteModulo = Math.max(3, Math.round(7 - diffCfg.eliteChanceBoost * 15));
+    const eliteModulo = Math.max(3, Math.round(6 - diffCfg.eliteChanceBoost * 12));
     const isElite =
       kind !== 'boss' &&
-      ((waveNumber >= 5 && i % eliteModulo === eliteModulo - 1) ||
-        (difficulty === 'hell' && waveNumber >= 3 && i % 5 === 4));
-    items.push({ kind, delaySec: elapsed, isElite });
+      ((mode === 'boss_rush' && i % 3 === 1) ||
+        (waveNumber >= 3 && i % eliteModulo === eliteModulo - 1) ||
+        (difficulty === 'hell' && waveNumber >= 2 && i % 5 === 4));
+    items.push({ kind, delaySec: Number(elapsed.toFixed(3)), isElite });
 
-    const baseGap = Math.max(0.2, 0.78 - waveNumber * 0.022 - (difficulty === 'hell' ? 0.08 : difficulty === 'hard' ? 0.04 : 0));
+    // ~2.0x wave duration via wider controlled lane spacing + extended squad length
+    const baseGap =
+      Math.max(
+        0.34,
+        1.18 - waveNumber * 0.025 - (difficulty === 'hell' ? 0.05 : difficulty === 'hard' ? 0.025 : 0)
+      ) / modeCfg.spawnRateMult;
     elapsed +=
-      kind === 'splitter'
-        ? baseGap * 0.72
+      kind === 'splitter' || kind === 'berserker'
+        ? baseGap * 0.78
         : kind === 'stealth' || kind === 'teleporter'
-          ? baseGap * 0.8
-          : kind === 'boss'
-            ? 1.05
+          ? baseGap * 0.85
+          : kind === 'boss' || kind === 'juggernaut'
+            ? baseGap * 1.35
             : baseGap;
   }
   return items;
 }
 
 /**
- * Compound enemy scaling across waves 1..41 and 4 Difficulty Tiers (Dễ -> Địa Ngục).
+ * Steeper per-wave scaling (~1.95x wave slope) so halved 8..21 wave campaigns reach full late-game intensity.
+ * Includes calibrated W1-W2 opening ramp on Hard/Hell so longer waves remain winnable.
  */
 export function createEnemyForWave(
   id: number,
@@ -1248,21 +1623,35 @@ export function createEnemyForWave(
   waveNumber: number,
   map: TdMapDef,
   isElite = false,
-  difficulty: DifficultyId = 'normal'
+  difficulty: DifficultyId = 'normal',
+  mode: GameModeId = 'campaign'
 ): TdEnemy {
   const diffCfg = DIFFICULTY_CONFIGS[difficulty];
+  const modeCfg = GAME_MODE_CONFIGS[mode];
   const spawnPt = gridToWorldCenter(map.path[0].col, map.path[0].row);
   const nextPt = gridToWorldCenter(map.path[1].col, map.path[1].row);
   const initialHeading = Math.atan2(nextPt.y - spawnPt.y, nextPt.x - spawnPt.x);
 
+  const effectiveWave = 1 + (waveNumber - 1) * 1.95;
   const baseScale =
-    1.25 + (waveNumber - 1) * 0.46 + Math.pow(Math.max(0, waveNumber - 2), 1.58) * 0.3;
+    1.15 + (effectiveWave - 1) * 0.44 + Math.pow(Math.max(0, effectiveWave - 2), 1.46) * 0.28;
+  const openingGrace =
+    difficulty === 'hell' && waveNumber <= 2
+      ? waveNumber === 1
+        ? 0.29
+        : 0.58
+      : difficulty === 'hard' && waveNumber === 1
+        ? 0.56
+        : 1.0;
+  const bossRushEarlyDamper = mode === 'boss_rush' && waveNumber <= 2 ? 0.52 : 1.0;
   const eliteMult = isElite ? 1.55 : 1;
-  const hpScale = baseScale * eliteMult * diffCfg.hpMult;
-  const shieldScale = baseScale * eliteMult * diffCfg.shieldMult;
-  const speedBonus = Math.min(46, waveNumber * 1.9);
-  const rewardScale = diffCfg.rewardMult * (isElite ? 1.35 : 1);
-  const armorAdd = diffCfg.armorBonus;
+  const hpScale = baseScale * eliteMult * diffCfg.hpMult * openingGrace * bossRushEarlyDamper;
+  const shieldScale = baseScale * eliteMult * diffCfg.shieldMult * openingGrace * bossRushEarlyDamper;
+  const speedBonus = Math.min(52, effectiveWave * 1.95);
+  const totalSpeedMult = diffCfg.speedMult * modeCfg.speedMult;
+  const rewardScale = diffCfg.rewardMult * modeCfg.rewardMult * (isElite ? 1.35 : 1);
+  const scoreMultTotal = diffCfg.scoreMult * modeCfg.scoreMult;
+  const armorAdd = waveNumber === 1 ? diffCfg.armorBonus * 0.3 : diffCfg.armorBonus;
 
   const base = {
     id,
@@ -1282,6 +1671,7 @@ export function createEnemyForWave(
     hitFlash: 0,
     koTimer: 0,
     isElite,
+    enraged: false,
   };
 
   if (kind === 'armored') {
@@ -1293,10 +1683,10 @@ export function createEnemyForWave(
       maxHp: hp,
       shield,
       maxShield: shield,
-      speed: (49 + speedBonus * 0.7) * diffCfg.speedMult,
+      speed: (49 + speedBonus * 0.7) * totalSpeedMult,
       radius: 17,
-      reward: Math.max(6, Math.round((14 + Math.floor(waveNumber * 0.65)) * rewardScale)),
-      scoreValue: Math.round(60 * diffCfg.scoreMult),
+      reward: Math.max(8, Math.round((15 + Math.floor(effectiveWave * 0.55)) * rewardScale)),
+      scoreValue: Math.round(65 * scoreMultTotal),
       armorRatio: Math.min(0.78, 0.54 + armorAdd),
     };
   }
@@ -1307,12 +1697,12 @@ export function createEnemyForWave(
       ...base,
       hp,
       maxHp: hp,
-      shield: difficulty === 'hell' && waveNumber >= 6 ? Math.round(25 * shieldScale) : 0,
-      maxShield: difficulty === 'hell' && waveNumber >= 6 ? Math.round(25 * shieldScale) : 0,
-      speed: (84 + speedBonus) * diffCfg.speedMult,
+      shield: difficulty === 'hell' && waveNumber >= 4 ? Math.round(25 * shieldScale) : 0,
+      maxShield: difficulty === 'hell' && waveNumber >= 4 ? Math.round(25 * shieldScale) : 0,
+      speed: (84 + speedBonus) * totalSpeedMult,
       radius: 14,
-      reward: Math.max(5, Math.round((10 + Math.floor(waveNumber * 0.45)) * rewardScale)),
-      scoreValue: Math.round(42 * diffCfg.scoreMult),
+      reward: Math.max(6, Math.round((11 + Math.floor(effectiveWave * 0.4)) * rewardScale)),
+      scoreValue: Math.round(45 * scoreMultTotal),
       armorRatio: Math.min(0.45, 0.12 + armorAdd),
     };
   }
@@ -1326,10 +1716,10 @@ export function createEnemyForWave(
       maxHp: hp,
       shield,
       maxShield: shield,
-      speed: (100 + speedBonus) * diffCfg.speedMult,
+      speed: (100 + speedBonus) * totalSpeedMult,
       radius: 14,
-      reward: Math.max(6, Math.round((13 + Math.floor(waveNumber * 0.6)) * rewardScale)),
-      scoreValue: Math.round(54 * diffCfg.scoreMult),
+      reward: Math.max(7, Math.round((14 + Math.floor(effectiveWave * 0.5)) * rewardScale)),
+      scoreValue: Math.round(58 * scoreMultTotal),
       armorRatio: Math.min(0.55, 0.24 + armorAdd),
     };
   }
@@ -1343,10 +1733,10 @@ export function createEnemyForWave(
       maxHp: hp,
       shield,
       maxShield: shield,
-      speed: (56 + speedBonus * 0.75) * diffCfg.speedMult,
+      speed: (56 + speedBonus * 0.75) * totalSpeedMult,
       radius: 16,
-      reward: Math.max(8, Math.round((18 + Math.floor(waveNumber * 0.75)) * rewardScale)),
-      scoreValue: Math.round(72 * diffCfg.scoreMult),
+      reward: Math.max(9, Math.round((19 + Math.floor(effectiveWave * 0.65)) * rewardScale)),
+      scoreValue: Math.round(78 * scoreMultTotal),
       armorRatio: Math.min(0.55, 0.22 + armorAdd),
       abilityCooldown: 1.85,
     };
@@ -1361,10 +1751,10 @@ export function createEnemyForWave(
       maxHp: hp,
       shield,
       maxShield: shield,
-      speed: (80 + speedBonus * 0.9) * diffCfg.speedMult,
+      speed: (80 + speedBonus * 0.9) * totalSpeedMult,
       radius: 15,
-      reward: Math.max(7, Math.round((16 + Math.floor(waveNumber * 0.65)) * rewardScale)),
-      scoreValue: Math.round(68 * diffCfg.scoreMult),
+      reward: Math.max(8, Math.round((17 + Math.floor(effectiveWave * 0.55)) * rewardScale)),
+      scoreValue: Math.round(72 * scoreMultTotal),
       armorRatio: Math.min(0.5, 0.2 + armorAdd),
       abilityCooldown: difficulty === 'hell' ? 2.4 : 2.9,
     };
@@ -1379,12 +1769,82 @@ export function createEnemyForWave(
       maxHp: hp,
       shield,
       maxShield: shield,
-      speed: (46 + speedBonus * 0.65) * diffCfg.speedMult,
+      speed: (46 + speedBonus * 0.65) * totalSpeedMult,
       radius: 18,
-      reward: Math.max(9, Math.round((20 + Math.floor(waveNumber * 0.85)) * rewardScale)),
-      scoreValue: Math.round(84 * diffCfg.scoreMult),
+      reward: Math.max(10, Math.round((21 + Math.floor(effectiveWave * 0.75)) * rewardScale)),
+      scoreValue: Math.round(90 * scoreMultTotal),
       armorRatio: Math.min(0.75, 0.48 + armorAdd),
       abilityCooldown: 2.9,
+    };
+  }
+
+  if (kind === 'berserker') {
+    const hp = Math.round(210 * hpScale);
+    const shield = Math.round(35 * shieldScale);
+    return {
+      ...base,
+      hp,
+      maxHp: hp,
+      shield,
+      maxShield: shield,
+      speed: (78 + speedBonus * 0.85) * totalSpeedMult,
+      radius: 15,
+      reward: Math.max(8, Math.round((16 + Math.floor(effectiveWave * 0.52)) * rewardScale)),
+      scoreValue: Math.round(68 * scoreMultTotal),
+      armorRatio: Math.min(0.5, 0.24 + armorAdd),
+    };
+  }
+
+  if (kind === 'juggernaut') {
+    const hp = Math.round(520 * hpScale);
+    const shield = Math.round(150 * shieldScale);
+    return {
+      ...base,
+      hp,
+      maxHp: hp,
+      shield,
+      maxShield: shield,
+      speed: (36 + speedBonus * 0.45) * totalSpeedMult,
+      radius: 21,
+      reward: Math.max(14, Math.round((28 + Math.floor(effectiveWave * 0.95)) * rewardScale)),
+      scoreValue: Math.round(125 * scoreMultTotal),
+      armorRatio: Math.min(0.8, 0.64 + armorAdd),
+    };
+  }
+
+  if (kind === 'summoner') {
+    const hp = Math.round(265 * hpScale);
+    const shield = Math.round(135 * shieldScale);
+    return {
+      ...base,
+      hp,
+      maxHp: hp,
+      shield,
+      maxShield: shield,
+      speed: (52 + speedBonus * 0.65) * totalSpeedMult,
+      radius: 18,
+      reward: Math.max(12, Math.round((25 + Math.floor(effectiveWave * 0.85)) * rewardScale)),
+      scoreValue: Math.round(108 * scoreMultTotal),
+      armorRatio: Math.min(0.55, 0.3 + armorAdd),
+      abilityCooldown: 3.1,
+    };
+  }
+
+  if (kind === 'leech') {
+    const hp = Math.round(195 * hpScale);
+    const shield = Math.round(165 * shieldScale);
+    return {
+      ...base,
+      hp,
+      maxHp: hp,
+      shield,
+      maxShield: shield,
+      speed: (74 + speedBonus * 0.85) * totalSpeedMult,
+      radius: 16,
+      reward: Math.max(10, Math.round((20 + Math.floor(effectiveWave * 0.7)) * rewardScale)),
+      scoreValue: Math.round(92 * scoreMultTotal),
+      armorRatio: Math.min(0.55, 0.28 + armorAdd),
+      abilityCooldown: 2.6,
     };
   }
 
@@ -1397,10 +1857,10 @@ export function createEnemyForWave(
       maxHp: hp,
       shield,
       maxShield: shield,
-      speed: (39 + speedBonus * 0.55) * diffCfg.speedMult,
+      speed: (39 + speedBonus * 0.55) * totalSpeedMult,
       radius: 25,
-      reward: Math.max(25, Math.round((68 + waveNumber * 3) * rewardScale)),
-      scoreValue: Math.round(320 * diffCfg.scoreMult),
+      reward: Math.max(30, Math.round((78 + effectiveWave * 3.2) * rewardScale)),
+      scoreValue: Math.round(360 * scoreMultTotal),
       armorRatio: Math.min(0.76, 0.48 + armorAdd),
       abilityCooldown: 3.1,
     };
@@ -1408,18 +1868,99 @@ export function createEnemyForWave(
 
   // 'scout'
   const hp = Math.round(126 * hpScale);
+  const hasScoutShield =
+    waveNumber >= 3 ||
+    (difficulty === 'hard' && waveNumber >= 2) ||
+    (difficulty === 'hell' && waveNumber >= 2);
   return {
     ...base,
     hp,
     maxHp: hp,
-    shield: waveNumber >= 5 || difficulty === 'hard' || difficulty === 'hell' ? Math.round(28 * shieldScale) : 0,
-    maxShield: waveNumber >= 5 || difficulty === 'hard' || difficulty === 'hell' ? Math.round(28 * shieldScale) : 0,
-    speed: (70 + speedBonus * 0.9) * diffCfg.speedMult,
+    shield: hasScoutShield ? Math.round(28 * shieldScale) : 0,
+    maxShield: hasScoutShield ? Math.round(28 * shieldScale) : 0,
+    speed: (70 + speedBonus * 0.9) * totalSpeedMult,
     radius: 14,
-    reward: Math.max(5, Math.round((11 + Math.floor(waveNumber * 0.48)) * rewardScale)),
-    scoreValue: Math.round(40 * diffCfg.scoreMult),
-    armorRatio: Math.min(0.45, (waveNumber >= 4 ? 0.16 : 0) + armorAdd),
+    reward: Math.max(7, Math.round((13 + Math.floor(effectiveWave * 0.42)) * rewardScale)),
+    scoreValue: Math.round(44 * scoreMultTotal),
+    armorRatio: Math.min(0.45, (waveNumber >= 3 ? 0.16 : 0) + armorAdd),
   };
+}
+
+export const MAX_CORRIDOR_LATERAL_PX = 8;
+
+export function getMaxLateralOffset(enemy: Pick<TdEnemy, 'radius'>): number {
+  return Math.max(3, Math.min(MAX_CORRIDOR_LATERAL_PX, 24 - enemy.radius));
+}
+
+function getSegmentBasis(
+  map: TdMapDef,
+  waypointIndex: number
+): {
+  a: { x: number; y: number };
+  b: { x: number; y: number };
+  segLen: number;
+  tx: number;
+  ty: number;
+  nx: number;
+  ny: number;
+} | null {
+  if (map.path.length < 2) return null;
+  const idx = Math.max(1, Math.min(map.path.length - 1, waypointIndex));
+  const a = gridToWorldCenter(map.path[idx - 1].col, map.path[idx - 1].row);
+  const b = gridToWorldCenter(map.path[idx].col, map.path[idx].row);
+  const abx = b.x - a.x;
+  const aby = b.y - a.y;
+  const segLen = Math.hypot(abx, aby);
+  if (segLen < 0.001) return null;
+  const tx = abx / segLen;
+  const ty = aby / segLen;
+  return { a, b, segLen, tx, ty, nx: -ty, ny: tx };
+}
+
+/**
+ * Keeps any enemy strictly inside its orthogonal track corridor so crowds and AoE effects
+ * never spill onto buildable tiles or walls, nor cut corners diagonally.
+ */
+export function clampEnemyToTrackCorridor(enemy: TdEnemy, map: TdMapDef): void {
+  const basis = getSegmentBasis(map, enemy.waypointIndex);
+  if (!basis) return;
+  const { a, segLen, tx, ty, nx, ny } = basis;
+  const relX = enemy.x - a.x;
+  const relY = enemy.y - a.y;
+  const proj = Math.max(0, Math.min(segLen, relX * tx + relY * ty));
+  const maxLat = getMaxLateralOffset(enemy);
+  const lat = Math.max(-maxLat, Math.min(maxLat, relX * nx + relY * ny));
+  enemy.x = a.x + tx * proj + nx * lat;
+  enemy.y = a.y + ty * proj + ny * lat;
+}
+
+/**
+ * Applies vortex/black-hole pull strictly projected along the active track segment
+ * while pulling lateral displacement back toward the lane centerline.
+ */
+export function pullEnemyAlongTrack(
+  enemy: TdEnemy,
+  map: TdMapDef,
+  anchorX: number,
+  anchorY: number,
+  pullForce: number
+): void {
+  if (pullForce <= 0) return;
+  const basis = getSegmentBasis(map, enemy.waypointIndex);
+  if (!basis) return;
+  const { a, segLen, tx, ty, nx, ny } = basis;
+  const anchorProj = Math.max(0, Math.min(segLen, (anchorX - a.x) * tx + (anchorY - a.y) * ty));
+  const enemyProj = Math.max(0, Math.min(segLen, (enemy.x - a.x) * tx + (enemy.y - a.y) * ty));
+  const diffProj = anchorProj - enemyProj;
+  if (Math.abs(diffProj) <= 2) return;
+
+  const step = Math.sign(diffProj) * Math.min(Math.abs(diffProj), pullForce);
+  const nextProj = Math.max(0, Math.min(segLen, enemyProj + step));
+  const curLat = (enemy.x - a.x) * nx + (enemy.y - a.y) * ny;
+  const nextLat = curLat * 0.5;
+  enemy.x = a.x + tx * nextProj + nx * nextLat;
+  enemy.y = a.y + ty * nextProj + ny * nextLat;
+  clampEnemyToTrackCorridor(enemy, map);
 }
 
 export function advanceEnemyAlongPath(
@@ -1429,24 +1970,31 @@ export function advanceEnemyAlongPath(
 ): boolean {
   let remainingMove = distancePx;
   while (remainingMove > 0 && enemy.waypointIndex < map.path.length) {
-    const wp = gridToWorldCenter(
-      map.path[enemy.waypointIndex].col,
-      map.path[enemy.waypointIndex].row
-    );
-    const dx = wp.x - enemy.x;
-    const dy = wp.y - enemy.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist > 0.001) {
-      enemy.heading = Math.atan2(dy, dx);
+    const basis = getSegmentBasis(map, enemy.waypointIndex);
+    if (!basis) {
+      enemy.waypointIndex += 1;
+      continue;
     }
-    if (dist <= remainingMove) {
-      enemy.x = wp.x;
-      enemy.y = wp.y;
-      remainingMove -= dist;
+    const { a, b, segLen, tx, ty, nx, ny } = basis;
+    const relX = enemy.x - a.x;
+    const relY = enemy.y - a.y;
+    const proj = Math.max(0, Math.min(segLen, relX * tx + relY * ty));
+    const maxLat = getMaxLateralOffset(enemy);
+    const curLat = Math.max(-maxLat, Math.min(maxLat, relX * nx + relY * ny));
+    const remSeg = segLen - proj;
+
+    enemy.heading = Math.atan2(ty, tx);
+
+    if (remSeg <= remainingMove) {
+      enemy.x = b.x;
+      enemy.y = b.y;
+      remainingMove -= remSeg;
       enemy.waypointIndex += 1;
     } else {
-      enemy.x += (dx / dist) * remainingMove;
-      enemy.y += (dy / dist) * remainingMove;
+      const nextProj = proj + remainingMove;
+      const nextLat = curLat * Math.max(0, 1 - remainingMove / 22);
+      enemy.x = a.x + tx * nextProj + nx * nextLat;
+      enemy.y = a.y + ty * nextProj + ny * nextLat;
       remainingMove = 0;
     }
   }
@@ -1511,6 +2059,16 @@ export interface StepEnemiesOutcome {
   healedEvents: { fromX: number; fromY: number; toX: number; toY: number; amount: number }[];
   blinkEvents: { fromX: number; fromY: number; toX: number; toY: number }[];
   shieldRegenEvents: { x: number; y: number }[];
+  spawnRequests: {
+    kind: EnemyKind;
+    x: number;
+    y: number;
+    heading: number;
+    waypointIndex: number;
+    baseHp: number;
+    speed: number;
+  }[];
+  leechEvents: { x: number; y: number; radius: number }[];
 }
 
 export function stepEnemies(
@@ -1526,6 +2084,16 @@ export function stepEnemies(
   const healedEvents: { fromX: number; fromY: number; toX: number; toY: number; amount: number }[] = [];
   const blinkEvents: { fromX: number; fromY: number; toX: number; toY: number }[] = [];
   const shieldRegenEvents: { x: number; y: number }[] = [];
+  const spawnRequests: {
+    kind: EnemyKind;
+    x: number;
+    y: number;
+    heading: number;
+    waypointIndex: number;
+    baseHp: number;
+    speed: number;
+  }[] = [];
+  const leechEvents: { x: number; y: number; radius: number }[] = [];
 
   for (const enemy of enemies) {
     if (enemy.koTimer > 0) {
@@ -1548,6 +2116,12 @@ export function stepEnemies(
         scoreGained += enemy.scoreValue;
         continue;
       }
+    }
+
+    // Berserker Rage trigger (<55% HP surges speed +55%)
+    if (enemy.kind === 'berserker' && !enemy.enraged && enemy.hp <= enemy.maxHp * 0.55) {
+      enemy.enraged = true;
+      enemy.speed = Math.round(enemy.speed * 1.55);
     }
 
     // Special Archetype Abilities
@@ -1598,6 +2172,42 @@ export function stepEnemies(
             continue;
           }
         }
+      } else if (enemy.kind === 'summoner') {
+        enemy.abilityCooldown -= dt;
+        if (enemy.abilityCooldown <= 0) {
+          enemy.abilityCooldown = 4.2;
+          const basis = getSegmentBasis(map, enemy.waypointIndex);
+          for (let s = 0; s < 2; s++) {
+            let spawnX = enemy.x;
+            let spawnY = enemy.y;
+            if (basis) {
+              const relX = enemy.x - basis.a.x;
+              const relY = enemy.y - basis.a.y;
+              const curProj = Math.max(
+                0,
+                Math.min(basis.segLen, relX * basis.tx + relY * basis.ty + (s === 0 ? -6 : 6))
+              );
+              const curLat = Math.max(-4, Math.min(4, relX * basis.nx + relY * basis.ny + (s === 0 ? -3 : 3)));
+              spawnX = basis.a.x + basis.tx * curProj + basis.nx * curLat;
+              spawnY = basis.a.y + basis.ty * curProj + basis.ny * curLat;
+            }
+            spawnRequests.push({
+              kind: 'scout',
+              x: spawnX,
+              y: spawnY,
+              heading: enemy.heading,
+              waypointIndex: enemy.waypointIndex,
+              baseHp: Math.max(45, Math.round(enemy.maxHp * 0.26)),
+              speed: Math.round(enemy.speed * 1.45),
+            });
+          }
+        }
+      } else if (enemy.kind === 'leech') {
+        enemy.abilityCooldown -= dt;
+        if (enemy.abilityCooldown <= 0) {
+          enemy.abilityCooldown = 3.4;
+          leechEvents.push({ x: enemy.x, y: enemy.y, radius: 135 });
+        }
       }
     }
 
@@ -1614,7 +2224,12 @@ export function stepEnemies(
       }
     }
 
-    const speedFactor = enemy.slowTimer > 0 ? enemy.slowFactor : 1;
+    // Juggernaut resists 40% of slow effect intensity
+    const rawSlowFactor = enemy.slowTimer > 0 ? enemy.slowFactor : 1;
+    const speedFactor =
+      enemy.kind === 'juggernaut' && rawSlowFactor < 1
+        ? 1 - (1 - rawSlowFactor) * 0.6
+        : rawSlowFactor;
     const remainingMove = enemy.speed * speedFactor * dt;
 
     const reachedEnd = advanceEnemyAlongPath(enemy, map, remainingMove);
@@ -1624,9 +2239,11 @@ export function stepEnemies(
       coreDamageTaken +=
         enemy.kind === 'boss'
           ? 5
-          : enemy.kind === 'armored' || enemy.kind === 'shieldbearer'
-            ? 2
-            : 1;
+          : enemy.kind === 'juggernaut'
+            ? 3
+            : enemy.kind === 'armored' || enemy.kind === 'shieldbearer' || enemy.kind === 'summoner'
+              ? 2
+              : 1;
     }
   }
 
@@ -1640,6 +2257,8 @@ export function stepEnemies(
       healedEvents,
       blinkEvents,
       shieldRegenEvents,
+      spawnRequests,
+      leechEvents,
     },
   };
 }

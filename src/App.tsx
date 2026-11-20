@@ -101,7 +101,7 @@ export default function App() {
     document.title = seoMeta.title;
 
     const canonicalUrl = buildCanonicalUrl(window.location.origin, seoMeta.path);
-    const ogCoverUrl = buildCanonicalUrl(window.location.origin, '/og-cover.jpg');
+    const ogCoverUrl = buildCanonicalUrl(window.location.origin, '/og-cover.jpg?v=2');
 
     const canonicalLink = document.getElementById('canonical-link');
     if (canonicalLink instanceof HTMLLinkElement) {

@@ -227,13 +227,13 @@ export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
   }
   if (route === 'game') {
     return {
-      title: 'Khu Trò Chơi 2D — 6 Game Trí Tuệ, ASMR, Laser & DevOps',
+      title: 'Khu Trò Chơi 2D — 8 Game Cờ Tướng, Pháo Đài & Ba Lô',
       description:
-        'Chơi 6 game 2D: Cờ Tướng AI, Kiểm Duyệt Hồ Sơ, Sắp Xếp Chuẩn OCD ASMR, Thủ Thành Laser, Hacker Ubuntu CLI và Điều Phối DDoS.',
+        'Chơi 8 game 2D: Cờ Tướng AI, Hồ Sơ Dị Biệt, Sắp Xếp OCD, Xé Túi Mù, Thủ Thành 16 Súng, Ubuntu CLI, Thiết Kế Kiến Trúc & Đấu Trường Ba Lô.',
       keywords:
-        'Game 2D, Cờ Tướng AI, Kiểm Duyệt Hồ Sơ, Sắp Xếp Chuẩn OCD ASMR, Thủ Thành Laser, Hacker Linux CLI, Điều Phối Lưu Lượng Chống DDoS, Thuận Lê',
+        'Game 2D, Cờ Tướng AI, Kiểm Duyệt Hồ Sơ, Sắp Xếp OCD, Tiệm Xé Túi Mù, Thủ Thành Pháo Đài Lv10, Ubuntu CLI Production, Thiết Kế Kiến Trúc, Đấu Trường Ba Lô, Thuận Lê',
       ogType: 'website',
-      ogImageAlt: 'Khu Trò Chơi 2D gồm Cờ Tướng AI, Kiểm Duyệt Hồ Sơ, Sắp Xếp ASMR, Thủ Thành Laser, Hacker CLI và Điều Phối DDoS',
+      ogImageAlt: 'Khu Trò Chơi 2D gồm Cờ Tướng AI, Thủ Thành Pháo Đài 16 Súng, Ubuntu CLI và Thiết Kế Kiến Trúc',
       path: '/game',
     };
   }
@@ -244,7 +244,7 @@ export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
     keywords:
       'Thuận Lê, Lê Văn Thuận, Senior .NET Engineer, MISA OneAI, Agribank, Phenikaa MEC, CV PDF Senior .NET, AI Agents, triển lãm ảnh',
     ogType: 'profile',
-    ogImageAlt: 'Cố Phán Di Quang Thái — Tác phẩm thị giác AI và hồ sơ kỹ sư Senior .NET Thuận Lê',
+    ogImageAlt: 'Kỹ sư Senior .NET Lê Văn Thuận lập trình hệ thống ban đêm tại Hà Nội',
     path: '/',
   };
 }

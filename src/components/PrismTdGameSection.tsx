@@ -16,17 +16,23 @@ import {
   Zap,
 } from 'lucide-react';
 import {
+  AcidPoolFx,
   applyDamageToEnemy,
   BIOME_PALETTES,
   buildWaveSpawns,
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
+  clampEnemyToTrackCorridor,
+  computeBeaconBuffAtTile,
   createEnemyForWave,
   DIFFICULTY_CONFIGS,
   DIFFICULTY_ORDER,
   DifficultyId,
   FlameConeFx,
   FloatingCombatText,
+  GAME_MODE_CONFIGS,
+  GAME_MODE_ORDER,
+  GameModeId,
   getEffectiveMapSetup,
   getGunCatalogItem,
   getGunCombatProfile,
@@ -43,6 +49,7 @@ import {
   PlacedGun,
   PRISM_MAPS,
   ProjectileItem,
+  pullEnemyAlongTrack,
   RailBeamFx,
   ShockwaveRing,
   stepEnemies,
@@ -84,6 +91,7 @@ interface MuzzleFlashFx {
 
 interface HudSnapshot {
   difficulty: DifficultyId;
+  gameMode: GameModeId;
   energy: number;
   coreHp: number;
   maxCoreHp: number;
@@ -140,6 +148,14 @@ function playSynthFx(
     | 'flamer'
     | 'cryo'
     | 'mortar'
+    | 'sniper'
+    | 'acid'
+    | 'saw'
+    | 'beacon'
+    | 'cannon'
+    | 'plasma'
+    | 'cluster'
+    | 'hunter'
     | 'explosion'
     | 'kill'
     | 'wave'
@@ -212,6 +228,26 @@ function playSynthFx(
       tone(980, 520, 0.16, 0.075, 'sine');
     } else if (kind === 'mortar') {
       tone(220, 75, 0.24, 0.12, 'triangle');
+    } else if (kind === 'sniper') {
+      tone(1480, 180, 0.17, 0.13, 'sawtooth', 0);
+      tone(520, 120, 0.12, 0.09, 'square', 0.01);
+    } else if (kind === 'acid') {
+      tone(420, 190, 0.13, 0.09, 'triangle');
+    } else if (kind === 'saw') {
+      tone(760, 420, 0.11, 0.085, 'sawtooth');
+    } else if (kind === 'beacon') {
+      tone(660, 990, 0.18, 0.09, 'sine', 0);
+      tone(880, 1320, 0.14, 0.07, 'triangle', 0.04);
+    } else if (kind === 'cannon') {
+      tone(190, 52, 0.24, 0.14, 'sawtooth', 0);
+      tone(95, 40, 0.2, 0.1, 'triangle', 0.02);
+    } else if (kind === 'plasma') {
+      tone(860, 310, 0.12, 0.09, 'sine', 0);
+      tone(520, 220, 0.1, 0.06, 'triangle', 0.02);
+    } else if (kind === 'cluster') {
+      tone(280, 88, 0.2, 0.12, 'triangle');
+    } else if (kind === 'hunter') {
+      tone(940, 520, 0.09, 0.07, 'triangle');
     } else if (kind === 'explosion') {
       tone(150, 42, 0.2, 0.13, 'sawtooth');
     } else if (kind === 'kill') {
@@ -520,6 +556,187 @@ function drawGunTurretSprite(
     ctx.fillStyle = tier === 4 ? '#38BDF8' : '#FDE047';
     ctx.beginPath();
     ctx.arc(7 - kick, 0, 5 + tier * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (type === 'sniper') {
+    ctx.save();
+    ctx.rotate(aimAngle);
+    const kick = recoil * 5.5;
+    const len = 28 + tier * 3;
+    ctx.fillStyle = tier >= 3 ? '#FDE047' : '#34D399';
+    ctx.fillRect(4 - kick, -2.5, len, 5);
+    ctx.fillStyle = '#064E3B';
+    ctx.fillRect(10 - kick, -4.5, 11, 9);
+    if (tier >= 2) {
+      ctx.fillStyle = '#6EE7B7';
+      ctx.fillRect(len - 2 - kick, -5, 5, 10);
+    }
+    if (tier >= 3) {
+      ctx.fillStyle = '#38BDF8';
+      ctx.fillRect(-10 - kick, -8, 12, 3);
+      ctx.fillRect(-10 - kick, 5, 12, 3);
+    }
+    ctx.fillStyle = '#065F46';
+    ctx.strokeStyle = tier >= 3 ? '#FDE047' : '#34D399';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(-1, 0, 11.5 + tier * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#F43F5E';
+    ctx.beginPath();
+    ctx.arc(4, -5.5, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (type === 'acid') {
+    ctx.save();
+    ctx.rotate(aimAngle);
+    const kick = recoil * 3.5;
+    ctx.fillStyle = '#365314';
+    ctx.strokeStyle = tier >= 3 ? '#FDE047' : '#A3E635';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(2 - kick, -7 - tier * 0.4, 17 + tier * 2, 14 + tier * 0.8, 4);
+    ctx.fill();
+    ctx.stroke();
+    // Bubbling twin canisters
+    ctx.fillStyle = '#BEF264';
+    ctx.beginPath();
+    ctx.arc(-7, -7, 4.5 + tier * 0.4, 0, Math.PI * 2);
+    ctx.arc(-7, 7, 4.5 + tier * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#1A2E05';
+    ctx.beginPath();
+    ctx.arc(-1, 0, 10 + tier * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  } else if (type === 'saw') {
+    ctx.save();
+    ctx.rotate(aimAngle);
+    const kick = recoil * 4;
+    ctx.fillStyle = tier >= 3 ? '#9F1239' : '#4C0519';
+    ctx.strokeStyle = tier >= 2 ? '#FDE047' : '#FB7185';
+    ctx.lineWidth = 2;
+    ctx.fillRect(-10 - kick, -8, 22, 16);
+    ctx.strokeRect(-10 - kick, -8, 22, 16);
+    // Spinning loaded saw blade on rail
+    ctx.save();
+    ctx.translate(10 - kick, 0);
+    ctx.rotate(animTime * 11);
+    ctx.fillStyle = tier === 4 ? '#FDE047' : '#FDA4AF';
+    ctx.beginPath();
+    for (let t = 0; t < 12; t++) {
+      const a = (t * Math.PI * 2) / 12;
+      const r = t % 2 === 0 ? 11 + tier : 6.5;
+      const sx = Math.cos(a) * r;
+      const sy = Math.sin(a) * r;
+      if (t === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  } else if (type === 'beacon') {
+    ctx.save();
+    ctx.rotate(animTime * (1.8 + tier * 0.6));
+    ctx.strokeStyle = tier >= 3 ? '#FEF08A' : '#FACC15';
+    ctx.fillStyle = 'rgba(250, 204, 21, 0.25)';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    for (let i = 0; i < 4; i++) {
+      const a = (i * Math.PI) / 2;
+      const r = 16 + tier * 1.1;
+      const px = Math.cos(a) * r;
+      const py = Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = tier === 4 ? '#FFFFFF' : '#FDE047';
+    ctx.beginPath();
+    ctx.arc(0, 0, 6.5 + tier * 0.7 + Math.sin(animTime * 7) * 1.1, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'cannon') {
+    ctx.save();
+    ctx.rotate(aimAngle);
+    const kick = recoil * 6;
+    const len = 21 + tier * 2.5;
+    ctx.fillStyle = tier >= 3 ? '#B45309' : '#78350F';
+    ctx.strokeStyle = tier >= 2 ? '#FDE047' : '#F59E0B';
+    ctx.lineWidth = 2;
+    ctx.fillRect(2 - kick, -6, len, 12);
+    ctx.strokeRect(2 - kick, -6, len, 12);
+    ctx.fillStyle = '#FDE047';
+    ctx.fillRect(len - 3 - kick, -8, 6, 16);
+    if (tier >= 3) {
+      ctx.fillStyle = '#FB7185';
+      ctx.fillRect(-10 - kick, -12, 12, 5);
+      ctx.fillRect(-10 - kick, 7, 12, 5);
+    }
+    ctx.fillStyle = '#451A03';
+    ctx.beginPath();
+    ctx.arc(-2, 0, 12 + tier * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  } else if (type === 'plasma') {
+    ctx.save();
+    ctx.rotate(aimAngle);
+    const kick = recoil * 3.5;
+    ctx.fillStyle = tier >= 3 ? '#BE185D' : '#831843';
+    ctx.strokeStyle = tier >= 2 ? '#F9A8D4' : '#EC4899';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(-8 - kick, -9, 24 + tier * 2, 18, 6);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = tier === 4 ? '#FFFFFF' : '#F472B6';
+    ctx.beginPath();
+    ctx.arc(14 + tier - kick, 0, 4.5 + tier * 0.6 + Math.sin(animTime * 12) * 1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (type === 'cluster') {
+    ctx.save();
+    ctx.rotate(aimAngle);
+    const kick = recoil * 4;
+    ctx.fillStyle = tier >= 3 ? '#047857' : '#064E3B';
+    ctx.strokeStyle = tier >= 2 ? '#6EE7B7' : '#10B981';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(-11 - kick, -11, 22 + tier, 22, 5);
+    ctx.fill();
+    ctx.stroke();
+    const pods = tier >= 3 ? [[-4, -5], [4, -5], [0, 0], [-4, 5], [4, 5]] : [[-4, -4], [4, -4], [0, 4]];
+    ctx.fillStyle = '#FDE047';
+    for (const [px, py] of pods) {
+      ctx.beginPath();
+      ctx.arc(px + 2 - kick, py, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  } else if (type === 'hunter') {
+    ctx.save();
+    ctx.rotate(aimAngle);
+    const kick = recoil * 3;
+    ctx.fillStyle = '#083344';
+    ctx.strokeStyle = tier >= 3 ? '#FDE047' : '#22D3EE';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(19 + tier * 2 - kick, 0);
+    ctx.lineTo(-10 - kick, -12 - tier * 0.5);
+    ctx.lineTo(-5 - kick, 0);
+    ctx.lineTo(-10 - kick, 12 + tier * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#22D3EE';
+    ctx.beginPath();
+    ctx.arc(3 - kick, 0, 4, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -931,6 +1148,92 @@ function drawEnemySprite(
     ctx.beginPath();
     ctx.arc(2, 0, 5.2, 0, Math.PI * 2);
     ctx.fill();
+  } else if (en.kind === 'berserker') {
+    if (en.enraged) {
+      ctx.strokeStyle = '#EF4444';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 18 + Math.sin(animTime * 16) * 2.2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = flash ? '#FFFFFF' : en.enraged ? '#991B1B' : '#7C2D12';
+    ctx.strokeStyle = en.enraged ? '#FCA5A5' : '#FB923C';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(17, 0);
+    ctx.lineTo(2, -13);
+    ctx.lineTo(-12, -9);
+    ctx.lineTo(-9, 0);
+    ctx.lineTo(-12, 9);
+    ctx.lineTo(2, 13);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Twin Spinning Energy Axes
+    ctx.fillStyle = en.enraged ? '#FDE047' : '#F97316';
+    ctx.fillRect(6, -15, 7, 4);
+    ctx.fillRect(6, 11, 7, 4);
+  } else if (en.kind === 'juggernaut') {
+    ctx.fillStyle = '#0F172A';
+    ctx.fillRect(-20, -20, 40, 7);
+    ctx.fillRect(-20, 13, 40, 7);
+    ctx.fillStyle = flash ? '#FFFFFF' : '#334155';
+    ctx.strokeStyle = '#F59E0B';
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.roundRect(-18, -15, 36, 30, 6);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#F59E0B';
+    ctx.fillRect(14, -12, 6, 24);
+    ctx.fillStyle = '#78350F';
+    ctx.beginPath();
+    ctx.arc(-2, 0, 9.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else if (en.kind === 'summoner') {
+    ctx.fillStyle = flash ? '#FFFFFF' : '#4C1D95';
+    ctx.strokeStyle = '#C084FC';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i * Math.PI) / 3;
+      const px = Math.cos(a) * 18;
+      const py = Math.sin(a) * 15;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#F472B6';
+    ctx.beginPath();
+    ctx.arc(0, 0, 6 + Math.sin(animTime * 8) * 1.2, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (en.kind === 'leech') {
+    ctx.save();
+    ctx.rotate(-animTime * 4);
+    ctx.strokeStyle = '#22D3EE';
+    ctx.lineWidth = 1.6;
+    for (let c = 0; c < 3; c++) {
+      const ca = (c * Math.PI * 2) / 3;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(ca) * 16, Math.sin(ca) * 16);
+      ctx.stroke();
+      ctx.fillStyle = '#A855F7';
+      ctx.beginPath();
+      ctx.arc(Math.cos(ca) * 16, Math.sin(ca) * 16, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.fillStyle = flash ? '#FFFFFF' : '#164E63';
+    ctx.strokeStyle = '#67E8F9';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
   }
   ctx.restore();
 
@@ -973,10 +1276,11 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
 
   const [selectedMapIndex, setSelectedMapIndex] = useState<number>(0);
   const [difficulty, setDifficulty] = useState<DifficultyId>('normal');
+  const [gameMode, setGameMode] = useState<GameModeId>('campaign');
   const activeMap = PRISM_MAPS[selectedMapIndex] ?? PRISM_MAPS[0];
   const effectiveSetup = useMemo(
-    () => getEffectiveMapSetup(activeMap, difficulty),
-    [activeMap, difficulty]
+    () => getEffectiveMapSetup(activeMap, difficulty, gameMode),
+    [activeMap, difficulty, gameMode]
   );
 
   const [selectedTool, setSelectedTool] = useState<GunType>('gatling');
@@ -985,9 +1289,10 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
   const [statusNotice, setStatusNotice] = useState<string>('');
 
   const [hud, setHud] = useState<HudSnapshot>(() => {
-    const initSetup = getEffectiveMapSetup(activeMap, 'normal');
+    const initSetup = getEffectiveMapSetup(activeMap, 'normal', 'campaign');
     return {
       difficulty: 'normal',
+      gameMode: 'campaign',
       energy: initSetup.startEnergy,
       coreHp: initSetup.startCoreHp,
       maxCoreHp: initSetup.startCoreHp,
@@ -1002,7 +1307,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
       overdrivePct: 0,
       overdriveActive: false,
       speedMult: 1,
-      nextWaveCountdown: 10,
+      nextWaveCountdown: 8,
       outcome: null,
       selectedGunVersion: 0,
     };
@@ -1015,6 +1320,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
   const simRef = useRef<{
     map: TdMapDef;
     difficulty: DifficultyId;
+    gameMode: GameModeId;
     totalWaves: number;
     maxCoreHp: number;
     guns: PlacedGun[];
@@ -1024,6 +1330,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     lightningArcs: LightningArc[];
     railBeams: RailBeamFx[];
     flameCones: FlameConeFx[];
+    acidPools: AcidPoolFx[];
     healBeams: { fromX: number; fromY: number; toX: number; toY: number; alpha: number }[];
     muzzleFlashes: MuzzleFlashFx[];
     floatingTexts: FloatingCombatText[];
@@ -1056,6 +1363,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
   }>({
     map: activeMap,
     difficulty: 'normal',
+    gameMode: 'campaign',
     totalWaves: effectiveSetup.totalWaves,
     maxCoreHp: effectiveSetup.startCoreHp,
     guns: [],
@@ -1065,12 +1373,13 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     lightningArcs: [],
     railBeams: [],
     flameCones: [],
+    acidPools: [],
     healBeams: [],
     muzzleFlashes: [],
     floatingTexts: [],
     spawnQueue: [],
     waveElapsed: 0,
-    nextWaveTimer: 10,
+    nextWaveTimer: 8,
     nextEnemyId: 1,
     nextProjId: 1,
     energy: effectiveSetup.startEnergy,
@@ -1115,7 +1424,12 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     const overdriveMult = s.overdriveTimer > 0 ? 2.0 : 1;
     let total = 0;
     for (const g of s.guns) {
-      total += getGunCombatProfile(g.type, g.level).dpsEstimate * overdriveMult;
+      const buff = computeBeaconBuffAtTile(s.guns, g.col, g.row);
+      total +=
+        getGunCombatProfile(g.type, g.level).dpsEstimate *
+        buff.speedMult *
+        buff.damageMult *
+        overdriveMult;
     }
     s.totalDps = Math.round(total);
   }, []);
@@ -1124,6 +1438,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     const s = simRef.current;
     setHud({
       difficulty: s.difficulty,
+      gameMode: s.gameMode,
       energy: Math.round(s.energy),
       coreHp: Math.max(0, Math.round(s.coreHp)),
       maxCoreHp: s.maxCoreHp,
@@ -1184,13 +1499,15 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
   );
 
   const startNewRun = useCallback(
-    (mapIdx = selectedMapIndex, diff = difficulty) => {
+    (mapIdx = selectedMapIndex, diff = difficulty, mode = gameMode) => {
       const targetMap = PRISM_MAPS[mapIdx] ?? PRISM_MAPS[0];
-      const effective = getEffectiveMapSetup(targetMap, diff);
+      const effective = getEffectiveMapSetup(targetMap, diff, mode);
       const diffCfg = DIFFICULTY_CONFIGS[diff];
+      const modeCfg = GAME_MODE_CONFIGS[mode];
       const s = simRef.current;
       s.map = targetMap;
       s.difficulty = diff;
+      s.gameMode = mode;
       s.totalWaves = effective.totalWaves;
       s.maxCoreHp = effective.startCoreHp;
       s.guns = [];
@@ -1199,12 +1516,13 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
       s.lightningArcs = [];
       s.railBeams = [];
       s.flameCones = [];
+      s.acidPools = [];
       s.healBeams = [];
       s.muzzleFlashes = [];
       s.floatingTexts = [];
       s.spawnQueue = [];
       s.waveElapsed = 0;
-      s.nextWaveTimer = 10;
+      s.nextWaveTimer = modeCfg.waveDelaySec;
       s.nextEnemyId = 1;
       s.nextProjId = 1;
       s.energy = effective.startEnergy;
@@ -1227,9 +1545,10 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
 
       setSelectedMapIndex(mapIdx);
       setDifficulty(diff);
+      setGameMode(mode);
       setSelectedGunId(null);
       setStatusNotice(
-        `Chế độ ${diffCfg.label} (${effective.totalWaves} Đợt) · Đặt Súng [1-8] & nâng Lv10 mở khóa Tuyệt Kỹ!`
+        `${modeCfg.label} · ${diffCfg.label} (${mode === 'endless' ? '∞' : effective.totalWaves} Đợt) · Phím [1-9,0,Q,E,Z,X,C,V] chọn súng!`
       );
       recomputeFirepower();
       syncHudFromSim();
@@ -1240,7 +1559,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
         document.activeElement.blur();
       }
     },
-    [selectedMapIndex, difficulty, recomputeFirepower, syncHudFromSim, soundEnabled]
+    [selectedMapIndex, difficulty, gameMode, recomputeFirepower, syncHudFromSim, soundEnabled]
   );
 
   useEffect(() => {
@@ -1258,7 +1577,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
   const launchNextWave = useCallback(() => {
     const s = simRef.current;
     if (gameState !== 'playing' || s.waveActive || s.outcome) return;
-    if (s.wave >= s.totalWaves) return;
+    if (s.gameMode !== 'endless' && s.wave >= s.totalWaves) return;
 
     const earlyBonus = s.nextWaveTimer > 0.5 ? (s.wave > 0 ? 12 : 8) : 0;
     s.energy += earlyBonus;
@@ -1267,11 +1586,12 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     s.waveActive = true;
     s.waveElapsed = 0;
     s.nextWaveTimer = 0;
-    s.spawnQueue = buildWaveSpawns(nextWave, s.totalWaves, s.difficulty);
+    s.spawnQueue = buildWaveSpawns(nextWave, s.totalWaves, s.difficulty, s.gameMode);
+    const waveLabel = s.gameMode === 'endless' ? `${nextWave}/∞` : `${nextWave}/${s.totalWaves}`;
     setStatusNotice(
       earlyBonus > 0
-        ? `Gọi sớm Đợt ${nextWave}/${s.totalWaves} (+${earlyBonus}⚡)! Nâng súng lên Lv5 / Lv7 / Lv10 để đột phá kỹ năng!`
-        : `Đợt ${nextWave}/${s.totalWaves} (${DIFFICULTY_CONFIGS[s.difficulty].label}) tiến công!`
+        ? `Gọi sớm Đợt ${waveLabel} (+${earlyBonus}⚡)! Nâng súng lên Lv5 / Lv7 / Lv10 để đột phá kỹ năng!`
+        : `Đợt ${waveLabel} (${GAME_MODE_CONFIGS[s.gameMode].label} · ${DIFFICULTY_CONFIGS[s.difficulty].label}) tiến công!`
     );
     playSynthFx('wave', soundEnabled, audioCtxRef);
     syncHudFromSim();
@@ -1451,7 +1771,10 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
       row: tile.row,
       type: selectedTool,
       level: 1,
-      priority: selectedTool === 'railgun' || selectedTool === 'missile' ? 'strongest' : 'first',
+      priority:
+        selectedTool === 'railgun' || selectedTool === 'missile' || selectedTool === 'sniper'
+          ? 'strongest'
+          : 'first',
       chargeTimer: 0,
       aimAngle: -Math.PI / 2,
       recoil: 0,
@@ -1525,7 +1848,9 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
 
       if (gameState !== 'playing') return;
 
-      const gunByKey = GUN_CATALOG.find((g) => g.hotkey === e.key);
+      const gunByKey = GUN_CATALOG.find(
+        (g) => g.hotkey.toLowerCase() === e.key.toLowerCase()
+      );
       if (gunByKey) {
         setSelectedTool(gunByKey.type);
       } else if (e.key === 'u' || e.key === 'U') {
@@ -1753,15 +2078,19 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
       const blastColor =
         en.kind === 'boss'
           ? '#FB7185'
-          : en.kind === 'armored' || en.kind === 'shieldbearer'
+          : en.kind === 'armored' || en.kind === 'shieldbearer' || en.kind === 'juggernaut'
             ? '#FBBF24'
             : en.kind === 'healer'
               ? '#4ADE80'
-              : en.kind === 'teleporter'
+              : en.kind === 'teleporter' || en.kind === 'summoner'
                 ? '#C084FC'
-                : en.kind === 'stealth'
-                  ? '#34D399'
-                  : '#38BDF8';
+                : en.kind === 'berserker'
+                  ? '#F97316'
+                  : en.kind === 'leech'
+                    ? '#22D3EE'
+                    : en.kind === 'stealth'
+                      ? '#34D399'
+                      : '#38BDF8';
       emitParticles(
         en.x,
         en.y,
@@ -1770,21 +2099,12 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
         en.kind === 'boss' ? 200 : 135,
         en.kind === 'boss' ? 1.5 : 1.05
       );
-      s.shockwaves.push({
-        x: en.x,
-        y: en.y,
-        radius: 6,
-        maxRadius: en.kind === 'boss' ? 98 : 42,
-        alpha: 0.88,
-        color: blastColor,
-        lineWidth: en.kind === 'boss' ? 4.5 : 2.4,
-      });
 
-      // Splitter splits into 2-3 fast mini cyber-drones on death!
+      // Splitter splits into 2-3 fast mini cyber-drones strictly inside corridor bounds!
       if (en.kind === 'splitter' && en.radius >= 14) {
-        const offsets = s.wave >= 9 ? [-12, 0, 12] : [-10, 10];
+        const offsets = s.wave >= 5 ? [-5, 0, 5] : [-4, 4];
         for (const offset of offsets) {
-          s.enemies.push({
+          const child: TdEnemy = {
             ...en,
             id: s.nextEnemyId++,
             x: en.x + Math.cos(en.heading + Math.PI / 2) * offset,
@@ -1803,7 +2123,9 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             slowTimer: 0,
             stunTimer: 0,
             isElite: false,
-          });
+          };
+          clampEnemyToTrackCorridor(child, s.map);
+          s.enemies.push(child);
         }
         emitParticles(en.x, en.y, '#E879F9', 14, 110, 0.9);
       }
@@ -1839,16 +2161,18 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           s.shakeTrauma = Math.max(0, s.shakeTrauma - dt * 1.6);
         }
 
-        // 0. 10-second Auto-Wave Countdown
-        if (!s.waveActive && !s.outcome && s.wave < s.totalWaves) {
+        // 0. Auto-Wave Countdown (honoring Game Mode speed & Endless mode)
+        if (!s.waveActive && !s.outcome && (s.gameMode === 'endless' || s.wave < s.totalWaves)) {
           s.nextWaveTimer = Math.max(0, s.nextWaveTimer - dt);
           if (s.nextWaveTimer <= 0) {
             const autoWave = s.wave + 1;
             s.wave = autoWave;
             s.waveActive = true;
             s.waveElapsed = 0;
-            s.spawnQueue = buildWaveSpawns(autoWave, s.totalWaves, s.difficulty);
-            setStatusNotice(`Tự động gọi Đợt ${autoWave}/${s.totalWaves}! Nâng cấp súng để bùng nổ hỏa lực!`);
+            s.spawnQueue = buildWaveSpawns(autoWave, s.totalWaves, s.difficulty, s.gameMode);
+            setStatusNotice(
+              `Tự động gọi Đợt ${autoWave}/${s.gameMode === 'endless' ? '∞' : s.totalWaves}! Nâng cấp súng để bùng nổ hỏa lực!`
+            );
             playSynthFx('wave', soundEnabled, audioCtxRef);
             syncHudFromSim();
           }
@@ -1859,7 +2183,9 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           s.waveElapsed += simDt;
           while (s.spawnQueue.length > 0 && s.spawnQueue[0].delaySec <= s.waveElapsed) {
             const item = s.spawnQueue.shift()!;
-            s.enemies.push(createEnemyForWave(s.nextEnemyId++, item.kind, s.wave, s.map, item.isElite, s.difficulty));
+            s.enemies.push(
+              createEnemyForWave(s.nextEnemyId++, item.kind, s.wave, s.map, item.isElite, s.difficulty, s.gameMode)
+            );
           }
         }
 
@@ -1901,12 +2227,13 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             gun.aimAngle = Math.atan2(target.y - origin.y, target.x - origin.x);
           }
 
-          gun.chargeTimer += simDt * overdriveSpeedMult;
+          const beaconBuff = computeBeaconBuffAtTile(s.guns, gun.col, gun.row);
+          gun.chargeTimer += simDt * overdriveSpeedMult * beaconBuff.speedMult;
           if (!target || gun.chargeTimer < profile.cooldownSec) continue;
 
           gun.chargeTimer = 0;
           gun.recoil = 1;
-          const shotDmg = Math.round(profile.damage * overdriveDmgMult);
+          const shotDmg = Math.round(profile.damage * overdriveDmgMult * beaconBuff.damageMult);
 
           if (gun.type === 'gatling') {
             const count = profile.projectilesPerShot;
@@ -1997,18 +2324,6 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               alpha: 0.94,
               visualTier: profile.visualTier,
             });
-            if (gun.level === MAX_GUN_LEVEL) {
-              // Lv10 360 Inferno Nova!
-              s.shockwaves.push({
-                x: origin.x,
-                y: origin.y,
-                radius: 16,
-                maxRadius: coneRange * 0.92,
-                alpha: 0.85,
-                color: '#38BDF8',
-                lineWidth: 3.5,
-              });
-            }
             for (let k = 0; k < 5 + profile.visualTier * 2; k++) {
               const spreadAngle = gun.aimAngle + (Math.random() - 0.5) * halfArc * 2;
               const slot = s.particles[s.particleCursor];
@@ -2064,27 +2379,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             }
             playSynthFx('flamer', soundEnabled, audioCtxRef);
           } else if (gun.type === 'cryo') {
-            s.shockwaves.push({
-              x: origin.x,
-              y: origin.y,
-              radius: 14,
-              maxRadius: profile.rangePx,
-              alpha: 0.92,
-              color: profile.visualTier >= 3 ? '#38BDF8' : '#67E8F9',
-              lineWidth: 3.2 + profile.visualTier * 0.7,
-            });
-            if (profile.visualTier >= 3) {
-              s.shockwaves.push({
-                x: origin.x,
-                y: origin.y,
-                radius: 24,
-                maxRadius: profile.rangePx * 0.76,
-                alpha: 0.94,
-                color: '#FFFFFF',
-                lineWidth: 2.5,
-              });
-            }
-            emitParticles(origin.x, origin.y, '#BAE6FD', 16 + profile.visualTier * 4, 140, 1.15);
+            emitParticles(origin.x, origin.y, '#BAE6FD', 18 + profile.visualTier * 4, 150, 1.15);
 
             for (const en of liveEnemies) {
               if ((en.x - origin.x) ** 2 + (en.y - origin.y) ** 2 <= rangeSq) {
@@ -2130,15 +2425,6 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               if (gun.level >= 7) {
                 cur.stunTimer = Math.max(cur.stunTimer, 0.35);
               }
-              s.shockwaves.push({
-                x: cur.x,
-                y: cur.y,
-                radius: 4,
-                maxRadius: profile.visualTier === 4 ? 48 : 26,
-                alpha: 0.85,
-                color: profile.visualTier >= 3 ? '#FDE047' : '#7DD3FC',
-                lineWidth: profile.visualTier >= 3 ? 2.8 : 2,
-              });
               emitParticles(cur.x, cur.y, profile.visualTier >= 3 ? '#FDE047' : '#7DD3FC', 8, 120, 1);
 
               const res = applyDamageToEnemy(cur, zapDmg, {
@@ -2255,17 +2541,6 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 const distSq = (en.x - px) ** 2 + (en.y - py) ** 2;
                 if (distSq <= (en.radius + 14 + profile.visualTier * 2) ** 2) {
                   emitParticles(en.x, en.y, profile.visualTier >= 3 ? '#FDE047' : '#E879F9', 14, 175, 1.2);
-                  if (profile.splashRadius > 0) {
-                    s.shockwaves.push({
-                      x: en.x,
-                      y: en.y,
-                      radius: 6,
-                      maxRadius: profile.splashRadius,
-                      alpha: 0.85,
-                      color: '#FB7185',
-                      lineWidth: 2.8,
-                    });
-                  }
                   const res = applyDamageToEnemy(en, perBeamDmg, {
                     armorPierce: profile.armorPierce,
                     shieldMult: profile.shieldMult,
@@ -2314,6 +2589,307 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               s.muzzleFlashes.push({ x: muzzleX, y: muzzleY, angle: launchAngle, radius: 22 + profile.visualTier * 3, alpha: 0.95, color: '#C084FC' });
             }
             playSynthFx('mortar', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'sniper') {
+            const shots = profile.projectilesPerShot;
+            const critChance = gun.level >= 10 ? 0.65 : gun.level >= 5 ? 0.45 : 0.25;
+            const critMult = gun.level >= 10 ? 2.6 : gun.level >= 5 ? 2.1 : 1.55;
+            const inRangeSorted = liveEnemies
+              .filter((e) => (e.x - origin.x) ** 2 + (e.y - origin.y) ** 2 <= rangeSq)
+              .sort((a, b) => b.hp + b.shield - (a.hp + a.shield));
+
+            for (let sIdx = 0; sIdx < shots; sIdx++) {
+              const hitTarget = inRangeSorted[sIdx] ?? target;
+              if (!hitTarget || hitTarget.hp <= 0) continue;
+              const shotAngle = Math.atan2(hitTarget.y - origin.y, hitTarget.x - origin.x);
+              const muzzleX = origin.x + Math.cos(shotAngle) * 26;
+              const muzzleY = origin.y + Math.sin(shotAngle) * 26;
+              const isCrit = Math.random() < critChance;
+              const bossBonus =
+                gun.level >= 7 &&
+                (hitTarget.kind === 'boss' || hitTarget.kind === 'healer' || hitTarget.isElite)
+                  ? 1.45
+                  : 1;
+              const finalDmg = Math.round(
+                (shots === 2 ? shotDmg * 0.72 : shotDmg) * (isCrit ? critMult : 1) * bossBonus
+              );
+
+              s.railBeams.push({
+                x1: muzzleX,
+                y1: muzzleY,
+                x2: hitTarget.x,
+                y2: hitTarget.y,
+                alpha: 0.96,
+                color: isCrit ? '#FDE047' : '#34D399',
+                visualTier: profile.visualTier,
+              });
+              s.muzzleFlashes.push({
+                x: muzzleX,
+                y: muzzleY,
+                angle: shotAngle,
+                radius: 20 + profile.visualTier * 2,
+                alpha: 1,
+                color: isCrit ? '#FDE047' : '#34D399',
+              });
+              emitParticles(hitTarget.x, hitTarget.y, isCrit ? '#FDE047' : '#34D399', isCrit ? 14 : 7, 150, 1.1);
+              if (isCrit) {
+                pushCombatText(hitTarget.x, hitTarget.y - 6, `CRIT! -${finalDmg}`, '#FDE047', 1.12);
+              }
+              const res = applyDamageToEnemy(hitTarget, finalDmg, {
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+              });
+              s.totalDamage += res.actualDamage;
+              gun.totalDamageDealt += res.actualDamage;
+              if (s.overdriveTimer <= 0) {
+                s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.045);
+              }
+              if (res.killed) recordKill(hitTarget, gun.id);
+            }
+            playSynthFx('sniper', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'acid') {
+            const count = profile.projectilesPerShot;
+            const inRange = liveEnemies.filter(
+              (e) => (e.x - origin.x) ** 2 + (e.y - origin.y) ** 2 <= rangeSq
+            );
+            for (let aIdx = 0; aIdx < count; aIdx++) {
+              const lock = inRange[(aIdx * 2) % Math.max(1, inRange.length)] ?? target;
+              const angle = Math.atan2(lock.y - origin.y, lock.x - origin.x);
+              const muzzleX = origin.x + Math.cos(angle) * 20;
+              const muzzleY = origin.y + Math.sin(angle) * 20;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'acid',
+                sourceGunId: gun.id,
+                x: muzzleX,
+                y: muzzleY,
+                vx: Math.cos(angle) * (310 + gun.level * 12),
+                vy: Math.sin(angle) * (310 + gun.level * 12),
+                targetId: lock.id,
+                damage: count === 2 ? Math.round(shotDmg * 0.72) : shotDmg,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: profile.splashRadius,
+                pullForce: 0,
+                burnDps: profile.burnDps,
+                burnDuration: 0,
+                slowAmount: profile.slowPct,
+                pierceLeft: 0,
+                acidShred: gun.level >= 10 ? 0.72 : gun.level >= 3 ? 0.45 : 0.3,
+                life: 1.5,
+                maxLife: 1.5,
+                speed: 310 + gun.level * 12,
+                color: '#A3E635',
+                visualTier: profile.visualTier,
+              });
+              s.muzzleFlashes.push({
+                x: muzzleX,
+                y: muzzleY,
+                angle,
+                radius: 16,
+                alpha: 0.9,
+                color: '#A3E635',
+              });
+            }
+            playSynthFx('acid', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'saw') {
+            const count = profile.projectilesPerShot;
+            for (let sw = 0; sw < count; sw++) {
+              const offsetAngle = count === 1 ? 0 : (sw - (count - 1) / 2) * 0.22;
+              const launchAngle = gun.aimAngle + offsetAngle;
+              const muzzleX = origin.x + Math.cos(launchAngle) * 20;
+              const muzzleY = origin.y + Math.sin(launchAngle) * 20;
+              const speed = 415 + gun.level * 14;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'sawblade',
+                sourceGunId: gun.id,
+                x: muzzleX,
+                y: muzzleY,
+                vx: Math.cos(launchAngle) * speed,
+                vy: Math.sin(launchAngle) * speed,
+                targetId: target.id,
+                damage: count === 3 ? Math.round(shotDmg * 0.62) : count === 2 ? Math.round(shotDmg * 0.76) : shotDmg,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: 0,
+                pullForce: 0,
+                burnDps: profile.burnDps,
+                burnDuration: profile.burnDps > 0 ? 2.0 : 0,
+                slowAmount: 0,
+                pierceLeft: 0,
+                bounceLeft: profile.chainCount,
+                hitIds: [],
+                life: 2.8,
+                maxLife: 2.8,
+                speed,
+                color: profile.visualTier === 4 ? '#FDE047' : '#F43F5E',
+                visualTier: profile.visualTier,
+              });
+            }
+            playSynthFx('saw', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'beacon') {
+            emitParticles(origin.x, origin.y, '#FDE047', 12 + profile.visualTier * 3, 130, 1.05);
+            for (const en of liveEnemies) {
+              if ((en.x - origin.x) ** 2 + (en.y - origin.y) ** 2 <= rangeSq) {
+                if (gun.level >= 5) {
+                  en.slowTimer = Math.max(en.slowTimer, 1.6);
+                  en.slowFactor = Math.min(en.slowFactor || 1, 1 - profile.slowPct);
+                }
+                const res = applyDamageToEnemy(en, shotDmg, {
+                  armorPierce: profile.armorPierce,
+                  shieldMult: profile.shieldMult,
+                });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (s.overdriveTimer <= 0) {
+                  s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.04);
+                }
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+            playSynthFx('beacon', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'cannon') {
+            const count = profile.projectilesPerShot;
+            for (let c = 0; c < count; c++) {
+              const offset = count === 1 ? 0 : (c - (count - 1) / 2) * 0.1;
+              const shotAngle = gun.aimAngle + offset;
+              const muzzleX = origin.x + Math.cos(shotAngle) * 24;
+              const muzzleY = origin.y + Math.sin(shotAngle) * 24;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'cannon',
+                sourceGunId: gun.id,
+                x: muzzleX,
+                y: muzzleY,
+                vx: Math.cos(shotAngle) * 430,
+                vy: Math.sin(shotAngle) * 430,
+                targetId: target.id,
+                damage: count === 3 ? Math.round(shotDmg * 0.56) : count === 2 ? Math.round(shotDmg * 0.72) : shotDmg,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: profile.splashRadius,
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: gun.level >= 5 ? (gun.level === 10 ? 0.8 : 0.55) : 0, // reused as stun sec
+                pierceLeft: 0,
+                life: 1.25,
+                maxLife: 1.25,
+                speed: 430,
+                color: '#F59E0B',
+                visualTier: profile.visualTier,
+              });
+              s.muzzleFlashes.push({ x: muzzleX, y: muzzleY, angle: shotAngle, radius: 22 + profile.visualTier * 2, alpha: 1, color: '#F59E0B' });
+            }
+            playSynthFx('cannon', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'plasma') {
+            const count = profile.projectilesPerShot;
+            for (let p = 0; p < count; p++) {
+              const offset = count === 1 ? 0 : (p - (count - 1) / 2) * 0.16;
+              const shotAngle = gun.aimAngle + offset;
+              const muzzleX = origin.x + Math.cos(shotAngle) * 20;
+              const muzzleY = origin.y + Math.sin(shotAngle) * 20;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'plasma',
+                sourceGunId: gun.id,
+                x: muzzleX,
+                y: muzzleY,
+                vx: Math.cos(shotAngle) * 365,
+                vy: Math.sin(shotAngle) * 365,
+                targetId: target.id,
+                damage: count === 3 ? Math.round(shotDmg * 0.6) : count === 2 ? Math.round(shotDmg * 0.74) : shotDmg,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: profile.splashRadius,
+                pullForce: profile.pullForce,
+                burnDps: profile.burnDps,
+                burnDuration: 2.2,
+                slowAmount: 0,
+                pierceLeft: 0,
+                life: 1.4,
+                maxLife: 1.4,
+                speed: 365,
+                color: '#EC4899',
+                visualTier: profile.visualTier,
+              });
+              s.muzzleFlashes.push({ x: muzzleX, y: muzzleY, angle: shotAngle, radius: 18, alpha: 0.95, color: '#EC4899' });
+            }
+            playSynthFx('plasma', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'cluster') {
+            const count = profile.projectilesPerShot;
+            for (let m = 0; m < count; m++) {
+              const offset = count === 1 ? 0 : (m - (count - 1) / 2) * 0.2;
+              const shotAngle = gun.aimAngle + offset;
+              const muzzleX = origin.x + Math.cos(shotAngle) * 18;
+              const muzzleY = origin.y + Math.sin(shotAngle) * 18;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'cluster',
+                sourceGunId: gun.id,
+                x: muzzleX,
+                y: muzzleY,
+                vx: Math.cos(shotAngle) * 245,
+                vy: Math.sin(shotAngle) * 245,
+                targetId: target.id,
+                damage: count === 3 ? Math.round(shotDmg * 0.56) : count === 2 ? Math.round(shotDmg * 0.72) : shotDmg,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: profile.splashRadius,
+                pullForce: 0,
+                burnDps: profile.burnDps,
+                burnDuration: profile.burnDps > 0 ? 2.4 : 0,
+                slowAmount: 0,
+                pierceLeft: 0,
+                life: 2.1,
+                maxLife: 2.1,
+                speed: 245,
+                color: '#10B981',
+                visualTier: profile.visualTier,
+                spawnCluster: gun.level >= 3,
+              });
+              s.muzzleFlashes.push({ x: muzzleX, y: muzzleY, angle: shotAngle, radius: 19, alpha: 0.9, color: '#10B981' });
+            }
+            playSynthFx('cluster', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'hunter') {
+            const count = profile.projectilesPerShot;
+            const sortedHunter = [...liveEnemies].sort((a, b) => {
+              const pa = (a.kind === 'stealth' || a.kind === 'teleporter' || a.kind === 'summoner' ? 1 : 0);
+              const pb = (b.kind === 'stealth' || b.kind === 'teleporter' || b.kind === 'summoner' ? 1 : 0);
+              return pb - pa || b.waypointIndex - a.waypointIndex;
+            });
+            for (let h = 0; h < count; h++) {
+              const lock = sortedHunter[h % sortedHunter.length] ?? target;
+              const offset = count === 1 ? 0 : (h - (count - 1) / 2) * 0.18;
+              const shotAngle = gun.aimAngle + offset;
+              const muzzleX = origin.x + Math.cos(shotAngle) * 20;
+              const muzzleY = origin.y + Math.sin(shotAngle) * 20;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'hunter',
+                sourceGunId: gun.id,
+                x: muzzleX,
+                y: muzzleY,
+                vx: Math.cos(shotAngle) * 410,
+                vy: Math.sin(shotAngle) * 410,
+                targetId: lock.id,
+                damage: count >= 5 ? Math.round(shotDmg * 0.5) : count >= 3 ? Math.round(shotDmg * 0.64) : count === 2 ? Math.round(shotDmg * 0.78) : shotDmg,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: profile.splashRadius,
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: gun.level >= 5 ? 1.35 : 1,
+                pierceLeft: 0,
+                life: 2.2,
+                maxLife: 2.2,
+                speed: 410,
+                color: '#22D3EE',
+                visualTier: profile.visualTier,
+              });
+            }
+            playSynthFx('hunter', soundEnabled, audioCtxRef);
           }
         }
 
@@ -2324,12 +2900,12 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           if (pr.life <= 0) continue;
 
           const tgt = s.enemies.find((e) => e.id === pr.targetId && e.hp > 0);
-          if ((pr.kind === 'missile' || pr.kind === 'mortar') && tgt) {
+          if ((pr.kind === 'missile' || pr.kind === 'mortar' || pr.kind === 'cluster' || pr.kind === 'hunter') && tgt) {
             const angle = Math.atan2(tgt.y - pr.y, tgt.x - pr.x);
             pr.vx = Math.cos(angle) * pr.speed;
             pr.vy = Math.sin(angle) * pr.speed;
             if (Math.random() < 0.65) {
-              emitParticles(pr.x, pr.y, pr.kind === 'mortar' ? '#C084FC' : '#FDBA74', 1, 30, 0.75);
+              emitParticles(pr.x, pr.y, pr.color, 1, 30, 0.75);
             }
           }
 
@@ -2350,25 +2926,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           if (hitEnemy) {
             const sourceGun = s.guns.find((g) => g.id === pr.sourceGunId);
             if (pr.kind === 'mortar') {
-              s.shockwaves.push({
-                x: pr.x,
-                y: pr.y,
-                radius: pr.splashRadius,
-                maxRadius: 12,
-                alpha: 0.95,
-                color: '#C084FC',
-                lineWidth: 4 + pr.visualTier,
-              });
-              s.shockwaves.push({
-                x: pr.x,
-                y: pr.y,
-                radius: 8,
-                maxRadius: pr.splashRadius,
-                alpha: 0.85,
-                color: '#FDE047',
-                lineWidth: 2.5 + pr.visualTier * 0.5,
-              });
-              s.shakeTrauma = Math.min(1, s.shakeTrauma + 0.3 + pr.visualTier * 0.06);
+              s.shakeTrauma = Math.min(1, s.shakeTrauma + 0.25 + pr.visualTier * 0.05);
               emitParticles(pr.x, pr.y, '#C084FC', 22 + pr.visualTier * 5, 185, 1.35);
 
               for (const en of s.enemies) {
@@ -2378,8 +2936,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 const dist = Math.hypot(dx, dy);
                 if (dist <= pr.splashRadius + en.radius) {
                   if (dist > 6 && en.kind !== 'boss') {
-                    en.x += (dx / dist) * pr.pullForce;
-                    en.y += (dy / dist) * pr.pullForce;
+                    pullEnemyAlongTrack(en, s.map, pr.x, pr.y, pr.pullForce);
                   }
                   if (pr.slowAmount > 0) {
                     en.slowTimer = Math.max(en.slowTimer, 1.8);
@@ -2405,15 +2962,6 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               playSynthFx('explosion', soundEnabled, audioCtxRef);
               continue;
             } else if (pr.kind === 'missile' || pr.kind === 'bomblet') {
-              s.shockwaves.push({
-                x: pr.x,
-                y: pr.y,
-                radius: 8,
-                maxRadius: pr.splashRadius,
-                alpha: 0.9,
-                color: pr.visualTier >= 3 ? '#FDE047' : '#FB7185',
-                lineWidth: 3.2 + pr.visualTier * 0.5,
-              });
               emitParticles(pr.x, pr.y, '#FB923C', pr.kind === 'bomblet' ? 8 : 16, 145, 1.15);
               for (const en of s.enemies) {
                 if (en.hp <= 0 || en.koTimer > 0) continue;
@@ -2463,6 +3011,203 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               }
               playSynthFx('explosion', soundEnabled, audioCtxRef);
               continue;
+            } else if (pr.kind === 'acid') {
+              emitParticles(pr.x, pr.y, '#BEF264', 14, 130, 1.1);
+              const res = applyDamageToEnemy(hitEnemy, pr.damage, {
+                armorPierce: pr.armorPierce,
+                shieldMult: pr.shieldMult,
+              });
+              s.totalDamage += res.actualDamage;
+              if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
+              if (res.killed) recordKill(hitEnemy, pr.sourceGunId);
+
+              const poolLife = pr.visualTier >= 3 ? 5.2 : pr.visualTier === 2 ? 4.4 : 3.6;
+              if (s.acidPools.length >= 24) s.acidPools.shift();
+              s.acidPools.push({
+                x: pr.x,
+                y: pr.y,
+                radius: pr.splashRadius,
+                life: poolLife,
+                maxLife: poolLife,
+                dps: Math.max(12, pr.burnDps),
+                shred: pr.acidShred ?? 0.35,
+                slowPct: pr.slowAmount,
+                tickAccum: 0.25,
+                sourceGunId: pr.sourceGunId,
+                visualTier: pr.visualTier,
+              });
+              continue;
+            } else if (pr.kind === 'sawblade') {
+              const res = applyDamageToEnemy(hitEnemy, pr.damage, {
+                armorPierce: pr.armorPierce,
+                shieldMult: pr.shieldMult,
+              });
+              if (pr.burnDps > 0) {
+                hitEnemy.burnTimer = Math.max(hitEnemy.burnTimer, pr.burnDuration);
+                hitEnemy.burnDps = Math.max(hitEnemy.burnDps, pr.burnDps);
+              }
+              s.totalDamage += res.actualDamage;
+              if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
+              if (s.overdriveTimer <= 0) {
+                s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.045);
+              }
+              emitParticles(pr.x, pr.y, '#F43F5E', 8, 120, 0.95);
+              if (res.killed) recordKill(hitEnemy, pr.sourceGunId);
+
+              pr.bounceLeft = (pr.bounceLeft ?? 1) - 1;
+              if (!pr.hitIds) pr.hitIds = [];
+              pr.hitIds.push(hitEnemy.id);
+              if (pr.bounceLeft <= 0) continue;
+
+              // Find nearest next unhit enemy to ricochet toward
+              let nextRicochet: TdEnemy | null = null;
+              let bestDistSq = 210 * 210;
+              for (const cand of s.enemies) {
+                if (cand.hp <= 0 || cand.koTimer > 0) continue;
+                if (pr.hitIds.includes(cand.id)) continue;
+                const dSq = (cand.x - pr.x) ** 2 + (cand.y - pr.y) ** 2;
+                if (dSq <= bestDistSq) {
+                  bestDistSq = dSq;
+                  nextRicochet = cand;
+                }
+              }
+              if (nextRicochet) {
+                const a = Math.atan2(nextRicochet.y - pr.y, nextRicochet.x - pr.x);
+                pr.vx = Math.cos(a) * pr.speed;
+                pr.vy = Math.sin(a) * pr.speed;
+              } else {
+                const curAngle = Math.atan2(pr.vy, pr.vx) + Math.PI * 0.72;
+                pr.vx = Math.cos(curAngle) * pr.speed;
+                pr.vy = Math.sin(curAngle) * pr.speed;
+              }
+            } else if (pr.kind === 'cannon') {
+              s.shakeTrauma = Math.min(1, s.shakeTrauma + 0.16);
+              emitParticles(pr.x, pr.y, '#FDE047', 14, 145, 1.15);
+              for (const en of s.enemies) {
+                if (en.hp <= 0 || en.koTimer > 0) continue;
+                const dist = Math.hypot(en.x - pr.x, en.y - pr.y);
+                if (dist <= pr.splashRadius + en.radius) {
+                  if (pr.slowAmount > 0 && en.id === hitEnemy.id) {
+                    en.stunTimer = Math.max(en.stunTimer, pr.slowAmount);
+                  }
+                  const res = applyDamageToEnemy(en, Math.round(pr.damage * (en.id === hitEnemy.id ? 1 : 0.65)), {
+                    armorPierce: pr.armorPierce,
+                    shieldMult: pr.shieldMult,
+                  });
+                  s.totalDamage += res.actualDamage;
+                  if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
+                  if (s.overdriveTimer <= 0) {
+                    s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.045);
+                  }
+                  if (res.killed) recordKill(en, pr.sourceGunId);
+                }
+              }
+              playSynthFx('explosion', soundEnabled, audioCtxRef);
+              continue;
+            } else if (pr.kind === 'plasma') {
+              emitParticles(pr.x, pr.y, '#F472B6', 12, 130, 1.1);
+              for (const en of s.enemies) {
+                if (en.hp <= 0 || en.koTimer > 0) continue;
+                const dx = pr.x - en.x;
+                const dy = pr.y - en.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist <= pr.splashRadius + en.radius) {
+                  if (pr.pullForce > 0 && dist > 6 && en.kind !== 'boss') {
+                    pullEnemyAlongTrack(en, s.map, pr.x, pr.y, pr.pullForce);
+                  }
+                  if (pr.burnDps > 0) {
+                    en.burnTimer = Math.max(en.burnTimer, pr.burnDuration);
+                    en.burnDps = Math.max(en.burnDps, pr.burnDps);
+                  }
+                  const res = applyDamageToEnemy(en, Math.round(pr.damage * (dist < 28 ? 1 : 0.72)), {
+                    armorPierce: pr.armorPierce,
+                    shieldMult: pr.shieldMult,
+                  });
+                  s.totalDamage += res.actualDamage;
+                  if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
+                  if (s.overdriveTimer <= 0) {
+                    s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.045);
+                  }
+                  if (res.killed) recordKill(en, pr.sourceGunId);
+                }
+              }
+              continue;
+            } else if (pr.kind === 'cluster') {
+              emitParticles(pr.x, pr.y, '#34D399', 16, 155, 1.2);
+              for (const en of s.enemies) {
+                if (en.hp <= 0 || en.koTimer > 0) continue;
+                const dist = Math.hypot(en.x - pr.x, en.y - pr.y);
+                if (dist <= pr.splashRadius + en.radius) {
+                  if (pr.burnDps > 0) {
+                    en.burnTimer = Math.max(en.burnTimer, pr.burnDuration);
+                    en.burnDps = Math.max(en.burnDps, pr.burnDps);
+                  }
+                  const res = applyDamageToEnemy(en, Math.round(pr.damage * (dist < 32 ? 1 : 0.75)), {
+                    armorPierce: pr.armorPierce,
+                    shieldMult: pr.shieldMult,
+                  });
+                  s.totalDamage += res.actualDamage;
+                  if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
+                  if (res.killed) recordKill(en, pr.sourceGunId);
+                }
+              }
+              if (pr.spawnCluster) {
+                const subCount = pr.visualTier === 4 ? 6 : 4;
+                for (let c = 0; c < subCount; c++) {
+                  const ca = (c * Math.PI * 2) / subCount + Math.random() * 0.4;
+                  s.projectiles.push({
+                    id: s.nextProjId++,
+                    kind: 'bomblet',
+                    sourceGunId: pr.sourceGunId,
+                    x: pr.x,
+                    y: pr.y,
+                    vx: Math.cos(ca) * 195,
+                    vy: Math.sin(ca) * 195,
+                    targetId: -1,
+                    damage: Math.round(pr.damage * 0.45),
+                    armorPierce: pr.armorPierce,
+                    shieldMult: pr.shieldMult,
+                    splashRadius: 48,
+                    pullForce: 0,
+                    burnDps: pr.burnDps,
+                    burnDuration: pr.burnDuration,
+                    slowAmount: 0,
+                    pierceLeft: 0,
+                    life: 0.24,
+                    maxLife: 0.24,
+                    speed: 195,
+                    color: '#34D399',
+                    visualTier: pr.visualTier,
+                  });
+                }
+              }
+              playSynthFx('explosion', soundEnabled, audioCtxRef);
+              continue;
+            } else if (pr.kind === 'hunter') {
+              const priorityBonus =
+                pr.slowAmount > 1 &&
+                (hitEnemy.kind === 'stealth' ||
+                  hitEnemy.kind === 'teleporter' ||
+                  hitEnemy.kind === 'healer' ||
+                  hitEnemy.kind === 'summoner' ||
+                  hitEnemy.kind === 'boss')
+                  ? pr.slowAmount
+                  : 1;
+              const hitDmg = Math.round(pr.damage * priorityBonus);
+              hitEnemy.slowTimer = Math.max(hitEnemy.slowTimer, 0.8);
+              hitEnemy.slowFactor = Math.min(hitEnemy.slowFactor || 1, 0.82);
+              const res = applyDamageToEnemy(hitEnemy, hitDmg, {
+                armorPierce: pr.armorPierce,
+                shieldMult: pr.shieldMult,
+              });
+              s.totalDamage += res.actualDamage;
+              if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
+              if (s.overdriveTimer <= 0) {
+                s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.05);
+              }
+              emitParticles(pr.x, pr.y, '#22D3EE', 7, 100, 0.9);
+              if (res.killed) recordKill(hitEnemy, pr.sourceGunId);
+              continue;
             } else {
               // Bullet / Pellet
               if (pr.burnDps > 0) {
@@ -2471,15 +3216,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 hitEnemy.armorShred = Math.max(hitEnemy.armorShred, 0.25);
               }
               if (pr.splashRadius > 0) {
-                s.shockwaves.push({
-                  x: pr.x,
-                  y: pr.y,
-                  radius: 4,
-                  maxRadius: pr.splashRadius,
-                  alpha: 0.75,
-                  color: '#FDE047',
-                  lineWidth: 2,
-                });
+                emitParticles(pr.x, pr.y, '#FDE047', 6, 95, 0.85);
                 for (const en of s.enemies) {
                   if (en.hp <= 0 || en.koTimer > 0) continue;
                   const dist = Math.hypot(en.x - pr.x, en.y - pr.y);
@@ -2517,11 +3254,52 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             }
           }
 
+          if (pr.kind === 'sawblade' && (pr.bounceLeft ?? 0) > 0) {
+            if (pr.x < 10 || pr.x > CANVAS_WIDTH - 10) {
+              pr.vx = -pr.vx;
+              pr.x = Math.max(10, Math.min(CANVAS_WIDTH - 10, pr.x));
+              pr.hitIds = [];
+            }
+            if (pr.y < 10 || pr.y > CANVAS_HEIGHT - 10) {
+              pr.vy = -pr.vy;
+              pr.y = Math.max(10, Math.min(CANVAS_HEIGHT - 10, pr.y));
+              pr.hitIds = [];
+            }
+          }
+
           if (pr.x >= -20 && pr.x <= CANVAS_WIDTH + 20 && pr.y >= -20 && pr.y <= CANVAS_HEIGHT + 20) {
             survivingProjectiles.push(pr);
           }
         }
         s.projectiles = survivingProjectiles;
+
+        // 3b. Step Acid Hazard Pools
+        const activePools: AcidPoolFx[] = [];
+        for (const pool of s.acidPools) {
+          pool.life -= simDt;
+          if (pool.life <= 0) continue;
+          pool.tickAccum += simDt;
+          if (pool.tickAccum >= 0.25) {
+            pool.tickAccum -= 0.25;
+            const sourceGun = s.guns.find((g) => g.id === pool.sourceGunId);
+            const tickDmg = Math.max(3, Math.round(pool.dps * 0.25));
+            for (const en of s.enemies) {
+              if (en.hp <= 0 || en.koTimer > 0) continue;
+              const dist = Math.hypot(en.x - pool.x, en.y - pool.y);
+              if (dist <= pool.radius + en.radius) {
+                en.armorShred = Math.max(en.armorShred, pool.shred);
+                en.slowTimer = Math.max(en.slowTimer, 0.55);
+                en.slowFactor = Math.min(en.slowFactor || 1, 1 - pool.slowPct);
+                const res = applyDamageToEnemy(en, tickDmg, { armorPierce: 0.9, shieldMult: 1.05 });
+                s.totalDamage += res.actualDamage;
+                if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, pool.sourceGunId);
+              }
+            }
+          }
+          activePools.push(pool);
+        }
+        s.acidPools = activePools;
 
         // 4. Enemy Movement, Fire Burn DoT & Archetype Abilities
         if (s.enemies.length > 0) {
@@ -2571,6 +3349,49 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               lineWidth: 2,
             });
           }
+          if (outcome.spawnRequests.length > 0 && s.enemies.length < 85) {
+            for (const req of outcome.spawnRequests) {
+              if (s.enemies.length >= 85) break;
+              const summoned = createEnemyForWave(
+                s.nextEnemyId++,
+                req.kind,
+                s.wave,
+                s.map,
+                false,
+                s.difficulty,
+                s.gameMode
+              );
+              summoned.x = req.x;
+              summoned.y = req.y;
+              summoned.heading = req.heading;
+              summoned.waypointIndex = req.waypointIndex;
+              summoned.hp = req.baseHp;
+              summoned.maxHp = req.baseHp;
+              summoned.speed = req.speed;
+              summoned.radius = 11;
+              summoned.reward = 4;
+              clampEnemyToTrackCorridor(summoned, s.map);
+              s.enemies.push(summoned);
+              emitParticles(summoned.x, summoned.y, '#C084FC', 6, 80, 0.85);
+            }
+          }
+          for (const le of outcome.leechEvents) {
+            s.shockwaves.push({
+              x: le.x,
+              y: le.y,
+              radius: 12,
+              maxRadius: le.radius,
+              alpha: 0.72,
+              color: '#A855F7',
+              lineWidth: 2.2,
+            });
+            for (const g of s.guns) {
+              const gPt = gridToWorldCenter(g.col, g.row);
+              if (Math.hypot(gPt.x - le.x, gPt.y - le.y) <= le.radius) {
+                g.chargeTimer = Math.max(-0.25, g.chargeTimer - 0.22);
+              }
+            }
+          }
 
           for (const en of s.enemies) {
             if (en.koTimer >= 0.24 && beforeIds.has(en.id)) {
@@ -2613,8 +3434,8 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           p.vy *= 0.92;
         }
         s.shockwaves = s.shockwaves.filter((sw) => {
-          sw.radius += (sw.maxRadius - sw.radius) * Math.min(1, dt * 8.5) + (sw.maxRadius > sw.radius ? 45 : -45) * dt;
-          sw.alpha -= dt * 2.4;
+          sw.radius += (sw.maxRadius - sw.radius) * Math.min(1, dt * 11) + (sw.maxRadius > sw.radius ? 55 : -55) * dt;
+          sw.alpha -= dt * 4.5;
           return sw.alpha > 0.02;
         });
         s.lightningArcs = s.lightningArcs.filter((arc) => {
@@ -2647,13 +3468,14 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
         if (s.waveActive && s.spawnQueue.length === 0 && s.enemies.length === 0 && s.coreHp > 0) {
           s.waveActive = false;
           const diffCfg = DIFFICULTY_CONFIGS[s.difficulty];
-          const waveBonus = Math.round((32 + s.wave * 9) * diffCfg.rewardMult);
+          const modeCfg = GAME_MODE_CONFIGS[s.gameMode];
+          const waveBonus = Math.round((50 + s.wave * 18) * diffCfg.rewardMult * modeCfg.rewardMult);
           s.energy += waveBonus;
-          s.score += Math.round(s.wave * 150 * diffCfg.scoreMult);
+          s.score += Math.round(s.wave * 240 * diffCfg.scoreMult * modeCfg.scoreMult);
 
-          if (s.wave >= s.totalWaves) {
+          if (s.gameMode !== 'endless' && s.wave >= s.totalWaves) {
             s.outcome = 'victory';
-            s.score += Math.round(s.coreHp * 90 * diffCfg.scoreMult);
+            s.score += Math.round(s.coreHp * 90 * diffCfg.scoreMult * modeCfg.scoreMult);
             if (s.score > s.bestScore) {
               s.bestScore = Math.round(s.score);
               saveBestScore(s.bestScore);
@@ -2663,8 +3485,11 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             playSynthFx('victory', soundEnabled, audioCtxRef);
             return;
           } else {
-            s.nextWaveTimer = 10;
-            setStatusNotice(`Hoàn thành Đợt ${s.wave}/${s.totalWaves}! (+${waveBonus}⚡) · Tự gọi Đợt ${s.wave + 1} sau 10s.`);
+            s.nextWaveTimer = modeCfg.waveDelaySec;
+            const waveBadge = s.gameMode === 'endless' ? `${s.wave}/∞` : `${s.wave}/${s.totalWaves}`;
+            setStatusNotice(
+              `Hoàn thành Đợt ${waveBadge}! (+${waveBonus}⚡) · Tự gọi Đợt ${s.wave + 1} sau ${modeCfg.waveDelaySec}s.`
+            );
             syncHudFromSim();
           }
         }
@@ -2834,12 +3659,31 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             ctx.restore();
           }
 
-          // 6. Shockwaves
+          // 5b. Lingering Acid Hazard Pools (subtle floor puddle without noisy border ring)
+          for (const pool of s.acidPools) {
+            const fade = Math.min(1, pool.life / 0.8);
+            ctx.save();
+            ctx.globalAlpha = 0.22 * fade;
+            ctx.fillStyle = pool.visualTier >= 3 ? '#84CC16' : '#65A30D';
+            ctx.beginPath();
+            ctx.arc(pool.x, pool.y, pool.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.globalAlpha = 0.24 * fade;
+            ctx.strokeStyle = '#BEF264';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.arc(pool.x, pool.y, pool.radius * 0.9, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+          }
+
+          // 6. Shockwaves (ultra-faint hairline pulse for non-combat UI/status cues only)
           for (const sw of s.shockwaves) {
             ctx.save();
-            ctx.globalAlpha = sw.alpha;
+            ctx.globalAlpha = sw.alpha * 0.16;
             ctx.strokeStyle = sw.color;
-            ctx.lineWidth = sw.lineWidth;
+            ctx.lineWidth = Math.min(1.2, sw.lineWidth * 0.4);
             ctx.beginPath();
             ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
             ctx.stroke();
@@ -2942,14 +3786,48 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             ctx.restore();
           }
 
-          // 8. Placed Guns (Lv1 .. Lv10 Evolving Sprites)
+          // 8. Placed Guns (Lv1 .. Lv10 Evolving Sprites + Beacon Ally Buff Tethers)
+          for (const beacon of s.guns) {
+            if (beacon.type !== 'beacon') continue;
+            const bPt = gridToWorldCenter(beacon.col, beacon.row);
+            const bProfile = getGunCombatProfile('beacon', beacon.level);
+            ctx.save();
+            ctx.strokeStyle = beacon.id === s.selectedGunId ? 'rgba(250, 204, 21, 0.2)' : 'rgba(250, 204, 21, 0.08)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([6, 6]);
+            ctx.beginPath();
+            ctx.arc(bPt.x, bPt.y, bProfile.rangePx, 0, Math.PI * 2);
+            ctx.stroke();
+            for (const ally of s.guns) {
+              if (ally.id === beacon.id) continue;
+              const aPt = gridToWorldCenter(ally.col, ally.row);
+              if (Math.hypot(aPt.x - bPt.x, aPt.y - bPt.y) <= bProfile.rangePx + 4) {
+                ctx.strokeStyle = 'rgba(250, 204, 21, 0.24)';
+                ctx.setLineDash([3, 4]);
+                ctx.beginPath();
+                ctx.moveTo(bPt.x, bPt.y);
+                ctx.lineTo(aPt.x, aPt.y);
+                ctx.stroke();
+              }
+            }
+            ctx.restore();
+          }
+
           for (const gun of s.guns) {
             const pt = gridToWorldCenter(gun.col, gun.row);
             const isSelected = gun.id === s.selectedGunId;
             const profile = getGunCombatProfile(gun.type, gun.level);
+            const hasBeaconBuff = computeBeaconBuffAtTile(s.guns, gun.col, gun.row).speedMult > 1;
 
             ctx.save();
             ctx.translate(pt.x, pt.y);
+            if (hasBeaconBuff) {
+              ctx.strokeStyle = 'rgba(250, 204, 21, 0.72)';
+              ctx.lineWidth = 1.6;
+              ctx.beginPath();
+              ctx.arc(0, 0, 26, 0, Math.PI * 2);
+              ctx.stroke();
+            }
             if (isSelected) {
               ctx.strokeStyle = '#FBBF24';
               ctx.lineWidth = 2.2;
@@ -2983,12 +3861,40 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             drawEnemySprite(ctx, en, s.animTime);
           }
 
-          // 10. Projectiles (Tracer Bolts, Shrapnel Pellets, Missiles, Singularity Mortars)
+          // 10. Projectiles (Tracer Bolts, Pellets, Missiles, Mortars, Acid Globs, Ricochet Sawblades)
           for (const pr of s.projectiles) {
             ctx.save();
             ctx.translate(pr.x, pr.y);
+            if (pr.kind === 'sawblade') {
+              ctx.rotate(s.animTime * 18);
+              ctx.fillStyle = pr.color;
+              ctx.strokeStyle = '#FEF08A';
+              ctx.lineWidth = 1.4;
+              ctx.beginPath();
+              for (let t = 0; t < 12; t++) {
+                const a = (t * Math.PI * 2) / 12;
+                const r = t % 2 === 0 ? 10.5 : 5.5;
+                const sx = Math.cos(a) * r;
+                const sy = Math.sin(a) * r;
+                if (t === 0) ctx.moveTo(sx, sy);
+                else ctx.lineTo(sx, sy);
+              }
+              ctx.closePath();
+              ctx.fill();
+              ctx.stroke();
+              ctx.restore();
+              continue;
+            }
             ctx.rotate(Math.atan2(pr.vy, pr.vx));
-            if (pr.kind === 'mortar') {
+            if (pr.kind === 'acid') {
+              ctx.fillStyle = '#84CC16';
+              ctx.strokeStyle = '#ECFCCB';
+              ctx.lineWidth = 1.6;
+              ctx.beginPath();
+              ctx.ellipse(0, 0, 7.5, 5.2, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+            } else if (pr.kind === 'mortar') {
               ctx.save();
               ctx.rotate(s.animTime * 12);
               ctx.strokeStyle = '#FDE047';
@@ -3034,6 +3940,39 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               ctx.fillStyle = '#FFFFFF';
               ctx.beginPath();
               ctx.arc(1, 0, 1.5, 0, Math.PI * 2);
+              ctx.fill();
+            } else if (pr.kind === 'cannon') {
+              ctx.fillStyle = '#F59E0B';
+              ctx.strokeStyle = '#FEF08A';
+              ctx.lineWidth = 1.6;
+              ctx.beginPath();
+              ctx.ellipse(2, 0, 8, 4.2, 0, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+            } else if (pr.kind === 'plasma') {
+              ctx.fillStyle = '#EC4899';
+              ctx.beginPath();
+              ctx.arc(0, 0, 6.2, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.fillStyle = '#FCE7F3';
+              ctx.beginPath();
+              ctx.arc(1, 0, 2.8, 0, Math.PI * 2);
+              ctx.fill();
+            } else if (pr.kind === 'cluster') {
+              ctx.fillStyle = '#10B981';
+              ctx.strokeStyle = '#A7F3D0';
+              ctx.lineWidth = 1.8;
+              ctx.beginPath();
+              ctx.arc(0, 0, 6.5, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.stroke();
+            } else if (pr.kind === 'hunter') {
+              ctx.fillStyle = '#22D3EE';
+              ctx.beginPath();
+              ctx.moveTo(8, 0);
+              ctx.lineTo(-5, -3.5);
+              ctx.lineTo(-5, 3.5);
+              ctx.closePath();
               ctx.fill();
             } else {
               ctx.fillStyle = pr.color;
@@ -3162,7 +4101,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                     Thủ Thành Pháo Đài Lv10
                   </h1>
                   <p className="text-xs sm:text-sm text-sky-300/90 font-mono">
-                    4 Cấp Độ · 16 Màn Dài (15–41 Đợt) · 8 Súng Thuần Max Lv10
+                    4 Cấp (+20%) · 4 Chế Độ · 16 Màn · 16 Súng Thuần Lv10 &amp; 12 Quái
                     {hud.bestScore > 0 ? ` · Kỷ lục: ${hud.bestScore}đ` : ''}
                   </p>
                 </div>
@@ -3171,7 +4110,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               {/* 4 Difficulty Tiers Selector */}
               <div className="space-y-2">
                 <p className="text-xs font-mono uppercase tracking-[0.12em] text-slate-400">
-                  Chọn Cấp Độ Thử Thách (4 Cấp: Dễ → Địa Ngục)
+                  Chọn Cấp Độ Thử Thách (+20% · Dễ → Địa Ngục)
                 </p>
                 <div
                   role="radiogroup"
@@ -3223,9 +4162,58 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                     {DIFFICULTY_CONFIGS[difficulty].label}:
                   </span>{' '}
                   {DIFFICULTY_CONFIGS[difficulty].description} · Thông số trận:{' '}
-                  <strong className="text-cyan-300">{effectiveSetup.totalWaves} Đợt</strong> ·{' '}
-                  <strong className="text-emerald-300">{effectiveSetup.startCoreHp} HP Lõi</strong> ·{' '}
+                  <strong className="text-cyan-300">
+                    {gameMode === 'endless' ? '∞ Đợt' : `${effectiveSetup.totalWaves} Đợt`}
+                  </strong>{' '}
+                  · <strong className="text-emerald-300">{effectiveSetup.startCoreHp} HP Lõi</strong> ·{' '}
                   <strong className="text-amber-300">{effectiveSetup.startEnergy}⚡</strong>
+                </p>
+              </div>
+
+              {/* 4 Game Modes Selector */}
+              <div className="space-y-1.5">
+                <p className="text-xs font-mono uppercase tracking-[0.12em] text-slate-400">
+                  Chọn Chế Độ Chơi (4 Chế Độ Phong Phú)
+                </p>
+                <div
+                  role="radiogroup"
+                  aria-label="Chọn chế độ chơi"
+                  className="grid grid-cols-2 sm:grid-cols-4 gap-2"
+                >
+                  {GAME_MODE_ORDER.map((mId) => {
+                    const mCfg = GAME_MODE_CONFIGS[mId];
+                    const selected = gameMode === mId;
+                    return (
+                      <button
+                        key={mId}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        data-testid={`td-mode-${mId}`}
+                        onClick={() => setGameMode(mId)}
+                        className={`p-2 rounded-xl border text-left transition-colors cursor-pointer ${
+                          selected
+                            ? 'bg-slate-900 text-white'
+                            : 'border-slate-700/80 bg-[#0F172A] text-slate-300 hover:border-slate-500'
+                        }`}
+                        style={
+                          selected
+                            ? { borderColor: mCfg.badgeColor, boxShadow: `0 0 0 1px ${mCfg.badgeColor}` }
+                            : undefined
+                        }
+                      >
+                        <div className="text-xs font-bold" style={{ color: mCfg.badgeColor }}>
+                          {mCfg.label}
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-400 mt-0.5 truncate">
+                          {mCfg.shortLabel}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[11px] font-mono text-slate-400 px-1">
+                  {GAME_MODE_CONFIGS[gameMode].description}
                 </p>
               </div>
 
@@ -3234,7 +4222,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 <p className="text-xs font-mono uppercase tracking-[0.12em] text-slate-400">
                   Chọn Chiến Trường ({PRISM_MAPS.length} Màn · Dễ 1–4 · Trung Bình 5–8 · Khó 9–12 · Địa Ngục 13–16)
                 </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 max-h-[212px] overflow-y-auto pr-1">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   {PRISM_MAPS.map((m, idx) => {
                     const active = idx === selectedMapIndex;
                     const accent = BIOME_PALETTES[m.biome].accent;
@@ -3277,12 +4265,12 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 <button
                   type="button"
                   data-start="true"
-                  onClick={() => startNewRun(selectedMapIndex, difficulty)}
+                  onClick={() => startNewRun(selectedMapIndex, difficulty, gameMode)}
                   className="inline-flex items-center justify-center gap-2 min-h-[48px] px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#070B14] font-bold text-sm sm:text-base transition-colors cursor-pointer"
                 >
                   <Play className="w-4 h-4 shrink-0" aria-hidden="true" />
                   <span>
-                    Vào Trận · {DIFFICULTY_CONFIGS[difficulty].label} ({effectiveSetup.totalWaves} Đợt)
+                    Vào Trận · {GAME_MODE_CONFIGS[gameMode].label} · {DIFFICULTY_CONFIGS[difficulty].label}
                   </span>
                 </button>
               </div>
@@ -3296,14 +4284,14 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                   className="w-full h-auto rounded-lg block border border-slate-800"
                 />
                 <p className="text-xs text-slate-400 text-center">
-                  Mỗi khẩu súng tiến hóa hình dạng &amp; kỹ năng riêng từ <strong className="text-amber-300">Lv1 → Lv10 MAX</strong>
+                  Mỗi khẩu súng trong <strong className="text-amber-300">16 loại súng</strong> đều tiến hóa hình dạng &amp; kỹ năng từ <strong className="text-amber-300">Lv1 → Lv10</strong>
                 </p>
               </div>
             </div>
           </div>
 
           <p className="text-[11px] font-mono text-slate-400 border-t border-slate-800/80 pt-3 text-center">
-            Phím 1-8 chọn Súng · Nhấp ô trống để đặt · Nhấp súng chọn &amp; bấm U để nâng cấp tới Lv10 · T đổi mục tiêu · Space Quá Tải Hỏa Lực
+            Phím 1-9, 0, Q, E, Z, X, C, V chọn Súng · Nhấp ô trống để đặt · Bấm U nâng cấp tới Lv10 · T đổi mục tiêu · Space Quá Tải Hỏa Lực
           </p>
         </div>
       )}
@@ -3323,7 +4311,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                   backgroundColor: 'rgba(15, 23, 42, 0.9)',
                 }}
               >
-                {DIFFICULTY_CONFIGS[hud.difficulty].shortLabel}
+                {DIFFICULTY_CONFIGS[hud.difficulty].shortLabel} · {GAME_MODE_CONFIGS[hud.gameMode].shortLabel}
               </div>
 
               <div className="flex items-center gap-1.5">
@@ -3349,7 +4337,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               <div>
                 <div className="text-[10px] font-mono text-slate-400 leading-none">ĐỢT</div>
                 <div className="text-sm sm:text-base font-bold text-cyan-300 leading-tight">
-                  {hud.wave}/{hud.totalWaves}
+                  {hud.wave}/{hud.gameMode === 'endless' ? '∞' : hud.totalWaves}
                 </div>
               </div>
 
@@ -3457,6 +4445,8 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             <div className="max-w-[590px] mx-auto">
               <canvas
                 ref={canvasRef}
+                width={CANVAS_WIDTH}
+                height={CANVAS_HEIGHT}
                 data-testid="prism-td-canvas"
                 aria-label="Bản đồ Thủ Thành Pháo Đài 12x8"
                 onPointerMove={handleCanvasPointerMove}
@@ -3468,9 +4458,9 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             </div>
           </div>
 
-          {/* 8 Pure Gun Arsenal Dock + Lv1..10 Inspector */}
+          {/* 16 Pure Gun Arsenal Dock + Lv1..10 Inspector */}
           <div className="border-t border-slate-800 bg-[#0B1222] px-3 sm:px-4 py-2 space-y-1.5">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5">
               {GUN_CATALOG.map((item) => {
                 const isActive = selectedTool === item.type;
                 const canAfford = hud.energy >= item.cost;
@@ -3603,7 +4593,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 type="button"
                 data-testid="prism-wave-btn"
                 onClick={launchNextWave}
-                disabled={hud.waveActive || hud.wave >= hud.totalWaves}
+                disabled={hud.waveActive || (hud.gameMode !== 'endless' && hud.wave >= hud.totalWaves)}
                 className={`min-h-[40px] px-4 py-1.5 rounded-xl font-bold text-xs sm:text-sm inline-flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer ${
                   hud.waveActive
                     ? 'bg-slate-800 text-slate-300 border border-slate-700 cursor-not-allowed'
@@ -3613,8 +4603,8 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 <Play className="w-4 h-4 shrink-0" />
                 <span>
                   {hud.waveActive
-                    ? `Đang giao tranh Đợt ${hud.wave}/${hud.totalWaves}...`
-                    : `Gọi Đợt ${hud.wave + 1}/${hud.totalWaves} (Tự gọi: ${hud.nextWaveCountdown}s)`}
+                    ? `Đang giao tranh Đợt ${hud.wave}/${hud.gameMode === 'endless' ? '∞' : hud.totalWaves}...`
+                    : `Gọi Đợt ${hud.wave + 1}/${hud.gameMode === 'endless' ? '∞' : hud.totalWaves} (Tự gọi: ${hud.nextWaveCountdown}s)`}
                 </span>
               </button>
             </div>
