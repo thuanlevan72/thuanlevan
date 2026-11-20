@@ -3,15 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Thuận Lê — Kỹ Sư Senior .NET &amp; Kiến Trúc Hệ Thống Doanh Nghiệp</title>
+    <title>Thuận Lê — Kỹ Sư Senior .NET &amp; Hệ Thống AI</title>
     <meta
       id="meta-description"
       name="description"
-      content="Hồ sơ kỹ sư Senior .NET Lê Văn Thuận (MISA OneAI, Agribank, Phenikaa MEC) và triển lãm nghệ thuật thị giác AI Nàng Thơ Hoa Đào – Kỷ niệm đời thực."
+      content="Hồ sơ kỹ sư Senior .NET Lê Văn Thuận: gần 4 năm phát triển hệ thống tải cao tại MISA OneAI, Agribank, Phenikaa MEC. Xem dự án và tải CV chuẩn A4."
     />
     <meta
+      id="meta-keywords"
       name="keywords"
-      content="Thuận Lê, Lê Văn Thuận, Senior .NET Engineer, MISA OneAI, Agribank, Phenikaa MEC, triển lãm ảnh AI, nàng thơ hoa đào"
+      content="Thuận Lê, Lê Văn Thuận, Senior .NET Engineer, MISA OneAI, Agribank, Phenikaa MEC, CV PDF Senior .NET, AI Agents, triển lãm ảnh"
     />
     <meta name="author" content="Lê Văn Thuận" />
     <meta
@@ -28,25 +29,30 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
     <!-- OpenGraph Social Card -->
-    <meta property="og:type" content="website" />
+    <meta id="og-type" property="og:type" content="profile" />
+    <meta property="profile:first_name" content="Thuận" />
+    <meta property="profile:last_name" content="Lê Văn" />
+    <meta property="profile:username" content="thuanlevan72" />
     <meta property="og:locale" content="vi_VN" />
     <meta property="og:site_name" content="Thuận Lê — Systems Engineering &amp; Visual Art" />
     <meta
       id="og-title"
       property="og:title"
-      content="Thuận Lê — Kỹ Sư Senior .NET &amp; Kiến Trúc Hệ Thống Doanh Nghiệp"
+      content="Thuận Lê — Kỹ Sư Senior .NET &amp; Hệ Thống AI"
     />
     <meta
       id="og-description"
       property="og:description"
-      content="Hồ sơ kỹ sư Senior .NET Lê Văn Thuận (MISA OneAI, Agribank, Phenikaa MEC) và triển lãm nghệ thuật thị giác AI Nàng Thơ Hoa Đào – Kỷ niệm đời thực."
+      content="Hồ sơ kỹ sư Senior .NET Lê Văn Thuận: gần 4 năm phát triển hệ thống tải cao tại MISA OneAI, Agribank, Phenikaa MEC. Xem dự án và tải CV chuẩn A4."
     />
-    <meta property="og:image" content="/assets/gallery/nang-tho-hoa-dao.webp" />
-    <meta property="og:image:width" content="1080" />
-    <meta property="og:image:height" content="603" />
+    <meta id="og-image" property="og:image" content="https://thuanlevan.vercel.app/og-cover.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta id="og-image-width" property="og:image:width" content="1200" />
+    <meta id="og-image-height" property="og:image:height" content="630" />
     <meta
+      id="og-image-alt"
       property="og:image:alt"
-      content="Cố Phán Di Quang Thái — Nàng thơ giữa hoa đào dưới ánh nắng sớm"
+      content="Cố Phán Di Quang Thái — Tác phẩm thị giác AI và hồ sơ kỹ sư Senior .NET Thuận Lê"
     />
     <meta property="og:url" content="https://thuanlevan.vercel.app/" id="og-url" />
 
@@ -55,17 +61,18 @@
     <meta
       id="twitter-title"
       name="twitter:title"
-      content="Thuận Lê — Kỹ Sư Senior .NET &amp; Kiến Trúc Hệ Thống Doanh Nghiệp"
+      content="Thuận Lê — Kỹ Sư Senior .NET &amp; Hệ Thống AI"
     />
     <meta
       id="twitter-description"
       name="twitter:description"
-      content="Hồ sơ kỹ sư Senior .NET Lê Văn Thuận (MISA OneAI, Agribank, Phenikaa MEC) và triển lãm nghệ thuật thị giác AI."
+      content="Hồ sơ kỹ sư Senior .NET Lê Văn Thuận: gần 4 năm phát triển hệ thống tải cao tại MISA OneAI, Agribank, Phenikaa MEC. Xem dự án và tải CV chuẩn A4."
     />
-    <meta name="twitter:image" content="/assets/gallery/nang-tho-hoa-dao.webp" />
+    <meta id="twitter-image" name="twitter:image" content="https://thuanlevan.vercel.app/og-cover.jpg" />
     <meta
+      id="twitter-image-alt"
       name="twitter:image:alt"
-      content="Cố Phán Di Quang Thái — Nàng thơ giữa hoa đào"
+      content="Cố Phán Di Quang Thái — Tác phẩm thị giác AI và hồ sơ kỹ sư Senior .NET Thuận Lê"
     />
 
     <!-- Typography: Cormorant Garamond (Display Serif) + Plus Jakarta Sans (Body) + JetBrains Mono (Tabular Metrics) -->
@@ -115,13 +122,15 @@
             "@type": "ProfilePage",
             "@id": "https://thuanlevan.vercel.app/#webpage",
             "url": "https://thuanlevan.vercel.app/",
-            "name": "Thuận Lê — Kỹ Sư Senior .NET & Kiến Trúc Hệ Thống Doanh Nghiệp",
-            "inLanguage": "vi",
+            "name": "Thuận Lê — Kỹ Sư Senior .NET & Hệ Thống AI",
+            "inLanguage": "vi-VN",
             "isPartOf": { "@id": "https://thuanlevan.vercel.app/#website" },
             "mainEntity": { "@id": "https://thuanlevan.vercel.app/#person" },
             "primaryImageOfPage": {
               "@type": "ImageObject",
-              "url": "https://thuanlevan.vercel.app/assets/gallery/thuan-le-doi-thuc.webp"
+              "url": "https://thuanlevan.vercel.app/assets/gallery/thuan-le-doi-thuc.webp",
+              "width": 675,
+              "height": 1200
             },
             "breadcrumb": { "@id": "https://thuanlevan.vercel.app/#breadcrumb" }
           },
@@ -143,6 +152,12 @@
             "name": "Lê Văn Thuận",
             "alternateName": "Thuận Lê",
             "jobTitle": "Senior .NET Systems Engineer & AI Agent Practitioner",
+            "hasOccupation": {
+              "@type": "Occupation",
+              "name": "Senior .NET Systems Engineer",
+              "occupationalCategory": "Software Developers",
+              "skills": "C# .NET 8, Clean Architecture, CQRS, Oracle Database, PostgreSQL, Apache Kafka, Redis, AI Agents"
+            },
             "birthDate": "2002",
             "url": "https://thuanlevan.vercel.app/",
             "email": "mailto:thuanlevan72@gmail.com",

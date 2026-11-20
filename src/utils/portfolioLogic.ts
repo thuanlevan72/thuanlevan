@@ -1,14 +1,100 @@
 export type ThemeMode = 'light' | 'dark';
 
-export type AppRoute = 'profile' | 'gallery' | 'cv';
+export type AppRoute = 'profile' | 'gallery' | 'cv' | 'xiangqi';
 
 export type GalleryCategory = 'all' | 'imperial' | 'poetic' | 'portrait' | 'moments';
 
 export type ProjectCategory = 'all' | 'ai' | 'fintech' | 'healthcare';
 
+export type ShowcaseTemplateId =
+  | 'modern'
+  | 'classical'
+  | 'introvert'
+  | 'extrovert'
+  | 'youthful'
+  | 'retro';
+
+export type ProfileTemplateId = ShowcaseTemplateId;
+
+export type CvTemplateId = ShowcaseTemplateId;
+
+export type GalleryTemplateId = ShowcaseTemplateId;
+
+export const SHOWCASE_TEMPLATE_IDS: readonly ShowcaseTemplateId[] = [
+  'modern',
+  'classical',
+  'introvert',
+  'extrovert',
+  'youthful',
+  'retro',
+];
+
+export interface TemplateOption<T extends string> {
+  id: T;
+  label: string;
+  shortDesc: string;
+}
+
+export const PROFILE_TEMPLATE_OPTIONS: TemplateOption<ProfileTemplateId>[] = [
+  { id: 'modern', label: 'Hiện Đại', shortDesc: 'Bento kỹ thuật sắc nét' },
+  { id: 'classical', label: 'Cổ Trang', shortDesc: 'Thủy mặc, ấn triện & thi ca' },
+  { id: 'introvert', label: 'Hướng Nội', shortDesc: 'Tĩnh lặng, tối giản & sâu lắng' },
+  { id: 'extrovert', label: 'Hướng Ngoại', shortDesc: 'Sân khấu lớn & kết nối mạnh' },
+  { id: 'youthful', label: 'Trẻ Trung', shortDesc: 'Phá cách, năng động & tươi mới' },
+  { id: 'retro', label: 'Hoài Cổ', shortDesc: 'Nhật ký giấy cũ & phim 35mm' },
+];
+
+export const CV_TEMPLATE_OPTIONS: TemplateOption<CvTemplateId>[] = [
+  { id: 'modern', label: 'Hiện Đại', shortDesc: '2 Cột Navy Studio sắc nét' },
+  { id: 'classical', label: 'Cổ Trang', shortDesc: 'Công danh khung kép & ấn triện' },
+  { id: 'introvert', label: 'Hướng Nội', shortDesc: 'Học thuật tĩnh tại một cột' },
+  { id: 'extrovert', label: 'Hướng Ngoại', shortDesc: 'Header sân khấu đậm dấu ấn' },
+  { id: 'youthful', label: 'Trẻ Trung', shortDesc: 'Dòng thời gian phá cách năng động' },
+  { id: 'retro', label: 'Hoài Cổ', shortDesc: 'Máy chữ lưu trữ & ảnh Polaroid' },
+];
+
+export const GALLERY_TEMPLATE_OPTIONS: TemplateOption<GalleryTemplateId>[] = [
+  { id: 'modern', label: 'Hiện Đại', shortDesc: 'Khung Bento 12 cột chuẩn mực' },
+  { id: 'classical', label: 'Cổ Trang', shortDesc: 'Tranh cuộn thủy mặc & lạc khoản' },
+  { id: 'introvert', label: 'Hướng Nội', shortDesc: 'Phòng tranh tĩnh lặng một dải' },
+  { id: 'extrovert', label: 'Hướng Ngoại', shortDesc: 'Sân khấu ảnh cỡ lớn đầy năng lượng' },
+  { id: 'youthful', label: 'Trẻ Trung', shortDesc: 'Lưới cắt dán tự nhiên phá cách' },
+  { id: 'retro', label: 'Hoài Cổ', shortDesc: 'Cuộn phim 35mm & khung Polaroid' },
+];
+
+const LEGACY_TEMPLATE_ALIASES: Record<string, ShowcaseTemplateId> = {
+  editorial: 'modern',
+  bento: 'modern',
+  classic: 'modern',
+  sidebar: 'modern',
+  executive: 'introvert',
+  spotlight: 'introvert',
+  masonry: 'youthful',
+};
+
+export function resolveTemplateSelection<T extends string>(
+  stored: string | null | undefined,
+  allowed: readonly T[],
+  fallback: T
+): T {
+  if (stored && (allowed as readonly string[]).includes(stored)) {
+    return stored as T;
+  }
+  if (stored && LEGACY_TEMPLATE_ALIASES[stored]) {
+    const mapped = LEGACY_TEMPLATE_ALIASES[stored];
+    if ((allowed as readonly string[]).includes(mapped)) {
+      return mapped as T;
+    }
+  }
+  return fallback;
+}
+
 export interface RouteSeoMeta {
   title: string;
   description: string;
+  keywords: string;
+  ogType: 'profile' | 'website';
+  ogImageAlt: string;
   path: string;
 }
 
@@ -93,36 +179,69 @@ export function parseAppRoute(pathname: string, hash = ''): AppRoute {
   ) {
     return 'cv';
   }
+  if (
+    cleanPath === '/co-tuong' ||
+    cleanPath === '/xiangqi' ||
+    cleanPath === '/game' ||
+    cleanHash === 'co-tuong'
+  ) {
+    return 'xiangqi';
+  }
   return 'profile';
 }
 
 export function getRoutePath(route: AppRoute): string {
   if (route === 'gallery') return '/trien-lam';
   if (route === 'cv') return '/cv';
+  if (route === 'xiangqi') return '/co-tuong';
   return '/';
 }
 
 export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
   if (route === 'gallery') {
     return {
-      title: 'Triển Lãm Ảnh & Video: Đời Thường, Hành Trình & MISA — Thuận Lê',
+      title: 'Triển Lãm Ảnh & Video — Thuận Lê (28 Tác Phẩm)',
       description:
-        'Phòng triển lãm trực tuyến 28 tác phẩm WebP & H.264 tối ưu tốc độ: Nàng Thơ Hoa Đào, Coding Đêm, Mô Tô Rừng Thông, Kỷ Niệm MISA và Người Thương.',
+        'Khám phá 28 khoảnh khắc WebP & video H.264 tối ưu tốc độ của Thuận Lê: Nàng Thơ Hoa Đào, Coding Timelapse, chuyến đi rừng thông và kỷ niệm MISA.',
+      keywords:
+        'Triển lãm ảnh Thuận Lê, Nàng Thơ Hoa Đào, Coding Timelapse, WebP Gallery, AI Visual Art, MISA Hạ Long',
+      ogType: 'website',
+      ogImageAlt: 'Triển lãm ảnh và video 28 tác phẩm của kỹ sư Thuận Lê',
       path: '/trien-lam',
     };
   }
   if (route === 'cv') {
     return {
-      title: 'CV PDF — Lê Văn Thuận | Kỹ Sư Senior .NET & Kiến Trúc Hệ Thống',
+      title: 'CV PDF Lê Văn Thuận — Kỹ Sư Senior .NET (Chuẩn A4)',
       description:
-        'Bản CV điện tử và tải xuống PDF chuẩn A4 của kỹ sư Senior .NET Lê Văn Thuận: gần 4 năm kinh nghiệm hệ thống tài chính Agribank, Phenikaa MEC và MISA OneAI.',
+        'Xem trực tuyến và tải CV PDF chuẩn A4 của kỹ sư Senior .NET Lê Văn Thuận: kinh nghiệm MISA OneAI, Agribank, Phenikaa MEC, kỹ năng .NET 8 và AI Agent.',
+      keywords:
+        'CV Lê Văn Thuận, CV PDF Senior .NET, C# .NET 8 Developer, MISA OneAI, Smart Form Agribank, Phenikaa MEC',
+      ogType: 'profile',
+      ogImageAlt: 'Hồ sơ CV PDF chuẩn A4 của kỹ sư Senior .NET Lê Văn Thuận',
       path: '/cv',
     };
   }
+  if (route === 'xiangqi') {
+    return {
+      title: 'Cờ Tướng 2D Đấu Với Máy AI — Thuận Lê Studio',
+      description:
+        'Chơi game Cờ Tướng 2D đối kháng cùng máy AI Alpha-Beta (Nhập Môn, Kỳ Thủ, Đại Sư). Tối ưu cảm ứng điện thoại, tablet và máy tính.',
+      keywords:
+        'Cờ Tướng 2D, Chơi Cờ Tướng với máy, Game Cờ Tướng Online, Xiangqi AI, Sở Hà Hán Giới, Thuận Lê',
+      ogType: 'website',
+      ogImageAlt: 'Bàn cờ Cờ Tướng 2D đối kháng với trí tuệ nhân tạo trên mọi thiết bị',
+      path: '/co-tuong',
+    };
+  }
   return {
-    title: 'Thuận Lê — Kỹ Sư Senior .NET & Kiến Trúc Hệ Thống Doanh Nghiệp',
+    title: 'Thuận Lê — Kỹ Sư Senior .NET & Hệ Thống AI',
     description:
-      'Hồ sơ kỹ sư Senior .NET Lê Văn Thuận (MISA OneAI, Agribank, Phenikaa MEC) với gần 4 năm kinh nghiệm hệ thống tài chính, y tế và AI.',
+      'Hồ sơ kỹ sư Senior .NET Lê Văn Thuận: gần 4 năm phát triển hệ thống tải cao tại MISA OneAI, Agribank, Phenikaa MEC. Xem dự án và tải CV chuẩn A4.',
+    keywords:
+      'Thuận Lê, Lê Văn Thuận, Senior .NET Engineer, MISA OneAI, Agribank, Phenikaa MEC, CV PDF Senior .NET, AI Agents, triển lãm ảnh',
+    ogType: 'profile',
+    ogImageAlt: 'Cố Phán Di Quang Thái — Tác phẩm thị giác AI và hồ sơ kỹ sư Senior .NET Thuận Lê',
     path: '/',
   };
 }
@@ -476,6 +595,13 @@ export function buildStructuredDataGraph(origin: string, route: AppRoute) {
       name: 'Triển Lãm Ảnh & Video',
       item: `${cleanOrigin}/trien-lam`,
     });
+  } else if (route === 'xiangqi') {
+    breadcrumbItems.push({
+      '@type': 'ListItem',
+      position: 2,
+      name: 'Cờ Tướng 2D Đấu Với Máy',
+      item: `${cleanOrigin}/co-tuong`,
+    });
   }
 
   return {
@@ -513,12 +639,17 @@ export function buildStructuredDataGraph(origin: string, route: AppRoute) {
         copyrightHolder: { '@id': `${cleanOrigin}/#person` },
       },
       {
-        '@type': route === 'gallery' ? 'CollectionPage' : 'ProfilePage',
+        '@type':
+          route === 'gallery'
+            ? 'CollectionPage'
+            : route === 'xiangqi'
+            ? 'WebPage'
+            : 'ProfilePage',
         '@id': `${currentUrl}#webpage`,
         url: currentUrl,
         name: seoMeta.title,
         description: seoMeta.description,
-        inLanguage: 'vi',
+        inLanguage: 'vi-VN',
         isPartOf: { '@id': `${cleanOrigin}/#website` },
         mainEntity: { '@id': `${cleanOrigin}/#person` },
         primaryImageOfPage: {
@@ -526,7 +657,11 @@ export function buildStructuredDataGraph(origin: string, route: AppRoute) {
           url:
             route === 'gallery'
               ? `${cleanOrigin}/assets/gallery/nang-tho-hoa-dao.webp`
-              : portraitUrl,
+              : route === 'cv'
+                ? `${cleanOrigin}/assets/gallery/chan-dung-the-xanh.webp`
+                : portraitUrl,
+          width: route === 'gallery' ? 1080 : route === 'cv' ? 472 : 675,
+          height: route === 'gallery' ? 603 : route === 'cv' ? 709 : 1200,
         },
         breadcrumb: { '@id': `${currentUrl}#breadcrumb` },
       },
@@ -541,6 +676,13 @@ export function buildStructuredDataGraph(origin: string, route: AppRoute) {
         name: 'Lê Văn Thuận',
         alternateName: 'Thuận Lê',
         jobTitle: 'Senior .NET Systems Engineer & AI Agent Practitioner',
+        hasOccupation: {
+          '@type': 'Occupation',
+          name: 'Senior .NET Systems Engineer',
+          occupationalCategory: 'Software Developers',
+          skills:
+            'C# .NET 8, Clean Architecture, CQRS, Oracle Database, PostgreSQL, Apache Kafka, Redis, AI Agents',
+        },
         birthDate: '2002',
         url: `${cleanOrigin}/`,
         email: 'mailto:thuanlevan72@gmail.com',

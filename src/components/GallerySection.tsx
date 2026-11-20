@@ -1,9 +1,7 @@
 import {
   ArrowLeft,
-  BookOpen,
   Expand,
   Film,
-  LayoutGrid,
   Moon,
   Play,
   Search,
@@ -14,11 +12,16 @@ import { useMemo, useState } from 'react';
 import { GALLERY_ARTWORKS } from '../data/portfolioData.ts';
 import {
   ArtworkItem,
+  GALLERY_TEMPLATE_OPTIONS,
   GalleryCategory,
+  GalleryTemplateId,
   getGalleryCategoryCounts,
+  resolveTemplateSelection,
   searchAndFilterGalleryItems,
+  SHOWCASE_TEMPLATE_IDS,
   ThemeMode,
 } from '../utils/portfolioLogic.ts';
+import { TemplateSwitcherBar } from './TemplateSwitcherBar.tsx';
 
 interface GallerySectionProps {
   theme: ThemeMode;
@@ -27,7 +30,7 @@ interface GallerySectionProps {
   onBackToProfile: () => void;
 }
 
-type GalleryViewMode = 'masonry' | 'editorial';
+const GALLERY_TEMPLATE_STORAGE_KEY = 'thuanle-gallery-template';
 
 export function GallerySection({
   theme,
@@ -37,9 +40,28 @@ export function GallerySection({
 }: GallerySectionProps) {
   const [selectedCategory, setSelectedCategory] = useState<GalleryCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<GalleryViewMode>('masonry');
+  const [galleryTemplate, setGalleryTemplate] = useState<GalleryTemplateId>(() => {
+    try {
+      return resolveTemplateSelection(
+        localStorage.getItem(GALLERY_TEMPLATE_STORAGE_KEY),
+        SHOWCASE_TEMPLATE_IDS,
+        'modern'
+      );
+    } catch {
+      return 'modern';
+    }
+  });
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [inlinePlayingVideoId, setInlinePlayingVideoId] = useState<string | null>(null);
+
+  const handleTemplateChange = (nextTemplate: GalleryTemplateId) => {
+    setGalleryTemplate(nextTemplate);
+    try {
+      localStorage.setItem(GALLERY_TEMPLATE_STORAGE_KEY, nextTemplate);
+    } catch {
+      // Ignore storage errors
+    }
+  };
 
   const counts = useMemo(() => getGalleryCategoryCounts(GALLERY_ARTWORKS), []);
 
@@ -118,7 +140,7 @@ export function GallerySection({
               type="button"
               onClick={onToggleTheme}
               aria-label="Chuyển đổi giao diện Sáng / Tối"
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border border-[#DCE6F2] dark:border-[#1E3250] bg-white/90 dark:bg-[#0B1220]/90 text-xs font-medium text-[#070B14] dark:text-[#F1F5F9] hover:border-[#0284C7] dark:hover:border-[#38BDF8] transition-all duration-200 whitespace-nowrap shrink-0 cursor-pointer"
+              className="inline-flex items-center gap-2 px-3.5 py-2 min-h-[38px] rounded-xl border border-[#DCE6F2] dark:border-[#1E3250] bg-white/90 dark:bg-[#0B1220]/90 text-xs font-medium text-[#070B14] dark:text-[#F1F5F9] hover:border-[#0284C7] dark:hover:border-[#38BDF8] transition-all duration-200 whitespace-nowrap shrink-0 cursor-pointer"
             >
               {theme === 'dark' ? (
                 <Moon className="w-3.5 h-3.5 text-[#38BDF8]" aria-hidden="true" />
@@ -139,8 +161,7 @@ export function GallerySection({
               </h1>
               <p className="text-sm sm:text-base text-[#475569] dark:text-[#94A3B8] leading-relaxed text-pretty">
                 {counts.all} khoảnh khắc được tuyển chọn và nén chuẩn WebP / H.264 giữ trọn từng tỷ
-                lệ khung hình gốc — từ mỹ học Á Đông, đêm lập trình Hà Nội đến những chuyến đi cùng
-                đồng đội và người thương.
+                lệ khung hình gốc — chọn ngay 1 trong 6 phong cách trưng bày bên dưới.
               </p>
             </div>
 
@@ -158,38 +179,49 @@ export function GallerySection({
           </div>
         </div>
 
-        {/* Filter Tabs + Instant Search + View Switcher */}
-        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3.5 pt-1">
-          <div
-            id="gallery-filters"
-            role="tablist"
-            aria-label="Lọc bộ sưu tập ảnh theo chủ đề"
-            className="inline-flex flex-wrap items-center gap-1 p-1.5 rounded-xl bg-[#E8F0F9] dark:bg-[#0B1426] border border-[#DCE6F2] dark:border-[#182740]"
-          >
-            {filterTabs.map((tab) => {
-              const isActive = selectedCategory === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  onClick={() => setSelectedCategory(tab.id)}
-                  className={`px-3.5 py-2 rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
-                    isActive
-                      ? 'bg-white dark:bg-[#14233E] text-[#070B14] dark:text-[#F1F5F9] shadow-[0_2px_8px_-2px_rgba(10,25,47,0.12)]'
-                      : 'text-[#475569] dark:text-[#94A3B8] hover:text-[#070B14] dark:hover:text-[#F1F5F9]'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
+        {/* Template Switcher Bar + Category Filter Tabs + Instant Search */}
+        <div className="space-y-4 pt-1">
+          <div className="rounded-2xl border border-[#DCE6F2] dark:border-[#182740] bg-white/80 dark:bg-[#0B1220]/80 px-4 py-3">
+            <TemplateSwitcherBar
+              id="gallery-template-switcher"
+              label="Phong Cách Phòng Tranh"
+              ariaLabel="Chọn phong cách bố cục triển lãm ảnh"
+              options={GALLERY_TEMPLATE_OPTIONS}
+              activeId={galleryTemplate}
+              onChange={handleTemplateChange}
+            />
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
+            <div
+              id="gallery-filters"
+              role="tablist"
+              aria-label="Lọc bộ sưu tập ảnh theo chủ đề"
+              className="flex items-center gap-1 p-1.5 rounded-xl bg-[#E8F0F9] dark:bg-[#0B1426] border border-[#DCE6F2] dark:border-[#182740] overflow-x-auto max-w-full"
+            >
+              {filterTabs.map((tab) => {
+                const isActive = selectedCategory === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => setSelectedCategory(tab.id)}
+                    className={`px-3.5 py-2 rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
+                      isActive
+                        ? 'bg-white dark:bg-[#14233E] text-[#070B14] dark:text-[#F1F5F9] shadow-[0_2px_8px_-2px_rgba(10,25,47,0.12)]'
+                        : 'text-[#475569] dark:text-[#94A3B8] hover:text-[#070B14] dark:hover:text-[#F1F5F9]'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Instant Search */}
-            <div className="relative flex-1 sm:w-72">
+            <div className="relative w-full lg:w-80 shrink-0">
               <Search
                 className="w-4 h-4 text-[#64748B] dark:text-[#94A3B8] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"
                 aria-hidden="true"
@@ -201,7 +233,7 @@ export function GallerySection({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 aria-label="Tìm kiếm ảnh theo tiêu đề hoặc kỷ niệm"
                 placeholder="Tìm ảnh (hoa đào, MISA...)"
-                className="w-full pl-9 pr-8 py-2 rounded-xl border border-[#DCE6F2] dark:border-[#182740] bg-white/95 dark:bg-[#0B1220]/95 text-xs sm:text-sm text-[#070B14] dark:text-[#F1F5F9] placeholder:text-[#64748B] dark:placeholder:text-[#64748B] focus:outline-none focus:border-[#0284C7] dark:focus:border-[#38BDF8] transition-colors"
+                className="w-full pl-9 pr-8 py-2.5 rounded-xl border border-[#DCE6F2] dark:border-[#182740] bg-white/95 dark:bg-[#0B1220]/95 text-xs sm:text-sm text-[#070B14] dark:text-[#F1F5F9] placeholder:text-[#64748B] dark:placeholder:text-[#64748B] focus:outline-none focus:border-[#0284C7] dark:focus:border-[#38BDF8] transition-colors"
               />
               {searchQuery && (
                 <button
@@ -213,43 +245,6 @@ export function GallerySection({
                   <X className="w-3.5 h-3.5" aria-hidden="true" />
                 </button>
               )}
-            </div>
-
-            {/* Museum Grid vs Detailed Editorial View Switcher */}
-            <div
-              role="group"
-              aria-label="Chế độ hiển thị phòng tranh"
-              className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#E8F0F9] dark:bg-[#0B1426] border border-[#DCE6F2] dark:border-[#182740] shrink-0"
-            >
-              <button
-                id="view-mode-masonry"
-                type="button"
-                aria-pressed={viewMode === 'masonry'}
-                onClick={() => setViewMode('masonry')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap cursor-pointer ${
-                  viewMode === 'masonry'
-                    ? 'bg-white dark:bg-[#14233E] text-[#070B14] dark:text-[#F1F5F9] shadow-xs'
-                    : 'text-[#475569] dark:text-[#94A3B8] hover:text-[#070B14] dark:hover:text-[#F1F5F9]'
-                }`}
-              >
-                <LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Lưới Nghệ Thuật</span>
-              </button>
-
-              <button
-                id="view-mode-editorial"
-                type="button"
-                aria-pressed={viewMode === 'editorial'}
-                onClick={() => setViewMode('editorial')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap cursor-pointer ${
-                  viewMode === 'editorial'
-                    ? 'bg-white dark:bg-[#14233E] text-[#070B14] dark:text-[#F1F5F9] shadow-xs'
-                    : 'text-[#475569] dark:text-[#94A3B8] hover:text-[#070B14] dark:hover:text-[#F1F5F9]'
-                }`}
-              >
-                <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Tạp Chí Chi Tiết</span>
-              </button>
             </div>
           </div>
         </div>
@@ -263,7 +258,6 @@ export function GallerySection({
             data-gallery-card="true"
             className="lg:col-span-12 soft-card rounded-3xl overflow-hidden border border-[#1B3358]/70 dark:border-[#1E355A] bg-gradient-to-br from-[#060E1D] via-[#05080F] to-[#081529] text-white grid grid-cols-1 lg:grid-cols-12 items-stretch"
           >
-            {/* Spacious Cinema Video Viewport */}
             <div className="lg:col-span-7 relative min-h-[380px] sm:min-h-[470px] lg:min-h-[520px] bg-[#03060D] flex items-center justify-center overflow-hidden">
               <div
                 aria-hidden="true"
@@ -309,7 +303,6 @@ export function GallerySection({
               )}
             </div>
 
-            {/* Generous Curatorial Studio Narrative Panel */}
             <figcaption className="lg:col-span-5 p-6 sm:p-9 lg:p-10 flex flex-col justify-between gap-6 border-t lg:border-t-0 lg:border-l border-[#182740]">
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-[#38BDF8] font-medium">
@@ -425,102 +418,115 @@ export function GallerySection({
             Xem Toàn Bộ ({counts.all} Tác Phẩm)
           </button>
         </div>
-      ) : viewMode === 'masonry' ? (
-        /* Museum Natural-Aspect Masonry View */
-        <div id="gallery-grid" className="columns-1 sm:columns-2 lg:columns-3 gap-5 sm:gap-6">
-          {gridArtworks.map((artwork) => {
-            const isVideo = artwork.mediaType === 'video';
-            const hasFailed = failedImages[artwork.id];
-            const thumbSrc = artwork.posterSrc || artwork.src;
-
-            return (
-              <figure
-                key={artwork.id}
-                data-gallery-card="true"
-                className="break-inside-avoid mb-5 sm:mb-6 group relative rounded-2xl overflow-hidden border border-[#DCE6F2] dark:border-[#182740] bg-[#060C18] shadow-[0_12px_30px_-18px_rgba(10,25,47,0.22)] hover:shadow-[0_20px_42px_-16px_rgba(2,132,199,0.28)] hover:border-[#0284C7]/60 dark:hover:border-[#38BDF8]/60 transition-all duration-300"
-              >
-                <button
-                  type="button"
-                  onClick={() => onSelectArtwork(artwork, visibleArtworks)}
-                  aria-label={`Xem chi tiết tác phẩm ${artwork.title}`}
-                  className="relative w-full block text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38BDF8]"
-                >
-                  {hasFailed ? (
-                    <div className="aspect-[4/3] w-full flex flex-col items-center justify-center p-6 text-center bg-gradient-to-br from-[#0A192F] to-[#05080F] text-[#F1F5F9]">
-                      <p className="font-display text-xl font-semibold">{artwork.title}</p>
-                      <p className="text-xs text-[#94A3B8] mt-1">{artwork.specs.format}</p>
-                    </div>
-                  ) : (
-                    <img
-                      src={thumbSrc}
-                      alt={artwork.alt}
-                      width={artwork.width}
-                      height={artwork.height}
-                      loading="eager"
-                      decoding="async"
-                      referrerPolicy="no-referrer"
-                      onError={() =>
-                        setFailedImages((prev) => ({ ...prev, [artwork.id]: true }))
-                      }
-                      className="w-full h-auto block transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.03]"
-                    />
-                  )}
-
-                  {/* Measured Bottom Contrast Scrim for Crisp Caption Legibility */}
-                  <div className="absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-[#030712]/95 via-[#061224]/62 to-transparent pointer-events-none" />
-
-                  <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                    {isVideo && (
-                      <span className="w-8 h-8 rounded-full bg-[#0284C7]/90 text-white border border-white/30 flex items-center justify-center shadow-md">
-                        <Play className="w-3.5 h-3.5 ml-0.5" aria-hidden="true" />
-                      </span>
-                    )}
-                    <span className="w-8 h-8 rounded-full bg-[#05080F]/65 backdrop-blur-md border border-[#38BDF8]/35 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-200">
-                      <Expand className="w-3.5 h-3.5" aria-hidden="true" />
-                    </span>
-                  </div>
-
-                  <figcaption className="absolute inset-x-0 bottom-0 p-4 sm:p-5 text-white space-y-1">
-                    <div className="flex items-center gap-1.5 text-[11px] text-[#7DD3FC] font-medium">
-                      <span className="truncate">{artwork.categoryLabel}</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="font-mono tabular-nums text-slate-300 shrink-0">
-                        {artwork.year}
-                      </span>
-                    </div>
-                    <h2 className="font-display text-lg sm:text-xl font-semibold leading-snug text-white line-clamp-2">
-                      {artwork.title}
-                    </h2>
-                  </figcaption>
-                </button>
-              </figure>
-            );
-          })}
-        </div>
-      ) : (
-        /* Editorial Story Card View */
+      ) : galleryTemplate === 'modern' ? (
+        /* 1. HIỆN ĐẠI — Khung Bento 12 Cột Chuẩn Mực (8+4 & 4+4+4) */
         <div
           id="gallery-grid"
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6"
+          data-template="modern"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-5 sm:gap-6"
         >
-          {gridArtworks.map((artwork) => {
+          {gridArtworks.map((artwork, index) => {
             const isVideo = artwork.mediaType === 'video';
             const hasFailed = failedImages[artwork.id];
+            const thumbSrc = artwork.posterSrc || artwork.src;
+            const isLeadSlot = index % 5 === 0;
             const objectPosClass =
               artwork.objectPosition === 'center' ? 'object-center' : 'object-top';
-            const thumbSrc = artwork.posterSrc || artwork.src;
+            const spanClass = isLeadSlot
+              ? 'sm:col-span-2 lg:col-span-8'
+              : 'sm:col-span-1 lg:col-span-4';
+
+            if (isLeadSlot && artwork.aspectType === 'portrait') {
+              return (
+                <figure
+                  key={artwork.id}
+                  data-gallery-card="true"
+                  className={`${spanClass} soft-card group rounded-3xl overflow-hidden border border-[#DCE6F2] dark:border-[#182740] bg-white/95 dark:bg-[#0B1220]/95 hover:border-[#0284C7]/60 dark:hover:border-[#38BDF8]/60 grid grid-cols-1 sm:grid-cols-12`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onSelectArtwork(artwork, visibleArtworks)}
+                    aria-label={`Xem chi tiết tác phẩm ${artwork.title}`}
+                    className="relative sm:col-span-6 min-h-[280px] sm:min-h-[360px] overflow-hidden bg-[#060C18] text-left cursor-pointer"
+                  >
+                    {hasFailed ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-gradient-to-br from-[#0A192F] to-[#05080F] text-[#F1F5F9]">
+                        <p className="font-display text-xl font-semibold">{artwork.title}</p>
+                        <p className="text-xs text-[#94A3B8] mt-1">{artwork.specs.format}</p>
+                      </div>
+                    ) : (
+                      <img
+                        src={thumbSrc}
+                        alt={artwork.alt}
+                        width={artwork.width}
+                        height={artwork.height}
+                        loading={index < 6 ? 'eager' : 'lazy'}
+                        decoding="async"
+                        referrerPolicy="no-referrer"
+                        onError={() =>
+                          setFailedImages((prev) => ({ ...prev, [artwork.id]: true }))
+                        }
+                        className={`w-full h-full object-cover ${objectPosClass} transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.03]`}
+                      />
+                    )}
+                    <span className="absolute top-3.5 right-3.5 w-9 h-9 rounded-full bg-[#05080F]/65 backdrop-blur-md border border-[#38BDF8]/35 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <Expand className="w-4 h-4" aria-hidden="true" />
+                    </span>
+                  </button>
+
+                  <figcaption className="sm:col-span-6 p-6 sm:p-7 flex flex-col justify-between gap-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="font-medium text-[#0369A1] dark:text-[#38BDF8] truncate">
+                          {artwork.categoryLabel}
+                        </span>
+                        <span className="font-mono tabular-nums text-[#64748B] dark:text-[#94A3B8] shrink-0">
+                          {artwork.year}
+                        </span>
+                      </div>
+                      <h2 className="font-display text-2xl sm:text-3xl font-semibold text-[#070B14] dark:text-[#F1F5F9] leading-snug">
+                        <button
+                          type="button"
+                          onClick={() => onSelectArtwork(artwork, visibleArtworks)}
+                          className="text-left hover:text-[#0284C7] dark:hover:text-[#38BDF8] transition-colors cursor-pointer"
+                        >
+                          {artwork.title}
+                        </button>
+                      </h2>
+                      <p className="text-xs font-medium text-[#475569] dark:text-[#94A3B8]">
+                        {artwork.subtitle}
+                      </p>
+                      <p className="text-xs sm:text-sm text-[#475569] dark:text-[#94A3B8] leading-relaxed line-clamp-4">
+                        {artwork.story}
+                      </p>
+                    </div>
+
+                    <div className="pt-4 border-t border-[#E9F0F8] dark:border-[#152339] flex items-center justify-between gap-2 text-xs text-[#475569] dark:text-[#94A3B8]">
+                      <span className="font-mono truncate">{artwork.specs.fileSize}</span>
+                      <button
+                        type="button"
+                        onClick={() => onSelectArtwork(artwork, visibleArtworks)}
+                        className="font-semibold text-[#0369A1] dark:text-[#38BDF8] hover:underline whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        Mở Khung Hình →
+                      </button>
+                    </div>
+                  </figcaption>
+                </figure>
+              );
+            }
 
             return (
               <figure
                 key={artwork.id}
                 data-gallery-card="true"
-                className="soft-card group flex flex-col justify-between rounded-2xl overflow-hidden border border-[#DCE6F2] dark:border-[#182740] bg-white/95 dark:bg-[#0B1220]/95 hover:border-[#0284C7]/60 dark:hover:border-[#38BDF8]/60"
+                className={`${spanClass} group relative rounded-3xl overflow-hidden border border-[#DCE6F2] dark:border-[#182740] bg-[#060C18] shadow-[0_12px_30px_-18px_rgba(10,25,47,0.22)] hover:shadow-[0_20px_42px_-16px_rgba(2,132,199,0.28)] hover:border-[#0284C7]/60 dark:hover:border-[#38BDF8]/60 transition-all duration-300`}
               >
                 <button
                   type="button"
                   onClick={() => onSelectArtwork(artwork, visibleArtworks)}
                   aria-label={`Xem chi tiết tác phẩm ${artwork.title}`}
-                  className="relative w-full aspect-[4/3] overflow-hidden bg-[#060B14] block text-left cursor-pointer"
+                  className="relative w-full h-[300px] sm:h-[340px] lg:h-[360px] block text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38BDF8]"
                 >
                   {hasFailed ? (
                     <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-gradient-to-br from-[#0A192F] to-[#05080F] text-[#F1F5F9]">
@@ -533,7 +539,7 @@ export function GallerySection({
                       alt={artwork.alt}
                       width={artwork.width}
                       height={artwork.height}
-                      loading="eager"
+                      loading={index < 6 ? 'eager' : 'lazy'}
                       decoding="async"
                       referrerPolicy="no-referrer"
                       onError={() =>
@@ -543,7 +549,258 @@ export function GallerySection({
                     />
                   )}
 
-                  <span className="absolute top-3.5 right-3.5 w-9 h-9 rounded-full bg-[#05080F]/65 backdrop-blur-md border border-[#38BDF8]/35 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-[#030712]/95 via-[#061224]/65 to-transparent pointer-events-none" />
+
+                  <div className="absolute top-3.5 right-3.5 flex items-center gap-1.5">
+                    {isVideo && (
+                      <span className="w-8 h-8 rounded-full bg-[#0284C7]/90 text-white border border-white/30 flex items-center justify-center shadow-md">
+                        <Play className="w-3.5 h-3.5 ml-0.5" aria-hidden="true" />
+                      </span>
+                    )}
+                    <span className="w-8 h-8 rounded-full bg-[#05080F]/65 backdrop-blur-md border border-[#38BDF8]/35 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-200">
+                      <Expand className="w-3.5 h-3.5" aria-hidden="true" />
+                    </span>
+                  </div>
+
+                  <figcaption className="absolute inset-x-0 bottom-0 p-5 sm:p-6 text-white space-y-1.5">
+                    <div className="flex items-center gap-2 text-[11px] text-[#7DD3FC] font-medium">
+                      <span className="truncate">{artwork.categoryLabel}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="font-mono tabular-nums text-slate-300 shrink-0">
+                        {artwork.specs.aspect}
+                      </span>
+                    </div>
+                    <h2
+                      className={`font-display font-semibold leading-snug text-white ${
+                        isLeadSlot ? 'text-2xl sm:text-3xl' : 'text-lg sm:text-xl'
+                      }`}
+                    >
+                      {artwork.title}
+                    </h2>
+                    {isLeadSlot && (
+                      <p className="text-xs sm:text-sm text-slate-200 line-clamp-2 max-w-xl">
+                        {artwork.story}
+                      </p>
+                    )}
+                  </figcaption>
+                </button>
+              </figure>
+            );
+          })}
+        </div>
+      ) : galleryTemplate === 'classical' ? (
+        /* 2. CỔ TRANG — Họa Đường Thủy Mặc, Tranh Cuộn Khung Kép & Lạc Khoản */
+        <div
+          id="gallery-grid"
+          data-template="classical"
+          className="space-y-8 max-w-5xl mx-auto"
+        >
+          {gridArtworks.map((artwork, index) => {
+            const hasFailed = failedImages[artwork.id];
+            const thumbSrc = artwork.posterSrc || artwork.src;
+            const plateNum = String(index + 1).padStart(2, '0');
+
+            return (
+              <figure
+                key={artwork.id}
+                data-gallery-card="true"
+                className="rounded-3xl border-2 border-[#CBB58D] dark:border-[#4F3B24] bg-[#FBF6EC] dark:bg-[#120E0B] p-2 sm:p-3 shadow-[0_18px_48px_-22px_rgba(92,61,32,0.22)]"
+              >
+                <div className="rounded-2xl border border-[#DFCDAE] dark:border-[#3A2B1B] grid grid-cols-1 lg:grid-cols-12 items-stretch overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => onSelectArtwork(artwork, visibleArtworks)}
+                    aria-label={`Xem chi tiết tác phẩm ${artwork.title}`}
+                    className="lg:col-span-7 relative min-h-[260px] sm:min-h-[340px] bg-[#140F0B] flex items-center justify-center p-5 sm:p-7 cursor-pointer group"
+                  >
+                    <div className="p-1.5 border-2 border-[#B48332]/80 rounded-xl bg-[#0D0906]">
+                      {hasFailed ? (
+                        <div className="aspect-[4/3] w-64 flex flex-col items-center justify-center p-6 text-center text-[#F5E6D0]">
+                          <p className="font-display text-xl">{artwork.title}</p>
+                        </div>
+                      ) : (
+                        <img
+                          src={thumbSrc}
+                          alt={artwork.alt}
+                          width={artwork.width}
+                          height={artwork.height}
+                          loading={index < 6 ? 'eager' : 'lazy'}
+                          decoding="async"
+                          referrerPolicy="no-referrer"
+                          onError={() =>
+                            setFailedImages((prev) => ({ ...prev, [artwork.id]: true }))
+                          }
+                          className="max-h-[360px] w-auto max-w-full object-contain rounded-lg transition-transform duration-500 group-hover:scale-[1.02]"
+                        />
+                      )}
+                    </div>
+                  </button>
+
+                  <figcaption className="lg:col-span-5 p-6 sm:p-8 flex flex-col justify-between gap-5 border-t lg:border-t-0 lg:border-l border-[#DFCDAE] dark:border-[#3A2B1B]">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="px-2.5 py-0.5 border border-[#9E2A2B] dark:border-[#E05252] text-[#9E2A2B] dark:text-[#F4B860] font-mono text-[11px] font-bold">
+                          HỒI {plateNum} · {artwork.year}
+                        </span>
+                        <span className="font-mono text-xs text-[#6E533B] dark:text-[#C8B29A]">
+                          {artwork.specs.aspect}
+                        </span>
+                      </div>
+
+                      <h2 className="font-display text-2xl sm:text-3xl font-semibold text-[#2A1B12] dark:text-[#F5E6D0] leading-snug">
+                        <button
+                          type="button"
+                          onClick={() => onSelectArtwork(artwork, visibleArtworks)}
+                          className="text-left hover:text-[#9E2A2B] dark:hover:text-[#F4B860] transition-colors cursor-pointer"
+                        >
+                          {artwork.title}
+                        </button>
+                      </h2>
+                      <p className="font-display italic text-sm text-[#9E2A2B] dark:text-[#D4A359]">
+                        {artwork.subtitle}
+                      </p>
+                      <p className="text-xs sm:text-sm text-[#5C4633] dark:text-[#C8B29A] leading-[1.8]">
+                        {artwork.story}
+                      </p>
+                    </div>
+
+                    <div className="pt-4 border-t border-[#DFCDAE] dark:border-[#3A2B1B] flex items-center justify-between gap-2 text-xs">
+                      <span className="font-mono text-[#6E533B] dark:text-[#C8B29A] truncate">
+                        {artwork.specs.fileSize}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onSelectArtwork(artwork, visibleArtworks)}
+                        className="font-semibold text-[#8B2324] dark:text-[#F4B860] hover:underline whitespace-nowrap cursor-pointer"
+                      >
+                        Thưởng Lãm Chi Tiết →
+                      </button>
+                    </div>
+                  </figcaption>
+                </div>
+              </figure>
+            );
+          })}
+        </div>
+      ) : galleryTemplate === 'introvert' ? (
+        /* 3. HƯỚNG NỘI — Phòng Tranh Tĩnh Lặng Một Dải Thưa Khoảng Trắng */
+        <div
+          id="gallery-grid"
+          data-template="introvert"
+          className="max-w-3xl mx-auto space-y-12"
+        >
+          {gridArtworks.map((artwork, index) => {
+            const hasFailed = failedImages[artwork.id];
+            const thumbSrc = artwork.posterSrc || artwork.src;
+
+            return (
+              <figure
+                key={artwork.id}
+                data-gallery-card="true"
+                className="space-y-4 pb-10 border-b border-[#E2E8F0] dark:border-[#1E293B] last:border-b-0"
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelectArtwork(artwork, visibleArtworks)}
+                  aria-label={`Xem chi tiết tác phẩm ${artwork.title}`}
+                  className="w-full rounded-2xl overflow-hidden bg-[#0D1117] border border-[#E2E8F0] dark:border-[#1E293B] flex items-center justify-center p-3 sm:p-5 cursor-pointer group"
+                >
+                  {hasFailed ? (
+                    <div className="aspect-[4/3] w-full flex items-center justify-center text-[#94A3B8]">
+                      {artwork.title}
+                    </div>
+                  ) : (
+                    <img
+                      src={thumbSrc}
+                      alt={artwork.alt}
+                      width={artwork.width}
+                      height={artwork.height}
+                      loading={index < 4 ? 'eager' : 'lazy'}
+                      decoding="async"
+                      referrerPolicy="no-referrer"
+                      onError={() =>
+                        setFailedImages((prev) => ({ ...prev, [artwork.id]: true }))
+                      }
+                      className="max-h-[540px] w-auto max-w-full object-contain rounded-xl transition-transform duration-500 group-hover:scale-[1.015]"
+                    />
+                  )}
+                </button>
+
+                <figcaption className="space-y-2 px-1">
+                  <div className="flex items-center justify-between gap-2 text-xs font-mono text-[#64748B] dark:text-[#94A3B8]">
+                    <span>
+                      0{index + 1}. {artwork.categoryLabel}
+                    </span>
+                    <span>
+                      {artwork.year} · {artwork.specs.fileSize}
+                    </span>
+                  </div>
+                  <h2 className="font-display text-2xl sm:text-[26px] font-medium text-[#1E293B] dark:text-[#E2E8F0]">
+                    <button
+                      type="button"
+                      onClick={() => onSelectArtwork(artwork, visibleArtworks)}
+                      className="text-left hover:text-[#0284C7] dark:hover:text-[#38BDF8] transition-colors cursor-pointer"
+                    >
+                      {artwork.title}
+                    </button>
+                  </h2>
+                  <p className="text-sm text-[#475569] dark:text-[#94A3B8] leading-[1.8]">
+                    {artwork.story}
+                  </p>
+                </figcaption>
+              </figure>
+            );
+          })}
+        </div>
+      ) : galleryTemplate === 'extrovert' ? (
+        /* 4. HƯỚNG NGOẠI — Sân Khấu Ảnh Lớn Đầy Năng Lượng */
+        <div
+          id="gallery-grid"
+          data-template="extrovert"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+        >
+          {gridArtworks.map((artwork, index) => {
+            const isVideo = artwork.mediaType === 'video';
+            const hasFailed = failedImages[artwork.id];
+            const objectPosClass =
+              artwork.objectPosition === 'center' ? 'object-center' : 'object-top';
+            const thumbSrc = artwork.posterSrc || artwork.src;
+            const isWideStage = index % 4 === 0 && artwork.aspectType === 'landscape';
+
+            return (
+              <figure
+                key={artwork.id}
+                data-gallery-card="true"
+                className={`group flex flex-col justify-between rounded-3xl overflow-hidden border border-[#BFDBFE] dark:border-[#1E3A5F] bg-white dark:bg-[#0B1220] shadow-[0_18px_40px_-20px_rgba(29,78,216,0.28)] ${
+                  isWideStage ? 'md:col-span-2' : ''
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelectArtwork(artwork, visibleArtworks)}
+                  aria-label={`Xem chi tiết tác phẩm ${artwork.title}`}
+                  className="relative w-full h-[280px] sm:h-[320px] overflow-hidden bg-[#060B14] block text-left cursor-pointer"
+                >
+                  {hasFailed ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center text-white">
+                      <p className="font-display text-xl font-bold">{artwork.title}</p>
+                    </div>
+                  ) : (
+                    <img
+                      src={thumbSrc}
+                      alt={artwork.alt}
+                      width={artwork.width}
+                      height={artwork.height}
+                      loading={index < 6 ? 'eager' : 'lazy'}
+                      decoding="async"
+                      referrerPolicy="no-referrer"
+                      onError={() =>
+                        setFailedImages((prev) => ({ ...prev, [artwork.id]: true }))
+                      }
+                      className={`w-full h-full object-cover ${objectPosClass} transition-transform duration-500 group-hover:scale-[1.04]`}
+                    />
+                  )}
+                  <span className="absolute top-3.5 right-3.5 w-9 h-9 rounded-full bg-[#0284C7] text-white flex items-center justify-center shadow-lg opacity-90 group-hover:opacity-100">
                     {isVideo ? (
                       <Play className="w-4 h-4 ml-0.5" aria-hidden="true" />
                     ) : (
@@ -552,37 +809,180 @@ export function GallerySection({
                   </span>
                 </button>
 
-                <figcaption className="p-5 sm:p-6 space-y-2.5 flex-1 flex flex-col justify-between">
+                <figcaption className="p-5 sm:p-6 space-y-2.5 flex-1 flex flex-col justify-between bg-gradient-to-b from-white to-[#F4F8FF] dark:from-[#0B1220] dark:to-[#08101D]">
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-xs text-[#475569] dark:text-[#94A3B8] whitespace-nowrap overflow-hidden">
-                      <span className="text-[#0369A1] dark:text-[#38BDF8] font-medium truncate">
+                    <div className="flex items-center justify-between gap-2 text-xs font-mono">
+                      <span className="font-bold text-[#1D4ED8] dark:text-[#38BDF8] truncate">
                         {artwork.categoryLabel}
                       </span>
-                      <span aria-hidden="true">·</span>
-                      <span className="font-mono tabular-nums shrink-0">
-                        {artwork.specs.aspect}
+                      <span className="text-[#475569] dark:text-[#94A3B8] shrink-0">
+                        {artwork.year}
                       </span>
                     </div>
-
-                    <h2 className="font-display text-xl sm:text-[22px] font-semibold text-[#070B14] dark:text-[#F1F5F9] leading-snug">
+                    <h2 className="font-display text-xl sm:text-2xl font-bold text-[#070B14] dark:text-white leading-snug">
                       <button
                         type="button"
                         onClick={() => onSelectArtwork(artwork, visibleArtworks)}
-                        className="text-left hover:text-[#0284C7] dark:hover:text-[#38BDF8] transition-colors cursor-pointer"
+                        className="text-left hover:text-[#1D4ED8] dark:hover:text-[#38BDF8] transition-colors cursor-pointer"
                       >
                         {artwork.title}
                       </button>
                     </h2>
-
-                    <p className="text-xs sm:text-sm text-[#475569] dark:text-[#94A3B8] leading-relaxed line-clamp-3">
+                    <p className="text-xs sm:text-sm text-[#334155] dark:text-[#CBD5E1] leading-relaxed line-clamp-3">
                       {artwork.story}
                     </p>
                   </div>
 
-                  <div className="pt-3.5 mt-3 border-t border-[#E9F0F8] dark:border-[#152339] flex items-center justify-between text-xs text-[#475569] dark:text-[#94A3B8]">
-                    <span className="truncate">{artwork.specs.fileSize}</span>
-                    <span className="font-mono tabular-nums shrink-0 ml-2">{artwork.year}</span>
+                  <div className="pt-3 border-t border-[#DBEAFE] dark:border-[#1E3A5F] flex items-center justify-between text-xs font-mono text-[#0369A1] dark:text-[#7DD3FC]">
+                    <span>{artwork.specs.fileSize}</span>
+                    <span>{artwork.specs.aspect}</span>
                   </div>
+                </figcaption>
+              </figure>
+            );
+          })}
+        </div>
+      ) : galleryTemplate === 'youthful' ? (
+        /* 5. TRẺ TRUNG — Lưới Cắt Dán Phá Cách Tự Nhiên + Viền Offset */
+        <div
+          id="gallery-grid"
+          data-template="youthful"
+          className="columns-1 sm:columns-2 lg:columns-3 gap-5 sm:gap-6"
+        >
+          {gridArtworks.map((artwork, index) => {
+            const isVideo = artwork.mediaType === 'video';
+            const hasFailed = failedImages[artwork.id];
+            const thumbSrc = artwork.posterSrc || artwork.src;
+
+            return (
+              <figure
+                key={artwork.id}
+                data-gallery-card="true"
+                className="break-inside-avoid mb-5 sm:mb-6 group rounded-2xl overflow-hidden border-2 border-[#0F172A] dark:border-[#2DD4BF]/60 bg-white dark:bg-[#0B1220] shadow-[6px_6px_0px_#2563EB] dark:shadow-[6px_6px_0px_#0D9488]"
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelectArtwork(artwork, visibleArtworks)}
+                  aria-label={`Xem chi tiết tác phẩm ${artwork.title}`}
+                  className="relative w-full block text-left cursor-pointer overflow-hidden"
+                >
+                  {hasFailed ? (
+                    <div className="aspect-[4/3] w-full flex flex-col items-center justify-center p-6 text-center bg-[#0B1220] text-white">
+                      <p className="font-display text-xl font-bold">{artwork.title}</p>
+                    </div>
+                  ) : (
+                    <img
+                      src={thumbSrc}
+                      alt={artwork.alt}
+                      width={artwork.width}
+                      height={artwork.height}
+                      loading={index < 6 ? 'eager' : 'lazy'}
+                      decoding="async"
+                      referrerPolicy="no-referrer"
+                      onError={() =>
+                        setFailedImages((prev) => ({ ...prev, [artwork.id]: true }))
+                      }
+                      className="w-full h-auto block transition-transform duration-500 group-hover:scale-[1.03]"
+                    />
+                  )}
+                  <span className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-[#2563EB] dark:bg-[#0D9488] text-white font-mono text-[11px] font-bold shadow">
+                    #{String(index + 1).padStart(2, '0')}
+                  </span>
+                  {isVideo && (
+                    <span className="absolute top-3 right-3 w-8 h-8 rounded-full bg-[#0F172A] text-white flex items-center justify-center">
+                      <Play className="w-3.5 h-3.5 ml-0.5" aria-hidden="true" />
+                    </span>
+                  )}
+                </button>
+
+                <figcaption className="p-4 sm:p-5 space-y-1.5 bg-white dark:bg-[#0B1220] border-t-2 border-[#0F172A] dark:border-[#1E3A5F]">
+                  <div className="flex items-center justify-between text-[11px] font-mono font-bold text-[#0D9488] dark:text-[#2DD4BF]">
+                    <span className="truncate">{artwork.categoryLabel}</span>
+                    <span className="shrink-0">{artwork.year}</span>
+                  </div>
+                  <h2 className="font-display text-lg sm:text-xl font-bold text-[#0F172A] dark:text-white leading-snug">
+                    <button
+                      type="button"
+                      onClick={() => onSelectArtwork(artwork, visibleArtworks)}
+                      className="text-left hover:text-[#2563EB] dark:hover:text-[#38BDF8] transition-colors cursor-pointer"
+                    >
+                      {artwork.title}
+                    </button>
+                  </h2>
+                </figcaption>
+              </figure>
+            );
+          })}
+        </div>
+      ) : (
+        /* 6. HOÀI CỔ — Cuộn Phim 35mm & Thẻ Ảnh Polaroid Lưu Trữ */
+        <div
+          id="gallery-grid"
+          data-template="retro"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+        >
+          {gridArtworks.map((artwork, index) => {
+            const hasFailed = failedImages[artwork.id];
+            const objectPosClass =
+              artwork.objectPosition === 'center' ? 'object-center' : 'object-top';
+            const thumbSrc = artwork.posterSrc || artwork.src;
+            const frameCode = `EXP #${String(index + 1).padStart(2, '0')}A`;
+
+            return (
+              <figure
+                key={artwork.id}
+                data-gallery-card="true"
+                className="group p-3.5 pb-6 rounded-sm border border-[#D4C3A3] dark:border-[#4A3B2C] bg-[#FDF9F0] dark:bg-[#1E1812] shadow-[0_14px_30px_-18px_rgba(67,40,24,0.35)] flex flex-col justify-between gap-4"
+              >
+                <div className="flex items-center justify-between font-mono text-[10px] font-bold tracking-widest text-[#92400E] dark:text-[#FBBF24]">
+                  <span>{frameCode} · 35MM ARCHIVE</span>
+                  <span>{artwork.specs.aspect}</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => onSelectArtwork(artwork, visibleArtworks)}
+                  aria-label={`Xem chi tiết tác phẩm ${artwork.title}`}
+                  className="relative aspect-[4/3] w-full overflow-hidden bg-[#16120E] border border-[#D4C3A3] dark:border-[#3A2D20] block cursor-pointer"
+                >
+                  {hasFailed ? (
+                    <div className="w-full h-full flex items-center justify-center p-4 text-center text-[#F3E5D0]">
+                      {artwork.title}
+                    </div>
+                  ) : (
+                    <img
+                      src={thumbSrc}
+                      alt={artwork.alt}
+                      width={artwork.width}
+                      height={artwork.height}
+                      loading={index < 6 ? 'eager' : 'lazy'}
+                      decoding="async"
+                      referrerPolicy="no-referrer"
+                      onError={() =>
+                        setFailedImages((prev) => ({ ...prev, [artwork.id]: true }))
+                      }
+                      className={`w-full h-full object-cover ${objectPosClass} sepia-[.18] group-hover:sepia-0 transition-all duration-500 group-hover:scale-[1.03]`}
+                    />
+                  )}
+                </button>
+
+                <figcaption className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between gap-2 font-mono text-[11px] text-[#785535] dark:text-[#D6B89C]">
+                    <span className="truncate">{artwork.categoryLabel}</span>
+                    <span className="shrink-0">{artwork.year}</span>
+                  </div>
+                  <h2 className="font-display text-xl font-bold text-[#2C1810] dark:text-[#F5E6D3] leading-snug">
+                    <button
+                      type="button"
+                      onClick={() => onSelectArtwork(artwork, visibleArtworks)}
+                      className="text-left hover:text-[#B45309] dark:hover:text-[#FBBF24] transition-colors cursor-pointer"
+                    >
+                      {artwork.title}
+                    </button>
+                  </h2>
+                  <p className="text-xs text-[#5C3D2E] dark:text-[#D6B89C] leading-relaxed line-clamp-2">
+                    {artwork.story}
+                  </p>
                 </figcaption>
               </figure>
             );

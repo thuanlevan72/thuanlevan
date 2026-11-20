@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { CvSourceData } from './portfolioLogic.ts';
+import { CvSourceData, CvTemplateId } from './portfolioLogic.ts';
 
 interface FontAssetsCache {
   serifBoldBase64: string;
@@ -309,8 +309,9 @@ function measureMixedBulletHeight(
 
 export async function downloadPortfolioCvPdf(
   data: CvSourceData,
-  options: { portraitSrc?: string; summaryParagraph: string }
+  options: { portraitSrc?: string; summaryParagraph: string; template?: CvTemplateId }
 ): Promise<string> {
+  const activeTemplate: CvTemplateId = options.template ?? 'modern';
   const { profile, metrics, projects, skillGroups, aiAgents } = data;
   const [fonts, brandLogoDataUrl, portraitDataUrl] = await Promise.all([
     loadCvFonts(),
@@ -324,7 +325,7 @@ export async function downloadPortfolioCvPdf(
       ? loadRoundedImageDataUrl(options.portraitSrc, {
           width: 420,
           height: 525,
-          radius: 44,
+          radius: activeTemplate === 'retro' ? 12 : 44,
           alignTop: true,
           bgColor: '#0A192F',
         })
@@ -359,25 +360,137 @@ export async function downloadPortfolioCvPdf(
   const contentWidth = pageWidth - marginX * 2;
   const bottomLimit = pageHeight - 15;
 
-  const colors = {
-    navy: [10, 25, 47] as const,
-    cobalt: [29, 78, 216] as const,
-    ocean: [3, 105, 161] as const,
-    oceanBright: [2, 132, 199] as const,
-    ink: [7, 11, 20] as const,
-    bodyDark: [51, 65, 85] as const,
-    muted: [71, 85, 105] as const,
-    softBg: [245, 248, 252] as const,
-    border: [220, 230, 242] as const,
-    hairline: [233, 240, 248] as const,
+  const palettes: Record<
+    CvTemplateId,
+    {
+      pageBg: readonly [number, number, number] | null;
+      navy: readonly [number, number, number];
+      cobalt: readonly [number, number, number];
+      ocean: readonly [number, number, number];
+      ink: readonly [number, number, number];
+      bodyDark: readonly [number, number, number];
+      muted: readonly [number, number, number];
+      softBg: readonly [number, number, number];
+      border: readonly [number, number, number];
+      hairline: readonly [number, number, number];
+    }
+  > = {
+    modern: {
+      pageBg: null,
+      navy: [10, 25, 47],
+      cobalt: [29, 78, 216],
+      ocean: [3, 105, 161],
+      ink: [7, 11, 20],
+      bodyDark: [51, 65, 85],
+      muted: [71, 85, 105],
+      softBg: [245, 248, 252],
+      border: [220, 230, 242],
+      hairline: [233, 240, 248],
+    },
+    classical: {
+      pageBg: [251, 246, 236],
+      navy: [42, 27, 18],
+      cobalt: [158, 42, 43],
+      ocean: [154, 107, 47],
+      ink: [42, 27, 18],
+      bodyDark: [74, 54, 37],
+      muted: [92, 70, 51],
+      softBg: [245, 236, 218],
+      border: [203, 181, 141],
+      hairline: [223, 205, 174],
+    },
+    introvert: {
+      pageBg: null,
+      navy: [30, 41, 59],
+      cobalt: [51, 65, 85],
+      ocean: [71, 85, 105],
+      ink: [15, 23, 42],
+      bodyDark: [51, 65, 85],
+      muted: [100, 116, 139],
+      softBg: [248, 250, 252],
+      border: [226, 232, 240],
+      hairline: [226, 232, 240],
+    },
+    extrovert: {
+      pageBg: null,
+      navy: [10, 25, 47],
+      cobalt: [29, 78, 216],
+      ocean: [2, 132, 199],
+      ink: [7, 11, 20],
+      bodyDark: [30, 41, 59],
+      muted: [71, 85, 105],
+      softBg: [240, 247, 255],
+      border: [191, 219, 254],
+      hairline: [219, 234, 254],
+    },
+    youthful: {
+      pageBg: null,
+      navy: [15, 23, 42],
+      cobalt: [37, 99, 235],
+      ocean: [13, 148, 136],
+      ink: [15, 23, 42],
+      bodyDark: [51, 65, 85],
+      muted: [71, 85, 105],
+      softBg: [244, 251, 250],
+      border: [153, 246, 228],
+      hairline: [204, 251, 241],
+    },
+    retro: {
+      pageBg: [244, 236, 216],
+      navy: [67, 40, 24],
+      cobalt: [180, 83, 9],
+      ocean: [146, 64, 14],
+      ink: [44, 24, 16],
+      bodyDark: [92, 61, 46],
+      muted: [110, 78, 56],
+      softBg: [250, 244, 230],
+      border: [166, 123, 91],
+      hairline: [212, 195, 163],
+    },
+  };
+
+  const colors = palettes[activeTemplate];
+
+  const decoratePageCanvas = (isFirstPage = false) => {
+    if (colors.pageBg) {
+      doc.setFillColor(...colors.pageBg);
+      doc.rect(0, 0, pageWidth, pageHeight, 'F');
+    }
+    if (activeTemplate === 'classical') {
+      doc.setDrawColor(180, 131, 50);
+      doc.setLineWidth(0.5);
+      doc.rect(7, 7, pageWidth - 14, pageHeight - 14, 'S');
+      doc.setDrawColor(158, 42, 43);
+      doc.setLineWidth(0.2);
+      doc.rect(8.6, 8.6, pageWidth - 17.2, pageHeight - 17.2, 'S');
+    } else if (activeTemplate === 'retro') {
+      doc.setDrawColor(166, 123, 91);
+      doc.setLineWidth(0.4);
+      doc.rect(8, 8, pageWidth - 16, pageHeight - 16, 'S');
+    } else if (activeTemplate === 'introvert') {
+      doc.setFillColor(...colors.navy);
+      doc.rect(0, 0, pageWidth, 1.2, 'F');
+    } else if (activeTemplate === 'youthful') {
+      doc.setFillColor(37, 99, 235);
+      doc.rect(0, 0, pageWidth * 0.6, 2.4, 'F');
+      doc.setFillColor(13, 148, 136);
+      doc.rect(pageWidth * 0.6, 0, pageWidth * 0.4, 2.4, 'F');
+    } else if (isFirstPage && activeTemplate === 'extrovert') {
+      doc.setFillColor(10, 25, 47);
+      doc.rect(0, 0, pageWidth, 56, 'F');
+      doc.setFillColor(2, 132, 199);
+      doc.rect(0, 56, pageWidth, 1.6, 'F');
+    } else {
+      drawTopGradientStrip(doc, pageWidth, isFirstPage ? 2.6 : 1.8);
+    }
   };
 
   let cursorY = 12;
 
   const startNewPage = () => {
     doc.addPage();
-    drawTopGradientStrip(doc, pageWidth, 1.8);
-    cursorY = 14;
+    decoratePageCanvas(false);
+    cursorY = 15;
   };
 
   const ensureSpace = (neededMm: number) => {
@@ -391,7 +504,8 @@ export async function downloadPortfolioCvPdf(
     doc.setFont('JetBrainsMono', 'bold');
     doc.setFontSize(8);
     doc.setTextColor(...colors.ocean);
-    doc.text(title.toUpperCase(), marginX, cursorY);
+    const label = activeTemplate === 'retro' ? `[ ${title.toUpperCase()} ]` : title.toUpperCase();
+    doc.text(label, marginX, cursorY);
     cursorY += 2.2;
     doc.setDrawColor(...colors.hairline);
     doc.setLineWidth(0.35);
@@ -399,24 +513,280 @@ export async function downloadPortfolioCvPdf(
     cursorY += 5.0;
   };
 
-  // Top gradient accent strip matching Web CV sheet
-  drawTopGradientStrip(doc, pageWidth, 2.6);
+  if (activeTemplate === 'modern') {
+    const sideW = 63;
+    const mainX = sideW + 8;
+    const mainW = pageWidth - mainX - 12;
+    const drawSidebarBg = () => {
+      doc.setFillColor(...colors.navy);
+      doc.rect(0, 0, sideW, pageHeight, 'F');
+    };
 
-  // Header block: Candidate details (left) + Rounded Portrait (right)
+    drawSidebarBg();
+    drawTopGradientStrip(doc, pageWidth, 2.2);
+
+    // Sidebar Portrait
+    let sideY = 12;
+    if (portraitDataUrl) {
+      const pW = 28;
+      const pH = 35;
+      const pX = (sideW - pW) / 2;
+      doc.addImage(portraitDataUrl, 'PNG', pX, sideY, pW, pH);
+      doc.setDrawColor(56, 189, 248);
+      doc.setLineWidth(0.35);
+      doc.roundedRect(pX, sideY, pW, pH, 3.2, 3.2, 'S');
+      sideY += pH + 6;
+    }
+
+    const sidePad = 7;
+    const sideInnerW = sideW - sidePad * 2;
+
+    doc.setFont('JetBrainsMono', 'bold');
+    doc.setFontSize(7.2);
+    doc.setTextColor(56, 189, 248);
+    doc.text('LIÊN HỆ', sidePad, sideY);
+    sideY += 4.2;
+
+    const contacts = [
+      profile.phoneFormatted,
+      profile.email,
+      profile.location,
+      'github.com/thuanlevan72',
+    ];
+    for (const c of contacts) {
+      doc.setFont('NotoSans', 'normal');
+      doc.setFontSize(7.2);
+      doc.setTextColor(226, 232, 240);
+      const wrapped = doc.splitTextToSize(c, sideInnerW);
+      doc.text(wrapped, sidePad, sideY, { lineHeightFactor: 1.3 });
+      sideY += wrapped.length * 3.4 + 1.2;
+    }
+
+    sideY += 3;
+    doc.setDrawColor(30, 58, 95);
+    doc.setLineWidth(0.25);
+    doc.line(sidePad, sideY, sideW - sidePad, sideY);
+    sideY += 5;
+
+    doc.setFont('JetBrainsMono', 'bold');
+    doc.setFontSize(7.2);
+    doc.setTextColor(56, 189, 248);
+    doc.text('CHỈ SỐ NỔI BẬT', sidePad, sideY);
+    sideY += 4.5;
+
+    for (const m of metrics) {
+      doc.setFont('JetBrainsMono', 'bold');
+      doc.setFontSize(9.5);
+      doc.setTextColor(255, 255, 255);
+      doc.text(m.value, sidePad, sideY);
+      sideY += 3.6;
+      doc.setFont('NotoSans', 'normal');
+      doc.setFontSize(6.6);
+      doc.setTextColor(148, 163, 184);
+      const ml = doc.splitTextToSize(m.label, sideInnerW);
+      doc.text(ml, sidePad, sideY, { lineHeightFactor: 1.25 });
+      sideY += ml.length * 3.1 + 2.2;
+    }
+
+    sideY += 2;
+    doc.setDrawColor(30, 58, 95);
+    doc.line(sidePad, sideY, sideW - sidePad, sideY);
+    sideY += 5;
+
+    doc.setFont('JetBrainsMono', 'bold');
+    doc.setFontSize(7.2);
+    doc.setTextColor(56, 189, 248);
+    doc.text('KỸ NĂNG CỐT LÕI', sidePad, sideY);
+    sideY += 4.5;
+
+    for (const group of skillGroups) {
+      doc.setFont('NotoSans', 'bold');
+      doc.setFontSize(7.4);
+      doc.setTextColor(248, 250, 252);
+      doc.text(group.title, sidePad, sideY);
+      sideY += 3.4;
+      doc.setFont('JetBrainsMono', 'normal');
+      doc.setFontSize(6.5);
+      doc.setTextColor(148, 163, 184);
+      const itemsText = doc.splitTextToSize(group.items.join(' · '), sideInnerW);
+      doc.text(itemsText, sidePad, sideY, { lineHeightFactor: 1.28 });
+      sideY += itemsText.length * 3.0 + 2.6;
+    }
+
+    // Main Right Column (Name + Summary + Experience + AI Agents)
+    let mainY = 13;
+    const ensureMainSpace = (neededMm: number) => {
+      if (mainY + neededMm > pageHeight - 16) {
+        doc.addPage();
+        drawSidebarBg();
+        drawTopGradientStrip(doc, pageWidth, 1.8);
+        mainY = 14;
+      }
+    };
+
+    doc.setFont('JetBrainsMono', 'bold');
+    doc.setFontSize(7.4);
+    doc.setTextColor(...colors.ocean);
+    doc.text(`HỒ SƠ ỨNG VIÊN · ${profile.birthInfo.toUpperCase()}`, mainX, mainY);
+    mainY += 7.5;
+
+    doc.setFont('NotoSerifDisplay', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(...colors.ink);
+    doc.text(profile.fullLegalName, mainX, mainY);
+    mainY += 5.4;
+
+    doc.setFont('NotoSans', 'bold');
+    doc.setFontSize(9.5);
+    doc.setTextColor(...colors.cobalt);
+    doc.text(profile.role, mainX, mainY);
+    mainY += 5.5;
+
+    doc.setDrawColor(...colors.border);
+    doc.setLineWidth(0.35);
+    doc.line(mainX, mainY, pageWidth - 12, mainY);
+    mainY += 5.5;
+
+    const drawMainHeading = (title: string) => {
+      ensureMainSpace(12);
+      doc.setFont('JetBrainsMono', 'bold');
+      doc.setFontSize(7.8);
+      doc.setTextColor(...colors.ocean);
+      doc.text(title.toUpperCase(), mainX, mainY);
+      mainY += 2.0;
+      doc.setDrawColor(...colors.hairline);
+      doc.line(mainX, mainY, pageWidth - 12, mainY);
+      mainY += 4.6;
+    };
+
+    drawMainHeading('Tóm Tắt Chuyên Môn');
+    doc.setFont('NotoSans', 'normal');
+    doc.setFontSize(8.2);
+    doc.setTextColor(...colors.ink);
+    const sLines = doc.splitTextToSize(options.summaryParagraph, mainW);
+    doc.text(sLines, mainX, mainY, { lineHeightFactor: 1.4 });
+    mainY += sLines.length * 3.9 + 5;
+
+    drawMainHeading('Kinh Nghiệm & Hệ Thống Production');
+    projects.forEach((project, idx) => {
+      doc.setFont('NotoSans', 'bold');
+      doc.setFontSize(7.9);
+      const pSum = doc.splitTextToSize(project.summary, mainW);
+      doc.setFont('JetBrainsMono', 'normal');
+      doc.setFontSize(7.0);
+      const pTags = doc.splitTextToSize(`Công nghệ: ${project.tags.join(' · ')}`, mainW);
+      const hHeights = project.highlights.map((h) =>
+        measureMixedBulletHeight(doc, h.title, h.description, mainW, 3.7)
+      );
+      const totalH =
+        6 + pSum.length * 3.8 + hHeights.reduce((a, b) => a + b + 0.8, 0) + pTags.length * 3.5 + 5;
+      ensureMainSpace(totalH);
+
+      doc.setFont('NotoSerifDisplay', 'bold');
+      doc.setFontSize(10.6);
+      doc.setTextColor(...colors.ink);
+      doc.text(project.title, mainX, mainY);
+      mainY += 4.1;
+
+      doc.setFont('JetBrainsMono', 'bold');
+      doc.setFontSize(7.2);
+      doc.setTextColor(...colors.ocean);
+      doc.text(`${project.orgBadge} · ${project.meta}`, mainX, mainY);
+      mainY += 4.2;
+
+      doc.setFont('NotoSans', 'bold');
+      doc.setFontSize(7.9);
+      doc.setTextColor(...colors.bodyDark);
+      doc.text(pSum, mainX, mainY, { lineHeightFactor: 1.35 });
+      mainY += pSum.length * 3.8 + 1.2;
+
+      for (const h of project.highlights) {
+        mainY = drawMixedBullet(doc, h.title, h.description, mainX, mainY, mainW, 3.7, {
+          titleRgb: colors.ink,
+          bodyRgb: colors.muted,
+        });
+        mainY += 0.8;
+      }
+
+      doc.setFont('JetBrainsMono', 'normal');
+      doc.setFontSize(7.0);
+      doc.setTextColor(...colors.navy);
+      doc.text(pTags, mainX, mainY + 0.4, { lineHeightFactor: 1.3 });
+      mainY += pTags.length * 3.5 + (idx < projects.length - 1 ? 4.5 : 3);
+    });
+
+    if (aiAgents && aiAgents.length > 0) {
+      drawMainHeading('Kinh Nghiệm Sử Dụng AI Agent');
+      for (const agent of aiAgents) {
+        doc.setFont('NotoSans', 'normal');
+        doc.setFontSize(7.6);
+        const uLines = doc.splitTextToSize(agent.simpleUsage, mainW);
+        ensureMainSpace(8 + uLines.length * 3.6);
+
+        doc.setFont('NotoSans', 'bold');
+        doc.setFontSize(8.2);
+        doc.setTextColor(...colors.ink);
+        doc.text(`${agent.name} — `, mainX, mainY);
+        const nameW = doc.getTextWidth(`${agent.name} — `);
+        doc.setFont('JetBrainsMono', 'normal');
+        doc.setFontSize(7.4);
+        doc.setTextColor(...colors.ocean);
+        doc.text(agent.roleSummary, mainX + nameW, mainY);
+        mainY += 3.8;
+
+        doc.setFont('NotoSans', 'normal');
+        doc.setFontSize(7.6);
+        doc.setTextColor(...colors.muted);
+        doc.text(uLines, mainX, mainY, { lineHeightFactor: 1.34 });
+        mainY += uLines.length * 3.6 + 2.5;
+      }
+    }
+
+    const totalPages = doc.getNumberOfPages();
+    for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+      doc.setPage(pageNum);
+      doc.setFont('NotoSans', 'normal');
+      doc.setFontSize(7.0);
+      doc.setTextColor(...colors.muted);
+      doc.text(`Trang ${pageNum} / ${totalPages}`, pageWidth - 12, pageHeight - 6, {
+        align: 'right',
+      });
+    }
+
+    const filename = 'Le-Van-Thuan-CV-Hien-Dai.pdf';
+    doc.save(filename);
+    return filename;
+  }
+
+  decoratePageCanvas(true);
+  cursorY = activeTemplate === 'classical' || activeTemplate === 'retro' ? 14 : 12;
+
+  // Header block: Candidate details (left) + Framed Portrait (right)
   const portraitWidth = portraitDataUrl ? 26.5 : 0;
   const portraitHeight = portraitDataUrl ? 33.2 : 0;
   const headerTextWidth = portraitDataUrl ? contentWidth - portraitWidth - 8 : contentWidth;
+  const isBannerHeader = activeTemplate === 'extrovert';
 
   if (portraitDataUrl) {
     const px = pageWidth - marginX - portraitWidth;
     const py = cursorY;
+    if (activeTemplate === 'retro') {
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(212, 195, 163);
+      doc.setLineWidth(0.35);
+      doc.rect(px - 1.5, py - 1.5, portraitWidth + 3, portraitHeight + 5, 'FD');
+    }
     doc.addImage(portraitDataUrl, 'PNG', px, py, portraitWidth, portraitHeight);
-    doc.setDrawColor(203, 216, 230);
-    doc.setLineWidth(0.35);
-    doc.roundedRect(px, py, portraitWidth, portraitHeight, 3.2, 3.2, 'S');
+    if (activeTemplate !== 'retro') {
+      const portraitBorderRgb: [number, number, number] = isBannerHeader
+        ? [56, 189, 248]
+        : [203, 216, 230];
+      doc.setDrawColor(...portraitBorderRgb);
+      doc.setLineWidth(0.35);
+      doc.roundedRect(px, py, portraitWidth, portraitHeight, 3.2, 3.2, 'S');
+    }
   }
 
-  // Brand logo + Eyebrow
   let eyebrowX = marginX;
   if (brandLogoDataUrl) {
     doc.addImage(brandLogoDataUrl, 'PNG', marginX, cursorY - 0.5, 4.8, 4.8);
@@ -424,34 +794,34 @@ export async function downloadPortfolioCvPdf(
   }
   doc.setFont('JetBrainsMono', 'bold');
   doc.setFontSize(7.6);
-  doc.setTextColor(...colors.ocean);
-  doc.text(
-    `HỒ SƠ ỨNG VIÊN · ${profile.birthInfo.toUpperCase()}`,
-    eyebrowX,
-    cursorY + 3.0
-  );
+  doc.setTextColor(...(isBannerHeader ? ([125, 211, 252] as const) : colors.ocean));
+  const eyebrowText =
+    activeTemplate === 'classical'
+      ? `CÔNG DANH HỒ SƠ · ${profile.birthInfo.toUpperCase()}`
+      : activeTemplate === 'retro'
+      ? `LƯU TRỮ SỐ 04 · ${profile.birthInfo.toUpperCase()}`
+      : `HỒ SƠ ỨNG VIÊN · ${profile.birthInfo.toUpperCase()}`;
+  doc.text(eyebrowText, eyebrowX, cursorY + 3.0);
 
-  // Candidate Full Name (Display Serif matching Cormorant Garamond)
   doc.setFont('NotoSerifDisplay', 'bold');
   doc.setFontSize(22);
-  doc.setTextColor(...colors.ink);
+  doc.setTextColor(...(isBannerHeader ? ([255, 255, 255] as const) : colors.ink));
   doc.text(profile.fullLegalName, marginX, cursorY + 11.2);
 
-  // Role subtitle
   doc.setFont('NotoSans', 'bold');
   doc.setFontSize(9.8);
-  doc.setTextColor(...colors.cobalt);
+  doc.setTextColor(...(isBannerHeader ? ([56, 189, 248] as const) : colors.cobalt));
   doc.text(profile.role, marginX, cursorY + 16.8);
 
-  // 2x2 Contact Grid matching Web CV
   const contactY1 = cursorY + 23.2;
   const contactY2 = cursorY + 28.4;
   const contactCol2X = marginX + Math.min(68, headerTextWidth * 0.48);
+  const contactRgb = isBannerHeader ? ([226, 232, 240] as const) : colors.muted;
 
   drawContactIcon(doc, 'phone', marginX, contactY1);
   doc.setFont('JetBrainsMono', 'normal');
   doc.setFontSize(8.0);
-  doc.setTextColor(...colors.muted);
+  doc.setTextColor(...contactRgb);
   doc.text(profile.phoneFormatted, marginX + 4.8, contactY1);
 
   drawContactIcon(doc, 'mail', contactCol2X, contactY1);
@@ -469,13 +839,16 @@ export async function downloadPortfolioCvPdf(
   doc.setFontSize(8.2);
   doc.text('github.com/thuanlevan72', contactCol2X + 4.8, contactY2);
 
-  cursorY = Math.max(contactY2 + 5.5, cursorY + portraitHeight + 5.5);
+  cursorY = isBannerHeader
+    ? 63
+    : Math.max(contactY2 + 5.5, cursorY + portraitHeight + 5.5);
 
-  // Header bottom divider
-  doc.setDrawColor(...colors.border);
-  doc.setLineWidth(0.35);
-  doc.line(marginX, cursorY, pageWidth - marginX, cursorY);
-  cursorY += 5.5;
+  if (!isBannerHeader) {
+    doc.setDrawColor(...colors.border);
+    doc.setLineWidth(0.35);
+    doc.line(marginX, cursorY, pageWidth - marginX, cursorY);
+    cursorY += 5.5;
+  }
 
   // 4 Quantitative KPI Cards (single crisp value line + muted label)
   const metricGap = 3.2;
@@ -787,7 +1160,15 @@ export async function downloadPortfolioCvPdf(
     );
   }
 
-  const filename = 'Le-Van-Thuan-CV-Senior-NET.pdf';
+  const filenameMap: Record<CvTemplateId, string> = {
+    modern: 'Le-Van-Thuan-CV-Hien-Dai.pdf',
+    classical: 'Le-Van-Thuan-CV-Co-Trang.pdf',
+    introvert: 'Le-Van-Thuan-CV-Huong-Noi.pdf',
+    extrovert: 'Le-Van-Thuan-CV-Huong-Ngoai.pdf',
+    youthful: 'Le-Van-Thuan-CV-Tre-Trung.pdf',
+    retro: 'Le-Van-Thuan-CV-Hoai-Co.pdf',
+  };
+  const filename = filenameMap[activeTemplate] ?? 'Le-Van-Thuan-CV-Senior-NET.pdf';
   doc.save(filename);
   return filename;
 }

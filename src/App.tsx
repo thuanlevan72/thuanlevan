@@ -13,6 +13,7 @@ import { LightboxModal } from './components/LightboxModal.tsx';
 import { ProjectsSection } from './components/ProjectsSection.tsx';
 import { SkillsSection } from './components/SkillsSection.tsx';
 import { TopBarAndHeader } from './components/TopBarAndHeader.tsx';
+import { XiangqiGameSection } from './components/XiangqiGameSection.tsx';
 import { GALLERY_ARTWORKS } from './data/portfolioData.ts';
 import {
   AppRoute,
@@ -24,12 +25,16 @@ import {
   getRoutePath,
   getRouteSeoMeta,
   parseAppRoute,
+  ProfileTemplateId,
   resolveInitialTheme,
   resolveNextTheme,
+  resolveTemplateSelection,
+  SHOWCASE_TEMPLATE_IDS,
   ThemeMode,
 } from './utils/portfolioLogic.ts';
 
 const THEME_STORAGE_KEY = 'thuanle-portfolio-theme';
+const PROFILE_TEMPLATE_KEY = 'thuanle-profile-template';
 
 export default function App() {
   const [theme, setTheme] = useState<ThemeMode>(() => {
@@ -43,8 +48,28 @@ export default function App() {
   const [activeRoute, setActiveRoute] = useState<AppRoute>(() =>
     parseAppRoute(window.location.pathname, window.location.hash)
   );
+  const [profileTemplate, setProfileTemplate] = useState<ProfileTemplateId>(() => {
+    try {
+      return resolveTemplateSelection(
+        localStorage.getItem(PROFILE_TEMPLATE_KEY),
+        SHOWCASE_TEMPLATE_IDS,
+        'modern'
+      );
+    } catch {
+      return 'modern';
+    }
+  });
   const [activeArtworkId, setActiveArtworkId] = useState<string | null>(null);
   const [lightboxScope, setLightboxScope] = useState<ArtworkItem[]>(GALLERY_ARTWORKS);
+
+  const handleChangeProfileTemplate = useCallback((nextTemplate: ProfileTemplateId) => {
+    setProfileTemplate(nextTemplate);
+    try {
+      localStorage.setItem(PROFILE_TEMPLATE_KEY, nextTemplate);
+    } catch {
+      // Ignore storage errors
+    }
+  }, []);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -76,40 +101,32 @@ export default function App() {
     document.title = seoMeta.title;
 
     const canonicalUrl = buildCanonicalUrl(window.location.origin, seoMeta.path);
+    const ogCoverUrl = buildCanonicalUrl(window.location.origin, '/og-cover.jpg');
+
     const canonicalLink = document.getElementById('canonical-link');
     if (canonicalLink instanceof HTMLLinkElement) {
       canonicalLink.href = canonicalUrl;
     }
 
-    const metaDesc = document.getElementById('meta-description');
-    if (metaDesc instanceof HTMLMetaElement) {
-      metaDesc.content = seoMeta.description;
-    }
+    const setMeta = (id: string, value: string) => {
+      const el = document.getElementById(id);
+      if (el instanceof HTMLMetaElement) {
+        el.content = value;
+      }
+    };
 
-    const ogTitle = document.getElementById('og-title');
-    if (ogTitle instanceof HTMLMetaElement) {
-      ogTitle.content = seoMeta.title;
-    }
-
-    const ogDesc = document.getElementById('og-description');
-    if (ogDesc instanceof HTMLMetaElement) {
-      ogDesc.content = seoMeta.description;
-    }
-
-    const ogUrl = document.getElementById('og-url');
-    if (ogUrl instanceof HTMLMetaElement) {
-      ogUrl.content = canonicalUrl;
-    }
-
-    const twitterTitle = document.getElementById('twitter-title');
-    if (twitterTitle instanceof HTMLMetaElement) {
-      twitterTitle.content = seoMeta.title;
-    }
-
-    const twitterDesc = document.getElementById('twitter-description');
-    if (twitterDesc instanceof HTMLMetaElement) {
-      twitterDesc.content = seoMeta.description;
-    }
+    setMeta('meta-description', seoMeta.description);
+    setMeta('meta-keywords', seoMeta.keywords);
+    setMeta('og-type', seoMeta.ogType);
+    setMeta('og-title', seoMeta.title);
+    setMeta('og-description', seoMeta.description);
+    setMeta('og-url', canonicalUrl);
+    setMeta('og-image', ogCoverUrl);
+    setMeta('og-image-alt', seoMeta.ogImageAlt);
+    setMeta('twitter-title', seoMeta.title);
+    setMeta('twitter-description', seoMeta.description);
+    setMeta('twitter-image', ogCoverUrl);
+    setMeta('twitter-image-alt', seoMeta.ogImageAlt);
 
     const ldJsonEl = document.getElementById('structured-data-jsonld');
     if (ldJsonEl) {
@@ -214,15 +231,22 @@ export default function App() {
             onToggleTheme={handleToggleTheme}
             onNavigate={handleNavigate}
           />
+        ) : activeRoute === 'xiangqi' ? (
+          <XiangqiGameSection
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
+          />
         ) : (
           <>
             <HeroSection
               theme={theme}
+              template={profileTemplate}
+              onChangeTemplate={handleChangeProfileTemplate}
               onToggleTheme={handleToggleTheme}
               onOpenGalleryScreen={() => handleNavigate('gallery')}
             />
-            <ProjectsSection />
-            <SkillsSection />
+            <ProjectsSection template={profileTemplate} />
+            <SkillsSection template={profileTemplate} />
             <InteractiveTerminal />
             <FaqAndCta />
           </>

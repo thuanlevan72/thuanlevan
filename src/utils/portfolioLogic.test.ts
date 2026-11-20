@@ -12,9 +12,11 @@ import {
   buildCanonicalUrl,
   buildCvPlainText,
   buildStructuredDataGraph,
+  CV_TEMPLATE_OPTIONS,
   executeCliCommand,
   filterGalleryItems,
   filterProjects,
+  GALLERY_TEMPLATE_OPTIONS,
   getGalleryCategoryCounts,
   getNextGalleryIndex,
   getPrevGalleryIndex,
@@ -22,9 +24,12 @@ import {
   getRoutePath,
   getRouteSeoMeta,
   parseAppRoute,
+  PROFILE_TEMPLATE_OPTIONS,
   resolveInitialTheme,
   resolveNextTheme,
+  resolveTemplateSelection,
   searchAndFilterGalleryItems,
+  SHOWCASE_TEMPLATE_IDS,
 } from './portfolioLogic.ts';
 
 test('resolveInitialTheme and resolveNextTheme manage theme transitions cleanly', () => {
@@ -42,20 +47,65 @@ test('parseAppRoute, getRoutePath, and getRouteSeoMeta separate profile, cv, and
   assert.equal(parseAppRoute('/cv'), 'cv');
   assert.equal(parseAppRoute('/cv-pdf/'), 'cv');
   assert.equal(parseAppRoute('/', '#cv'), 'cv');
+  assert.equal(parseAppRoute('/co-tuong'), 'xiangqi');
+  assert.equal(parseAppRoute('/xiangqi/'), 'xiangqi');
 
   assert.equal(getRoutePath('profile'), '/');
   assert.equal(getRoutePath('gallery'), '/trien-lam');
   assert.equal(getRoutePath('cv'), '/cv');
+  assert.equal(getRoutePath('xiangqi'), '/co-tuong');
 
   const galleryMeta = getRouteSeoMeta('gallery');
   const cvMeta = getRouteSeoMeta('cv');
   const profileMeta = getRouteSeoMeta('profile');
+  const xiangqiMeta = getRouteSeoMeta('xiangqi');
   assert.match(galleryMeta.title, /Triển Lãm/);
   assert.equal(galleryMeta.path, '/trien-lam');
   assert.match(cvMeta.title, /CV PDF/);
   assert.equal(cvMeta.path, '/cv');
   assert.match(profileMeta.title, /Kỹ Sư Senior \.NET/);
   assert.equal(profileMeta.path, '/');
+  assert.match(xiangqiMeta.title, /Cờ Tướng/);
+  assert.equal(xiangqiMeta.path, '/co-tuong');
+
+  for (const [name, meta] of [
+    ['profile', profileMeta],
+    ['cv', cvMeta],
+    ['gallery', galleryMeta],
+    ['xiangqi', xiangqiMeta],
+  ] as const) {
+    assert.ok(
+      meta.title.length >= 30 && meta.title.length <= 60,
+      `${name} title length ${meta.title.length} outside 30-60`
+    );
+    assert.ok(
+      meta.description.length >= 120 && meta.description.length <= 160,
+      `${name} description length ${meta.description.length} outside 120-160`
+    );
+    assert.ok(meta.keywords.length > 20);
+    assert.ok(meta.ogImageAlt.length > 10);
+  }
+});
+
+test('resolveTemplateSelection validates all 6 expressive template IDs across all three tabs', () => {
+  for (const id of SHOWCASE_TEMPLATE_IDS) {
+    assert.equal(resolveTemplateSelection(id, SHOWCASE_TEMPLATE_IDS, 'modern'), id);
+  }
+  assert.equal(
+    resolveTemplateSelection('editorial', SHOWCASE_TEMPLATE_IDS, 'modern'),
+    'modern'
+  );
+  assert.equal(
+    resolveTemplateSelection('masonry', SHOWCASE_TEMPLATE_IDS, 'modern'),
+    'youthful'
+  );
+  assert.equal(
+    resolveTemplateSelection('invalid-unknown', SHOWCASE_TEMPLATE_IDS, 'classical'),
+    'classical'
+  );
+  assert.equal(PROFILE_TEMPLATE_OPTIONS.length, 6);
+  assert.equal(CV_TEMPLATE_OPTIONS.length, 6);
+  assert.equal(GALLERY_TEMPLATE_OPTIONS.length, 6);
 });
 
 test('buildCanonicalUrl strips trailing slashes safely for SEO canonical tags', () => {
@@ -184,6 +234,9 @@ test('buildStructuredDataGraph outputs valid Schema.org Brand logo, BreadcrumbLi
   const profilePage = profileGraph['@graph'].find((n) => n['@type'] === 'ProfilePage');
   assert.ok(profilePage);
   assert.equal(profilePage.url, 'https://thuanlevan.vercel.app/');
+
+  const personNode = profileGraph['@graph'].find((n) => n['@type'] === 'Person');
+  assert.ok(personNode && 'hasOccupation' in personNode && personNode.hasOccupation);
 
   const galleryGraph = buildStructuredDataGraph('https://thuanlevan.vercel.app/', 'gallery');
   const collectionPage = galleryGraph['@graph'].find((n) => n['@type'] === 'CollectionPage');

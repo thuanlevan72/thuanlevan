@@ -177,6 +177,17 @@ export function GlobalFooter({ theme, onToggleTheme, onNavigate }: GlobalFooterP
           </a>
           <span aria-hidden="true">·</span>
           <a
+            href="/co-tuong"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('xiangqi');
+            }}
+            className="hover:text-[#0369A1] dark:hover:text-[#38BDF8] hover:underline underline-offset-4 transition-colors"
+          >
+            Cờ Tướng
+          </a>
+          <span aria-hidden="true">·</span>
+          <a
             href={PORTFOLIO_PROFILE.githubUrl}
             target="_blank"
             rel="noopener noreferrer"

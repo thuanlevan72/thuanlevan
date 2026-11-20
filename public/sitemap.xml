@@ -2,168 +2,193 @@
 <urlset
   xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
   xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+  xmlns:video="http://www.google.com/schemas/sitemap-video/1.1"
 >
   <url>
-    <loc>/</loc>
-    <lastmod>2026-11-18</lastmod>
+    <loc>https://thuanlevan.vercel.app/</loc>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
     <image:image>
-      <image:loc>/assets/gallery/thuan-le-doi-thuc.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/thuan-le-doi-thuc.webp</image:loc>
       <image:title>Lê Văn Thuận — Kỹ Sư Senior .NET</image:title>
       <image:caption>Chân dung đời thực của kỹ sư Senior .NET Lê Văn Thuận tại Hà Nội.</image:caption>
     </image:image>
+    <image:image>
+      <image:loc>https://thuanlevan.vercel.app/og-cover.jpg</image:loc>
+      <image:title>Thuận Lê — Kỹ Sư Senior .NET &amp; Hệ Thống AI</image:title>
+      <image:caption>Ảnh đại diện hồ sơ kỹ sư Senior .NET và nghệ thuật thị giác AI.</image:caption>
+    </image:image>
   </url>
   <url>
-    <loc>/cv</loc>
-    <lastmod>2026-11-18</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>/trien-lam</loc>
-    <lastmod>2026-11-18</lastmod>
+    <loc>https://thuanlevan.vercel.app/cv</loc>
+    <lastmod>2026-11-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
     <image:image>
-      <image:loc>/assets/gallery/timelapse-coding-poster.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/chan-dung-the-xanh.webp</image:loc>
+      <image:title>CV PDF Lê Văn Thuận — Kỹ Sư Senior .NET</image:title>
+      <image:caption>Ảnh chân dung thẻ hồ sơ CV chuẩn A4 của kỹ sư Lê Văn Thuận.</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://thuanlevan.vercel.app/trien-lam</loc>
+    <lastmod>2026-11-19</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+    <video:video>
+      <video:thumbnail_loc>https://thuanlevan.vercel.app/assets/gallery/timelapse-coding-poster.webp</video:thumbnail_loc>
+      <video:title>Coding Timelapse — Góc Làm Việc &amp; Đam Mê</video:title>
+      <video:description>Video tua nhanh 36 giây quá trình tập trung lập trình với bàn phím cơ đỏ và tai nghe kiểm âm tại văn phòng.</video:description>
+      <video:content_loc>https://thuanlevan.vercel.app/assets/gallery/timelapse-coding.mp4</video:content_loc>
+      <video:duration>36</video:duration>
+      <video:family_friendly>yes</video:family_friendly>
+    </video:video>
+    <image:image>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/timelapse-coding-poster.webp</image:loc>
       <image:title>Coding Timelapse — Góc Làm Việc &amp; Đam Mê</image:title>
       <image:caption>Ảnh đại diện video timelapse 36 giây quá trình lập trình tại văn phòng.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/nang-tho-hoa-dao.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/nang-tho-hoa-dao.webp</image:loc>
       <image:title>Cố Phán Di Quang Thái — Nàng Thơ Giữa Hoa Đào</image:title>
       <image:caption>Tác phẩm nghệ thuật thị giác AI phong cách thủy mặc và thư pháp Hán Nôm dưới ánh nắng mai.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/thuan-le-doi-thuc.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/thuan-le-doi-thuc.webp</image:loc>
       <image:title>Thuận Lê — Chân Dung Đời Thực 2026</image:title>
       <image:caption>Ảnh chân dung đời thực của Lê Văn Thuận, Senior .NET Systems Engineer.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/misa-ha-long-2026.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/misa-ha-long-2026.webp</image:loc>
       <image:title>MISA Level Up With AI — Hạ Long 2026</image:title>
       <image:caption>Tập thể khối sản xuất MISA tại sự kiện Level Up With AI Hạ Long 2026.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/team-outing-bien.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/team-outing-bien.webp</image:loc>
       <image:title>Team Outing — Phố Biển Sáng Sớm</image:title>
       <image:caption>Ảnh kỷ niệm chuyến du lịch gắn kết đồng nghiệp ngoài trời.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/le-vu-quy-anh-em.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/le-vu-quy-anh-em.webp</image:loc>
       <image:title>Ngày Chung Vui — Lễ Vu Quy Anh Em</image:title>
       <image:caption>Khoảnh khắc anh em bạn bè hội ngộ trong lễ vu quy.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/dem-nghi-duong.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/dem-nghi-duong.webp</image:loc>
       <image:title>Đêm Nghỉ Dưỡng Dưới Mái Ngói Cổ</image:title>
       <image:caption>Ảnh chụp ban đêm cùng đồng đội dưới ánh đèn vàng bên khu nhà truyền thống.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/chan-dung-the-xanh.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/chan-dung-the-xanh.webp</image:loc>
       <image:title>Chân Dung Thẻ — Phông Xanh Chuẩn Mực</image:title>
       <image:caption>Ảnh chân dung thẻ phông xanh mặc áo polo trắng của Lê Văn Thuận.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/dem-trang-0238.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/dem-trang-0238.webp</image:loc>
       <image:title>Đêm Trắng 02:38 — Nạp Năng Lượng</image:title>
       <image:caption>Khoảnh khắc ăn mì ly lúc 2h38 sáng tại cửa hàng tiện lợi.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/dao-pho-dem-ben-ho.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/dao-pho-dem-ben-ho.webp</image:loc>
       <image:title>Người Thương Bên Bờ Hồ Đêm — Khoảnh Khắc Bình Yên</image:title>
       <image:caption>Chân dung người yêu của Thuận Lê mỉm cười dịu dàng bên bờ hồ ban đêm với ánh đèn phản chiếu lung linh.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/filter-hoa-xuan.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/filter-hoa-xuan.webp</image:loc>
       <image:title>Góc Vui Nhộn — Filter Hoa Xuân</image:title>
       <image:caption>Ảnh selfie hài hước với filter vòng hoa xuân và kính mắt.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/coding-dem-ban-cong.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/coding-dem-ban-cong.webp</image:loc>
       <image:title>Coding Đêm Ngoài Ban Công — Ánh Đèn Thành Phố</image:title>
       <image:caption>Khoảnh khắc lập trình đêm trên laptop ngoài ban công hướng về tòa tháp cờ đỏ sao vàng.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/misa-infinity-impact-award.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/misa-infinity-impact-award.webp</image:loc>
       <image:title>Giải Thưởng MISA — The Infinity Impact Award</image:title>
       <image:caption>Thuận Lê nâng bảng chứng nhận MISA The Infinity Impact Award.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/goc-lam-viec-mec.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/goc-lam-viec-mec.webp</image:loc>
       <image:title>Chiến Trường Hai Màn Hình — Team Phenikaa MEC</image:title>
       <image:caption>Bàn làm việc hai màn hình cùng nhóm hỗ trợ kỹ thuật team MEC.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/giai-lao-ban-bi-lac.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/giai-lao-ban-bi-lac.webp</image:loc>
       <image:title>Giờ Giải Lao — Trận Bi Lắc Cùng Đồng Đội</image:title>
       <image:caption>Các anh em đồng nghiệp chơi bi lắc giải lao sau giờ làm việc.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/binh-minh-bien-bac.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/binh-minh-bien-bac.webp</image:loc>
       <image:title>Nắng Xuyên Mây Biển Bạc — Khoảnh Khắc Mở Rộng</image:title>
       <image:caption>Tia nắng rọi xuống mặt biển bạc lấp lánh cùng chiếc thuyền nhỏ.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/ninja-400-eagle-villa.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/ninja-400-eagle-villa.webp</image:loc>
       <image:title>Kawasaki Ninja 400 — Trước Cổng Eagle Villa</image:title>
       <image:caption>Thuận Lê ngồi trên mô tô Kawasaki Ninja 400 trước cổng Eagle Villa.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/chuyen-di-rung-thong.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/chuyen-di-rung-thong.webp</image:loc>
       <image:title>Giữa Rừng Thông — Khoảnh Khắc Thư Thái</image:title>
       <image:caption>Ngồi thư giãn trên hiên gỗ giữa đồi thông và ngôi nhà chữ A.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/ban-cong-rung-thong.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/ban-cong-rung-thong.webp</image:loc>
       <image:title>Hiên Gỗ Đồi Thông — Ánh Nhìn Trầm Lắng</image:title>
       <image:caption>Góc nghiêng bên lan can gỗ hướng ra cánh rừng thông bạt ngàn.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/rung-thong-ghe-go.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/rung-thong-ghe-go.webp</image:loc>
       <image:title>Băng Ghế Gỗ Rừng Thông — Phút Bình Yên</image:title>
       <image:caption>Ngồi nghỉ trên băng ghế gỗ mộc giữa sân vườn rặng thông cao vút.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/tap-the-khan-dai-go.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/tap-the-khan-dai-go.webp</image:loc>
       <image:title>Chuyến Đi Rừng Thông — Tập Thể Khán Đài Gỗ</image:title>
       <image:caption>Ảnh tập thể cả nhóm trên khán đài gỗ ngoài trời giữa rừng cây.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/hoi-ngo-vit-34.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/hoi-ngo-vit-34.webp</image:loc>
       <image:title>Đại Gia Đình Anh Em — Hội Ngộ Tại Vịt 34</image:title>
       <image:caption>Đông đủ anh em nâng ly sum vầy tại nhà hàng Vịt 34.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/lien-hoan-noi-lau.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/lien-hoan-noi-lau.webp</image:loc>
       <image:title>Liên Hoan Nồi Lẩu — Nâng Ly Gắn Kết</image:title>
       <image:caption>Bữa lẩu ấm cúng nâng ly gắn kết cùng anh em đồng nghiệp.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/chuyen-thuyen-dem.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/chuyen-thuyen-dem.webp</image:loc>
       <image:title>Chuyến Thuyền Đêm — Áo Phao Cam Trên Mặt Nước</image:title>
       <image:caption>Selfie mặc áo phao cam trên chuyến đi thuyền ban đêm.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/tu-ky-guitar-acoustic.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/tu-ky-guitar-acoustic.webp</image:loc>
       <image:title>Góc Mộc Acoustic — Ôm Đàn Thư Giãn</image:title>
       <image:caption>Ôm cây đàn guitar gỗ acoustic thư giãn sau giờ làm việc.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/chan-dung-guitar-am.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/chan-dung-guitar-am.webp</image:loc>
       <image:title>Giai Điệu Đời Thường — Guitar &amp; Ánh Sáng Ấm</image:title>
       <image:caption>Chân dung cầm đàn guitar gỗ acoustic trong ánh sáng ấm áp.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/chu-meo-ke-kho.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/chu-meo-ke-kho.webp</image:loc>
       <image:title>Người Bạn Bốn Chân — Boss Mèo Trên Kệ Kho</image:title>
       <image:caption>Chú mèo mướp bốn chân trắng nằm thư giãn trên thùng carton dưới kệ sắt.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>/assets/gallery/vuot-ve-meo-nho.webp</image:loc>
+      <image:loc>https://thuanlevan.vercel.app/assets/gallery/vuot-ve-meo-nho.webp</image:loc>
       <image:title>Khoảnh Khắc Nhẹ Nhàng — Vuốt Ve Chú Mèo Nhỏ</image:title>
       <image:caption>Bàn tay vuốt ve chú mèo nhỏ nằm cuộn tròn đáng yêu.</image:caption>
     </image:image>
+  </url>
+  <url>
+    <loc>https://thuanlevan.vercel.app/co-tuong</loc>
+    <lastmod>2026-11-19</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
   </url>
 </urlset>
