@@ -4,13 +4,18 @@ import {
   ArrowRight,
   BookOpen,
   CheckCircle2,
+  Clock,
   Database,
+  Eye,
   FileText,
   Flame,
+  GitCompareArrows,
   Info,
+  MessageSquareWarning,
   Pause,
   Play,
   RotateCcw,
+  ScanLine,
   Search,
   ShieldAlert,
   ShieldCheck,
@@ -29,10 +34,16 @@ import {
 import {
   advanceAfterVerdict,
   advanceToNextDay,
+  ANOMALY_DIFFICULTIES,
+  AnomalyDifficultyId,
   AnomalyProgressState,
   applyVerdictToProgress,
+  buildForensicDossier,
   createInitialAnomalyProgress,
+  CrossCheckResult,
+  evaluateCrossCheckPair,
   evaluateInspectionVerdict,
+  evaluateTimeoutFailure,
   getActiveCase,
   getActiveDay,
   MAX_REPUTATION,
@@ -43,6 +54,14 @@ import {
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 
 type AnomalyScreenState = 'title' | 'playing' | 'paused' | 'day_complete' | 'gameover';
+
+interface AuditLogEntry {
+  caseCode: string;
+  applicantName: string;
+  verdict: AnomalyVerdict;
+  isCorrect: boolean;
+  scoreDelta: number;
+}
 
 interface AnomalyGameSectionProps {
   theme: ThemeMode;
@@ -163,10 +182,22 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
 
   const [unlockAllDays, setUnlockAllDays] = useState<boolean>(false);
   const [selectedStartDay, setSelectedStartDay] = useState<number>(1);
+  const [selectedDifficulty, setSelectedDifficulty] = useState<AnomalyDifficultyId>('inspector');
   const [progress, setProgress] = useState<AnomalyProgressState>(() =>
-    createInitialAnomalyProgress(1, initialMeta.bestScore, initialMeta.highestUnlockedDay)
+    createInitialAnomalyProgress(1, initialMeta.bestScore, initialMeta.highestUnlockedDay, 'inspector')
   );
   const [flaggedIds, setFlaggedIds] = useState<string[]>([]);
+  const [citedRuleCodes, setCitedRuleCodes] = useState<string[]>([]);
+  const [uvScannedCaseIds, setUvScannedCaseIds] = useState<string[]>([]);
+  const [interrogatedTurnIds, setInterrogatedTurnIds] = useState<string[]>([]);
+  const [compareDocKey, setCompareDocKey] = useState<string | null>(null);
+  const [compareDbKey, setCompareDbKey] = useState<string | null>(null);
+  const [crossCheckOutput, setCrossCheckOutput] = useState<CrossCheckResult | null>(null);
+  const [caseTimeLeftSec, setCaseTimeLeftSec] = useState<number | null>(
+    ANOMALY_DIFFICULTIES.inspector.timeLimitPerCaseSec
+  );
+  const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([]);
+
   const [lastEvaluation, setLastEvaluation] = useState<VerdictEvaluationResult | null>(null);
   const [pendingTransition, setPendingTransition] = useState<PostVerdictTransition | null>(null);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
@@ -181,6 +212,22 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
   const effectiveUnlockedDay = unlockAllDays ? ANOMALY_DAYS.length : progress.highestUnlockedDay;
   const activeDay = useMemo(() => getActiveDay(progress), [progress]);
   const activeCase = useMemo(() => getActiveCase(progress), [progress]);
+  const activeDifficultyCfg = ANOMALY_DIFFICULTIES[progress.difficulty];
+  const forensicIntel = useMemo(
+    () => (activeCase ? buildForensicDossier(activeCase, progress.difficulty) : null),
+    [activeCase, progress.difficulty]
+  );
+  const isUvScanned = Boolean(activeCase && uvScannedCaseIds.includes(activeCase.id));
+
+  const resetCaseDeductionTools = useCallback((diffId: AnomalyDifficultyId) => {
+    setFlaggedIds([]);
+    setCitedRuleCodes([]);
+    setInterrogatedTurnIds([]);
+    setCompareDocKey(null);
+    setCompareDbKey(null);
+    setCrossCheckOutput(null);
+    setCaseTimeLeftSec(ANOMALY_DIFFICULTIES[diffId].timeLimitPerCaseSec);
+  }, []);
 
   // Sync document.body.dataset.state cleanly
   useEffect(() => {
@@ -195,20 +242,23 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
   }, [screenState]);
 
   const startShift = useCallback(
-    (dayNumber: number) => {
+    (dayNumber: number, diffOverride?: AnomalyDifficultyId) => {
+      const diffToUse = diffOverride ?? selectedDifficulty;
       const saved = loadSavedAnomalyMeta();
       const maxAllowed = unlockAllDays ? ANOMALY_DAYS.length : saved.highestUnlockedDay;
       const clampedDay = Math.max(1, Math.min(maxAllowed, dayNumber));
       setProgress(
-        createInitialAnomalyProgress(clampedDay, saved.bestScore, maxAllowed)
+        createInitialAnomalyProgress(clampedDay, saved.bestScore, maxAllowed, diffToUse)
       );
-      setFlaggedIds([]);
+      setUvScannedCaseIds([]);
+      setAuditLog([]);
+      resetCaseDeductionTools(diffToUse);
       setLastEvaluation(null);
       setPendingTransition(null);
       setScreenState('playing');
       playAnomalyFx('stamp', soundEnabled, audioCtxRef);
     },
-    [soundEnabled, unlockAllDays]
+    [resetCaseDeductionTools, selectedDifficulty, soundEnabled, unlockAllDays]
   );
 
   const handleToggleFlag = useCallback(
@@ -223,6 +273,91 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
     [screenState, lastEvaluation, soundEnabled]
   );
 
+  const handleToggleCiteRule = useCallback(
+    (ruleCode: string) => {
+      if (screenState !== 'playing' || lastEvaluation !== null) return;
+      setCitedRuleCodes((prev) =>
+        prev.includes(ruleCode) ? prev.filter((c) => c !== ruleCode) : [...prev, ruleCode]
+      );
+      playAnomalyFx('clue', soundEnabled, audioCtxRef);
+    },
+    [lastEvaluation, screenState, soundEnabled]
+  );
+
+  const handleRunUvScan = useCallback(() => {
+    if (screenState !== 'playing' || !activeCase || lastEvaluation !== null || isUvScanned) return;
+    if (progress.investigationTokens <= 0) {
+      playAnomalyFx('error', soundEnabled, audioCtxRef);
+      return;
+    }
+    setProgress((prev) => ({
+      ...prev,
+      investigationTokens: Math.max(0, prev.investigationTokens - 1),
+    }));
+    setUvScannedCaseIds((prev) => [...prev, activeCase.id]);
+    playAnomalyFx('clue', soundEnabled, audioCtxRef);
+  }, [activeCase, isUvScanned, lastEvaluation, progress.investigationTokens, screenState, soundEnabled]);
+
+  const handleRunCrossCheck = useCallback(
+    (docKeyOverride?: string, dbKeyOverride?: string) => {
+      if (!activeCase || lastEvaluation !== null) return;
+      const dKey = docKeyOverride ?? compareDocKey;
+      const bKey = dbKeyOverride ?? compareDbKey;
+      if (!dKey || !bKey) return;
+      const docField = activeCase.documentFields.find((f) => f.key === dKey);
+      const dbField = activeCase.databaseFields.find((f) => f.key === bKey);
+      if (!docField || !dbField) return;
+      const result = evaluateCrossCheckPair(activeCase, docField, dbField);
+      setCrossCheckOutput(result);
+      playAnomalyFx(result.hasMismatch ? 'alarm' : 'clue', soundEnabled, audioCtxRef);
+    },
+    [activeCase, compareDbKey, compareDocKey, lastEvaluation, soundEnabled]
+  );
+
+  const handleAskInterrogation = useCallback(
+    (turnId: string) => {
+      if (screenState !== 'playing' || lastEvaluation !== null) return;
+      setInterrogatedTurnIds((prev) => (prev.includes(turnId) ? prev : [...prev, turnId]));
+      playAnomalyFx('clue', soundEnabled, audioCtxRef);
+    },
+    [lastEvaluation, screenState, soundEnabled]
+  );
+
+  const finalizeEvaluation = useCallback(
+    (evaluation: VerdictEvaluationResult, verdictForLog: AnomalyVerdict) => {
+      if (!activeCase) return;
+      const { nextProgress, transition } = applyVerdictToProgress(progress, evaluation);
+
+      setProgress(nextProgress);
+      setLastEvaluation(evaluation);
+      setPendingTransition(transition);
+      setAuditLog((prev) => [
+        {
+          caseCode: activeCase.dossierCode,
+          applicantName: activeCase.applicantName,
+          verdict: verdictForLog,
+          isCorrect: evaluation.isCorrect,
+          scoreDelta: evaluation.scoreDelta,
+        },
+        ...prev.slice(0, 7),
+      ]);
+
+      saveAnomalyMeta({
+        bestScore: nextProgress.bestScore,
+        highestUnlockedDay: nextProgress.highestUnlockedDay,
+      });
+
+      if (verdictForLog === 'alarm' && evaluation.isCorrect) {
+        playAnomalyFx('alarm', soundEnabled, audioCtxRef);
+      } else if (evaluation.isCorrect) {
+        playAnomalyFx('stamp', soundEnabled, audioCtxRef);
+      } else {
+        playAnomalyFx('error', soundEnabled, audioCtxRef);
+      }
+    },
+    [activeCase, progress, soundEnabled]
+  );
+
   const handleSubmitVerdict = useCallback(
     (verdict: AnomalyVerdict) => {
       if (screenState !== 'playing' || !activeCase || lastEvaluation !== null) return;
@@ -231,34 +366,59 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
         activeCase,
         verdict,
         flaggedIds,
-        progress.streak
+        progress.streak,
+        {
+          difficulty: progress.difficulty,
+          citedRuleCodes,
+          usedForensicAssist: isUvScanned || interrogatedTurnIds.length > 0,
+        }
       );
-      const { nextProgress, transition } = applyVerdictToProgress(progress, evaluation);
-
-      setProgress(nextProgress);
-      setLastEvaluation(evaluation);
-      setPendingTransition(transition);
-
-      saveAnomalyMeta({
-        bestScore: nextProgress.bestScore,
-        highestUnlockedDay: nextProgress.highestUnlockedDay,
-      });
-
-      if (verdict === 'alarm' && evaluation.isCorrect) {
-        playAnomalyFx('alarm', soundEnabled, audioCtxRef);
-      } else if (evaluation.isCorrect) {
-        playAnomalyFx('stamp', soundEnabled, audioCtxRef);
-      } else {
-        playAnomalyFx('error', soundEnabled, audioCtxRef);
-      }
+      finalizeEvaluation(evaluation, verdict);
     },
-    [screenState, activeCase, lastEvaluation, flaggedIds, progress, soundEnabled]
+    [
+      activeCase,
+      citedRuleCodes,
+      finalizeEvaluation,
+      flaggedIds,
+      interrogatedTurnIds.length,
+      isUvScanned,
+      lastEvaluation,
+      progress.difficulty,
+      progress.streak,
+      screenState,
+    ]
   );
+
+  // Per-case countdown timer for timed difficulty modes
+  useEffect(() => {
+    if (
+      screenState !== 'playing' ||
+      lastEvaluation !== null ||
+      !activeCase ||
+      activeDifficultyCfg.timeLimitPerCaseSec === null
+    ) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setCaseTimeLeftSec((prev) => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          const timeoutEval = evaluateTimeoutFailure(activeCase, progress.difficulty);
+          finalizeEvaluation(timeoutEval, 'reject');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [activeCase, activeDifficultyCfg.timeLimitPerCaseSec, finalizeEvaluation, lastEvaluation, progress.difficulty, screenState]);
 
   const handleAdvanceAfterVerdict = useCallback(() => {
     if (!lastEvaluation || !pendingTransition) return;
 
-    setFlaggedIds([]);
+    resetCaseDeductionTools(progress.difficulty);
     setLastEvaluation(null);
 
     if (pendingTransition === 'next_case') {
@@ -286,16 +446,16 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
       setScreenState('gameover');
       playAnomalyFx('gameover', soundEnabled, audioCtxRef);
     }
-  }, [lastEvaluation, pendingTransition, soundEnabled]);
+  }, [lastEvaluation, pendingTransition, progress.difficulty, resetCaseDeductionTools, soundEnabled]);
 
   const handleContinueNextDay = useCallback(() => {
     setProgress((prev) => advanceToNextDay(prev));
-    setFlaggedIds([]);
+    resetCaseDeductionTools(progress.difficulty);
     setLastEvaluation(null);
     setPendingTransition(null);
     setScreenState('playing');
     playAnomalyFx('stamp', soundEnabled, audioCtxRef);
-  }, [soundEnabled]);
+  }, [progress.difficulty, resetCaseDeductionTools, soundEnabled]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -438,12 +598,52 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
               </h1>
 
               <p className="text-sm text-[#334155] dark:text-[#CBD5E1] leading-relaxed max-w-2xl">
-                Ngồi bàn trực tối giản: đọc hồ sơ đệ trình, đối chiếu CSDL hệ thống, đánh dấu điểm
-                mâu thuẫn theo bộ quy tắc thay đổi mỗi ngày rồi đóng dấu{' '}
+                Ngồi bàn trực điều tra: soi đối chiếu chéo hồ sơ với CSDL, chạy đèn UV giải mã,
+                thẩm vấn đương sự lộ sơ hở và trích dẫn đúng điều luật vi phạm trước khi đóng dấu{' '}
                 <strong className="text-emerald-700 dark:text-emerald-400">Duyệt</strong>,{' '}
                 <strong className="text-amber-700 dark:text-amber-400">Từ Chối</strong> hoặc{' '}
                 <strong className="text-rose-700 dark:text-rose-400">Báo Động</strong>.
               </p>
+
+              {/* Difficulty Mode Selector (3 Modes) */}
+              <div className="space-y-2">
+                <p className="text-xs font-mono uppercase tracking-[0.08em] text-[#475569] dark:text-[#94A3B8]">
+                  Chọn chế độ khó & áp lực suy luận
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {(['trainee', 'inspector', 'nightmare'] as const).map((diffId) => {
+                    const cfg = ANOMALY_DIFFICULTIES[diffId];
+                    const active = selectedDifficulty === diffId;
+                    return (
+                      <button
+                        key={diffId}
+                        type="button"
+                        data-testid={`anomaly-diff-${diffId}`}
+                        onClick={() => setSelectedDifficulty(diffId)}
+                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          active
+                            ? diffId === 'nightmare'
+                              ? 'bg-[#991B1B] text-white border-[#7F1D1D] shadow-sm'
+                              : diffId === 'trainee'
+                                ? 'bg-emerald-700 text-white border-emerald-800 shadow-sm'
+                                : 'bg-[#0A192F] dark:bg-[#0284C7] text-white border-[#0A192F] dark:border-[#38BDF8] shadow-sm'
+                            : 'bg-white dark:bg-[#111C33] text-[#0F172A] dark:text-[#E2E8F0] border-[#D8CEBC] dark:border-[#1E2E4A] hover:border-[#0284C7]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 text-xs font-bold">
+                          <span>{cfg.label}</span>
+                        </div>
+                        <p className={`text-[10px] font-mono mt-0.5 ${active ? 'text-white/90' : 'text-[#0284C7] dark:text-sky-400'}`}>
+                          {cfg.badge}
+                        </p>
+                        <p className={`text-[11px] leading-snug mt-1 ${active ? 'text-white/85' : 'text-[#475569] dark:text-[#94A3B8]'}`}>
+                          {cfg.description}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
 
               {/* Day / Shift Selector (12 Days) */}
               <div className="space-y-2">
@@ -644,6 +844,10 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                 <span className="text-xs text-[#475569] dark:text-[#94A3B8] truncate">
                   {activeDay.department}
                 </span>
+                <span className="hidden sm:inline text-xs text-[#64748B]">·</span>
+                <span data-testid="anomaly-hud-difficulty" className="text-xs font-mono font-semibold text-[#0284C7] dark:text-sky-300">
+                  {activeDifficultyCfg.label} (×{activeDifficultyCfg.scoreMultiplier})
+                </span>
               </div>
             </div>
 
@@ -655,9 +859,39 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                 </strong>
               </div>
 
+              {caseTimeLeftSec !== null && (
+                <div className="flex items-center gap-1">
+                  <Clock
+                    className={`w-3.5 h-3.5 ${
+                      caseTimeLeftSec <= 10 ? 'text-rose-600 dark:text-rose-400' : 'text-[#0284C7] dark:text-sky-400'
+                    }`}
+                    aria-hidden="true"
+                  />
+                  <strong
+                    data-testid="anomaly-timer"
+                    className={
+                      caseTimeLeftSec <= 10
+                        ? 'text-rose-700 dark:text-rose-400'
+                        : 'text-[#0F172A] dark:text-white'
+                    }
+                  >
+                    {caseTimeLeftSec}s
+                  </strong>
+                </div>
+              )}
+
+              <div className="flex items-center gap-1.5">
+                <ScanLine className="w-3.5 h-3.5 text-violet-700 dark:text-violet-400" aria-hidden="true" />
+                <strong data-testid="anomaly-tokens" className="text-violet-800 dark:text-violet-300">
+                  Soi: {progress.investigationTokens}
+                </strong>
+              </div>
+
               <div className="flex items-center gap-1.5">
                 <span className="text-[#475569] dark:text-[#94A3B8]">Điểm:</span>
-                <strong className="text-[#0284C7] dark:text-sky-400">{progress.score}đ</strong>
+                <strong data-testid="anomaly-score" className="text-[#0284C7] dark:text-sky-400">
+                  {progress.score}đ
+                </strong>
               </div>
 
               <div className="flex items-center gap-1.5">
@@ -665,9 +899,9 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                 <strong className="text-amber-700 dark:text-amber-300">×{progress.streak}</strong>
               </div>
 
-              <div className="flex items-center gap-2 min-w-[128px]">
+              <div className="flex items-center gap-2 min-w-[120px]">
                 <span className="text-[#475569] dark:text-[#94A3B8]">Uy tín:</span>
-                <div className="w-16 h-2 rounded-full bg-[#D8CEBC] dark:bg-[#1E293B] overflow-hidden">
+                <div className="w-14 h-2 rounded-full bg-[#D8CEBC] dark:bg-[#1E293B] overflow-hidden">
                   <div
                     className={`h-full transition-all duration-300 ${reputationToneClass}`}
                     style={{ width: `${reputationPercent}%` }}
@@ -754,37 +988,64 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                         {activeCase.documentFields.map((field) => {
                           const clueId = field.suspectId ?? field.key;
                           const isFlagged = flaggedIds.includes(clueId);
+                          const isCompareSelected = compareDocKey === field.key;
                           const isTrueClue =
                             lastEvaluation !== null &&
                             activeCase.validClueIds.includes(clueId);
                           return (
-                            <button
+                            <div
                               key={field.key}
-                              type="button"
-                              disabled={lastEvaluation !== null}
-                              onClick={() => handleToggleFlag(field)}
-                              className={`w-full text-left px-2.5 py-2 rounded-lg border transition-all ${
+                              className={`rounded-lg border transition-all ${
                                 isTrueClue
                                   ? 'border-rose-500 bg-rose-50 dark:bg-rose-950/40'
                                   : isFlagged
                                     ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-400/50'
-                                    : 'border-[#E5DEC9] dark:border-[#1E2E4A] bg-white dark:bg-[#111C33] hover:border-amber-500/70'
-                              } ${lastEvaluation === null ? 'cursor-pointer' : 'cursor-default'}`}
+                                    : isCompareSelected
+                                      ? 'border-sky-500 bg-sky-50 dark:bg-sky-950/30'
+                                      : 'border-[#E5DEC9] dark:border-[#1E2E4A] bg-white dark:bg-[#111C33]'
+                              }`}
                             >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[11px] font-mono text-[#64748B] dark:text-[#94A3B8]">
-                                  {field.label}
-                                </span>
-                                {isFlagged && (
-                                  <span className="text-[10px] font-mono font-bold text-amber-700 dark:text-amber-300">
-                                    NGHI VẤN
+                              <button
+                                type="button"
+                                disabled={lastEvaluation !== null}
+                                onClick={() => handleToggleFlag(field)}
+                                className={`w-full text-left px-2.5 py-2 ${lastEvaluation === null ? 'cursor-pointer' : 'cursor-default'}`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[11px] font-mono text-[#64748B] dark:text-[#94A3B8]">
+                                    {field.label}
                                   </span>
-                                )}
-                              </div>
-                              <div className="text-xs sm:text-[13px] font-semibold text-[#0F172A] dark:text-white mt-0.5 break-words">
-                                {field.value}
-                              </div>
-                            </button>
+                                  {isFlagged && (
+                                    <span className="text-[10px] font-mono font-bold text-amber-700 dark:text-amber-300">
+                                      NGHI VẤN
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs sm:text-[13px] font-semibold text-[#0F172A] dark:text-white mt-0.5 break-words">
+                                  {field.value}
+                                </div>
+                              </button>
+                              {lastEvaluation === null && (
+                                <div className="px-2.5 pb-1.5 flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCompareDocKey(field.key);
+                                      if (compareDbKey) {
+                                        handleRunCrossCheck(field.key, compareDbKey);
+                                      }
+                                    }}
+                                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer ${
+                                      isCompareSelected
+                                        ? 'border-sky-600 bg-sky-600 text-white'
+                                        : 'border-[#CBD5E1] dark:border-[#243454] text-[#475569] dark:text-[#94A3B8] hover:border-sky-500'
+                                    }`}
+                                  >
+                                    {isCompareSelected ? '✓ Đang so sánh' : 'Soi chéo'}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           );
                         })}
                       </div>
@@ -800,37 +1061,76 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                         {activeCase.databaseFields.map((field) => {
                           const clueId = field.suspectId ?? field.key;
                           const isFlagged = flaggedIds.includes(clueId);
+                          const isCompareSelected = compareDbKey === field.key;
+                          const isRedacted =
+                            Boolean(forensicIntel?.redactedDbKeys.includes(field.key)) &&
+                            !isUvScanned &&
+                            lastEvaluation === null;
                           const isTrueClue =
                             lastEvaluation !== null &&
                             activeCase.validClueIds.includes(clueId);
                           return (
-                            <button
+                            <div
                               key={field.key}
-                              type="button"
-                              disabled={lastEvaluation !== null}
-                              onClick={() => handleToggleFlag(field)}
-                              className={`w-full text-left px-2.5 py-2 rounded-lg border transition-all ${
+                              className={`rounded-lg border transition-all ${
                                 isTrueClue
                                   ? 'border-rose-500 bg-rose-50 dark:bg-rose-950/40'
                                   : isFlagged
                                     ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-400/50'
-                                    : 'border-[#DCE6F2] dark:border-[#1E2E4A] bg-white dark:bg-[#111C33] hover:border-amber-500/70'
-                              } ${lastEvaluation === null ? 'cursor-pointer' : 'cursor-default'}`}
+                                    : isCompareSelected
+                                      ? 'border-sky-500 bg-sky-50 dark:bg-sky-950/30'
+                                      : 'border-[#DCE6F2] dark:border-[#1E2E4A] bg-white dark:bg-[#111C33]'
+                              }`}
                             >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-[11px] font-mono text-[#64748B] dark:text-[#94A3B8]">
-                                  {field.label}
-                                </span>
-                                {isFlagged && (
-                                  <span className="text-[10px] font-mono font-bold text-amber-700 dark:text-amber-300">
-                                    NGHI VẤN
+                              <button
+                                type="button"
+                                disabled={lastEvaluation !== null || isRedacted}
+                                onClick={() => handleToggleFlag(field)}
+                                className={`w-full text-left px-2.5 py-2 ${
+                                  lastEvaluation === null && !isRedacted ? 'cursor-pointer' : 'cursor-default'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[11px] font-mono text-[#64748B] dark:text-[#94A3B8]">
+                                    {field.label}
                                   </span>
-                                )}
-                              </div>
-                              <div className="text-xs sm:text-[13px] font-semibold text-[#0F172A] dark:text-white mt-0.5 break-words">
-                                {field.value}
-                              </div>
-                            </button>
+                                  {isFlagged && (
+                                    <span className="text-[10px] font-mono font-bold text-amber-700 dark:text-amber-300">
+                                      NGHI VẤN
+                                    </span>
+                                  )}
+                                </div>
+                                <div
+                                  className={`text-xs sm:text-[13px] font-semibold mt-0.5 break-words ${
+                                    isRedacted
+                                      ? 'font-mono text-rose-700 dark:text-rose-400'
+                                      : 'text-[#0F172A] dark:text-white'
+                                  }`}
+                                >
+                                  {isRedacted ? '[DỮ LIỆU BỊ MÃ HÓA · DÙNG QUÉT UV ĐỂ MỞ]' : field.value}
+                                </div>
+                              </button>
+                              {lastEvaluation === null && !isRedacted && (
+                                <div className="px-2.5 pb-1.5 flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setCompareDbKey(field.key);
+                                      if (compareDocKey) {
+                                        handleRunCrossCheck(compareDocKey, field.key);
+                                      }
+                                    }}
+                                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer ${
+                                      isCompareSelected
+                                        ? 'border-sky-600 bg-sky-600 text-white'
+                                        : 'border-[#CBD5E1] dark:border-[#243454] text-[#475569] dark:text-[#94A3B8] hover:border-sky-500'
+                                    }`}
+                                  >
+                                    {isCompareSelected ? '✓ Đang so sánh' : 'Soi chéo'}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           );
                         })}
                       </div>
@@ -846,6 +1146,102 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                       “{activeCase.statement}”
                     </blockquote>
                   </div>
+
+                  {/* FORENSIC DEDUCTION WORKBENCH: UV SCAN, CROSS-CHECK, INTERROGATION */}
+                  {forensicIntel && (
+                    <div className="mt-3 rounded-lg border border-[#CBD5E1] dark:border-[#243454] bg-[#F8FAFC] dark:bg-[#0B1424] p-3 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 text-xs font-mono font-bold text-[#0A192F] dark:text-sky-300">
+                          <GitCompareArrows className="w-3.5 h-3.5 text-[#0284C7]" aria-hidden="true" />
+                          <span>Bàn Điều Tra & Thẩm Vấn Pháp Y</span>
+                        </div>
+                        <button
+                          type="button"
+                          data-testid="anomaly-uv-scan-btn"
+                          disabled={isUvScanned || progress.investigationTokens <= 0 || lastEvaluation !== null}
+                          onClick={handleRunUvScan}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-700 hover:bg-violet-800 disabled:opacity-45 disabled:cursor-not-allowed text-white font-mono text-[11px] font-bold cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>
+                            {isUvScanned
+                              ? '✓ Đã Quét UV Hồ Sơ Này'
+                              : `Quét Đèn UV & Sinh Trắc (-1 Điểm Soi · Còn ${progress.investigationTokens})`}
+                          </span>
+                        </button>
+                      </div>
+
+                      {crossCheckOutput && (
+                        <div
+                          data-testid="anomaly-crosscheck-result"
+                          className={`rounded-lg border p-2.5 text-xs ${
+                            crossCheckOutput.hasMismatch
+                              ? 'border-rose-400 bg-rose-50 dark:bg-rose-950/40 text-rose-900 dark:text-rose-200'
+                              : 'border-sky-300 bg-sky-50 dark:bg-sky-950/30 text-sky-900 dark:text-sky-200'
+                          }`}
+                        >
+                          <p className="font-bold">{crossCheckOutput.title}</p>
+                          <p className="mt-0.5 leading-relaxed">{crossCheckOutput.detail}</p>
+                        </div>
+                      )}
+
+                      {isUvScanned && (
+                        <div
+                          data-testid="anomaly-uv-report"
+                          className="rounded-lg border border-violet-300 dark:border-violet-800 bg-violet-50/90 dark:bg-violet-950/30 p-2.5 text-xs space-y-1 text-violet-950 dark:text-violet-100"
+                        >
+                          <p className="font-bold font-mono text-[11px] uppercase">Kết quả Pháp Y & Đèn UV</p>
+                          <p>· {forensicIntel.uvScanFinding}</p>
+                          <p>· Sinh trắc: {forensicIntel.biometricSummary}</p>
+                          <p>· Phổ mực: {forensicIntel.inkAndSealAudit}</p>
+                        </div>
+                      )}
+
+                      {/* Cross-Examination Questions */}
+                      <div className="space-y-1.5">
+                        <p className="text-[11px] font-mono text-[#64748B] dark:text-[#94A3B8] flex items-center gap-1">
+                          <MessageSquareWarning className="w-3.5 h-3.5 text-amber-600" aria-hidden="true" />
+                          <span>Thẩm vấn đương sự (lấy thêm dữ kiện suy luận):</span>
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {forensicIntel.interrogationTurns.map((turn, idx) => {
+                            const asked = interrogatedTurnIds.includes(turn.id);
+                            return (
+                              <div key={turn.id} className="space-y-1">
+                                <button
+                                  type="button"
+                                  data-testid={`anomaly-interrogate-${idx}`}
+                                  disabled={asked || lastEvaluation !== null}
+                                  onClick={() => handleAskInterrogation(turn.id)}
+                                  className={`w-full text-left px-2.5 py-2 rounded-lg border text-xs transition-colors ${
+                                    asked
+                                      ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/30 text-[#0F172A] dark:text-amber-100'
+                                      : 'border-[#CBD5E1] dark:border-[#243454] bg-white dark:bg-[#111C33] hover:border-amber-500 text-[#0F172A] dark:text-slate-200 cursor-pointer'
+                                  }`}
+                                >
+                                  <span className="font-semibold block">{turn.question}</span>
+                                </button>
+                                {asked && (
+                                  <div className="rounded-lg border border-amber-300/70 dark:border-amber-800/60 bg-white dark:bg-[#0D1629] p-2 text-[11px] space-y-1">
+                                    <p className="italic text-[#0F172A] dark:text-slate-200">{turn.answer}</p>
+                                    <p
+                                      className={`font-mono font-semibold ${
+                                        turn.exposesDeception
+                                          ? 'text-rose-700 dark:text-rose-400'
+                                          : 'text-emerald-700 dark:text-emerald-400'
+                                      }`}
+                                    >
+                                      → Ghi chú tâm lý: {turn.suspicionCue}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* POST-VERDICT RESOLUTION BANNER */}
@@ -905,12 +1301,23 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                       {lastEvaluation.feedbackDetail}
                     </p>
 
-                    {lastEvaluation.matchedCluesCount > 0 && lastEvaluation.isCorrect && (
-                      <p className="text-xs font-mono text-amber-800 dark:text-amber-300">
-                        ★ Soi trúng {lastEvaluation.matchedCluesCount} dấu hiệu mâu thuẫn: +
-                        {lastEvaluation.clueBonus}đ thưởng
-                      </p>
-                    )}
+                    {(lastEvaluation.matchedCluesCount > 0 || lastEvaluation.ruleCitationBonus > 0) &&
+                      lastEvaluation.isCorrect && (
+                        <div className="text-xs font-mono text-amber-800 dark:text-amber-300 space-y-0.5">
+                          {lastEvaluation.matchedCluesCount > 0 && (
+                            <p>
+                              ★ Soi trúng {lastEvaluation.matchedCluesCount} dấu hiệu mâu thuẫn: +
+                              {lastEvaluation.clueBonus}đ thưởng
+                            </p>
+                          )}
+                          {lastEvaluation.ruleCitationBonus > 0 && (
+                            <p>
+                              ★ Trích dẫn chuẩn điều luật ({lastEvaluation.matchedRuleCodes.join(', ')}): +
+                              {lastEvaluation.ruleCitationBonus}đ thưởng suy luận
+                            </p>
+                          )}
+                        </div>
+                      )}
 
                     <div className="pt-1 flex justify-end">
                       <button
@@ -932,7 +1339,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                 )}
               </div>
 
-              {/* RIGHT COLUMN: Rulebook + Action Stamps */}
+              {/* RIGHT COLUMN: Rulebook (Clickable Rule Citation) + Action Stamps + Audit Log */}
               <div className="lg:col-span-5 space-y-3.5">
                 {/* Daily Rulebook */}
                 <div className="rounded-xl border border-[#D8CEBC] dark:border-[#1E2E4A] bg-white dark:bg-[#111C33] p-3.5 sm:p-4 shadow-sm space-y-3">
@@ -944,7 +1351,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                       </h3>
                     </div>
                     <span className="text-[11px] font-mono text-[#64748B] dark:text-[#94A3B8]">
-                      {activeDay.rules.length} điều khoản
+                      Bấm điều khoản vi phạm để trích dẫn (+35đ)
                     </span>
                   </div>
 
@@ -953,36 +1360,52 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                   </p>
 
                   <div className="space-y-2">
-                    {activeDay.rules.map((rule) => (
-                      <div
-                        key={rule.id}
-                        className={`rounded-lg border p-2.5 space-y-1 ${
-                          rule.severity === 'critical'
-                            ? 'border-rose-300 dark:border-rose-800/70 bg-rose-50/70 dark:bg-rose-950/30'
-                            : rule.severity === 'strict'
-                              ? 'border-amber-300 dark:border-amber-800/70 bg-amber-50/70 dark:bg-amber-950/30'
-                              : 'border-[#E2D9C8] dark:border-[#243454] bg-[#FCF9F2] dark:bg-[#0D1629]'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2 text-xs font-bold">
-                          <span className="text-[#0F172A] dark:text-white">{rule.title}</span>
-                          <span
-                            className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${
-                              rule.severity === 'critical'
-                                ? 'bg-rose-700 text-white'
+                    {activeDay.rules.map((rule) => {
+                      const isCited = citedRuleCodes.includes(rule.code);
+                      return (
+                        <button
+                          key={rule.id}
+                          type="button"
+                          data-testid={`anomaly-rule-${rule.code}`}
+                          disabled={lastEvaluation !== null}
+                          onClick={() => handleToggleCiteRule(rule.code)}
+                          className={`w-full text-left rounded-lg border p-2.5 space-y-1 transition-all ${
+                            isCited
+                              ? 'ring-2 ring-[#0284C7] border-[#0284C7] bg-sky-50/90 dark:bg-sky-950/50'
+                              : rule.severity === 'critical'
+                                ? 'border-rose-300 dark:border-rose-800/70 bg-rose-50/70 dark:bg-rose-950/30'
                                 : rule.severity === 'strict'
-                                  ? 'bg-amber-700 text-white'
-                                  : 'bg-[#0A192F] dark:bg-[#1E2E4A] text-white'
-                            }`}
-                          >
-                            {rule.code}
-                          </span>
-                        </div>
-                        <p className="text-xs text-[#334155] dark:text-[#CBD5E1] leading-relaxed">
-                          {rule.detail}
-                        </p>
-                      </div>
-                    ))}
+                                  ? 'border-amber-300 dark:border-amber-800/70 bg-amber-50/70 dark:bg-amber-950/30'
+                                  : 'border-[#E2D9C8] dark:border-[#243454] bg-[#FCF9F2] dark:bg-[#0D1629]'
+                          } ${lastEvaluation === null ? 'cursor-pointer hover:border-[#0284C7]' : 'cursor-default'}`}
+                        >
+                          <div className="flex items-center justify-between gap-2 text-xs font-bold">
+                            <span className="text-[#0F172A] dark:text-white">{rule.title}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {isCited && (
+                                <span className="font-mono text-[10px] text-[#0284C7] dark:text-sky-300 font-bold">
+                                  ✓ TRÍCH DẪN
+                                </span>
+                              )}
+                              <span
+                                className={`font-mono text-[10px] px-1.5 py-0.5 rounded ${
+                                  rule.severity === 'critical'
+                                    ? 'bg-rose-700 text-white'
+                                    : rule.severity === 'strict'
+                                      ? 'bg-amber-700 text-white'
+                                      : 'bg-[#0A192F] dark:bg-[#1E2E4A] text-white'
+                                }`}
+                              >
+                                {rule.code}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="text-xs text-[#334155] dark:text-[#CBD5E1] leading-relaxed">
+                            {rule.detail}
+                          </p>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1034,6 +1457,36 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                     </button>
                   </div>
                 </div>
+
+                {/* Shift Audit Log */}
+                {auditLog.length > 0 && (
+                  <div className="rounded-xl border border-[#D8CEBC] dark:border-[#1E2E4A] bg-white dark:bg-[#111C33] p-3 space-y-2">
+                    <p className="text-[11px] font-mono uppercase tracking-[0.08em] text-[#475569] dark:text-[#94A3B8]">
+                      Nhật Ký Đóng Dấu Gần Đây ({auditLog.length})
+                    </p>
+                    <div className="space-y-1 max-h-[140px] overflow-y-auto pr-1">
+                      {auditLog.map((entry, idx) => (
+                        <div
+                          key={`${entry.caseCode}-${idx}`}
+                          className="flex items-center justify-between gap-2 text-xs py-1 border-b border-dashed border-[#E2D9C8] dark:border-[#1E2E4A] last:border-b-0"
+                        >
+                          <span className="truncate text-[#0F172A] dark:text-slate-200">
+                            <strong className="font-mono text-[11px]">{entry.caseCode}</strong> · {entry.applicantName}
+                          </span>
+                          <span
+                            className={`font-mono text-[11px] font-bold shrink-0 ${
+                              entry.isCorrect
+                                ? 'text-emerald-700 dark:text-emerald-400'
+                                : 'text-rose-700 dark:text-rose-400'
+                            }`}
+                          >
+                            {VERDICT_LABELS[entry.verdict].label} {entry.scoreDelta > 0 ? `+${entry.scoreDelta}đ` : '✗'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

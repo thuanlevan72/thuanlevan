@@ -5,7 +5,11 @@ import {
   canPlaceGearItem,
   createStarterBackpack,
   evaluateBackpackSynergies,
+  GEAR_ARENA_MODES,
+  GEAR_CATALOG,
+  getArenaWaveStage,
   getGearCatalogEntry,
+  getModeRoundReward,
   getRotatedDimensions,
   ghostGridToPlacedGears,
   GRID_SIZE,
@@ -56,7 +60,6 @@ test('Overclock Core doubles fire rate (x2.0) of adjacent Grenade Launcher', () 
 });
 
 test('Nuclear Battery + Conductor Wire circuit across >= 3 weapons activates Chain Lightning', () => {
-  // Only 2 weapons connected => not yet chain lightning
   const twoWeaponGrid: PlacedGear[] = [
     { uid: 'bat', itemId: 'nuclear_battery', col: 0, row: 2, rotation: 0 },
     { uid: 'wire', itemId: 'conductor_wire', col: 1, row: 2, rotation: 0 },
@@ -67,7 +70,6 @@ test('Nuclear Battery + Conductor Wire circuit across >= 3 weapons activates Cha
   assert.equal(partialEval.energizedWeaponCount, 2);
   assert.equal(partialEval.chainLightningActive, false);
 
-  // Add 3rd weapon connected through conductor wire -> Chain Lightning activates!
   const threeWeaponGrid: PlacedGear[] = [
     ...twoWeaponGrid,
     { uid: 'w3', itemId: 'chain_saw', col: 1, row: 3, rotation: 90 },
@@ -92,7 +94,6 @@ test('all 10 built-in Ghost PvP presets are valid non-overlapping 5x5 JSON build
     assert.ok(evalRes.totalDps > 40, `Round ${ghost.round} ghost DPS too low`);
   }
 
-  // Round-trip serialization test on player build
   const sample = createStarterBackpack();
   const snapshot = serializeGhostBuild('Thuận Lê Mech', 4, sample);
   const reParsed = parseGhostBuildJson(JSON.stringify(snapshot));
@@ -100,7 +101,6 @@ test('all 10 built-in Ghost PvP presets are valid non-overlapping 5x5 JSON build
   assert.equal(reParsed.name, 'Thuận Lê Mech');
   assert.equal(reParsed.grid.length, sample.length);
 
-  // Reject malformed / overlapping JSON
   assert.equal(parseGhostBuildJson('not json'), null);
   assert.equal(
     parseGhostBuildJson(
@@ -127,3 +127,53 @@ test('shop offer generator returns 4 valid items for every round', () => {
     }
   }
 });
+
+test('expanded arsenal (12 weapons, 14 accessories/support), 4 modes, and tactical accessory synergies work', () => {
+  const weaponsCount = GEAR_CATALOG.filter((g) => g.category === 'weapon').length;
+  const supportCount = GEAR_CATALOG.filter((g) => g.category !== 'weapon').length;
+  assert.equal(weaponsCount, 12);
+  assert.equal(supportCount, 14);
+  assert.equal(GEAR_ARENA_MODES.length, 4);
+
+  // Mode reward scaling
+  assert.ok(getModeRoundReward(3, 'boss_rush') > getModeRoundReward(3, 'classic'));
+  assert.ok(getModeRoundReward(3, 'blitz') > getModeRoundReward(3, 'classic'));
+
+  // Accessories attached to 2x2 Nova Cannon
+  const moddedGrid: PlacedGear[] = [
+    { uid: 'nova', itemId: 'nova_cannon', col: 1, row: 1, rotation: 0 }, // 2x2: cols 1..2, rows 1..2
+    { uid: 'mag', itemId: 'extended_mag', col: 0, row: 1, rotation: 0 },
+    { uid: 'vamp', itemId: 'vampire_module', col: 0, row: 2, rotation: 0 },
+    { uid: 'cryo', itemId: 'cryo_cell', col: 3, row: 1, rotation: 0 },
+    { uid: 'sight', itemId: 'laser_sight', col: 3, row: 2, rotation: 0 },
+    { uid: 'emp', itemId: 'stun_capacitor', col: 4, row: 0, rotation: 0 },
+    { uid: 'shield', itemId: 'reflector_shield', col: 4, row: 1, rotation: 0 },
+  ];
+  const moddedEval = evaluateBackpackSynergies(moddedGrid);
+  assert.equal(moddedEval.weapons.length, 1);
+  const nova = moddedEval.weapons[0];
+  assert.equal(nova.pelletCount, 2); // +1 from extended_mag
+  assert.ok(nova.aoeRadius > 96); // +25% AoE
+  assert.ok(nova.slowFactor >= 0.35); // cryo_cell
+  assert.ok(nova.lifestealPct >= 0.05); // vampire_module
+  assert.equal(moddedEval.empCount, 1);
+  assert.ok(moddedEval.reflectPct >= 0.35);
+  assert.ok(moddedEval.maxHp >= 220 + 40 + 25 + 55);
+});
+
+test('all 4 Gear Arena modes have 3x longer round durations (39s..60s) and 3-stage wave escalation', () => {
+  const byId = Object.fromEntries(GEAR_ARENA_MODES.map((m) => [m.id, m]));
+  assert.equal(byId.classic.battleDurationSec, 48);
+  assert.equal(byId.blitz.battleDurationSec, 39);
+  assert.equal(byId.boss_rush.battleDurationSec, 60);
+  assert.equal(byId.endless.battleDurationSec, 48);
+
+  const s1 = getArenaWaveStage(5, 48);
+  const s2 = getArenaWaveStage(22, 48);
+  const s3 = getArenaWaveStage(40, 48);
+  assert.equal(s1.stage, 1);
+  assert.equal(s2.stage, 2);
+  assert.equal(s3.stage, 3);
+  assert.ok(s3.spawnIntervalFactor < s2.spawnIntervalFactor && s2.spawnIntervalFactor < s1.spawnIntervalFactor);
+});
+

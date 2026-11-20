@@ -4,9 +4,13 @@ import { ANOMALY_DAYS, AnomalyVerdict } from '../data/anomalyCases.ts';
 import {
   advanceAfterVerdict,
   advanceToNextDay,
+  ANOMALY_DIFFICULTIES,
   applyVerdictToProgress,
+  buildForensicDossier,
   createInitialAnomalyProgress,
+  evaluateCrossCheckPair,
   evaluateInspectionVerdict,
+  evaluateTimeoutFailure,
   getActiveCase,
   getActiveDay,
 } from './anomalyInspectorEngine.ts';
@@ -150,4 +154,48 @@ test('applyVerdictToProgress transitions cleanly across next_case, day_complete,
   const firedRes = applyVerdictToProgress(fragileState, fatalMiss);
   assert.equal(firedRes.transition, 'fired');
   assert.equal(firedRes.nextProgress.reputation, 0);
+});
+
+test('Difficulty modes, forensic redaction, cross-check pair, rule citation bonus, and timeout penalty work accurately', () => {
+  assert.equal(ANOMALY_DIFFICULTIES.trainee.timeLimitPerCaseSec, null);
+  assert.equal(ANOMALY_DIFFICULTIES.nightmare.initialReputation, 80);
+
+  const alarmCase = ANOMALY_DAYS[0].cases[2]; // d1-c3 (QT-03)
+  const cleanCase = ANOMALY_DAYS[0].cases[0]; // d1-c1 (approve)
+
+  // Nightmare redacts at least one database field and produces interrogation evidence
+  const nightmareForensic = buildForensicDossier(alarmCase, 'nightmare');
+  assert.ok(nightmareForensic.redactedDbKeys.length >= 1);
+  assert.equal(nightmareForensic.interrogationTurns.length, 2);
+  assert.equal(nightmareForensic.interrogationTurns[0].exposesDeception, true);
+
+  // Rule citation & Nightmare score multiplier reward deduction
+  const evalNightmare = evaluateInspectionVerdict(alarmCase, 'alarm', ['d1c3-seal'], 0, {
+    difficulty: 'nightmare',
+    citedRuleCodes: ['QT-03'],
+  });
+  assert.equal(evalNightmare.isCorrect, true);
+  assert.equal(evalNightmare.ruleCitationBonus, 35);
+  assert.deepEqual(evalNightmare.matchedRuleCodes, ['QT-03']);
+  assert.equal(evalNightmare.scoreDelta, Math.round((140 + 25 + 35) * 1.85));
+
+  // Cross-check detects contradiction vs clean pair
+  const mismatchCheck = evaluateCrossCheckPair(
+    alarmCase,
+    alarmCase.documentFields[3], // Mã ấn triện X-9904
+    alarmCase.databaseFields[0] // Trạng thái CSDL TRỐN NÃ
+  );
+  assert.equal(mismatchCheck.hasMismatch, true);
+
+  const cleanCheck = evaluateCrossCheckPair(
+    cleanCase,
+    cleanCase.documentFields[0],
+    cleanCase.databaseFields[0]
+  );
+  assert.equal(cleanCheck.hasMismatch, false);
+
+  // Timeout failure penalizes reputation according to difficulty
+  const timeoutRes = evaluateTimeoutFailure(alarmCase, 'nightmare');
+  assert.equal(timeoutRes.isCorrect, false);
+  assert.equal(timeoutRes.reputationDelta, -27);
 });
