@@ -167,11 +167,60 @@ export function normalizePhraseInput(value: string): string {
     .replace(/\s+/g, ' ');
 }
 
+export interface DomExplosionShard {
+  id: string;
+  label: string;
+  xPercent: number;
+  yPercent: number;
+  dxPx: number;
+  dyPx: number;
+  rotDeg: number;
+  tone: 'rose' | 'amber' | 'sky' | 'emerald';
+}
+
+const SHARD_LABELS = ['<div>', '</>', '404', '{ }', 'ERR!', 'DOM', '⚡', '💥'] as const;
+const SHARD_TONES: readonly DomExplosionShard['tone'][] = ['rose', 'amber', 'sky', 'emerald'];
+
+export function createDomExplosionShards(
+  count = 14,
+  originXPercent = 50,
+  originYPercent = 50
+): DomExplosionShard[] {
+  const shards: DomExplosionShard[] = [];
+  const safeCount = Math.max(4, Math.min(28, count));
+  for (let i = 0; i < safeCount; i++) {
+    const angle = (Math.PI * 2 * i) / safeCount + (Math.random() * 0.5 - 0.25);
+    const speed = 55 + Math.random() * 145;
+    shards.push({
+      id: `shard-${Date.now()}-${i}-${Math.floor(Math.random() * 10000)}`,
+      label: SHARD_LABELS[i % SHARD_LABELS.length],
+      xPercent: Math.max(8, Math.min(92, originXPercent)),
+      yPercent: Math.max(10, Math.min(90, originYPercent)),
+      dxPx: Math.round(Math.cos(angle) * speed),
+      dyPx: Math.round(Math.sin(angle) * speed + 35),
+      rotDeg: Math.round((Math.random() - 0.5) * 520),
+      tone: SHARD_TONES[i % SHARD_TONES.length],
+    });
+  }
+  return shards;
+}
+
+export function computeMazeTargetDistance(
+  scrollX: number,
+  scrollY: number,
+  targetX = 720,
+  targetY = 520
+): number {
+  const dx = targetX - scrollX;
+  const dy = targetY - scrollY;
+  return Math.round(Math.hypot(dx, dy));
+}
+
 export function createVirusPopup(indexSeed: number): VirusPopupItem {
   const tpl = VIRUS_POPUP_TEMPLATES[indexSeed % VIRUS_POPUP_TEMPLATES.length];
-  // Spread across safe interior percentage bounds (8%..62% X, 8%..64% Y)
-  const xPercent = 8 + ((indexSeed * 23) % 52);
-  const yPercent = 8 + ((indexSeed * 19) % 54);
+  // Spread across safe interior percentage bounds (6%..58% X, 6%..60% Y)
+  const xPercent = 6 + ((indexSeed * 23) % 52);
+  const yPercent = 6 + ((indexSeed * 19) % 54);
   return {
     id: `virus-${Date.now()}-${indexSeed}-${Math.floor(Math.random() * 1000)}`,
     title: tpl.title,

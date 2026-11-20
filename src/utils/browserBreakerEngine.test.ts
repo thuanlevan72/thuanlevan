@@ -3,9 +3,11 @@ import test from 'node:test';
 import {
   BROWSER_BREAKER_STAGES,
   checkInvisibleSelectionMatch,
+  computeMazeTargetDistance,
   computeRamTick,
   computeResizeGapPx,
   computeWaterLevelPercent,
+  createDomExplosionShards,
   createVirusPopup,
   isResizePuzzleSolved,
   normalizePhraseInput,
@@ -52,7 +54,19 @@ test('RAM pressure rises with active virus popups and cools down when cleared', 
   assert.equal(computeRamTick(98, 6, 2), 100);
 
   const popup = createVirusPopup(2);
-  assert.ok(popup.xPercent >= 8 && popup.xPercent <= 65);
-  assert.ok(popup.yPercent >= 8 && popup.yPercent <= 65);
+  assert.ok(popup.xPercent >= 6 && popup.xPercent <= 65);
+  assert.ok(popup.yPercent >= 6 && popup.yPercent <= 65);
   assert.ok(popup.title.length > 0);
+});
+
+test('createDomExplosionShards and computeMazeTargetDistance generate valid chaos feedback', () => {
+  const shards = createDomExplosionShards(16, 50, 50);
+  assert.equal(shards.length, 16);
+  for (const s of shards) {
+    assert.ok(s.label.length > 0);
+    assert.ok(Math.abs(s.dxPx) + Math.abs(s.dyPx) > 10);
+  }
+
+  assert.equal(computeMazeTargetDistance(720, 520, 720, 520), 0);
+  assert.equal(computeMazeTargetDistance(420, 120, 720, 520), 500);
 });

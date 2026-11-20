@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { FileSearch, Gamepad2, Grid3X3, Layers, Sparkles, Terminal } from 'lucide-react';
+import { FileSearch, Gamepad2, Grid3X3, Layers, Sparkles, Terminal, Zap } from 'lucide-react';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 import { AnomalyGameSection } from './AnomalyGameSection.tsx';
 import { BrowserBreakerGameSection } from './BrowserBreakerGameSection.tsx';
+import { PrismTdGameSection } from './PrismTdGameSection.tsx';
 import { XiangqiGameSection } from './XiangqiGameSection.tsx';
 
-type GameId = 'xiangqi' | 'anomaly' | 'browser_breaker';
+type GameId = 'xiangqi' | 'anomaly' | 'browser_breaker' | 'prism_td';
 
 interface GameCatalogItem {
   id: string;
@@ -46,6 +47,15 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     gameKey: 'browser_breaker',
   },
   {
+    id: 'prism-td',
+    title: 'Thủ Thành Laser',
+    shortTitle: 'Mạch Laser',
+    subtitle: 'Prism & Mirror Circuit TD · Bẻ cong tia laser quét quái',
+    badge: '3 Mạch',
+    playable: true,
+    gameKey: 'prism_td',
+  },
+  {
     id: 'gomoku-planned',
     title: 'Cờ Caro 5 Ô',
     shortTitle: 'Cờ Caro',
@@ -74,6 +84,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       const playParam = new URLSearchParams(window.location.search).get('play');
       if (playParam === 'anomaly') return 'anomaly';
       if (playParam === 'browser' || playParam === 'browser-breaker') return 'browser_breaker';
+      if (playParam === 'prism' || playParam === 'prism-td' || playParam === 'laser') return 'prism_td';
     }
     return 'xiangqi';
   });
@@ -140,6 +151,13 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
                         }`}
                         aria-hidden="true"
                       />
+                    ) : item.gameKey === 'prism_td' ? (
+                      <Zap
+                        className={`w-3.5 h-3.5 shrink-0 ${
+                          isSelected ? 'text-cyan-300' : 'text-cyan-600 dark:text-cyan-400'
+                        }`}
+                        aria-hidden="true"
+                      />
                     ) : (
                       <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true" />
                     )}
@@ -191,6 +209,9 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       )}
       {activeGame === 'browser_breaker' && (
         <BrowserBreakerGameSection theme={theme} onToggleTheme={onToggleTheme} />
+      )}
+      {activeGame === 'prism_td' && (
+        <PrismTdGameSection theme={theme} onToggleTheme={onToggleTheme} />
       )}
     </div>
   );

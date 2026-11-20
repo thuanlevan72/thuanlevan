@@ -227,13 +227,13 @@ export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
   }
   if (route === 'game') {
     return {
-      title: 'Khu Trò Chơi 2D — Cờ Tướng, Hồ Sơ & Phá Vỡ Trình Duyệt',
+      title: 'Khu Trò Chơi 2D — Cờ Tướng, Hồ Sơ, Phá DOM & Laser',
       description:
-        'Khám phá tab Game 2D đa thiết bị: Cờ Tướng AI 10 cấp độ, Kiểm Duyệt Hồ Sơ Dị Biệt 12 ngày và game giải đố Phá Vỡ Trình Duyệt độc lạ.',
+        'Chơi 4 game 2D độc đáo: Cờ Tướng AI 10 cấp, Kiểm Duyệt Hồ Sơ 12 ngày, Phá Vỡ Trình Duyệt và Thủ Thành Gương Phản Xạ Mạch Laser.',
       keywords:
-        'Game 2D, Cờ Tướng 10 cấp độ, Kiểm Duyệt Hồ Sơ Dị Biệt, Phá Vỡ Trình Duyệt, Browser Breaking Puzzle, Meta-UI Game, Thuận Lê',
+        'Game 2D, Cờ Tướng 10 cấp độ, Kiểm Duyệt Hồ Sơ Dị Biệt, Phá Vỡ Trình Duyệt, Thủ Thành Laser, Prism Circuit TD, Thuận Lê',
       ogType: 'website',
-      ogImageAlt: 'Khu Trò Chơi 2D gồm Cờ Tướng AI, Kiểm Duyệt Hồ Sơ và Phá Vỡ Trình Duyệt',
+      ogImageAlt: 'Khu Trò Chơi 2D gồm Cờ Tướng AI, Kiểm Duyệt Hồ Sơ, Phá Vỡ Trình Duyệt và Thủ Thành Mạch Laser',
       path: '/game',
     };
   }
