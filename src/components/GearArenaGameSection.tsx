@@ -1725,26 +1725,26 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
       <section
         id="gear-arena-section"
         aria-label="Đấu Trường Ba Lô Cơ Khí — Gear-Grid Auto Arena"
-        className="rounded-2xl border border-[#1E2E4A] bg-[#070B14] text-[#F1F5F9] p-5 sm:p-7 shadow-sm"
+        className="rounded-2xl border border-[#1E2E4A] bg-[#070B14] text-[#F1F5F9] p-5 sm:p-7 mobile-ls:p-3 shadow-sm"
       >
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
-          <div className="lg:col-span-7 space-y-4">
-            <p className="text-xs font-mono tracking-wider text-cyan-400">
+        <div className="grid grid-cols-1 mobile-ls:grid-cols-12 lg:grid-cols-12 gap-6 mobile-ls:gap-3 items-center">
+          <div className="mobile-ls:col-span-8 lg:col-span-7 space-y-4 mobile-ls:space-y-2">
+            <p className="text-xs font-mono tracking-wider text-cyan-400 mobile-ls:text-[11px]">
               12 VŨ KHÍ · 14 PHỤ KIỆN &amp; LÕI · 4 CHẾ ĐỘ CHƠI · BÓNG MA PvP
             </p>
-            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white [text-wrap:balance]">
+            <h1 className="text-2xl sm:text-4xl mobile-ls:text-xl font-extrabold tracking-tight text-white [text-wrap:balance]">
               Đấu Trường Ba Lô Cơ Khí
             </h1>
-            <p className="text-sm text-slate-300 leading-relaxed max-w-2xl">
+            <p className="text-sm mobile-ls:text-xs text-slate-300 leading-relaxed max-w-2xl mobile-ls:line-clamp-2">
               Sắp xếp <strong>12 loại súng tối tân</strong> (Nova 2×2, Vulcan 6 Nòng, Sét Tesla, Railgun, Băng Cryo, Phun Lửa...) cùng <strong>14 phụ kiện chiến thuật</strong> (Hút Máu, Tụ EMP, Hồng Tâm, Băng Đạn+) vào ba lô <strong>5×5</strong> để kích hoạt cộng hưởng hủy diệt!
             </p>
 
             {/* 4 Selectable Game Modes */}
-            <div className="space-y-2">
+            <div className="space-y-2 mobile-ls:space-y-1">
               <p className="text-xs font-mono uppercase tracking-[0.08em] text-slate-400">
                 Chọn chế độ đấu trường ({GEAR_ARENA_MODES.length} chế độ)
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mobile-ls:gap-1.5 text-xs">
                 {GEAR_ARENA_MODES.map((m) => {
                   const isSel = selectedMode === m.id;
                   return (
@@ -1753,22 +1753,22 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                       type="button"
                       data-testid={`gear-mode-${m.id}`}
                       onClick={() => setSelectedMode(m.id)}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer space-y-1 ${
+                      className={`p-3 mobile-ls:p-2 rounded-xl border text-left transition-all cursor-pointer space-y-1 mobile-ls:space-y-0.5 ${
                         isSel
                           ? 'bg-cyan-500/15 border-cyan-400 ring-1 ring-cyan-400/60'
                           : 'bg-[#0D1526] border-[#1E2E4A] hover:border-cyan-500/60'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <strong className={isSel ? 'text-cyan-300 text-sm' : 'text-white text-sm'}>
+                        <strong className={isSel ? 'text-cyan-300 text-sm mobile-ls:text-xs' : 'text-white text-sm mobile-ls:text-xs'}>
                           {m.name}
                         </strong>
                         <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-900 text-amber-300">
                           {m.startingGold}G đầu
                         </span>
                       </div>
-                      <p className="text-[11px] font-mono text-sky-300">{m.tagline}</p>
-                      <p className="text-[11px] text-slate-300 leading-snug">{m.description}</p>
+                      <p className="text-[11px] font-mono text-sky-300 mobile-ls:truncate">{m.tagline}</p>
+                      <p className="text-[11px] text-slate-300 leading-snug mobile-ls:hidden">{m.description}</p>
                     </button>
                   );
                 })}
@@ -1781,20 +1781,20 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                 data-start="true"
                 data-testid="gear-start-btn"
                 onClick={() => startNewRun()}
-                className="min-h-[44px] w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-sm transition-colors cursor-pointer"
+                className="min-h-[44px] mobile-ls:min-h-[40px] w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 mobile-ls:py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-sm transition-colors cursor-pointer"
               >
                 <Play className="w-4 h-4" aria-hidden="true" />
                 <span>Vào Chế Độ: {activeMode.name}</span>
               </button>
-              <span className="text-xs text-slate-400">
+              <span className="text-xs text-slate-400 mobile-ls:hidden">
                 [Enter] bắt đầu · [R] xoay súng · [WASD] điều khiển né đạn · Kỷ lục Vô Tận: Vòng {bestEndlessRound}
               </span>
             </div>
           </div>
 
           {/* Bespoke SVG Emblem Centerpiece */}
-          <div className="lg:col-span-5 flex justify-center">
-            <div className="w-full max-w-[340px] aspect-square rounded-2xl border border-cyan-500/30 bg-[#0D1526] p-5 flex flex-col items-center justify-center relative">
+          <div className="mobile-ls:col-span-4 lg:col-span-5 flex justify-center">
+            <div className="w-full max-w-[340px] mobile-ls:max-w-[200px] aspect-square rounded-2xl border border-cyan-500/30 bg-[#0D1526] p-5 mobile-ls:p-2.5 flex flex-col items-center justify-center relative">
               <svg viewBox="0 0 240 240" className="w-full h-full" aria-hidden="true">
                 <defs>
                   <linearGradient id="gearGrad" x1="0" y1="0" x2="1" y2="1">
@@ -1846,15 +1846,15 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
     <section
       id="gear-arena-section"
       aria-label="Đấu Trường Ba Lô Cơ Khí"
-      className="relative rounded-2xl border border-[#1E2E4A] bg-[#070B14] text-[#F1F5F9] p-3.5 sm:p-5 shadow-sm"
+      className="relative rounded-2xl border border-[#1E2E4A] bg-[#070B14] text-[#F1F5F9] p-3.5 sm:p-5 mobile-ls:p-2 shadow-sm"
     >
       {/* Top Unified HUD */}
-      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-2.5 pb-3 border-b border-[#1E2E4A]">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs tabular-nums">
+      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between mobile-ls:flex-row mobile-ls:items-center mobile-ls:justify-between gap-2.5 mobile-ls:gap-1.5 pb-3 mobile-ls:pb-1.5 border-b border-[#1E2E4A]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mobile-ls:gap-x-2 mobile-ls:gap-y-1 text-xs tabular-nums">
           <button
             type="button"
             onClick={() => setPhase('TITLE')}
-            className="min-h-[40px] px-3 py-1.5 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 text-xs font-medium cursor-pointer"
+            className="min-h-[40px] mobile-ls:min-h-[34px] px-3 mobile-ls:px-2.5 py-1.5 mobile-ls:py-1 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 text-xs font-medium cursor-pointer"
           >
             Menu
           </button>
@@ -1916,16 +1916,17 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
               setCopiedNotice(false);
               setShowGhostModal(true);
             }}
-            className="min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 text-xs font-mono text-slate-200 cursor-pointer whitespace-nowrap"
+            className="min-h-[40px] mobile-ls:min-h-[34px] inline-flex items-center gap-1.5 px-3 mobile-ls:px-2 py-1.5 mobile-ls:py-1 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 text-xs font-mono text-slate-200 cursor-pointer whitespace-nowrap"
           >
             <Code2 className="w-3.5 h-3.5 text-rose-400" />
-            <span>Ghost JSON</span>
+            <span className="mobile-ls:hidden">Ghost JSON</span>
+            <span className="hidden mobile-ls:inline">JSON</span>
           </button>
           <button
             type="button"
             onClick={() => setMuted((m) => !m)}
             aria-label={muted ? 'Bật âm thanh' : 'Tắt âm thanh'}
-            className="min-w-[40px] min-h-[40px] p-2 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 flex items-center justify-center cursor-pointer"
+            className="min-w-[40px] min-h-[40px] mobile-ls:min-w-[34px] mobile-ls:min-h-[34px] p-2 mobile-ls:p-1.5 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 flex items-center justify-center cursor-pointer"
           >
             {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-cyan-400" />}
           </button>
@@ -1933,7 +1934,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
             type="button"
             onClick={() => startNewRun()}
             aria-label="Chơi lại từ Vòng 1"
-            className="min-w-[40px] min-h-[40px] p-2 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 flex items-center justify-center cursor-pointer"
+            className="min-w-[40px] min-h-[40px] mobile-ls:min-w-[34px] mobile-ls:min-h-[34px] p-2 mobile-ls:p-1.5 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 flex items-center justify-center cursor-pointer"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
@@ -1942,18 +1943,18 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
 
       {/* PHASE 1: TACTICAL 5x5 BACKPACK & 6-SLOT FILTERABLE SHOP */}
       {phase === 'SHOP' && (
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        <div className="mt-4 mobile-ls:mt-2 grid grid-cols-1 mobile-ls:grid-cols-[minmax(0,1fr)_295px] lg:grid-cols-12 gap-5 mobile-ls:gap-3 items-start">
           {/* Left 7 Cols: 5x5 Backpack Grid */}
-          <div className="lg:col-span-7 space-y-3">
+          <div className="mobile-ls:min-w-0 lg:col-span-7 space-y-3 mobile-ls:space-y-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                <h2 className="text-base sm:text-lg mobile-ls:text-sm font-bold text-white flex items-center gap-2">
                   <span>Ba Lô Cơ Khí (5×5)</span>
                   <span className="text-xs font-mono text-cyan-400">
                     {playerEval.weapons.length} súng · {grid.length - playerEval.weapons.length} phụ kiện
                   </span>
                 </h2>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-400 mobile-ls:hidden">
                   Nhấp món đồ đang có để nhấc lên/xoay [R], hoặc nhấp ô trống để đặt trang bị vừa mua.
                 </p>
               </div>
@@ -2008,7 +2009,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
             )}
 
             {/* 5x5 Armored Mech Hangar Grid Board */}
-            <div className="relative mx-auto w-full max-w-[440px] aspect-square p-3 rounded-2xl border border-slate-700/80 bg-gradient-to-b from-[#111C31] to-[#080E1B] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_30px_rgba(0,0,0,0.45)]">
+            <div className="relative mx-auto w-full max-w-[440px] mobile-ls:max-w-[min(100%,calc(100dvh-130px))] aspect-square p-3 mobile-ls:p-2 rounded-2xl border border-slate-700/80 bg-gradient-to-b from-[#111C31] to-[#080E1B] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_30px_rgba(0,0,0,0.45)]">
               <div
                 className="grid grid-cols-5 grid-rows-5 gap-1.5 w-full h-full"
                 onMouseLeave={() => setHoverCell(null)}
@@ -2079,7 +2080,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
               </div>
 
               {/* Placed Multi-Cell Armored Hardware Modules */}
-              <div className="pointer-events-none absolute inset-3 grid grid-cols-5 grid-rows-5 gap-1.5">
+              <div className="pointer-events-none absolute inset-3 mobile-ls:inset-2 grid grid-cols-5 grid-rows-5 gap-1.5">
                 {grid.map((g) => {
                   const entry = getGearCatalogEntry(g.itemId);
                   const dim = getRotatedDimensions(g.itemId, g.rotation);
@@ -2204,8 +2205,8 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
           </div>
 
           {/* Right 5 Cols: Filterable 6-Slot Shop + Ghost PvP + FIGHT CTA */}
-          <div className="lg:col-span-5 space-y-3.5">
-            <div className="rounded-2xl border border-[#1E2E4A] bg-[#0D1526] p-3.5 space-y-2.5">
+          <div className="lg:col-span-5 space-y-3.5 mobile-ls:max-h-[calc(100dvh-68px)] mobile-ls:overflow-y-auto mobile-ls:pr-1 mobile-ls:space-y-2">
+            <div className="rounded-2xl border border-[#1E2E4A] bg-[#0D1526] p-3.5 mobile-ls:p-2.5 space-y-2.5 mobile-ls:space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-bold text-white">
                   Kho Trang Bị ({GEAR_CATALOG.length} Món)
@@ -2359,16 +2360,16 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
 
       {/* PHASE 2: LIVE NEON VECTOR AUTO-BATTLE CANVAS */}
       {phase === 'BATTLE' && (
-        <div className="mt-3 space-y-2.5">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-center text-xs tabular-nums">
-            <div className="p-2.5 rounded-xl bg-gradient-to-b from-[#132036] to-[#0B1221] border border-cyan-500/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] space-y-1.5">
-              <div className="flex items-center justify-between">
-                <strong className="text-cyan-300 tracking-wide">CHIẾN GIÁP CỦA BẠN</strong>
-                <span className="font-mono text-white">
+        <div className="mt-3 mobile-ls:mt-1.5 space-y-2.5 mobile-ls:space-y-1.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 mobile-ls:grid-cols-3 gap-2.5 mobile-ls:gap-1.5 items-center text-xs tabular-nums">
+            <div className="p-2.5 mobile-ls:p-1.5 rounded-xl bg-gradient-to-b from-[#132036] to-[#0B1221] border border-cyan-500/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] space-y-1.5 mobile-ls:space-y-1">
+              <div className="flex items-center justify-between gap-1">
+                <strong className="text-cyan-300 tracking-wide truncate mobile-ls:text-[11px]">CHIẾN GIÁP</strong>
+                <span className="font-mono text-white mobile-ls:text-[11px] shrink-0">
                   {battleHud.playerHp}/{battleHud.playerMaxHp} HP
                 </span>
               </div>
-              <div className="w-full h-2.5 rounded bg-slate-950 border border-slate-800 overflow-hidden p-0.5">
+              <div className="w-full h-2.5 mobile-ls:h-2 rounded bg-slate-950 border border-slate-800 overflow-hidden p-0.5">
                 <div
                   className="h-full rounded-sm bg-gradient-to-r from-cyan-500 to-sky-300 transition-all duration-100"
                   style={{ width: `${Math.max(0, (battleHud.playerHp / Math.max(1, battleHud.playerMaxHp)) * 100)}%` }}
@@ -2376,22 +2377,22 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center gap-3.5 py-1.5 px-3 rounded-xl bg-gradient-to-b from-[#132036] to-[#0B1221] border border-slate-700/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] font-mono">
+            <div className="flex flex-wrap items-center justify-center gap-3.5 mobile-ls:gap-2 py-1.5 px-3 mobile-ls:py-1 mobile-ls:px-2 rounded-xl bg-gradient-to-b from-[#132036] to-[#0B1221] border border-slate-700/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] font-mono">
               <div>
                 <span className="text-slate-400 text-[10px] block text-center">THỜI GIAN</span>
-                <strong className="text-base text-amber-300" data-testid="gear-battle-time">
+                <strong className="text-base mobile-ls:text-xs text-amber-300" data-testid="gear-battle-time">
                   {battleHud.timeLeft}s
                 </strong>
               </div>
               <div>
                 <span className="text-slate-400 text-[10px] block text-center">ĐỢT QUÁI</span>
-                <strong className="text-base text-cyan-300">{battleHud.waveStage}/3</strong>
+                <strong className="text-base mobile-ls:text-xs text-cyan-300">{battleHud.waveStage}/3</strong>
               </div>
               <div>
                 <span className="text-slate-400 text-[10px] block text-center">TIÊU DIỆT</span>
-                <strong className="text-base text-emerald-300">{battleHud.kills}</strong>
+                <strong className="text-base mobile-ls:text-xs text-emerald-300">{battleHud.kills}</strong>
               </div>
-              <div>
+              <div className="mobile-ls:hidden">
                 <span className="text-slate-400 text-[10px] block text-center">SÁT THƯƠNG</span>
                 <strong className="text-base text-white">{battleHud.damageDealt}</strong>
               </div>
@@ -2399,7 +2400,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                 type="button"
                 data-testid="gear-speed-btn"
                 onClick={() => setBattleSpeed((s) => (s === 1 ? 2 : 1))}
-                className={`min-h-[38px] min-w-[44px] px-2.5 py-1 rounded-lg border text-xs font-bold transition-colors cursor-pointer ${
+                className={`min-h-[38px] min-w-[44px] mobile-ls:min-h-[32px] mobile-ls:min-w-[36px] px-2.5 py-1 rounded-lg border text-xs font-bold transition-colors cursor-pointer ${
                   battleSpeed === 2
                     ? 'bg-amber-500/20 border-amber-400 text-amber-200'
                     : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-cyan-400'
@@ -2410,14 +2411,14 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
               </button>
             </div>
 
-            <div className="p-2.5 rounded-xl bg-gradient-to-b from-[#231224] to-[#110915] border border-rose-500/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] space-y-1.5">
-              <div className="flex items-center justify-between">
-                <strong className="text-rose-300 truncate tracking-wide">{activeGhost.name}</strong>
-                <span className="font-mono text-white">
+            <div className="p-2.5 mobile-ls:p-1.5 rounded-xl bg-gradient-to-b from-[#231224] to-[#110915] border border-rose-500/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] space-y-1.5 mobile-ls:space-y-1">
+              <div className="flex items-center justify-between gap-1">
+                <strong className="text-rose-300 truncate tracking-wide mobile-ls:text-[11px]">{activeGhost.name}</strong>
+                <span className="font-mono text-white mobile-ls:text-[11px] shrink-0">
                   {battleHud.ghostHp}/{battleHud.ghostMaxHp} HP
                 </span>
               </div>
-              <div className="w-full h-2.5 rounded bg-slate-950 border border-slate-800 overflow-hidden p-0.5">
+              <div className="w-full h-2.5 mobile-ls:h-2 rounded bg-slate-950 border border-slate-800 overflow-hidden p-0.5">
                 <div
                   className="h-full rounded-sm bg-gradient-to-r from-rose-600 to-amber-400 transition-all duration-100"
                   style={{ width: `${Math.max(0, (battleHud.ghostHp / Math.max(1, battleHud.ghostMaxHp)) * 100)}%` }}
@@ -2439,7 +2440,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
             width={ARENA_W}
             height={ARENA_H}
             data-testid="gear-arena-canvas"
-            className="w-full aspect-[920/500] h-auto rounded-xl border border-[#1E2E4A]"
+            className="w-full mobile-ls:max-w-[min(100%,calc((100dvh-130px)*1.84))] mobile-ls:mx-auto block aspect-[920/500] h-auto rounded-xl border border-[#1E2E4A]"
             aria-label="Đấu trường chiến đấu Ba Lô Cơ Khí"
           />
         </div>

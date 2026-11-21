@@ -18,6 +18,7 @@ import {
 import { useMemo, useState } from 'react';
 import {
   AI_AGENT_EXPERIENCE,
+  GALLERY_ARTWORKS,
   HERO_METRICS,
   PORTFOLIO_PROFILE,
   PORTFOLIO_PROJECTS,
@@ -503,7 +504,7 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
                     className="no-print inline-flex items-center gap-1.5 font-medium text-[#0369A1] dark:text-[#38BDF8] hover:underline underline-offset-4"
                   >
                     <Images className="w-3.5 h-3.5" aria-hidden="true" />
-                    <span>Xem Triển Lãm Ảnh (28 tác phẩm)</span>
+                    <span>Xem Triển Lãm Ảnh ({GALLERY_ARTWORKS.length} tác phẩm)</span>
                   </a>
                 </div>
               </div>
@@ -955,7 +956,7 @@ export function CvPdfSection({ theme, onToggleTheme, onNavigate }: CvPdfSectionP
                   className="no-print inline-flex items-center gap-1.5 font-medium text-[#0369A1] dark:text-[#38BDF8] hover:underline underline-offset-4"
                 >
                   <Images className="w-3.5 h-3.5" aria-hidden="true" />
-                  <span>Xem Triển Lãm Ảnh &amp; Video (28 tác phẩm)</span>
+                  <span>Xem Triển Lãm Ảnh &amp; Video ({GALLERY_ARTWORKS.length} tác phẩm)</span>
                 </a>
               </div>
             </div>

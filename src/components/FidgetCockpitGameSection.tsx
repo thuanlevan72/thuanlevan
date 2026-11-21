@@ -1156,7 +1156,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             : phase === 'finished'
               ? 'border-emerald-400/80 bg-[#0A1614]'
               : 'border-slate-700/90 bg-[#0D131D]'
-      } text-slate-100 p-4 sm:p-5`}
+      } text-slate-100 p-4 sm:p-5 mobile-ls:p-2`}
     >
       {/* Subtle Anodized Corner Bolts */}
       <svg aria-hidden="true" className="pointer-events-none absolute top-2.5 left-2.5 w-3 h-3 text-slate-700" viewBox="0 0 12 12">
@@ -1197,14 +1197,14 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
       )}
 
       {/* TOP ANODIZED HARDWARE BEZEL: Mode & Difficulty Switch + LCD Telemetry + Mute/Reset */}
-      <div className="flex flex-col gap-3 pb-3 border-b border-slate-800">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col gap-3 mobile-ls:gap-1.5 pb-3 mobile-ls:pb-1.5 border-b border-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-3 mobile-ls:gap-1.5">
+          <div className="flex flex-wrap items-center gap-3 mobile-ls:gap-2">
             <div>
-              <h1 className="font-sans text-lg sm:text-xl font-bold tracking-tight text-white">
+              <h1 className="font-sans text-lg sm:text-xl mobile-ls:text-sm font-bold tracking-tight text-white">
                 Buồng Lái Hỗn Loạn 15 Giây
               </h1>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-400 mobile-ls:hidden">
                 15 phản xạ cơ khí · Sự cố Khẩn Cấp ×1.5 điểm · Overdrive pháo hoa
               </p>
             </div>
@@ -1263,8 +1263,8 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
           </div>
 
           {/* Clean Tabular LCD Readouts + Mute/Reset Controls */}
-          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-            <div className="flex flex-wrap items-center gap-3 rounded-xl bg-[#070A10] border border-slate-800 px-3.5 py-2 font-mono tabular-nums text-xs">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 mobile-ls:gap-2">
+            <div className="flex flex-wrap items-center gap-3 mobile-ls:gap-2 rounded-xl bg-[#070A10] border border-slate-800 px-3.5 py-2 mobile-ls:px-2 mobile-ls:py-1 font-mono tabular-nums text-xs">
               <div>
                 <span className="text-slate-400 block text-[10px]">ĐIỂM</span>
                 <span data-testid="fidget-score" className="text-sm sm:text-base font-bold text-white">
@@ -1405,7 +1405,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
       </div>
 
       {/* COMMAND DISPLAY + PILOT DEBRIEF + OVERDRIVE CAPACITOR */}
-      <div className="mt-3 mb-4 space-y-2.5">
+      <div className="mt-3 mb-4 mobile-ls:mt-1.5 mobile-ls:mb-2 space-y-2.5 mobile-ls:space-y-1.5">
         {phase === 'failed' || phase === 'finished' ? (
           <div
             data-testid="fidget-debrief-card"
@@ -1516,7 +1516,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         ) : (
           <div
             data-testid="fidget-active-command"
-            className={`sticky top-1 z-20 md:static shadow-lg md:shadow-none rounded-xl border px-3 sm:px-4 py-2 sm:py-2.5 space-y-1.5 sm:space-y-2 ${
+            className={`sticky top-1 z-20 mobile-ls:static md:static shadow-lg md:shadow-none rounded-xl border px-3 sm:px-4 mobile-ls:px-2.5 py-2 sm:py-2.5 mobile-ls:py-1.5 space-y-1.5 sm:space-y-2 mobile-ls:space-y-1 ${
               activeTask.isCrisis
                 ? 'border-rose-400 bg-[#24111B]'
                 : 'border-amber-400/70 bg-[#121B2B]'
@@ -1609,11 +1609,11 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
       </div>
 
       {/* 6-MODULE ELECTROMECHANICAL COCKPIT GRID (2x3) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 mobile-ls:grid-cols-3 lg:grid-cols-3 gap-2.5 sm:gap-3.5 mobile-ls:gap-2">
         {/* MODULE 1: 3x TACTILE TOGGLE SWITCHES */}
         <div
           data-testid="module-switches"
-          className={`rounded-xl border p-3 sm:p-4 bg-[#111824] flex flex-col justify-between gap-3 transition-all ${
+          className={`rounded-xl border p-3 sm:p-4 mobile-ls:p-2 bg-[#111824] flex flex-col justify-between gap-3 mobile-ls:gap-1.5 transition-all ${
             isModuleTargeted('switches')
               ? 'border-emerald-400 ring-2 ring-emerald-400/40 bg-[#13202B]'
               : 'border-slate-800'
@@ -1654,7 +1654,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                   data-testid={`cockpit-switch-${idx}`}
                   onClick={() => cycleSwitch(idx)}
                   aria-label={`Công tắc ${idx + 1}: ${textLabel}`}
-                  className={`min-h-[112px] rounded-xl border p-2 flex flex-col items-center justify-between gap-1 cursor-pointer select-none transition-colors ${
+                  className={`min-h-[112px] mobile-ls:min-h-[70px] rounded-xl border p-2 mobile-ls:p-1.5 flex flex-col items-center justify-between gap-1 cursor-pointer select-none transition-colors ${
                     isMatched
                       ? 'border-emerald-400 bg-emerald-950/35'
                       : 'border-slate-700 bg-[#0A0E16] hover:border-slate-500'
@@ -1673,7 +1673,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                       }`}
                     />
                   </div>
-                  <div className="relative w-10 h-14 rounded-lg bg-[#05070B] border border-slate-800 flex items-center justify-center shadow-inner">
+                  <div className="relative w-10 h-14 mobile-ls:h-8 rounded-lg bg-[#05070B] border border-slate-800 flex items-center justify-center shadow-inner">
                     <div
                       className={`w-7 h-5 rounded border shadow-md transition-transform duration-150 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${tiltClass}`}
                     />
@@ -1698,7 +1698,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         {/* MODULE 2: BIG RED EMERGENCY SMASH BUTTON */}
         <div
           data-testid="module-red_button"
-          className={`rounded-xl border p-3 sm:p-4 bg-[#111824] flex flex-col justify-between gap-3 transition-all ${
+          className={`rounded-xl border p-3 sm:p-4 mobile-ls:p-2 bg-[#111824] flex flex-col justify-between gap-3 mobile-ls:gap-1.5 transition-all ${
             isModuleTargeted('red_button')
               ? 'border-rose-400 ring-2 ring-rose-400/45 bg-[#1F131B]'
               : 'border-slate-800'
@@ -1715,13 +1715,13 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             </span>
           </div>
 
-          <div className="flex flex-col items-center justify-center py-2">
+          <div className="flex flex-col items-center justify-center py-2 mobile-ls:py-0.5">
             <button
               type="button"
               data-testid="cockpit-red-btn"
               onClick={pressRedButton}
               aria-label="Nút bấm đỏ khẩn cấp"
-              className={`relative w-28 h-28 rounded-full p-2.5 border-2 shadow-lg cursor-pointer select-none focus-visible:outline-2 focus-visible:outline-amber-300 ${
+              className={`relative w-28 h-28 mobile-ls:w-20 mobile-ls:h-20 rounded-full p-2.5 mobile-ls:p-1.5 border-2 shadow-lg cursor-pointer select-none focus-visible:outline-2 focus-visible:outline-amber-300 ${
                 activeTask.goal.exactClicks &&
                 isModuleTargeted('red_button') &&
                 hw.redPressCount === activeTask.goal.targetClicks
@@ -1749,7 +1749,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         {/* MODULE 3: PRECISION ROTARY ENCODER DIAL */}
         <div
           data-testid="module-rotary_dial"
-          className={`rounded-xl border p-3 sm:p-4 bg-[#111824] flex flex-col justify-between gap-2 transition-all ${
+          className={`rounded-xl border p-3 sm:p-4 mobile-ls:p-2 bg-[#111824] flex flex-col justify-between gap-2 mobile-ls:gap-1.5 transition-all ${
             isModuleTargeted('rotary_dial')
               ? 'border-sky-400 ring-2 ring-sky-400/45 bg-[#101D2D]'
               : 'border-slate-800'
@@ -1767,13 +1767,13 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             </span>
           </div>
 
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex items-center justify-center gap-3 mobile-ls:gap-1.5">
             <button
               type="button"
               data-testid="cockpit-dial-ccw"
               onClick={() => nudgeDial(-30)}
               aria-label="Xoay trái 30 độ"
-              className="min-h-[44px] min-w-[44px] rounded-lg border border-slate-700 bg-[#0A0E16] hover:border-sky-400 text-slate-200 font-mono text-xs font-bold cursor-pointer"
+              className="min-h-[44px] min-w-[44px] mobile-ls:min-h-[36px] mobile-ls:min-w-[36px] rounded-lg border border-slate-700 bg-[#0A0E16] hover:border-sky-400 text-slate-200 font-mono text-xs font-bold cursor-pointer"
             >
               -30°
             </button>
@@ -1794,7 +1794,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                 e.preventDefault();
                 nudgeDial(e.deltaY > 0 ? 30 : -30);
               }}
-              className="w-28 h-28 cursor-grab active:cursor-grabbing touch-none select-none"
+              className="w-28 h-28 mobile-ls:w-20 mobile-ls:h-20 cursor-grab active:cursor-grabbing touch-none select-none"
             >
               {Array.from({ length: 12 }).map((_, idx) => {
                 const ang = idx * 30;
@@ -1846,7 +1846,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
               data-testid="cockpit-dial-cw"
               onClick={() => nudgeDial(30)}
               aria-label="Xoay phải 30 độ"
-              className="min-h-[44px] min-w-[44px] rounded-lg border border-slate-700 bg-[#0A0E16] hover:border-sky-400 text-slate-200 font-mono text-xs font-bold cursor-pointer"
+              className="min-h-[44px] min-w-[44px] mobile-ls:min-h-[36px] mobile-ls:min-w-[36px] rounded-lg border border-slate-700 bg-[#0A0E16] hover:border-sky-400 text-slate-200 font-mono text-xs font-bold cursor-pointer"
             >
               +30°
             </button>
@@ -1856,7 +1856,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         {/* MODULE 4: PRECISION WAVE FADER + LIVE OSCILLOSCOPE */}
         <div
           data-testid="module-wave_fader"
-          className={`rounded-xl border p-3 sm:p-4 bg-[#111824] flex flex-col justify-between gap-3 transition-all ${
+          className={`rounded-xl border p-3 sm:p-4 mobile-ls:p-2 bg-[#111824] flex flex-col justify-between gap-3 mobile-ls:gap-1.5 transition-all ${
             isModuleTargeted('wave_fader')
               ? 'border-cyan-400 ring-2 ring-cyan-400/45 bg-[#0F202C]'
               : 'border-slate-800'
@@ -1876,8 +1876,8 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             </span>
           </div>
 
-          <div className="rounded-lg border border-slate-800 bg-[#06090F] p-2">
-            <svg viewBox="0 0 200 52" className="w-full h-14 overflow-visible" aria-hidden="true">
+          <div className="rounded-lg border border-slate-800 bg-[#06090F] p-2 mobile-ls:p-1">
+            <svg viewBox="0 0 200 52" className="w-full h-14 mobile-ls:h-9 overflow-visible" aria-hidden="true">
               <line x1={50} y1={4} x2={50} y2={48} stroke="#131C2B" strokeWidth={1} />
               <line x1={100} y1={4} x2={100} y2={48} stroke="#131C2B" strokeWidth={1} />
               <line x1={150} y1={4} x2={150} y2={48} stroke="#131C2B" strokeWidth={1} />
@@ -1900,12 +1900,12 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             </svg>
           </div>
 
-          <div className="relative flex items-center gap-2">
+          <div className="relative flex items-center gap-2 mobile-ls:gap-1">
             <button
               type="button"
               onClick={() => setFaderValue(hw.faderValue - 10)}
               aria-label="Giảm thanh trượt"
-              className="min-h-[44px] min-w-[44px] rounded-lg border border-slate-700 bg-[#0A0E16] hover:border-cyan-400 text-slate-200 font-mono text-xs cursor-pointer"
+              className="min-h-[44px] min-w-[44px] mobile-ls:min-h-[36px] mobile-ls:min-w-[36px] rounded-lg border border-slate-700 bg-[#0A0E16] hover:border-cyan-400 text-slate-200 font-mono text-xs cursor-pointer"
             >
               -10
             </button>
@@ -1936,7 +1936,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
               type="button"
               onClick={() => setFaderValue(hw.faderValue + 10)}
               aria-label="Tăng thanh trượt"
-              className="min-h-[44px] min-w-[44px] rounded-lg border border-slate-700 bg-[#0A0E16] hover:border-cyan-400 text-slate-200 font-mono text-xs cursor-pointer"
+              className="min-h-[44px] min-w-[44px] mobile-ls:min-h-[36px] mobile-ls:min-w-[36px] rounded-lg border border-slate-700 bg-[#0A0E16] hover:border-cyan-400 text-slate-200 font-mono text-xs cursor-pointer"
             >
               +10
             </button>
@@ -1946,7 +1946,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         {/* MODULE 5: COLOR + SYMBOL CODED PATCH BAY */}
         <div
           data-testid="module-patch_bay"
-          className={`rounded-xl border p-3 sm:p-4 bg-[#111824] flex flex-col justify-between gap-2.5 transition-all ${
+          className={`rounded-xl border p-3 sm:p-4 mobile-ls:p-2 bg-[#111824] flex flex-col justify-between gap-2.5 mobile-ls:gap-1.5 transition-all ${
             isModuleTargeted('patch_bay')
               ? 'border-fuchsia-400 ring-2 ring-fuchsia-400/45 bg-[#1C1429]'
               : 'border-slate-800'
@@ -1977,7 +1977,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
 
           <div className="relative grid grid-cols-[auto_1fr_auto] items-center gap-2">
             {/* Left Output Ports */}
-            <div className="flex flex-col gap-2 z-10">
+            <div className="flex flex-col gap-2 mobile-ls:gap-1 z-10">
               {LEFT_PORT_COLORS.map((clr, idx) => {
                 const meta = PATCH_SYMBOL_MAP[clr];
                 const isSelected = hw.selectedLeftPort === idx;
@@ -1989,7 +1989,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                     data-testid={`patch-left-${idx}`}
                     onClick={() => clickLeftPatchPort(idx)}
                     aria-label={`Cổng nguồn trái ${meta.symbol} ${meta.label}`}
-                    className={`min-h-[42px] px-2.5 rounded-lg border font-mono text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-transform ${
+                    className={`min-h-[42px] mobile-ls:min-h-[30px] px-2.5 mobile-ls:px-1.5 rounded-lg border font-mono text-xs mobile-ls:text-[10px] font-bold flex items-center gap-1.5 cursor-pointer transition-transform ${
                       isSelected ? 'scale-105 ring-2 ring-white' : ''
                     }`}
                     style={{
@@ -2006,7 +2006,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             </div>
 
             {/* SVG Braided Patch Cables */}
-            <svg viewBox="0 0 100 120" className="w-full h-[126px]" aria-hidden="true">
+            <svg viewBox="0 0 100 120" className="w-full h-[126px] mobile-ls:h-[96px]" aria-hidden="true">
               {hw.patchConnections.map((conn) => {
                 const y1 = 20 + conn.fromIndex * 40;
                 const y2 = 20 + conn.toIndex * 40;
@@ -2030,7 +2030,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             </svg>
 
             {/* Right Input Ports (shuffled each task) */}
-            <div className="flex flex-col gap-2 z-10">
+            <div className="flex flex-col gap-2 mobile-ls:gap-1 z-10">
               {hw.rightPortOrder.map((clr, idx) => {
                 const meta = PATCH_SYMBOL_MAP[clr];
                 const isPlugged = hw.patchConnections.some((c) => c.toIndex === idx);
@@ -2042,7 +2042,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                     data-testid={`patch-right-${idx}`}
                     onClick={() => clickRightPatchPort(idx)}
                     aria-label={`Cổng đích phải ${meta.symbol} ${meta.label}`}
-                    className={`min-h-[42px] px-2.5 rounded-lg border font-mono text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-transform ${
+                    className={`min-h-[42px] mobile-ls:min-h-[30px] px-2.5 mobile-ls:px-1.5 rounded-lg border font-mono text-xs mobile-ls:text-[10px] font-bold flex items-center gap-1.5 cursor-pointer transition-transform ${
                       matchesSelected ? 'scale-105 ring-2 ring-white' : ''
                     }`}
                     style={{
@@ -2063,7 +2063,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         {/* MODULE 6: YELLOW HOLD PAD + SWEEPING LIGHTNING HAZARD */}
         <div
           data-testid="module-hazard_hold"
-          className={`rounded-xl border p-3 sm:p-4 bg-[#111824] flex flex-col justify-between gap-2.5 transition-all ${
+          className={`rounded-xl border p-3 sm:p-4 mobile-ls:p-2 bg-[#111824] flex flex-col justify-between gap-2.5 mobile-ls:gap-1.5 transition-all ${
             hazardCycle.active
               ? 'border-rose-500 ring-2 ring-rose-500/70 bg-[#271019]'
               : isModuleTargeted('hazard_hold')
@@ -2114,7 +2114,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
             onPointerLeave={() => setYellowHolding(false)}
             onPointerCancel={() => setYellowHolding(false)}
             aria-label="Nút giữ vàng né tia sét"
-            className={`relative min-h-[96px] rounded-xl border-2 p-3 flex flex-col items-center justify-center gap-1.5 select-none touch-none cursor-pointer transition-transform ${
+            className={`relative min-h-[96px] mobile-ls:min-h-[64px] rounded-xl border-2 p-3 mobile-ls:p-2 flex flex-col items-center justify-center gap-1.5 select-none touch-none cursor-pointer transition-transform ${
               hazardCycle.active
                 ? 'border-rose-400 bg-rose-950/70 text-rose-100'
                 : hw.yellowHolding

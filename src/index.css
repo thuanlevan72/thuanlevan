@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
+@custom-variant mobile-ls (@media (orientation: landscape) and (max-height: 540px));
 
 @theme {
   --font-display: "Cormorant Garamond", Georgia, serif;
@@ -191,10 +192,27 @@
   }
 }
 
-/* Edge-to-edge expansion only when Game Hub enters F11 Fullscreen */
+/* Edge-to-edge expansion & safe-area support when Game Hub enters Fullscreen */
+[data-fullscreen="true"] {
+  padding-top: max(0.25rem, env(safe-area-inset-top, 0px));
+  padding-bottom: max(0.25rem, env(safe-area-inset-bottom, 0px));
+  padding-left: max(0.25rem, env(safe-area-inset-left, 0px));
+  padding-right: max(0.25rem, env(safe-area-inset-right, 0px));
+}
+
 [data-fullscreen="true"] > .game-fs-inner > section {
   width: 100%;
   max-width: 100% !important;
   flex: 1 1 auto;
 }
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 

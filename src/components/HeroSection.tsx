@@ -1,5 +1,5 @@
 import { ArrowUpRight, ChevronDown, Moon, Sun } from 'lucide-react';
-import { HERO_METRICS, PORTFOLIO_PROFILE } from '../data/portfolioData.ts';
+import { GALLERY_ARTWORKS, HERO_METRICS, PORTFOLIO_PROFILE } from '../data/portfolioData.ts';
 import {
   PROFILE_TEMPLATE_OPTIONS,
   ProfileTemplateId,
@@ -124,7 +124,7 @@ export function HeroSection({
                   }}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-[#CBD8E6] dark:border-[#1E3250] bg-[#F5F8FC] dark:bg-[#0E1729] hover:border-[#0284C7] dark:hover:border-[#38BDF8] text-[#070B14] dark:text-[#F1F5F9] font-medium text-sm transition-colors whitespace-nowrap"
                 >
-                  <span>Triển Lãm Ảnh (28)</span>
+                  <span>Triển Lãm Ảnh ({GALLERY_ARTWORKS.length})</span>
                   <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
                 </a>
               </div>
@@ -277,7 +277,7 @@ export function HeroSection({
                 }}
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-[#B48332] dark:border-[#9E7538] text-[#6E471B] dark:text-[#F4B860] hover:bg-[#F5ECDA] dark:hover:bg-[#1F1711] font-medium text-sm transition-colors whitespace-nowrap"
               >
-                <span>Thưởng Lãm Họa Đường (28)</span>
+                <span>Thưởng Lãm Họa Đường ({GALLERY_ARTWORKS.length})</span>
                 <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
               </a>
             </div>
@@ -358,7 +358,7 @@ export function HeroSection({
                 }}
                 className="text-sm font-medium text-[#475569] dark:text-[#94A3B8] hover:text-[#0F172A] dark:hover:text-white transition-colors whitespace-nowrap"
               >
-                Ghé phòng tranh yên tĩnh (28) →
+                Ghé phòng tranh yên tĩnh ({GALLERY_ARTWORKS.length}) →
               </a>
             </div>
           </div>
@@ -423,7 +423,7 @@ export function HeroSection({
                     }}
                     className="inline-flex items-center gap-2 px-5 py-3.5 rounded-xl border border-white/30 hover:bg-white/10 text-white font-medium text-sm transition-colors whitespace-nowrap"
                   >
-                    <span>Album Đồng Đội (28)</span>
+                    <span>Album Đồng Đội ({GALLERY_ARTWORKS.length})</span>
                   </a>
                 </div>
               </div>
@@ -532,7 +532,7 @@ export function HeroSection({
                 }}
                 className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl border-2 border-[#0F172A] dark:border-[#38BDF8] bg-white dark:bg-[#0B1220] text-[#0F172A] dark:text-white font-bold text-sm transition-colors whitespace-nowrap"
               >
-                <span>Check Album 28 Ảnh</span>
+                <span>Check Album {GALLERY_ARTWORKS.length} Ảnh</span>
                 <ArrowUpRight className="w-4 h-4" aria-hidden="true" />
               </a>
             </div>
@@ -608,7 +608,7 @@ export function HeroSection({
                   }}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-dashed border-[#6B4226] dark:border-[#D6B89C] text-[#432818] dark:text-[#F5E6D3] font-mono text-xs sm:text-sm font-semibold hover:bg-[#EADBC2]/60 dark:hover:bg-[#241C14] transition-colors whitespace-nowrap"
                 >
-                  <span>XEM CUỘN PHIM 28 KHOẢNH KHẮC →</span>
+                  <span>XEM CUỘN PHIM {GALLERY_ARTWORKS.length} KHOẢNH KHẮC →</span>
                 </a>
               </div>
             </div>

@@ -128,33 +128,34 @@ test('buildCanonicalUrl strips trailing slashes safely for SEO canonical tags', 
   );
 });
 
-test('filterGalleryItems filters all 28 exhibition media items accurately', () => {
+test('filterGalleryItems filters all 37 exhibition media items accurately', () => {
   const counts = getGalleryCategoryCounts(GALLERY_ARTWORKS);
   assert.deepEqual(counts, {
-    all: 28,
+    all: 37,
     imperial: 0,
     poetic: 1,
-    portrait: 11,
-    moments: 16,
+    portrait: 12,
+    moments: 24,
   });
 
-  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'all').length, 28);
+  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'all').length, 37);
   assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'imperial').length, 0);
   assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'poetic').length, 1);
-  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'portrait').length, 11);
-  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'moments').length, 16);
+  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'portrait').length, 12);
+  assert.equal(filterGalleryItems(GALLERY_ARTWORKS, 'moments').length, 24);
 
   assert.equal(searchAndFilterGalleryItems(GALLERY_ARTWORKS, 'all', 'hoa dao').length, 1);
+  assert.equal(searchAndFilterGalleryItems(GALLERY_ARTWORKS, 'all', 'tam dao').length, 9);
   assert.equal(searchAndFilterGalleryItems(GALLERY_ARTWORKS, 'all', 'rung thong').length, 4);
   assert.equal(searchAndFilterGalleryItems(GALLERY_ARTWORKS, 'moments', 'misa').length, 2);
   assert.equal(searchAndFilterGalleryItems(GALLERY_ARTWORKS, 'all', 'khong-ton-tai-xyz').length, 0);
 });
 
 test('lightbox next/prev index helpers wrap cleanly across gallery boundaries', () => {
-  assert.equal(getNextGalleryIndex(0, 28), 1);
-  assert.equal(getNextGalleryIndex(27, 28), 0);
-  assert.equal(getPrevGalleryIndex(0, 28), 27);
-  assert.equal(getPrevGalleryIndex(3, 28), 2);
+  assert.equal(getNextGalleryIndex(0, 37), 1);
+  assert.equal(getNextGalleryIndex(36, 37), 0);
+  assert.equal(getPrevGalleryIndex(0, 37), 36);
+  assert.equal(getPrevGalleryIndex(3, 37), 2);
   assert.equal(getNextGalleryIndex(0, 0), -1);
   assert.equal(getPrevGalleryIndex(0, 0), -1);
 });

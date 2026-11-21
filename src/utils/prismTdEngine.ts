@@ -19,6 +19,9 @@ export type GunType =
   | 'tempest'
   | 'sonic'
   | 'gravity_lance'
+  | 'amp_spire'
+  | 'radar'
+  | 'aegis_field'
   | 'map01_cyber_smg'
   | 'map02_matrix_spire'
   | 'map03_forge_magma'
@@ -1874,6 +1877,178 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
       summary: 'Khai hỏa đại thương trọng lực tạo hố hút trên tuyến hành quân & nổ xuyên 100% giáp',
     },
   },
+  // === 3 NEW TEAM SUPPORT GUNS (Total 23 Global) ===
+  {
+    type: 'amp_spire',
+    hotkey: 'k',
+    name: 'Trạm Tiếp Năng Đội Hình',
+    shortName: 'Tiếp Năng',
+    roleClue: 'Hồi năng lượng⚡ · Hạ nhiệt & +Xuyên Giáp cho đồng đội',
+    accentColor: '#34D399',
+    cost: 95,
+    baseDamage: 18,
+    baseCooldown: 1.55,
+    rangeTiles: 2.8,
+    milestones: [
+      { level: 3, name: 'Pin Tản Nhiệt Đội', summary: '+18% tốc độ hạ nhiệt đồng minh & sinh +3⚡ mỗi nhịp' },
+      { level: 5, name: 'Mạng Nạp Đạn Phụ', summary: '+6% tốc bắn & +10% xuyên giáp cho súng lân cận' },
+      { level: 7, name: 'Sạc Lõi Toàn Năng', summary: 'Rút 0.25s hồi chiêu đồng đội mỗi nhịp & sinh +4⚡' },
+      { level: 10, name: 'Lò Phản Ứng Tiếp Tế V10', summary: '+5⚡/nhịp, hạ nhiệt +30%, +12% tốc & +18% xuyên giáp đội' },
+    ],
+    variants: {
+      alpha: {
+        id: 'alpha',
+        name: 'Alpha · Trạm Tiếp Năng Tốc Độ',
+        shortTag: 'α Tiếp Tế',
+        summary: 'Tầm +0.35ô · Tốc nhịp +18% & hạ nhiệt sâu hơn',
+        accentColor: '#34D399',
+        damageMult: 0.92,
+        rofMult: 1.18,
+        rangeBonus: 0.35,
+        splashBonus: 0,
+        armorPierceBonus: 0.05,
+        shieldMultBonus: 0.1,
+        extraProjectiles: 0,
+        extraChain: 0,
+      },
+      omega: {
+        id: 'omega',
+        name: 'Omega · Lõi Xuyên Giáp Đội',
+        shortTag: 'ω Xuyên Giáp',
+        summary: '+24% uy lực xung & tăng thêm xuyên giáp đồng minh',
+        accentColor: '#A7F3D0',
+        damageMult: 1.24,
+        rofMult: 0.94,
+        rangeBonus: 0.25,
+        splashBonus: 20,
+        armorPierceBonus: 0.15,
+        shieldMultBonus: 0.2,
+        extraProjectiles: 0,
+        extraChain: 0,
+      },
+    },
+    overheatSkill: {
+      key: 'supply_drop_surge',
+      name: 'Cơn Mưa Tiếp Tế Lõi',
+      color: '#34D399',
+      heatPerShot: 24,
+      summary: 'Nạp ngay +18⚡, hạ -40% nhiệt toàn súng đồng đội trong tầm & hồi +1 HP Lõi (Lv7+)',
+    },
+  },
+  {
+    type: 'radar',
+    hotkey: 'l',
+    name: 'Trạm Radar Trinh Sát',
+    shortName: 'Radar',
+    roleClue: '+Tầm bắn · Phá tàng hình & +Sát thương cả đội',
+    accentColor: '#22D3EE',
+    cost: 95,
+    baseDamage: 16,
+    baseCooldown: 1.45,
+    rangeTiles: 3.2,
+    milestones: [
+      { level: 3, name: 'Khắc Tinh Tàng Hình', summary: 'Bóc trần tàng hình, +0.4ô tầm & +8% xuyên giáp đội' },
+      { level: 5, name: 'Định Vị Giáp Yếu', summary: 'Đánh dấu mục tiêu nhận thêm +20% sát thương từ cả đội' },
+      { level: 7, name: 'Mạng Quét Xuyên Phá', summary: '+0.65ô tầm bắn & +16% xuyên giáp cho súng đồng minh' },
+      { level: 10, name: 'Thiên Nhãn Chiến Trường V10', summary: '+0.85ô tầm, +24% xuyên giáp & dấu +30% sát thương' },
+    ],
+    variants: {
+      alpha: {
+        id: 'alpha',
+        name: 'Alpha · Ăng-ten Quét Xa',
+        shortTag: 'α Quét Xa',
+        summary: 'Tầm +0.45ô · Quét rộng & chia sẻ thêm tầm bắn',
+        accentColor: '#22D3EE',
+        damageMult: 0.94,
+        rofMult: 1.14,
+        rangeBonus: 0.45,
+        splashBonus: 0,
+        armorPierceBonus: 0.05,
+        shieldMultBonus: 0.1,
+        extraProjectiles: 0,
+        extraChain: 0,
+      },
+      omega: {
+        id: 'omega',
+        name: 'Omega · Lộ Điểm Yếu Chí Mạng',
+        shortTag: 'ω Điểm Yếu',
+        summary: '+26% sát thương xung & bóc giáp nặng hơn',
+        accentColor: '#FDE047',
+        damageMult: 1.26,
+        rofMult: 0.94,
+        rangeBonus: 0.25,
+        splashBonus: 18,
+        armorPierceBonus: 0.15,
+        shieldMultBonus: 0.2,
+        extraProjectiles: 0,
+        extraChain: 0,
+      },
+    },
+    overheatSkill: {
+      key: 'orbital_target_lock',
+      name: 'Định Vị Hủy Diệt Toàn Đội',
+      color: '#22D3EE',
+      heatPerShot: 22,
+      summary: 'Khóa hồng tâm 4 quái nguy hiểm nhất, tước 35% giáp & tăng +35% sát thương cả đội lên chúng',
+    },
+  },
+  {
+    type: 'aegis_field',
+    hotkey: 'h',
+    name: 'Tháp Trường Khiên Aegis',
+    shortName: 'Khiên Aegis',
+    roleClue: 'EMP đẩy lùi · +Phá Khiên & +Tốc Bắn đội hình',
+    accentColor: '#60A5FA',
+    cost: 105,
+    baseDamage: 22,
+    baseCooldown: 1.6,
+    rangeTiles: 2.8,
+    milestones: [
+      { level: 3, name: 'Vòng Xung Phá Khiên', summary: '+25% phá khiên cho cả đội trong tầm & làm chậm -24%' },
+      { level: 5, name: 'Xung Đẩy Đứt Nhịp', summary: 'Đẩy lùi nhẹ quái thường trên đường & +10% tốc bắn đội' },
+      { level: 7, name: 'Pháo Đài Nạp Nhanh', summary: '+40% phá khiên đội & hỗ trợ nạp nhịp bắn đồng đội' },
+      { level: 10, name: 'Trường Khiên Bất Tử V10', summary: '+55% phá khiên đội, +16% tốc bắn & choáng 0.3s' },
+    ],
+    variants: {
+      alpha: {
+        id: 'alpha',
+        name: 'Alpha · Xung Đẩy Nhịp Nhanh',
+        shortTag: 'α Xung Đẩy',
+        summary: 'Tốc phát EMP +16% & tầm +0.35ô',
+        accentColor: '#60A5FA',
+        damageMult: 0.94,
+        rofMult: 1.16,
+        rangeBonus: 0.35,
+        splashBonus: 12,
+        armorPierceBonus: 0,
+        shieldMultBonus: 0.18,
+        extraProjectiles: 0,
+        extraChain: 0,
+      },
+      omega: {
+        id: 'omega',
+        name: 'Omega · Trường Phá Khiên Vệ Thần',
+        shortTag: 'ω Hộ Thuẫn',
+        summary: '+26% sát thương xung & +40% phá khiên đồng minh',
+        accentColor: '#38BDF8',
+        damageMult: 1.26,
+        rofMult: 0.92,
+        rangeBonus: 0.2,
+        splashBonus: 20,
+        armorPierceBonus: 0.1,
+        shieldMultBonus: 0.4,
+        extraProjectiles: 0,
+        extraChain: 0,
+      },
+    },
+    overheatSkill: {
+      key: 'aegis_fortress_pulse',
+      name: 'Pháo Đài Bất Khả Xâm Phạm',
+      color: '#60A5FA',
+      heatPerShot: 25,
+      summary: 'Kích nổ EMP choáng 0.65s, đẩy lùi quái, hồi +1 HP Lõi & nạp ngay +0.5s nhịp bắn đồng minh',
+    },
+  },
   // === 16 MAP-EXCLUSIVE SIGNATURE GUNS (1 unique weapon per sector-01..sector-16) ===
   {
     type: 'map01_cyber_smg',
@@ -3477,6 +3652,22 @@ export function getGunCombatProfile(
     splashRadius = level >= 10 ? 52 : level >= 3 ? 28 : 0;
     pullForce = level >= 3 ? 12 + (level - 3) * 1.1 : 0;
     shieldMult = level >= 5 ? 1.35 : 1.15;
+  } else if (type === 'amp_spire') {
+    armorPierce = level >= 10 ? 0.72 : 0.42 + lvOffset * 0.03;
+    splashRadius = Math.round((item.rangeTiles + rangeBonusTiles) * TILE_SIZE);
+    shieldMult = 1.25;
+  } else if (type === 'radar') {
+    armorPierce = level >= 10 ? 0.75 : 0.4 + lvOffset * 0.035;
+    splashRadius = Math.round((item.rangeTiles + rangeBonusTiles) * TILE_SIZE);
+    slowPct = level >= 3 ? 0.14 : 0.08;
+    brittleBonus = level >= 10 ? 0.3 : level >= 5 ? 0.2 : 0.14;
+    shieldMult = 1.2;
+  } else if (type === 'aegis_field') {
+    armorPierce = level >= 10 ? 0.68 : 0.38 + lvOffset * 0.03;
+    splashRadius = Math.round((item.rangeTiles + rangeBonusTiles) * TILE_SIZE);
+    slowPct = level >= 10 ? 0.32 : level >= 3 ? 0.24 : 0.16;
+    pullForce = level >= 5 ? 12 + (level - 5) * 1.2 : 0;
+    shieldMult = level >= 10 ? 2.45 : level >= 3 ? 2.05 : 1.75;
   } else if (type === 'map01_cyber_smg') {
     armorPierce = level >= 10 ? 0.65 : 0.25 + lvOffset * 0.04;
     projectilesPerShot = level >= 10 ? 4 : level >= 7 ? 3 : level >= 3 ? 2 : 1;
@@ -3679,32 +3870,98 @@ export function getGunCombatProfile(
   };
 }
 
+export function isSupportGunType(type: GunType): boolean {
+  return type === 'beacon' || type === 'amp_spire' || type === 'radar' || type === 'aegis_field';
+}
+
+export interface TeamSupportBuff {
+  readonly speedMult: number;
+  readonly damageMult: number;
+  readonly rangeBonusTiles: number;
+  readonly armorPierceBonus: number;
+  readonly shieldMultBonus: number;
+  readonly heatCoolMult: number;
+  readonly hasSupportLink: boolean;
+  readonly linkColors: string[];
+}
+
+export function computeTeamSupportBuffAtTile(
+  guns: readonly PlacedGun[],
+  col: number,
+  row: number
+): TeamSupportBuff {
+  let speedBonus = 0;
+  let dmgBonus = 0;
+  let rangeBonusTiles = 0;
+  let armorPierceBonus = 0;
+  let shieldMultBonus = 0;
+  let heatCoolBonus = 0;
+  const linkColors: string[] = [];
+  const targetPt = gridToWorldCenter(col, row);
+
+  for (const g of guns) {
+    if (!isSupportGunType(g.type)) continue;
+    if (g.col === col && g.row === row) continue;
+    const variant = g.variant ?? 'alpha';
+    const supportProfile = getGunCombatProfile(g.type, g.level, variant);
+    const gPt = gridToWorldCenter(g.col, g.row);
+    const dist = Math.hypot(gPt.x - targetPt.x, gPt.y - targetPt.y);
+    if (dist > supportProfile.rangePx + 4) continue;
+
+    if (g.type === 'beacon') {
+      const sp = g.level >= 10 ? 0.3 : g.level >= 7 ? 0.22 : g.level >= 3 ? 0.14 : 0.08;
+      const dm = g.level >= 10 ? 0.24 : g.level >= 7 ? 0.16 : g.level >= 3 ? 0.1 : 0.06;
+      speedBonus += sp;
+      dmgBonus += dm;
+      if (!linkColors.includes('#FACC15')) linkColors.push('#FACC15');
+    } else if (g.type === 'amp_spire') {
+      const cool = (g.level >= 10 ? 0.3 : g.level >= 7 ? 0.24 : g.level >= 3 ? 0.18 : 0.12) + (variant === 'alpha' ? 0.06 : 0);
+      const sp = g.level >= 10 ? 0.12 : g.level >= 5 ? 0.06 : 0;
+      const ap = (g.level >= 10 ? 0.18 : g.level >= 5 ? 0.1 : 0.04) + (variant === 'omega' ? 0.06 : 0);
+      heatCoolBonus += cool;
+      speedBonus += sp;
+      armorPierceBonus += ap;
+      if (!linkColors.includes('#34D399')) linkColors.push('#34D399');
+    } else if (g.type === 'radar') {
+      const rb = (g.level >= 10 ? 0.85 : g.level >= 7 ? 0.65 : g.level >= 3 ? 0.4 : 0.25) + (variant === 'alpha' ? 0.15 : 0);
+      const ap = (g.level >= 10 ? 0.24 : g.level >= 7 ? 0.16 : g.level >= 3 ? 0.08 : 0.05) + (variant === 'omega' ? 0.06 : 0);
+      const dm = g.level >= 10 ? 0.06 : 0.03;
+      rangeBonusTiles += rb;
+      armorPierceBonus += ap;
+      dmgBonus += dm;
+      if (!linkColors.includes('#22D3EE')) linkColors.push('#22D3EE');
+    } else if (g.type === 'aegis_field') {
+      const sh = (g.level >= 10 ? 0.55 : g.level >= 7 ? 0.4 : g.level >= 3 ? 0.25 : 0.15) + (variant === 'omega' ? 0.15 : 0);
+      const sp = g.level >= 10 ? 0.16 : g.level >= 5 ? 0.1 : 0.06;
+      const dm = g.level >= 10 ? 0.06 : 0.03;
+      shieldMultBonus += sh;
+      speedBonus += sp;
+      dmgBonus += dm;
+      if (!linkColors.includes('#60A5FA')) linkColors.push('#60A5FA');
+    }
+  }
+
+  return {
+    speedMult: Number(Math.min(1.55, 1 + speedBonus).toFixed(2)),
+    damageMult: Number(Math.min(1.45, 1 + dmgBonus).toFixed(2)),
+    rangeBonusTiles: Number(Math.min(1.4, rangeBonusTiles).toFixed(2)),
+    armorPierceBonus: Number(Math.min(0.45, armorPierceBonus).toFixed(3)),
+    shieldMultBonus: Number(Math.min(0.95, shieldMultBonus).toFixed(2)),
+    heatCoolMult: Number(Math.min(1.85, 1 + heatCoolBonus).toFixed(2)),
+    hasSupportLink: linkColors.length > 0,
+    linkColors,
+  };
+}
+
 export function computeBeaconBuffAtTile(
   guns: readonly PlacedGun[],
   col: number,
   row: number
 ): { speedMult: number; damageMult: number } {
-  let speedBonus = 0;
-  let dmgBonus = 0;
-  const targetPt = gridToWorldCenter(col, row);
-
-  for (const g of guns) {
-    if (g.type !== 'beacon') continue;
-    if (g.col === col && g.row === row) continue;
-    const beaconProfile = getGunCombatProfile('beacon', g.level);
-    const gPt = gridToWorldCenter(g.col, g.row);
-    const dist = Math.hypot(gPt.x - targetPt.x, gPt.y - targetPt.y);
-    if (dist <= beaconProfile.rangePx + 4) {
-      const sp = g.level >= 10 ? 0.3 : g.level >= 7 ? 0.22 : g.level >= 3 ? 0.14 : 0.08;
-      const dm = g.level >= 10 ? 0.24 : g.level >= 7 ? 0.16 : g.level >= 3 ? 0.1 : 0.06;
-      speedBonus += sp;
-      dmgBonus += dm;
-    }
-  }
-
+  const buff = computeTeamSupportBuffAtTile(guns, col, row);
   return {
-    speedMult: Number(Math.min(1.35, 1 + speedBonus).toFixed(2)),
-    damageMult: Number(Math.min(1.3, 1 + dmgBonus).toFixed(2)),
+    speedMult: buff.speedMult,
+    damageMult: buff.damageMult,
   };
 }
 

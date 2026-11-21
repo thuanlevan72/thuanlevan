@@ -42,7 +42,10 @@ export interface OverheatFx {
     | 'meteor_shower'
     | 'hydra_burst'
     | 'emerald_storm'
-    | 'sovereign_eclipse';
+    | 'sovereign_eclipse'
+    | 'supply_pulse'
+    | 'radar_sweep'
+    | 'aegis_dome';
   x: number;
   y: number;
   tx?: number;
@@ -391,6 +394,67 @@ export function drawOverheatSpecialFx(
       ctx.stroke();
       ctx.strokeStyle = '#C084FC';
       drawPolygon(ctx, 0, 0, 6, fx.radius * 0.4, Math.PI / 6);
+      ctx.stroke();
+    } else if (fx.kind === 'supply_pulse') {
+      // Emerald Tactical Supply Drop Concentric Surge
+      ctx.translate(fx.x, fx.y);
+      ctx.globalAlpha = t * 0.9;
+      const sg = ctx.createRadialGradient(0, 0, 6, 0, 0, fx.radius);
+      sg.addColorStop(0, 'rgba(167, 243, 208, 0.55)');
+      sg.addColorStop(0.55, 'rgba(52, 211, 153, 0.3)');
+      sg.addColorStop(1, 'rgba(16, 185, 129, 0)');
+      ctx.fillStyle = sg;
+      ctx.beginPath();
+      ctx.arc(0, 0, fx.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.rotate(animTime * 3.2);
+      ctx.strokeStyle = '#A7F3D0';
+      ctx.lineWidth = 2.4;
+      drawPolygon(ctx, 0, 0, 6, fx.radius * (0.45 + (1 - t) * 0.45), 0);
+      ctx.stroke();
+      ctx.fillStyle = '#ECFDF5';
+      ctx.fillRect(-2, -10, 4, 20);
+      ctx.fillRect(-10, -2, 20, 4);
+    } else if (fx.kind === 'radar_sweep') {
+      // Cyan Orbital Radar Wedge & Expanding Sonar Ring
+      ctx.translate(fx.x, fx.y);
+      ctx.globalAlpha = t * 0.88;
+      const sweepAng = animTime * 6.5;
+      ctx.fillStyle = 'rgba(34, 211, 238, 0.24)';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, fx.radius, sweepAng - 0.55, sweepAng + 0.55);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#67E8F9';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(0, 0, fx.radius * (0.35 + (1 - t) * 0.65), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(sweepAng) * fx.radius, Math.sin(sweepAng) * fx.radius);
+      ctx.stroke();
+    } else if (fx.kind === 'aegis_dome') {
+      // Cobalt Hexagonal Aegis Fortress Barrier Dome
+      ctx.translate(fx.x, fx.y);
+      ctx.globalAlpha = t * 0.92;
+      const dg = ctx.createRadialGradient(0, 0, 8, 0, 0, fx.radius);
+      dg.addColorStop(0, 'rgba(147, 197, 253, 0.42)');
+      dg.addColorStop(0.65, 'rgba(96, 165, 250, 0.25)');
+      dg.addColorStop(1, 'rgba(37, 99, 235, 0)');
+      ctx.fillStyle = dg;
+      ctx.beginPath();
+      ctx.arc(0, 0, fx.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#93C5FD';
+      ctx.lineWidth = 2.6;
+      drawPolygon(ctx, 0, 0, 8, fx.radius * (0.55 + (1 - t) * 0.35), animTime * 1.4);
+      ctx.stroke();
+      ctx.strokeStyle = '#E0F2FE';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.arc(0, 0, fx.radius * 0.72, 0, Math.PI * 2);
       ctx.stroke();
     }
 
@@ -1331,6 +1395,82 @@ export function drawGunTurretSprite(
     ctx.fillStyle = '#FEF08A';
     ctx.beginPath();
     ctx.arc(0, 0, 6.5 + tier * 0.7 + Math.sin(animTime * 7) * 1.1, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'amp_spire') {
+    // Rotating Emerald Octagonal Capacitor Pylons + Cross Core
+    ctx.save();
+    ctx.rotate(-animTime * (1.5 + tier * 0.45));
+    ctx.fillStyle = isOmega ? '#064E3B' : '#065F46';
+    ctx.strokeStyle = isOmega ? '#A7F3D0' : '#34D399';
+    ctx.lineWidth = 2.2;
+    drawPolygon(ctx, 0, 0, 6, 15 + tier * 1.1, 0);
+    ctx.fill();
+    ctx.stroke();
+    const coils = tier >= 3 ? 4 : 3;
+    for (let i = 0; i < coils; i++) {
+      const a = (i * Math.PI * 2) / coils;
+      ctx.fillStyle = '#6EE7B7';
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * (11 + tier * 0.8), Math.sin(a) * (11 + tier * 0.8), 2.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.fillStyle = '#ECFDF5';
+    ctx.fillRect(-5, -1.8, 10, 3.6);
+    ctx.fillRect(-1.8, -5, 3.6, 10);
+  } else if (type === 'radar') {
+    // Sweeping Cyan Parabolic Sensor Dish + Pulse Emitter
+    ctx.fillStyle = '#083344';
+    ctx.strokeStyle = isOmega ? '#FDE047' : '#22D3EE';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 12 + tier * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.save();
+    ctx.rotate(animTime * (2.6 + tier * 0.5));
+    ctx.fillStyle = 'rgba(34, 211, 238, 0.25)';
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, 16 + tier, -0.5, 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = isOmega ? '#FDE047' : '#67E8F9';
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.arc(-2, 0, 11 + tier * 0.8, -1.1, 1.1);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(13 + tier, 0);
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = '#E0F2FE';
+    ctx.beginPath();
+    ctx.arc(0, 0, 3.5 + tier * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'aegis_field') {
+    // Rotating Cobalt Shield Projector + Defensive Bastion Plates
+    ctx.save();
+    ctx.rotate(animTime * (1.2 + tier * 0.35));
+    ctx.fillStyle = isOmega ? '#1E3A8A' : '#172554';
+    ctx.strokeStyle = isOmega ? '#38BDF8' : '#60A5FA';
+    ctx.lineWidth = 2.2;
+    drawPolygon(ctx, 0, 0, 8, 15 + tier, 0);
+    ctx.fill();
+    ctx.stroke();
+    for (let b = 0; b < 4; b++) {
+      const a = (b * Math.PI) / 2;
+      ctx.strokeStyle = '#93C5FD';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.arc(0, 0, 18 + tier * 0.7, a - 0.32, a + 0.32);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.fillStyle = '#DBEAFE';
+    drawPolygon(ctx, 0, 0, 4, 6.2 + tier * 0.5, Math.PI / 4);
     ctx.fill();
   } else if (type === 'cannon') {
     ctx.save();

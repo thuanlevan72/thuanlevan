@@ -16,8 +16,16 @@ export function TopBarAndHeader({ activeRoute, onNavigate }: TopBarAndHeaderProp
     }`;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[#DCE6F2]/80 dark:border-[#182740]/85 bg-[#F5F8FC]/88 dark:bg-[#05080F]/88 backdrop-blur-xl transition-colors duration-200">
-      <div className="max-w-7xl mx-auto px-2.5 sm:px-6 h-16 flex items-center justify-between gap-1.5 sm:gap-8">
+    <header
+      className={`${
+        activeRoute === 'game' ? 'sticky top-0 mobile-ls:static' : 'sticky top-0'
+      } z-40 border-b border-[#DCE6F2]/80 dark:border-[#182740]/85 bg-[#F5F8FC]/88 dark:bg-[#05080F]/88 backdrop-blur-xl transition-colors duration-200`}
+    >
+      <div
+        className={`max-w-7xl mx-auto px-2.5 sm:px-6 ${
+          activeRoute === 'game' ? 'h-16 mobile-ls:h-11' : 'h-16'
+        } flex items-center justify-between gap-1.5 sm:gap-8`}
+      >
         {/* Zone 1: Brand monogram emblem + wordmark */}
         <a
           href="/"

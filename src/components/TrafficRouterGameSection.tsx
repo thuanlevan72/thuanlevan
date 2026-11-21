@@ -1421,19 +1421,19 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
       <section
         id="traffic-router-section"
         aria-label={`Thiết Kế Kiến Trúc Hệ Thống — ${TRAFFIC_LEVELS.length} Hoàn Cảnh & ${ARCH_MODES.length} Chế Độ Chơi`}
-        className="rounded-2xl border border-[#1E2E4A] bg-[#0B1320] text-[#F1F5F9] p-5 sm:p-7 shadow-sm"
+        className="rounded-2xl border border-[#1E2E4A] bg-[#0B1320] text-[#F1F5F9] p-5 sm:p-7 mobile-ls:p-3 shadow-sm"
       >
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        <div className="grid grid-cols-1 mobile-ls:grid-cols-12 lg:grid-cols-12 gap-6 mobile-ls:gap-3 items-start">
           {/* Left 7 cols: Chapter tabs & 24-level catalog */}
-          <div className="lg:col-span-7 space-y-4">
-            <div className="space-y-1.5">
-              <p className="text-xs font-mono tracking-wide text-sky-400">
+          <div className="mobile-ls:col-span-7 lg:col-span-7 space-y-4 mobile-ls:space-y-2">
+            <div className="space-y-1.5 mobile-ls:space-y-1">
+              <p className="text-xs font-mono tracking-wide text-sky-400 mobile-ls:text-[11px]">
                 System Architecture Designer · {TRAFFIC_LEVELS.length} Hoàn Cảnh Thực Tế · {ARCH_MODES.length} Chế Độ Chơi / Màn · Chấm Điểm Tối Ưu
               </p>
-              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight [text-wrap:balance]">
+              <h1 className="text-2xl sm:text-3xl mobile-ls:text-lg font-bold tracking-tight [text-wrap:balance]">
                 Thiết Kế Kiến Trúc Hệ Thống
               </h1>
-              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed mobile-ls:line-clamp-2">
                 Chinh phục <strong>{TRAFFIC_LEVELS.length} tình huống thực tế</strong> (Tin tức, Flash Sale, Chứng khoán, AI RAG, Multi-Tenant ERP, Active-Active...) qua <strong>{ARCH_MODES.length} chế độ chơi</strong> mỗi màn và nhận phân tích <em>tại sao giải pháp chưa tối ưu</em>.
               </p>
             </div>
@@ -1455,7 +1455,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                   role="tab"
                   aria-selected={chapterFilter === tab.id}
                   onClick={() => setChapterFilter(tab.id)}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                  className={`px-2.5 py-1.5 mobile-ls:px-2 mobile-ls:py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                     chapterFilter === tab.id
                       ? 'bg-sky-500 text-slate-950'
                       : 'bg-[#111C33] text-slate-300 border border-[#1E2E4A] hover:border-sky-400'
@@ -1470,7 +1470,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
             </div>
 
             {/* Scenario Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[410px] overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mobile-ls:gap-1.5 max-h-[410px] mobile-ls:max-h-[195px] overflow-y-auto pr-1">
               {filteredLevels.map((lvl) => {
                 const idx = TRAFFIC_LEVELS.findIndex((x) => x.id === lvl.id);
                 const isSelected = idx === levelIdx;
@@ -1529,8 +1529,8 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
           </div>
 
           {/* Right 5 cols: Game Mode Selector + Scenario Context & Approaches */}
-          <div className="lg:col-span-5 space-y-3">
-            <div className="rounded-2xl border border-[#1E2E4A] bg-[#0F192B] p-4 sm:p-5 space-y-3.5">
+          <div className="mobile-ls:col-span-5 lg:col-span-5 space-y-3 mobile-ls:max-h-[calc(100dvh-76px)] mobile-ls:overflow-y-auto mobile-ls:pr-1">
+            <div className="rounded-2xl border border-[#1E2E4A] bg-[#0F192B] p-4 sm:p-5 mobile-ls:p-2.5 space-y-3.5 mobile-ls:space-y-2">
               {/* Per-Stage Game Mode Selector */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
@@ -1679,10 +1679,10 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     <section
       id="traffic-router-section"
       aria-label={`Thiết Kế Kiến Trúc — ${currentLevel.title} (${activeMode.name})`}
-      className="relative rounded-2xl border border-[#1E2E4A] bg-[#0B1320] text-[#F1F5F9] p-3.5 sm:p-5 shadow-sm"
+      className="relative rounded-2xl border border-[#1E2E4A] bg-[#0B1320] text-[#F1F5F9] p-3.5 sm:p-5 mobile-ls:p-2 shadow-sm"
     >
       {/* Top Telemetry HUD */}
-      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-2.5 pb-3 border-b border-[#1E2E4A]">
+      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between mobile-ls:flex-row mobile-ls:items-center mobile-ls:justify-between gap-2.5 mobile-ls:gap-1.5 pb-3 mobile-ls:pb-1.5 border-b border-[#1E2E4A]">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs tabular-nums min-w-0">
           <button
             type="button"
@@ -1832,9 +1832,9 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
       </div>
 
       {/* Main Split Workspace: Canvas + Right Inspector */}
-      <div className="mt-3 grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+      <div className="mt-3 mobile-ls:mt-1.5 grid grid-cols-1 mobile-ls:grid-cols-[minmax(0,1fr)_265px] xl:grid-cols-12 gap-4 mobile-ls:gap-2.5 items-start">
         {/* Left/Center 8 Cols: Canvas + Tool Palette */}
-        <div className="xl:col-span-8 space-y-3">
+        <div className="mobile-ls:min-w-0 xl:col-span-8 space-y-3 mobile-ls:space-y-2">
           <div className="relative flex justify-center">
             <canvas
               ref={canvasRef}
@@ -1843,7 +1843,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
               onPointerMove={handleCanvasPointerMove}
               onPointerDown={handleCanvasPointerDown}
               data-testid="architecture-canvas"
-              className="w-full aspect-[920/500] h-auto rounded-xl border border-[#1E2E4A] cursor-crosshair touch-none"
+              className="w-full mobile-ls:max-w-[min(100%,calc((100dvh-145px)*1.84))] mobile-ls:mx-auto block aspect-[920/500] h-auto rounded-xl border border-[#1E2E4A] cursor-crosshair touch-none"
               aria-label="Sơ đồ thiết kế kiến trúc hệ thống"
             />
           </div>
@@ -2130,7 +2130,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
         </div>
 
         {/* Right 4 Cols: Live Architecture Diagnosis & Multiple Approaches Guide */}
-        <aside className="xl:col-span-4 rounded-xl border border-[#1E2E4A] bg-[#0F192B] p-3.5 space-y-3">
+        <aside className="mobile-ls:max-h-[calc(100dvh-75px)] mobile-ls:overflow-y-auto xl:col-span-4 rounded-xl border border-[#1E2E4A] bg-[#0F192B] p-3.5 mobile-ls:p-2.5 space-y-3 mobile-ls:space-y-2">
           <div className="flex items-center gap-1 p-1 rounded-lg bg-[#0B1320] border border-[#1E2E4A]">
             <button
               type="button"

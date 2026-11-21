@@ -965,35 +965,35 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
     <section
       id="blind-box-merge-section"
       aria-label="Tiệm Xé Túi Mù & Hợp Nhất Thú Bông"
-      className={`rounded-2xl border p-4 sm:p-6 shadow-sm transition-colors ${surfaceClass}`}
+      className={`rounded-2xl border p-4 sm:p-6 mobile-ls:p-2.5 shadow-sm transition-colors ${surfaceClass}`}
     >
       {/* Top Studio Header & 3-Mode Switcher */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 pb-4 border-b border-[#F0DCE3] dark:border-[#3E3239]">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mobile-ls:flex-row mobile-ls:items-center mobile-ls:justify-between gap-3 mobile-ls:gap-1.5 pb-4 mobile-ls:pb-1.5 border-b border-[#F0DCE3] dark:border-[#3E3239]">
         <div>
-          <p className="text-xs font-medium text-[#D16B8F] dark:text-[#F4A8C3]">
+          <p className="text-xs font-medium text-[#D16B8F] dark:text-[#F4A8C3] mobile-ls:hidden">
             Blind-Box Squishy Merge · 10 Thú Bông Mochi · 12 Đồ Decor Phòng Mini
           </p>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
+          <h1 className="text-xl sm:text-2xl mobile-ls:text-base font-bold tracking-tight">
             Tiệm Xé Túi Mù &amp; Hợp Nhất Thú Bông
           </h1>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 mobile-ls:gap-1.5">
           {/* Coins & Collection Counter */}
-          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-semibold tabular-nums ${cardClass}`}>
+          <div className={`inline-flex items-center gap-2 px-3 mobile-ls:px-2 py-1.5 mobile-ls:py-1 rounded-xl border text-xs font-semibold tabular-nums ${cardClass}`}>
             <Coins className="w-4 h-4 text-amber-500 shrink-0" />
             <span data-testid="blindbox-coins">{profile.coins} Xu</span>
-            <span className="opacity-35" aria-hidden="true">·</span>
-            <span>Sưu tầm: {profile.unlockedIds.length}/{ROOM_COLLECTIBLES.length}</span>
+            <span className="opacity-35 mobile-ls:hidden" aria-hidden="true">·</span>
+            <span className="mobile-ls:hidden">Sưu tầm: {profile.unlockedIds.length}/{ROOM_COLLECTIBLES.length}</span>
           </div>
 
           {/* Sub-tab Switcher */}
-          <div className={`flex flex-wrap sm:inline-flex items-center gap-1 p-1 rounded-xl border w-full sm:w-auto ${cardClass}`}>
+          <div className={`flex flex-wrap sm:inline-flex items-center gap-1 p-1 rounded-xl border w-full sm:w-auto mobile-ls:w-auto ${cardClass}`}>
             <button
               type="button"
               data-testid="blindbox-tab-merge"
               onClick={() => setSubTab('merge')}
-              className={`min-h-[42px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+              className={`min-h-[42px] mobile-ls:min-h-[34px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2.5 sm:px-3 mobile-ls:px-2 py-1.5 mobile-ls:py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 subTab === 'merge'
                   ? 'bg-[#E57399] text-white'
                   : 'hover:bg-[#FCEEF3] dark:hover:bg-[#3A2E35]'
@@ -1006,7 +1006,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
               type="button"
               data-testid="blindbox-tab-gacha"
               onClick={() => setSubTab('gacha')}
-              className={`min-h-[42px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+              className={`min-h-[42px] mobile-ls:min-h-[34px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2.5 sm:px-3 mobile-ls:px-2 py-1.5 mobile-ls:py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 subTab === 'gacha'
                   ? 'bg-[#E57399] text-white'
                   : 'hover:bg-[#FCEEF3] dark:hover:bg-[#3A2E35]'
@@ -1019,7 +1019,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
               type="button"
               data-testid="blindbox-tab-room"
               onClick={() => setSubTab('room')}
-              className={`min-h-[42px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+              className={`min-h-[42px] mobile-ls:min-h-[34px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2.5 sm:px-3 mobile-ls:px-2 py-1.5 mobile-ls:py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 subTab === 'room'
                   ? 'bg-[#E57399] text-white'
                   : 'hover:bg-[#FCEEF3] dark:hover:bg-[#3A2E35]'
@@ -1034,7 +1034,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
             type="button"
             onClick={() => setMuted((m) => !m)}
             aria-label={muted ? 'Bật âm thanh ASMR' : 'Tắt âm thanh ASMR'}
-            className={`min-w-[40px] min-h-[40px] p-2 rounded-xl border flex items-center justify-center cursor-pointer ${cardClass}`}
+            className={`min-w-[40px] min-h-[40px] mobile-ls:min-w-[34px] mobile-ls:min-h-[34px] p-2 mobile-ls:p-1.5 rounded-xl border flex items-center justify-center cursor-pointer ${cardClass}`}
           >
             {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-[#E57399]" />}
           </button>
@@ -1045,10 +1045,10 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
       {/* TAB 1: SQUISHY MERGE JAR                                          */}
       {/* ================================================================= */}
       {subTab === 'merge' && (
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        <div className="mt-4 mobile-ls:mt-2 grid grid-cols-1 mobile-ls:grid-cols-[minmax(0,1fr)_290px] lg:grid-cols-12 gap-5 mobile-ls:gap-3 items-start">
           {/* Center Glass Jar Play Area */}
-          <div className="lg:col-span-7 flex flex-col items-center">
-            <div className="w-full max-w-[380px] flex items-center justify-between gap-2 mb-2 text-xs tabular-nums">
+          <div className="mobile-ls:min-w-0 lg:col-span-7 flex flex-col items-center">
+            <div className="w-full max-w-[380px] flex items-center justify-between gap-2 mb-2 mobile-ls:mb-1 text-xs tabular-nums">
               <div>
                 Điểm: <strong data-testid="blindbox-score" className="text-sm text-[#D16B8F] dark:text-[#F4A8C3]">{score}</strong>
                 <span className="mx-2 opacity-40">·</span>
@@ -1060,14 +1060,14 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
                   type="button"
                   onClick={resetJar}
                   aria-label="Chơi lại hũ mới"
-                  className={`min-w-[40px] min-h-[40px] p-2 rounded-lg border flex items-center justify-center cursor-pointer ${cardClass}`}
+                  className={`min-w-[40px] min-h-[40px] mobile-ls:min-w-[32px] mobile-ls:min-h-[32px] p-2 mobile-ls:p-1 rounded-lg border flex items-center justify-center cursor-pointer ${cardClass}`}
                 >
-                  <RotateCcw className="w-4 h-4" />
+                  <RotateCcw className="w-4 h-4 mobile-ls:w-3.5 mobile-ls:h-3.5" />
                 </button>
               </div>
             </div>
 
-            <div className="relative w-full max-w-[360px]">
+            <div className="relative w-full max-w-[360px] mobile-ls:max-w-[min(100%,calc((100dvh-98px)*0.818))]">
               <canvas
                 ref={jarCanvasRef}
                 data-testid="blindbox-jar-canvas"
@@ -1123,8 +1123,8 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
           </div>
 
           {/* Right Column: Evolution Ladder + Quick Blind Box CTA */}
-          <div className="lg:col-span-5 space-y-4">
-            <div className={`rounded-2xl border p-4 space-y-3 ${cardClass}`}>
+          <div className="lg:col-span-5 space-y-4 mobile-ls:max-h-[calc(100dvh-76px)] mobile-ls:overflow-y-auto mobile-ls:pr-1 mobile-ls:space-y-2.5">
+            <div className={`rounded-2xl border p-4 mobile-ls:p-2.5 space-y-3 mobile-ls:space-y-2 ${cardClass}`}>
               <h2 className="text-sm font-bold">Vòng Tiến Hóa 10 Thú Bông (+Xu khi ghép)</h2>
               <div className="grid grid-cols-2 gap-2">
                 {SQUISHY_TIERS.map((t) => (
@@ -1176,17 +1176,17 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
       {/* TAB 2: SWIPE-TO-TEAR BLIND BOX SHELF                              */}
       {/* ================================================================= */}
       {subTab === 'gacha' && (
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        <div className="mt-4 mobile-ls:mt-2 grid grid-cols-1 mobile-ls:grid-cols-12 lg:grid-cols-12 gap-5 mobile-ls:gap-3 items-start">
           {/* Left: Shelf Packs */}
-          <div className="lg:col-span-5 space-y-3">
+          <div className="mobile-ls:col-span-5 lg:col-span-5 space-y-3 mobile-ls:max-h-[calc(100dvh-76px)] mobile-ls:overflow-y-auto mobile-ls:pr-1">
             <h2 className="text-sm font-bold">Kệ Túi Mù Hôm Nay</h2>
             {BLIND_BOX_PACKS.map((pack) => {
               const canAfford = profile.coins >= pack.costCoins;
               return (
-                <div key={pack.id} className={`rounded-2xl border p-4 space-y-3 ${cardClass}`}>
+                <div key={pack.id} className={`rounded-2xl border p-4 mobile-ls:p-2.5 space-y-3 mobile-ls:space-y-2 ${cardClass}`}>
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h3 className="text-base font-bold">{pack.name}</h3>
+                      <h3 className="text-base mobile-ls:text-sm font-bold">{pack.name}</h3>
                       <p className="text-xs opacity-80 mt-0.5">{pack.subtitle}</p>
                       <p className="text-[11px] text-[#D16B8F] dark:text-[#F4A8C3] mt-1">
                         Tỷ lệ Secret: {Math.round(pack.secretChance * 100)}% · Hiếm: {Math.round(pack.rareChance * 100)}%
@@ -1205,7 +1205,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
                     data-testid={`buy-${pack.id}`}
                     disabled={!canAfford || activePack !== null}
                     onClick={() => handleBuyPack(pack)}
-                    className="min-h-[44px] w-full py-2.5 rounded-xl bg-[#E57399] hover:bg-[#D55E87] disabled:opacity-45 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+                    className="min-h-[44px] mobile-ls:min-h-[38px] w-full py-2.5 mobile-ls:py-1.5 rounded-xl bg-[#E57399] hover:bg-[#D55E87] disabled:opacity-45 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
                   >
                     {activePack
                       ? 'Đang có túi chờ xé...'
@@ -1219,17 +1219,17 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
           </div>
 
           {/* Right: Interactive Foil Tear Stage */}
-          <div className="lg:col-span-7">
-            <div className={`rounded-2xl border p-5 min-h-[380px] flex flex-col items-center justify-center text-center ${cardClass}`}>
+          <div className="mobile-ls:col-span-7 lg:col-span-7">
+            <div className={`rounded-2xl border p-5 mobile-ls:p-3 min-h-[380px] mobile-ls:min-h-[250px] flex flex-col items-center justify-center text-center ${cardClass}`}>
               {activePack ? (
-                <div className="w-full max-w-sm space-y-4">
+                <div className="w-full max-w-sm space-y-4 mobile-ls:space-y-2">
                   <p className="text-xs font-semibold text-[#D16B8F] dark:text-[#F4A8C3]">
                     VUỐT NGANG ĐƯỜNG RĂNG CƯA ĐỂ XÉ TÚI! ({Math.round(tearProgress * 100)}%)
                   </p>
 
                   {/* Interactive Tearing Blind Box Foil Pouch */}
                   <div
-                    className="relative mx-auto w-60 h-72 select-none touch-none"
+                    className="relative mx-auto w-60 h-72 mobile-ls:scale-[0.82] mobile-ls:-my-4 select-none touch-none"
                     style={{
                       transform:
                         tearProgress > 0.05
@@ -1383,9 +1383,9 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
       {/* TAB 3: COZY MINI-ROOM DECORATOR & SNAPSHOT                        */}
       {/* ================================================================= */}
       {subTab === 'room' && (
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        <div className="mt-4 mobile-ls:mt-2 grid grid-cols-1 mobile-ls:grid-cols-[minmax(0,1fr)_250px] lg:grid-cols-12 gap-5 mobile-ls:gap-3 items-start">
           {/* Left: Interactive SVG Bedroom Corner */}
-          <div className="lg:col-span-8 space-y-2.5">
+          <div className="mobile-ls:min-w-0 lg:col-span-8 space-y-2.5 mobile-ls:space-y-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs opacity-80">
                 Kéo thả tự do mọi món đồ trong phòng · Nhấp món đồ để Lật hướng hoặc Cất
@@ -1431,7 +1431,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
                 roomDragRef.current = null;
               }}
               onClick={() => setSelectedRoomId(null)}
-              className="w-full aspect-[680/420] h-auto rounded-2xl border border-[#F0DCE3] dark:border-[#3E3239] select-none touch-none"
+              className="w-full mobile-ls:max-w-[min(100%,calc((100dvh-130px)*1.619))] mobile-ls:mx-auto block aspect-[680/420] h-auto rounded-2xl border border-[#F0DCE3] dark:border-[#3E3239] select-none touch-none"
               role="application"
               aria-label="Góc phòng mini trang trí đồ sưu tầm"
             >
@@ -1533,7 +1533,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
             <h2 className="text-sm font-bold">
               Kho Đồ Sưu Tầm ({profile.unlockedIds.length}/{ROOM_COLLECTIBLES.length})
             </h2>
-            <div className="grid grid-cols-2 gap-2 max-h-[420px] overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-2 max-h-[420px] mobile-ls:max-h-[240px] overflow-y-auto pr-1">
               {ROOM_COLLECTIBLES.map((item) => {
                 const unlocked = profile.unlockedIds.includes(item.id);
                 const placed = profile.placedRoom.some((p) => p.id === item.id);

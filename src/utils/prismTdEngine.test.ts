@@ -10,6 +10,7 @@ import {
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
   computeBeaconBuffAtTile,
+  computeTeamSupportBuffAtTile,
   createEnemyForWave,
   ENEMY_KILL_COIN_BOOST,
   DIFFICULTY_CONFIGS,
@@ -37,8 +38,9 @@ import {
   stepEnemies,
   TILE_SIZE,
 } from './prismTdEngine.ts';
+import { playOverheatSkillSfx, playPrismSfx } from './prismTdSound.ts';
 
-test('PRISM_MAPS define 16 valid 16x10 tactical maps with doubled waves (16..36), 36 guns Lv10 (20 global + 16 exclusive), and 8 modes', () => {
+test('PRISM_MAPS define 16 valid 16x10 tactical maps with doubled waves (16..36), 39 guns Lv10 (23 global + 16 exclusive), and 8 modes', () => {
   assert.equal(PRISM_MAPS.length, 16);
   assert.equal(GRID_COLS, 16);
   assert.equal(GRID_ROWS, 10);
@@ -46,10 +48,10 @@ test('PRISM_MAPS define 16 valid 16x10 tactical maps with doubled waves (16..36)
   assert.equal(CANVAS_WIDTH, 896);
   assert.equal(CANVAS_HEIGHT, 560);
 
-  assert.equal(GUN_CATALOG.length, 36);
+  assert.equal(GUN_CATALOG.length, 39);
   const globalGuns = GUN_CATALOG.filter((g) => !g.exclusiveMapId);
   const exclusiveGuns = GUN_CATALOG.filter((g) => Boolean(g.exclusiveMapId));
-  assert.equal(globalGuns.length, 20);
+  assert.equal(globalGuns.length, 23);
   assert.equal(exclusiveGuns.length, 16);
 
   assert.equal(MAX_GUN_LEVEL, 10);
@@ -105,14 +107,14 @@ test('PRISM_MAPS define 16 valid 16x10 tactical maps with doubled waves (16..36)
       assert.ok(b.col >= 0 && b.col < 16 && b.row >= 0 && b.row < 10);
     }
 
-    // Verify exclusive map gun isolation (20 global + 1 map-exclusive = 21 total)
+    // Verify exclusive map gun isolation (23 global + 1 map-exclusive = 24 total)
     const exGun = getExclusiveGunForMap(map.id);
     assert.ok(exGun, `${map.id} must have an exclusive gun`);
     assert.equal(seenExclusiveTypes.has(exGun.type), false, `Duplicate exclusive gun ${exGun.type}`);
     seenExclusiveTypes.add(exGun.type);
 
     const available = getAvailableGunsForMap(map.id);
-    assert.equal(available.length, 21, `${map.id} should unlock 20 global + 1 exclusive gun`);
+    assert.equal(available.length, 24, `${map.id} should unlock 23 global + 1 exclusive gun`);
     assert.equal(available[0].type, exGun.type);
     const otherExclusiveCount = available.filter((g) => g.exclusiveMapId && g.exclusiveMapId !== map.id).length;
     assert.equal(otherExclusiveCount, 0, `${map.id} must NOT expose other maps' exclusive guns`);
@@ -199,7 +201,7 @@ test('Doubled campaign wave counts (16..42), 8 game modes scaling, steeper per-w
   assert.ok(w4Hell.some((s) => s.kind === 'boss'));
 });
 
-test('Pure Gun Lv1..Lv10 progression for all 36 guns scales monotonically + Alpha/Omega variants + 36 unique Overheat skills', () => {
+test('Pure Gun Lv1..Lv10 progression for all 39 guns scales monotonically + Alpha/Omega variants + 39 unique Overheat skills', () => {
   const overheatKeys = new Set<string>();
   for (const gun of GUN_CATALOG) {
     assert.equal(gun.milestones.length, 4);
@@ -238,7 +240,7 @@ test('Pure Gun Lv1..Lv10 progression for all 36 guns scales monotonically + Alph
       }
     }
   }
-  assert.equal(overheatKeys.size, 36);
+  assert.equal(overheatKeys.size, 39);
 
   const beaconGun: PlacedGun = {
     id: 'b1',
@@ -263,6 +265,18 @@ test('Pure Gun Lv1..Lv10 progression for all 36 guns scales monotonically + Alph
 
   const farBuff = computeBeaconBuffAtTile([beaconGun], 11, 7);
   assert.equal(farBuff.speedMult, 1);
+
+  const ampGun: PlacedGun = { ...beaconGun, id: 'amp1', col: 5, row: 5, type: 'amp_spire', variant: 'omega' };
+  const radarGun: PlacedGun = { ...beaconGun, id: 'rad1', col: 6, row: 4, type: 'radar', variant: 'alpha' };
+  const aegisGun: PlacedGun = { ...beaconGun, id: 'aeg1', col: 4, row: 3, type: 'aegis_field', variant: 'omega' };
+  const teamBuff = computeTeamSupportBuffAtTile([beaconGun, ampGun, radarGun, aegisGun], 5, 4);
+  assert.equal(teamBuff.hasSupportLink, true);
+  assert.ok(teamBuff.speedMult > 1.3 && teamBuff.speedMult <= 1.55);
+  assert.ok(teamBuff.damageMult > 1.24 && teamBuff.damageMult <= 1.45);
+  assert.ok(teamBuff.rangeBonusTiles >= 0.85);
+  assert.ok(teamBuff.armorPierceBonus >= 0.4);
+  assert.ok(teamBuff.shieldMultBonus >= 0.55);
+  assert.ok(teamBuff.heatCoolMult >= 1.25);
 
   const lv1Cost = getGunUpgradeCost('gatling', 1)!;
   const lv9Cost = getGunUpgradeCost('gatling', 9)!;
@@ -400,7 +414,7 @@ test('Rebalanced steeper wave spawns and all 12 enemy archetypes & abilities wor
   assert.equal(resJugg.coreDamageTaken, 3);
 });
 
-test('All 20 global + 16 exclusive guns unlock distinct Lv3/Lv5/Lv7/Lv10 combat profile milestones', () => {
+test('All 23 global + 16 exclusive guns unlock distinct Lv3/Lv5/Lv7/Lv10 combat profile milestones', () => {
   const gat10 = getGunCombatProfile('gatling', 10);
   assert.equal(gat10.projectilesPerShot, 4);
   assert.ok(gat10.armorPierce >= 0.75);
@@ -594,5 +608,154 @@ test('Enemy kill coin rewards increase by 10% across all 12 enemy archetypes', (
   assert.ok(bossW1.reward >= 33, `Boss W1 reward (${bossW1.reward}) includes +10% floor (>= 33)`);
 });
 
+test('prismTdSound synthesizes compressor+shaper bus, enforces polyphony budget, guards suspended state, and covers 39 guns + 39 Overheat skills', () => {
+  let oscCount = 0;
+  let noiseSrcCount = 0;
+  let filterCount = 0;
+  let compressorCount = 0;
+  let shaperCount = 0;
+  let bufferCount = 0;
+  const maxSubOscFreqs: number[] = [];
 
+  const makeParam = () => ({
+    setValueAtTime: (v: number) => {
+      maxSubOscFreqs.push(v);
+    },
+    setTargetAtTime: () => {},
+    linearRampToValueAtTime: () => {},
+    exponentialRampToValueAtTime: () => {},
+  });
 
+  const makeMockCtx = (state: 'running' | 'suspended' = 'running') =>
+    ({
+      sampleRate: 44100,
+      currentTime: 0,
+      state,
+      destination: {},
+      resume: async () => {},
+      createBuffer: (_c: number, length: number) => {
+        bufferCount++;
+        return {
+          getChannelData: () => new Float32Array(length),
+        };
+      },
+      createWaveShaper: () => {
+        shaperCount++;
+        return {
+          curve: null,
+          oversample: 'none',
+          connect: () => {},
+        };
+      },
+      createDynamicsCompressor: () => {
+        compressorCount++;
+        return {
+          threshold: makeParam(),
+          knee: makeParam(),
+          ratio: makeParam(),
+          attack: makeParam(),
+          release: makeParam(),
+          connect: () => {},
+        };
+      },
+      createGain: () => ({
+        gain: makeParam(),
+        connect: () => {},
+      }),
+      createOscillator: () => {
+        oscCount++;
+        return {
+          type: 'sine',
+          frequency: {
+            setValueAtTime: (v: number) => {
+              maxSubOscFreqs.push(v);
+            },
+            exponentialRampToValueAtTime: () => {},
+          },
+          connect: () => {},
+          start: () => {},
+          stop: () => {},
+        };
+      },
+      createBufferSource: () => {
+        noiseSrcCount++;
+        return {
+          buffer: null,
+          playbackRate: makeParam(),
+          connect: () => {},
+          start: () => {},
+          stop: () => {},
+        };
+      },
+      createBiquadFilter: () => {
+        filterCount++;
+        return {
+          type: 'lowpass',
+          frequency: makeParam(),
+          Q: makeParam(),
+          connect: () => {},
+        };
+      },
+    }) as unknown as AudioContext;
+
+  // 1. Suspended context guard: passive gunfire must NOT pile up backlog while AudioContext is suspended
+  const suspendedRef = { current: makeMockCtx('suspended') };
+  playPrismSfx('gatling', true, suspendedRef);
+  assert.equal(noiseSrcCount, 0, 'Suspended AudioContext must not buffer/backlog combat gunfire');
+
+  // 2. Polyphony burst protection when all 36 guns + Overheat ultimates fire in same 0ms frame
+  const burstRef = { current: makeMockCtx('running') };
+  for (const gun of GUN_CATALOG) {
+    playPrismSfx(gun.type, true, burstRef);
+    playOverheatSkillSfx(gun.overheatSkill.key, gun.type, true, burstRef);
+  }
+  assert.equal(compressorCount, 1, 'Exactly one master DynamicsCompressor per AudioContext');
+  assert.equal(shaperCount, 1, 'Exactly one soft-clipper WaveShaper per AudioContext');
+  assert.equal(bufferCount, 8, 'Pre-bakes 8 normalized acoustic Foley/noise buffers once');
+  assert.ok(
+    noiseSrcCount <= 16,
+    `Global polyphony budget must cap simultaneous 0ms gunfire/overheat voices, got ${noiseSrcCount}`
+  );
+
+  // 3. Full spaced verification across every one of 36 guns & 36 Overheat skill keys + UI cues
+  const origPerfNow = performance.now.bind(performance);
+  let fakeNow = 10_000;
+  (performance as { now: () => number }).now = () => {
+    fakeNow += 400;
+    return fakeNow;
+  };
+  try {
+    const cleanRef = { current: makeMockCtx('running') };
+    const beforeNoise = noiseSrcCount;
+    for (const gun of GUN_CATALOG) {
+      const preN = noiseSrcCount;
+      const preO = oscCount;
+      playPrismSfx(gun.type, true, cleanRef);
+      assert.ok(
+        noiseSrcCount > preN || oscCount > preO,
+        `Weapon ${gun.type} must emit acoustic Foley or tone`
+      );
+      const preSkillN = noiseSrcCount;
+      const preSkillO = oscCount;
+      playOverheatSkillSfx(gun.overheatSkill.key, gun.type, true, cleanRef);
+      assert.ok(
+        noiseSrcCount > preSkillN || oscCount > preSkillO,
+        `Overheat skill ${gun.overheatSkill.key} must emit audio`
+      );
+    }
+    for (const uiFx of ['place', 'select', 'upgrade', 'variant', 'sell', 'explosion', 'kill', 'wave', 'overdrive', 'hurt', 'victory', 'defeat'] as const) {
+      playPrismSfx(uiFx, true, cleanRef);
+    }
+    assert.ok(noiseSrcCount - beforeNoise >= 74, 'All 39 guns + 39 Overheat skills + UI cues produce clean Foley layers');
+    assert.ok(filterCount >= noiseSrcCount - 10);
+
+    // Muted flag check
+    const preMutedOsc = oscCount;
+    const preMutedNoise = noiseSrcCount;
+    playPrismSfx('overdrive', false, cleanRef);
+    assert.equal(oscCount, preMutedOsc);
+    assert.equal(noiseSrcCount, preMutedNoise);
+  } finally {
+    (performance as { now: () => number }).now = origPerfNow;
+  }
+});

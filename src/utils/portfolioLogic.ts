@@ -225,13 +225,13 @@ export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
   }
   if (route === 'gallery') {
     return {
-      title: 'Triển Lãm Ảnh & Video — Thuận Lê (28 Tác Phẩm)',
+      title: 'Triển Lãm Ảnh & Video — Thuận Lê (37 Tác Phẩm)',
       description:
-        'Khám phá 28 khoảnh khắc WebP & video H.264 tối ưu tốc độ của Thuận Lê: Nàng Thơ Hoa Đào, Coding Timelapse, chuyến đi rừng thông và kỷ niệm MISA.',
+        'Khám phá 37 khoảnh khắc WebP & video H.264 tối ưu tốc độ của Thuận Lê: Nàng Thơ Hoa Đào, Coding Timelapse, chuyến đi Tam Đảo, rừng thông và MISA.',
       keywords:
-        'Triển lãm ảnh Thuận Lê, Nàng Thơ Hoa Đào, Coding Timelapse, WebP Gallery, AI Visual Art, MISA Hạ Long',
+        'Triển lãm ảnh Thuận Lê, Nàng Thơ Hoa Đào, Tam Đảo, Coding Timelapse, WebP Gallery, AI Visual Art, MISA Hạ Long',
       ogType: 'website',
-      ogImageAlt: 'Triển lãm ảnh và video 28 tác phẩm của kỹ sư Thuận Lê',
+      ogImageAlt: 'Triển lãm ảnh và video 37 tác phẩm của kỹ sư Thuận Lê',
       path: '/trien-lam',
     };
   }
@@ -380,7 +380,7 @@ export function executeCliCommand(rawInput: string): CliExecutionResult {
   ai-agents          : Kinh nghiệm dùng Gemini, Claude, Grok & Codex
   projects           : Liệt kê các hệ thống production lớn đã build
   cv                 : Xem tóm tắt CV & tải bản PDF tại /cv
-  gallery            : Xem danh sách 28 tác phẩm ảnh WebP & video tại /trien-lam
+  gallery            : Xem danh sách 37 tác phẩm ảnh WebP & video tại /trien-lam
   why-hire           : 4 lý do tại sao nên tuyển Thuận Lê
   stack              : Danh sách toàn bộ Database, Messaging & Framework
   contact            : Lấy thông tin liên hệ ngay lập tức
@@ -435,11 +435,11 @@ export function executeCliCommand(rawInput: string): CliExecutionResult {
     return {
       action: 'append',
       commandEcho: `thuanle@portfolio:~$ ${cmd}`,
-      responseText: `Triển Lãm Nghệ Thuật & Đời Thường (/trien-lam — 28 Tác Phẩm WebP & H.264):
+      responseText: `Triển Lãm Nghệ Thuật & Đời Thường (/trien-lam — 37 Tác Phẩm WebP & H.264):
 - Video (1): Coding Timelapse — Góc Làm Việc & Đam Mê (MP4 3.6 MB)
 - Nàng Thơ Hoa Đào (1): Cố Phán Di Quang Thái — Nàng Thơ Giữa Hoa Đào
-- Chân Dung (10): Coding Ban Công Đêm, Ninja 400 Eagle Villa, Rừng Thông, Guitar Acoustic, Chân Dung Đời Thực, Thẻ Xanh, Filter Hoa Xuân
-- Đồng Đội & Kỷ Niệm (16): MISA Infinity Impact Award, Hạ Long 2026, Team MEC, Bàn Bi Lắc, Khán Đài Gỗ, Vịt 34, Lẩu Sum Vầy, Biển Bạc & Người Thương`,
+- Chân Dung (11): Coding Ban Công Đêm, Tam Đảo Đỉnh Núi, Ninja 400 Eagle Villa, Rừng Thông, Guitar Acoustic, Chân Dung Đời Thực, Thẻ Xanh, Filter Hoa Xuân
+- Đồng Đội & Kỷ Niệm (24): Chuyến đi Tam Đảo, MISA Infinity Impact Award, Hạ Long 2026, Team MEC, Bàn Bi Lắc, Khán Đài Gỗ, Vịt 34, Lẩu Sum Vầy, Biển Bạc & Người Thương`,
       responseToneClass: 'text-sky-300',
     };
   }
@@ -760,7 +760,7 @@ export function buildStructuredDataGraph(origin: string, route: AppRoute) {
         url: `${cleanOrigin}/trien-lam`,
         name: 'Triển Lãm Ảnh & Video Đời Thường, Hành Trình & Đồng Đội — Thuận Lê',
         description:
-          'Tuyển tập 28 tác phẩm thị giác tối ưu WebP và Video H.264 kết hợp nghệ thuật Nàng Thơ Hoa Đào, Coding Ban Công Đêm, Kawasaki Ninja 400, Rừng Thông và kỷ niệm MISA.',
+          'Tuyển tập 37 tác phẩm thị giác tối ưu WebP và Video H.264 kết hợp nghệ thuật Nàng Thơ Hoa Đào, Coding Ban Công Đêm, Tam Đảo, Kawasaki Ninja 400, Rừng Thông và kỷ niệm MISA.',
         creator: { '@id': `${cleanOrigin}/#person` },
         associatedMedia: [
           {

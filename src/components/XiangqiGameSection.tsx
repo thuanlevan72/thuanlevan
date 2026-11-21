@@ -1278,15 +1278,15 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
       data-turn={sideToMove}
       data-difficulty={difficulty}
       data-board-theme={boardTheme}
-      className="pt-1 sm:pt-2 pb-6 space-y-3 sm:space-y-3.5"
+      className="pt-1 sm:pt-2 pb-6 space-y-3 sm:space-y-3.5 mobile-ls:py-1 mobile-ls:pb-2 mobile-ls:space-y-2"
     >
       {/* Top Game Utility Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-[#DCE6F2] dark:border-[#1E2E4A] pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-[#DCE6F2] dark:border-[#1E2E4A] pb-3 mobile-ls:pb-1.5 mobile-ls:gap-2">
         <div className="space-y-0.5">
-          <p className="text-[11px] font-mono uppercase tracking-[0.16em] text-[#0284C7] dark:text-[#38BDF8]">
+          <p className="text-[11px] font-mono uppercase tracking-[0.16em] text-[#0284C7] dark:text-[#38BDF8] mobile-ls:hidden">
             Khu Giải Trí Chiến Thuật · 2D Canvas Engine
           </p>
-          <h1 className="font-display text-xl sm:text-3xl font-bold text-[#070B14] dark:text-[#F1F5F9]">
+          <h1 className="font-display text-xl sm:text-3xl mobile-ls:text-lg font-bold text-[#070B14] dark:text-[#F1F5F9]">
             Cờ Tướng Đối Kháng AI
           </h1>
         </div>
@@ -1334,12 +1334,12 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
         </div>
       </div>
 
-      {/* Main 2-Column Game Shell (Desktop: Board Left/Center + HUD Dock Right; Mobile: Stacked) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
+      {/* Main 2-Column Game Shell (Desktop: Board Left/Center + HUD Dock Right; Mobile Landscape: 2-col dual-thumb) */}
+      <div className="grid grid-cols-1 mobile-ls:grid-cols-[minmax(0,1fr)_270px] lg:grid-cols-12 gap-4 mobile-ls:gap-2.5 lg:gap-6 items-start">
         {/* Board Column */}
-        <div className="lg:col-span-7 xl:col-span-7 flex flex-col items-center gap-2.5">
+        <div className="mobile-ls:min-w-0 lg:col-span-7 xl:col-span-7 flex flex-col items-center gap-2.5 mobile-ls:gap-1.5">
           {/* Top Compact Opponent Strip (Mobile & Desktop) */}
-          <div className="w-full max-w-[500px] xl:max-w-[520px] flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white dark:bg-[#0B1222]">
+          <div className="w-full max-w-[500px] xl:max-w-[520px] mobile-ls:max-w-[min(100%,calc((100dvh-106px)*0.9))] flex items-center justify-between gap-2 px-3 py-2 mobile-ls:px-2 mobile-ls:py-1 rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white dark:bg-[#0B1222]">
             <div className="flex items-center gap-2.5 min-w-0">
               <div
                 aria-hidden="true"
@@ -1381,7 +1381,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
           {/* Interactive 2D Board Stage + Overlays */}
           <div
             ref={containerRef}
-            className="relative w-full max-w-[500px] xl:max-w-[520px] aspect-[9/10] mx-auto rounded-2xl overflow-hidden shadow-[0_20px_50px_-18px_rgba(7,11,20,0.38)] border-2 border-[#3E2718] dark:border-[#2B3E5E] select-none touch-none"
+            className="relative w-full max-w-[500px] xl:max-w-[520px] mobile-ls:max-w-[min(100%,calc((100dvh-106px)*0.9))] aspect-[9/10] mx-auto rounded-2xl overflow-hidden shadow-[0_20px_50px_-18px_rgba(7,11,20,0.38)] border-2 border-[#3E2718] dark:border-[#2B3E5E] select-none touch-none"
           >
             <canvas
               ref={canvasRef}
@@ -1398,15 +1398,15 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
               <div
                 role="region"
                 aria-label="Màn hình bắt đầu Cờ Tướng"
-                className="absolute inset-0 flex flex-col items-center justify-start sm:justify-center p-3 sm:p-7 text-center overflow-y-auto"
+                className="absolute inset-0 flex flex-col items-center justify-start sm:justify-center mobile-ls:justify-center p-3 sm:p-7 mobile-ls:p-2 text-center overflow-y-auto"
                 style={{ backgroundColor: 'rgba(10, 15, 28, 0.85)' }}
               >
-                <div className="w-full max-w-md space-y-2.5 sm:space-y-4 text-white">
+                <div className="w-full max-w-md space-y-2.5 sm:space-y-4 mobile-ls:space-y-1.5 text-white">
                   {/* Custom SVG Title Emblem */}
-                  <div className="flex flex-col items-center gap-1.5 sm:gap-2">
+                  <div className="flex flex-col items-center gap-1.5 sm:gap-2 mobile-ls:gap-0">
                     <svg
                       viewBox="0 0 120 56"
-                      className="w-20 h-10 sm:w-28 sm:h-13"
+                      className="w-20 h-10 sm:w-28 sm:h-13 mobile-ls:hidden"
                       aria-hidden="true"
                     >
                       <circle cx="40" cy="28" r="22" fill="#FFF8EC" stroke="#B91C1C" strokeWidth="3" />
@@ -1436,44 +1436,46 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                         將
                       </text>
                     </svg>
-                    <h2 className="font-display text-2xl sm:text-4xl font-bold tracking-tight text-white">
+                    <h2 className="font-display text-2xl sm:text-4xl mobile-ls:text-base font-bold tracking-tight text-white">
                       Sở Hà · Hán Giới
                     </h2>
-                    <p className="hidden sm:block text-sm text-slate-300">
+                    <p className="hidden sm:block mobile-ls:hidden text-sm text-slate-300">
                       Đấu trí Cờ Tướng 2D cùng trí tuệ nhân tạo Alpha-Beta trên mọi thiết bị
                     </p>
                   </div>
 
                   {/* Difficulty Selection (10 Levels) */}
-                  <div className="space-y-1.5 text-left">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-amber-300">
-                        1. Chọn Trình Độ Máy (10 Cấp)
+                  <div className="space-y-1.5 mobile-ls:space-y-1 text-left">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <p className="text-[10px] sm:text-[11px] mobile-ls:text-[9px] font-mono uppercase tracking-wider text-amber-300 truncate">
+                        1. Chọn Cấp AI
                       </p>
-                      <span className="text-[10px] sm:text-xs font-semibold text-amber-200">
+                      <span className="text-[10px] sm:text-xs mobile-ls:text-[9px] font-semibold text-amber-200 whitespace-nowrap">
                         {activeLevelInfo.badge} · {activeLevelInfo.name}
                       </span>
                     </div>
-                    <div className="grid grid-cols-5 gap-1.5">
+                    <div className="grid grid-cols-5 gap-1.5 mobile-ls:gap-1">
                       {XIANGQI_LEVELS.map((cfg) => (
                         <button
                           key={cfg.level}
                           type="button"
                           aria-label={`Chọn ${cfg.badge} ${cfg.name}`}
                           onClick={() => setDifficulty(cfg.level)}
-                          className={`min-h-[38px] py-1.5 sm:py-2 rounded-lg border text-center transition-all cursor-pointer ${
+                          className={`min-h-[38px] mobile-ls:min-h-[28px] py-1.5 sm:py-2 mobile-ls:py-1 rounded-lg border text-center transition-all cursor-pointer ${
                             difficulty === cfg.level
                               ? 'bg-amber-500 text-slate-950 border-amber-300 font-bold shadow-sm'
                               : 'bg-slate-900/90 text-slate-200 border-slate-700 hover:border-slate-500'
                           }`}
                         >
-                          <div className="text-[11px] sm:text-xs font-mono leading-tight">
-                            Cấp {cfg.level}
+                          <div className="text-[11px] sm:text-xs mobile-ls:text-[10px] font-mono leading-tight whitespace-nowrap">
+                            <span className="mobile-ls:hidden">Cấp </span>
+                            <span className="hidden mobile-ls:inline">C</span>
+                            {cfg.level}
                           </div>
                         </button>
                       ))}
                     </div>
-                    <p className="text-[10px] sm:text-[11px] text-slate-300 bg-slate-900/80 border border-slate-700/80 rounded-lg px-2.5 py-1.5 leading-snug">
+                    <p className="mobile-ls:hidden text-[10px] sm:text-[11px] text-slate-300 bg-slate-900/80 border border-slate-700/80 rounded-lg px-2.5 py-1.5 leading-snug">
                       <strong className="text-amber-300">{activeLevelInfo.name}:</strong>{' '}
                       {activeLevelInfo.summary}
                     </p>
@@ -1481,31 +1483,31 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
 
                   {/* Side Selection */}
                   <div className="space-y-1 text-left">
-                    <p className="text-[10px] sm:text-[11px] font-mono uppercase tracking-wider text-amber-300">
+                    <p className="text-[10px] sm:text-[11px] mobile-ls:text-[9px] font-mono uppercase tracking-wider text-amber-300">
                       2. Chọn Phe Thi Đấu
                     </p>
-                    <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
+                    <div className="grid grid-cols-2 gap-1.5 sm:gap-2 mobile-ls:gap-1">
                       <button
                         type="button"
                         onClick={() => setPlayerSide('red')}
-                        className={`min-h-[42px] px-2 py-2 sm:px-3 sm:py-2.5 rounded-xl border text-[11px] sm:text-sm font-semibold transition-all cursor-pointer ${
+                        className={`min-h-[42px] mobile-ls:min-h-[32px] px-2 py-2 sm:px-3 sm:py-2.5 mobile-ls:py-1 rounded-xl border text-[11px] sm:text-sm mobile-ls:text-[10px] font-semibold transition-all cursor-pointer ${
                           playerIsRed
                             ? 'bg-red-700 text-white border-red-400'
                             : 'bg-slate-900/90 text-slate-300 border-slate-700 hover:border-slate-500'
                         }`}
                       >
-                        Quân Đỏ (Đi Trước)
+                        Quân Đỏ <span className="mobile-ls:hidden">(Đi Trước)</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setPlayerSide('black')}
-                        className={`min-h-[42px] px-2 py-2 sm:px-3 sm:py-2.5 rounded-xl border text-[11px] sm:text-sm font-semibold transition-all cursor-pointer ${
+                        className={`min-h-[42px] mobile-ls:min-h-[32px] px-2 py-2 sm:px-3 sm:py-2.5 mobile-ls:py-1 rounded-xl border text-[11px] sm:text-sm mobile-ls:text-[10px] font-semibold transition-all cursor-pointer ${
                           !playerIsRed
                             ? 'bg-slate-100 text-slate-950 border-white'
                             : 'bg-slate-900/90 text-slate-300 border-slate-700 hover:border-slate-500'
                         }`}
                       >
-                        Quân Đen (Đi Sau)
+                        Quân Đen <span className="mobile-ls:hidden">(Đi Sau)</span>
                       </button>
                     </div>
                   </div>
@@ -1514,13 +1516,13 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                     type="button"
                     data-start="true"
                     onClick={() => startNewGame()}
-                    className="w-full py-2.5 sm:py-3.5 px-5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm sm:text-base inline-flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-[0.98] cursor-pointer"
+                    className="w-full py-2.5 sm:py-3.5 mobile-ls:py-2 px-5 mobile-ls:px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-sm sm:text-base mobile-ls:text-xs inline-flex items-center justify-center gap-2 shadow-lg transition-transform active:scale-[0.98] cursor-pointer"
                   >
                     <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
                     Bắt Đầu Ván Đấu
                   </button>
 
-                  <p className="text-[10px] sm:text-[11px] text-slate-300/90">
+                  <p className="mobile-ls:hidden text-[10px] sm:text-[11px] text-slate-300/90">
                     Chạm hoặc kéo thả quân · Enter Bắt đầu · Z Đi lại · H Gợi ý
                   </p>
                 </div>
@@ -1649,7 +1651,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
           </div>
 
           {/* Bottom Compact Player Strip */}
-          <div className="w-full max-w-[500px] xl:max-w-[520px] flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white dark:bg-[#0B1222]">
+          <div className="w-full max-w-[500px] xl:max-w-[520px] mobile-ls:max-w-[min(100%,calc((100dvh-132px)*0.9))] flex items-center justify-between gap-2 px-3 py-2 mobile-ls:px-2 mobile-ls:py-1 rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white dark:bg-[#0B1222]">
             <div className="flex items-center gap-2.5 min-w-0">
               <div
                 aria-hidden="true"
@@ -1701,10 +1703,10 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
           </div>
         </div>
 
-        {/* Right Side Control Dock & Live Match Log (Stacks cleanly below board on Mobile/Tablet) */}
-        <aside className="lg:col-span-5 xl:col-span-5 space-y-4">
+        {/* Right Side Control Dock & Live Match Log (Stacks cleanly below board on Mobile/Tablet, scrollable dock in Mobile Landscape) */}
+        <aside className="lg:col-span-5 xl:col-span-5 space-y-4 mobile-ls:max-h-[calc(100dvh-64px)] mobile-ls:overflow-y-auto mobile-ls:pr-1 mobile-ls:space-y-2">
           {/* Action Toolbar */}
-          <div className="rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white dark:bg-[#0B1222] p-4 sm:p-5 space-y-4">
+          <div className="rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white dark:bg-[#0B1222] p-4 sm:p-5 mobile-ls:p-2.5 space-y-4 mobile-ls:space-y-2">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-bold uppercase tracking-wider text-[#070B14] dark:text-[#F1F5F9]">
                 Bảng Điều Khiển Ván Đấu
@@ -1715,12 +1717,12 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
             </div>
 
             {/* 44px+ Tactile Controls Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 mobile-ls:grid-cols-2 gap-2.5 mobile-ls:gap-1.5">
               <button
                 type="button"
                 onClick={handleUndoMove}
                 disabled={snapshots.length <= 1 || gameState === 'title'}
-                className="min-h-[44px] px-3 py-2 rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-[#F8FAFC] dark:bg-[#111C33] hover:border-[#0284C7] disabled:opacity-45 disabled:cursor-not-allowed text-xs sm:text-sm font-semibold text-[#070B14] dark:text-[#F1F5F9] inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                className="min-h-[44px] mobile-ls:min-h-[38px] px-3 mobile-ls:px-2 py-2 mobile-ls:py-1.5 rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-[#F8FAFC] dark:bg-[#111C33] hover:border-[#0284C7] disabled:opacity-45 disabled:cursor-not-allowed text-xs sm:text-sm mobile-ls:text-xs font-semibold text-[#070B14] dark:text-[#F1F5F9] inline-flex items-center justify-center gap-2 mobile-ls:gap-1 transition-colors cursor-pointer"
               >
                 <Undo2 className="w-4 h-4 text-[#0284C7]" />
                 Đi Lại (Z)
@@ -1730,7 +1732,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                 type="button"
                 onClick={handleShowHint}
                 disabled={gameState !== 'playing' || sideToMove !== playerSide || isAiThinking}
-                className="min-h-[44px] px-3 py-2 rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-[#F8FAFC] dark:bg-[#111C33] hover:border-[#0284C7] disabled:opacity-45 disabled:cursor-not-allowed text-xs sm:text-sm font-semibold text-[#070B14] dark:text-[#F1F5F9] inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                className="min-h-[44px] mobile-ls:min-h-[38px] px-3 mobile-ls:px-2 py-2 mobile-ls:py-1.5 rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-[#F8FAFC] dark:bg-[#111C33] hover:border-[#0284C7] disabled:opacity-45 disabled:cursor-not-allowed text-xs sm:text-sm mobile-ls:text-xs font-semibold text-[#070B14] dark:text-[#F1F5F9] inline-flex items-center justify-center gap-2 mobile-ls:gap-1 transition-colors cursor-pointer"
               >
                 <Lightbulb className="w-4 h-4 text-amber-500" />
                 Gợi Ý (H)
@@ -1747,7 +1749,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                   }
                 }}
                 disabled={gameState !== 'playing' && gameState !== 'paused'}
-                className="min-h-[44px] px-3 py-2 rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-[#F8FAFC] dark:bg-[#111C33] hover:border-[#0284C7] disabled:opacity-45 disabled:cursor-not-allowed text-xs sm:text-sm font-semibold text-[#070B14] dark:text-[#F1F5F9] inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                className="min-h-[44px] mobile-ls:min-h-[38px] px-3 mobile-ls:px-2 py-2 mobile-ls:py-1.5 rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-[#F8FAFC] dark:bg-[#111C33] hover:border-[#0284C7] disabled:opacity-45 disabled:cursor-not-allowed text-xs sm:text-sm mobile-ls:text-xs font-semibold text-[#070B14] dark:text-[#F1F5F9] inline-flex items-center justify-center gap-2 mobile-ls:gap-1 transition-colors cursor-pointer"
               >
                 {gameState === 'paused' ? (
                   <>
@@ -1765,7 +1767,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
               <button
                 type="button"
                 onClick={() => startNewGame()}
-                className="min-h-[44px] px-3 py-2 rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-[#0A192F] hover:bg-[#13294B] dark:bg-[#0284C7] dark:hover:bg-[#0369A1] text-white text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                className="min-h-[44px] mobile-ls:min-h-[38px] px-3 mobile-ls:px-2 py-2 mobile-ls:py-1.5 rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-[#0A192F] hover:bg-[#13294B] dark:bg-[#0284C7] dark:hover:bg-[#0369A1] text-white text-xs sm:text-sm mobile-ls:text-xs font-semibold inline-flex items-center justify-center gap-2 mobile-ls:gap-1 transition-colors cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4" />
                 Ván Mới (R)
@@ -1797,7 +1799,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                     title={`${cfg.badge} · ${cfg.name}`}
                     aria-label={`Đổi độ khó ${cfg.badge} ${cfg.name}`}
                     onClick={() => setDifficulty(cfg.level)}
-                    className={`min-h-[40px] py-1.5 rounded-lg text-xs font-mono font-semibold transition-colors cursor-pointer ${
+                    className={`min-h-[40px] mobile-ls:min-h-[34px] py-1.5 mobile-ls:py-1 rounded-lg text-xs font-mono font-semibold transition-colors cursor-pointer ${
                       difficulty === cfg.level
                         ? 'bg-[#0284C7] text-white shadow-sm'
                         : 'bg-[#F1F5F9] dark:bg-[#13203A] text-[#475569] dark:text-[#94A3B8] hover:text-[#070B14] dark:hover:text-white'
@@ -1811,7 +1813,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
           </div>
 
           {/* Captured Pieces & Move Notation History */}
-          <div className="rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white dark:bg-[#0B1222] p-4 sm:p-5 space-y-3">
+          <div className="rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white dark:bg-[#0B1222] p-4 sm:p-5 mobile-ls:p-2.5 space-y-3 mobile-ls:space-y-2">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-sm font-bold uppercase tracking-wider text-[#070B14] dark:text-[#F1F5F9] inline-flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-[#0284C7]" />
@@ -1881,7 +1883,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
             )}
 
             {/* Move List */}
-            <div className="max-h-56 overflow-y-auto pr-1 space-y-1 text-xs">
+            <div className="max-h-56 mobile-ls:max-h-28 overflow-y-auto pr-1 space-y-1 text-xs">
               {moveHistory.length === 0 ? (
                 <p className="py-6 text-center text-[#64748B] dark:text-[#94A3B8]">
                   Chưa có nước đi nào. Quân Đỏ luôn đi trước theo luật Cờ Tướng.

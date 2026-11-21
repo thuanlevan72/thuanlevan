@@ -752,22 +752,22 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
   return (
     <section
       aria-label="Học Viện Chiến Binh Frontend — 5 Trạm Thực Chiến"
-      className="rounded-2xl border border-slate-700/90 bg-[#0B111D] text-slate-100 p-3.5 sm:p-5 space-y-4"
+      className="rounded-2xl border border-slate-700/90 bg-[#0B111D] text-slate-100 p-3.5 sm:p-5 mobile-ls:p-2.5 space-y-4 mobile-ls:space-y-2"
     >
       {/* TOP BAR: UNIFIED GAME IDENTITY + CLEAN TABULAR TELEMETRY */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-3 mobile-ls:gap-2 pb-3 mobile-ls:pb-2 border-b border-slate-800">
         <div>
-          <h1 className="font-sans text-lg sm:text-xl font-bold tracking-tight text-white">
+          <h1 className="font-sans text-lg sm:text-xl mobile-ls:text-base font-bold tracking-tight text-white">
             Học Viện Chiến Binh Frontend (5 Trong 1)
           </h1>
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-slate-400 mobile-ls:text-[11px]">
             Cấp bậc: <span className="text-sky-300 font-semibold">{rankInfo.rankTitle}</span> · Hoàn thành{' '}
             <span className="font-mono tabular-nums text-emerald-300">{totalCleared}/15</span> nhiệm vụ
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex flex-wrap items-center gap-4 rounded-xl bg-[#060911] border border-slate-800 px-3.5 py-2 font-mono tabular-nums text-xs">
+        <div className="flex flex-wrap items-center gap-3 mobile-ls:gap-2">
+          <div className="flex flex-wrap items-center gap-4 mobile-ls:gap-2.5 rounded-xl bg-[#060911] border border-slate-800 px-3.5 py-2 mobile-ls:px-2.5 mobile-ls:py-1 font-mono tabular-nums text-xs">
             <div>
               <span className="text-slate-400 block text-[10px]">XP</span>
               <span data-testid="fe-xp" className="text-sm sm:text-base font-bold text-white">
@@ -858,11 +858,11 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
       </div>
 
       {/* UNIFIED 5-STATION MISSION NAVIGATOR */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+      <div className="flex flex-col mobile-ls:flex-row mobile-ls:items-center lg:flex-row lg:items-center justify-between gap-2.5 mobile-ls:gap-2">
         <div
           role="tablist"
           aria-label="5 Trạm Chiến Dịch Frontend"
-          className="flex flex-nowrap overflow-x-auto lg:flex-wrap lg:overflow-visible items-center gap-1.5 rounded-xl bg-[#060911] border border-slate-800 p-1.5"
+          className="flex flex-nowrap overflow-x-auto lg:flex-wrap lg:overflow-visible items-center gap-1.5 rounded-xl bg-[#060911] border border-slate-800 p-1.5 mobile-ls:p-1"
         >
           {FE_STATIONS.map((st) => {
             const selected = activeStation === st.id;
@@ -886,7 +886,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                 data-testid={`fe-station-${st.id}`}
                 aria-selected={selected}
                 onClick={() => selectMission(st.id, 0)}
-                className={`min-h-[40px] px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                className={`min-h-[40px] mobile-ls:min-h-[34px] px-3 mobile-ls:px-2.5 py-1.5 mobile-ls:py-1 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
                   selected
                     ? 'bg-emerald-400 text-slate-950 font-bold'
                     : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
@@ -930,7 +930,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
 
       {/* GAME OVER / READY BRIEFING BANNER OR ACTIVE STATION PLAYFIELD */}
       {phase === 'ready' ? (
-        <div className="rounded-xl border border-slate-700 bg-[#10192A] p-5 sm:p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="rounded-xl border border-slate-700 bg-[#10192A] p-5 sm:p-6 mobile-ls:p-3 flex flex-col md:flex-row mobile-ls:flex-row md:items-center mobile-ls:items-center justify-between gap-4 mobile-ls:gap-3">
           <div className="space-y-2 max-w-2xl">
             <h2 className="text-base sm:text-lg font-bold text-white">
               Học Làm Web Qua 5 Trò Chơi Trực Quan — Không Cần Biết Code Trước!
@@ -977,9 +977,9 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
           </button>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-4 mobile-ls:space-y-2.5">
           {/* STATION HEADER + VISUAL BEGINNER 10s ANALOGY */}
-          <div className="rounded-xl border border-slate-800 bg-[#0E1625] p-3.5 sm:p-4 space-y-2.5">
+          <div className="rounded-xl border border-slate-800 bg-[#0E1625] p-3.5 sm:p-4 mobile-ls:p-2.5 space-y-2.5 mobile-ls:space-y-1.5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-mono text-sky-300">
@@ -1062,9 +1062,9 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
               STATION 1: DOM SNIPER (LIVE CROSSHAIR LOCK + CANVAS LASER)
           ================================================================ */}
           {activeStation === 'dom_sniper' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div className="grid grid-cols-1 mobile-ls:grid-cols-12 lg:grid-cols-12 gap-4 mobile-ls:gap-2.5">
               {/* Left Briefing + Visual Selector Builder */}
-              <div className="lg:col-span-5 rounded-xl border border-slate-800 bg-[#0F1728] p-4 flex flex-col justify-between gap-3">
+              <div className="mobile-ls:col-span-5 lg:col-span-5 rounded-xl border border-slate-800 bg-[#0F1728] p-4 mobile-ls:p-2.5 flex flex-col justify-between gap-3 mobile-ls:gap-2">
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <h2 className="text-base font-bold text-white">{activeSniperMission.title}</h2>
@@ -1194,7 +1194,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
               </div>
 
               {/* Right Live Semantic DOM Arena + Overlaid Laser Canvas */}
-              <div className="lg:col-span-7 relative rounded-xl border border-slate-800 bg-[#070B14] p-4 overflow-hidden">
+              <div className="mobile-ls:col-span-7 lg:col-span-7 relative rounded-xl border border-slate-800 bg-[#070B14] p-4 mobile-ls:p-2.5 overflow-hidden">
                 <canvas
                   ref={laserCanvasRef}
                   aria-hidden="true"
@@ -1443,8 +1443,8 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
               STATION 2: LAYOUT HEIST (STEERING PAD + AXIS COMPASS + REAL CSS)
           ================================================================ */}
           {activeStation === 'layout_heist' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-              <div className="lg:col-span-5 rounded-xl border border-slate-800 bg-[#0F1728] p-4 flex flex-col justify-between gap-3">
+            <div className="grid grid-cols-1 mobile-ls:grid-cols-12 lg:grid-cols-12 gap-4 mobile-ls:gap-2.5">
+              <div className="mobile-ls:col-span-5 lg:col-span-5 rounded-xl border border-slate-800 bg-[#0F1728] p-4 mobile-ls:p-2.5 flex flex-col justify-between gap-3 mobile-ls:gap-2">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <h2 className="text-base font-bold text-white">{activeHeistLevel.title}</h2>
@@ -1611,7 +1611,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                 </div>
               </div>
 
-              <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-[#060911] p-4 space-y-2">
+              <div className="mobile-ls:col-span-7 lg:col-span-7 rounded-xl border border-slate-800 bg-[#060911] p-4 mobile-ls:p-2.5 space-y-2">
                 {/* Live Axis Compass Strip */}
                 <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-300 px-1">
                   {activeHeistLevel.mode === 'grid' ? (
@@ -1643,7 +1643,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
 
                 <div
                   ref={heistFloorRef}
-                  className="relative w-full h-[290px] rounded-xl border border-slate-800 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:28px_28px] overflow-hidden"
+                  className="relative w-full h-[290px] mobile-ls:h-[200px] rounded-xl border border-slate-800 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:28px_28px] overflow-hidden"
                 >
                   {/* Goal Diamond Slots */}
                   {activeHeistLevel.goalNormalizedPoints.map((pt, i) => (
@@ -1704,10 +1704,10 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
               STATION 3: EVENT LOOP TRAFFIC (PLAIN AIRPORT LANES + HINT)
           ================================================================ */}
           {activeStation === 'event_loop' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div className="space-y-4 mobile-ls:space-y-2.5">
+              <div className="grid grid-cols-1 mobile-ls:grid-cols-12 lg:grid-cols-12 gap-4 mobile-ls:gap-2.5">
                 {/* Zone 1: Code Source + Expected Console Output + Main Thread Meter */}
-                <div className="lg:col-span-5 rounded-xl border border-slate-800 bg-[#0F1728] p-4 space-y-3">
+                <div className="mobile-ls:col-span-5 lg:col-span-5 rounded-xl border border-slate-800 bg-[#0F1728] p-4 mobile-ls:p-2.5 space-y-3 mobile-ls:space-y-2">
                   <div className="flex items-center justify-between">
                     <h2 className="text-base font-bold text-white">{activeLoopLevel.title}</h2>
                     <span className="font-mono text-xs text-amber-300">
@@ -1784,7 +1784,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                 </div>
 
                 {/* Zones 2, 3, 4: Call Stack | Microtask Queue | Web API -> Macrotask Queue */}
-                <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="mobile-ls:col-span-7 lg:col-span-7 grid grid-cols-1 md:grid-cols-3 mobile-ls:grid-cols-3 gap-3 mobile-ls:gap-1.5">
                   {(
                     [
                       {
@@ -1899,9 +1899,9 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+              <div className="grid grid-cols-1 mobile-ls:grid-cols-12 lg:grid-cols-12 gap-4 mobile-ls:gap-2.5">
                 {/* Resizable Live Mini Webpage Frame */}
-                <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-[#05080F] p-3 flex flex-col gap-3">
+                <div className="mobile-ls:col-span-7 lg:col-span-7 rounded-xl border border-slate-800 bg-[#05080F] p-3 mobile-ls:p-2.5 flex flex-col gap-3 mobile-ls:gap-2">
                   <div className="flex flex-wrap items-center gap-3 font-mono text-xs">
                     <span className="text-slate-400">Viewport:</span>
                     <input
@@ -2051,7 +2051,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                 </div>
 
                 {/* Patch Selector Column */}
-                <div className="lg:col-span-5 rounded-xl border border-slate-800 bg-[#0F1728] p-4 space-y-3">
+                <div className="mobile-ls:col-span-5 lg:col-span-5 rounded-xl border border-slate-800 bg-[#0F1728] p-4 mobile-ls:p-2.5 space-y-3 mobile-ls:space-y-2">
                   <h3 className="text-sm font-bold text-white">Chọn Miếng Vá CSS Chính Xác</h3>
                   <p className="text-xs text-slate-400">{activeBugLevel.brokenCssSummary}</p>
 
@@ -2086,9 +2086,9 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
               STATION 5: COMPONENT TREE DEFENSE (3 PROGRESSIVE WAVES + MINI APP)
           ================================================================ */}
           {activeStation === 'tree_defense' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            <div className="grid grid-cols-1 mobile-ls:grid-cols-12 lg:grid-cols-12 gap-4 mobile-ls:gap-2.5">
               {/* Left Defense Arsenal + Live Search Input + Wave Trigger */}
-              <div className="lg:col-span-5 rounded-xl border border-slate-800 bg-[#0F1728] p-4 space-y-3">
+              <div className="mobile-ls:col-span-5 lg:col-span-5 rounded-xl border border-slate-800 bg-[#0F1728] p-4 mobile-ls:p-2.5 space-y-3 mobile-ls:space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <h2 className="text-base font-bold text-white">{activeTreeLevel.title}</h2>
@@ -2207,7 +2207,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
               </div>
 
               {/* Right Interactive Visual Component Tree + Mini Simulated Shop Preview */}
-              <div className="lg:col-span-7 rounded-xl border border-slate-800 bg-[#060911] p-4 flex flex-col justify-start gap-4">
+              <div className="mobile-ls:col-span-7 lg:col-span-7 rounded-xl border border-slate-800 bg-[#060911] p-4 mobile-ls:p-2.5 flex flex-col justify-start gap-4 mobile-ls:gap-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 font-mono pb-2 border-b border-slate-800/80">
                   <span className="inline-flex items-center gap-1.5">
                     <Layers className="w-3.5 h-3.5 text-sky-400" />
@@ -2232,7 +2232,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                   </div>
 
                   {/* Level 2 Children */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 mobile-ls:grid-cols-3 gap-3 mobile-ls:gap-2">
                     <TreeNodeCard
                       label={assistMode === 'visual_guide' ? 'Ô Tìm Kiếm' : '<SearchHeader />'}
                       renders={renderCounts.search_input ?? 1}
@@ -2254,7 +2254,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                   </div>
 
                   {/* Level 3 Heavy Children */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 mobile-ls:grid-cols-2 gap-3 mobile-ls:gap-2 pt-2 border-t border-slate-800/80">
                     <TreeNodeCard
                       label={assistMode === 'visual_guide' ? 'Bảng 500 Món' : '<ProductGrid (500) />'}
                       renders={renderCounts.post_list ?? 1}

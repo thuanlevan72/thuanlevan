@@ -13,6 +13,7 @@ import {
   Trophy,
   Volume2,
   VolumeX,
+  X,
   Zap,
 } from 'lucide-react';
 import {
@@ -23,7 +24,7 @@ import {
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
   clampEnemyToTrackCorridor,
-  computeBeaconBuffAtTile,
+  computeTeamSupportBuffAtTile,
   createEnemyForWave,
   DIFFICULTY_CONFIGS,
   DIFFICULTY_ORDER,
@@ -47,6 +48,7 @@ import {
   GUN_CATALOG,
   GunType,
   GunVariant,
+  isSupportGunType,
   LightningArc,
   MAX_GUN_LEVEL,
   PlacedGun,
@@ -74,6 +76,12 @@ import {
   OverheatFx,
   ShellCasingFx,
 } from '../utils/prismTdRenderer.ts';
+import {
+  playOverheatSkillSfx,
+  playPrismSfx,
+  syncPrismSoundMute,
+  unlockPrismAudio,
+} from '../utils/prismTdSound.ts';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 
 type GameState = 'title' | 'playing' | 'paused' | 'gameover';
@@ -182,161 +190,7 @@ function saveBestScore(score: number) {
   }
 }
 
-function playSynthFx(
-  kind:
-    | 'place'
-    | 'select'
-    | 'upgrade'
-    | 'sell'
-    | 'gatling'
-    | 'shotgun'
-    | 'tesla'
-    | 'missile'
-    | 'railgun'
-    | 'flamer'
-    | 'cryo'
-    | 'mortar'
-    | 'sniper'
-    | 'acid'
-    | 'saw'
-    | 'beacon'
-    | 'cannon'
-    | 'plasma'
-    | 'cluster'
-    | 'hunter'
-    | 'prism_laser'
-    | 'tempest'
-    | 'sonic'
-    | 'overheat'
-    | 'explosion'
-    | 'kill'
-    | 'wave'
-    | 'overdrive'
-    | 'hurt'
-    | 'victory'
-    | 'defeat',
-  enabled: boolean,
-  audioCtxRef: { current: AudioContext | null }
-) {
-  if (!enabled || typeof window === 'undefined') return;
-  try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) return;
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new AudioCtx();
-    }
-    const ctx = audioCtxRef.current;
-    if (ctx.state === 'suspended') {
-      void ctx.resume();
-    }
-    const now = ctx.currentTime;
-    const tone = (
-      f1: number,
-      f2: number,
-      dur: number,
-      vol: number,
-      type: OscillatorType = 'sine',
-      delay = 0
-    ) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(f1, now + delay);
-      osc.frequency.exponentialRampToValueAtTime(Math.max(36, f2), now + delay + dur);
-      gain.gain.setValueAtTime(0.001, now + delay);
-      gain.gain.linearRampToValueAtTime(vol, now + delay + 0.008);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + dur);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(now + delay);
-      osc.stop(now + delay + dur + 0.02);
-    };
-
-    if (kind === 'place') {
-      tone(380, 660, 0.09, 0.12, 'triangle');
-    } else if (kind === 'select') {
-      tone(540, 720, 0.05, 0.08, 'sine');
-    } else if (kind === 'upgrade') {
-      tone(440, 880, 0.12, 0.14, 'triangle', 0);
-      tone(660, 1240, 0.15, 0.12, 'sine', 0.05);
-    } else if (kind === 'sell') {
-      tone(480, 260, 0.1, 0.11, 'triangle');
-    } else if (kind === 'gatling') {
-      tone(680 + Math.random() * 140, 220, 0.045, 0.04, 'square');
-    } else if (kind === 'shotgun') {
-      tone(240, 75, 0.11, 0.11, 'sawtooth');
-    } else if (kind === 'tesla') {
-      tone(1120, 340, 0.09, 0.075, 'sawtooth');
-    } else if (kind === 'missile') {
-      tone(320, 640, 0.12, 0.08, 'triangle');
-    } else if (kind === 'railgun') {
-      tone(1260, 90, 0.22, 0.14, 'sawtooth', 0);
-      tone(420, 140, 0.18, 0.1, 'square', 0.02);
-    } else if (kind === 'flamer') {
-      tone(240, 110, 0.12, 0.055, 'sawtooth');
-    } else if (kind === 'cryo') {
-      tone(980, 520, 0.16, 0.075, 'sine');
-    } else if (kind === 'mortar') {
-      tone(220, 75, 0.24, 0.12, 'triangle');
-    } else if (kind === 'sniper') {
-      tone(1480, 180, 0.17, 0.13, 'sawtooth', 0);
-      tone(520, 120, 0.12, 0.09, 'square', 0.01);
-    } else if (kind === 'acid') {
-      tone(420, 190, 0.13, 0.09, 'triangle');
-    } else if (kind === 'saw') {
-      tone(760, 420, 0.11, 0.085, 'sawtooth');
-    } else if (kind === 'beacon') {
-      tone(660, 990, 0.18, 0.09, 'sine', 0);
-      tone(880, 1320, 0.14, 0.07, 'triangle', 0.04);
-    } else if (kind === 'cannon') {
-      tone(190, 52, 0.24, 0.14, 'sawtooth', 0);
-      tone(95, 40, 0.2, 0.1, 'triangle', 0.02);
-    } else if (kind === 'plasma') {
-      tone(860, 310, 0.12, 0.09, 'sine', 0);
-      tone(520, 220, 0.1, 0.06, 'triangle', 0.02);
-    } else if (kind === 'cluster') {
-      tone(280, 88, 0.2, 0.12, 'triangle');
-    } else if (kind === 'hunter') {
-      tone(940, 520, 0.09, 0.07, 'triangle');
-    } else if (kind === 'prism_laser') {
-      tone(1180, 1620, 0.12, 0.08, 'sine', 0);
-      tone(880, 1320, 0.1, 0.06, 'triangle', 0.02);
-    } else if (kind === 'tempest') {
-      tone(520, 220, 0.14, 0.095, 'sawtooth', 0);
-      tone(980, 440, 0.12, 0.07, 'sine', 0.02);
-    } else if (kind === 'sonic') {
-      tone(620, 260, 0.14, 0.085, 'sine', 0);
-      tone(920, 460, 0.1, 0.05, 'triangle', 0.02);
-    } else if (kind === 'overheat') {
-      tone(320, 1080, 0.22, 0.13, 'sawtooth', 0);
-      tone(640, 1480, 0.18, 0.1, 'triangle', 0.04);
-    } else if (kind === 'explosion') {
-      tone(150, 42, 0.2, 0.13, 'sawtooth');
-    } else if (kind === 'kill') {
-      const jitter = 0.94 + Math.random() * 0.12;
-      tone(540 * jitter, 180 * jitter, 0.08, 0.08, 'triangle');
-    } else if (kind === 'wave') {
-      tone(330, 540, 0.14, 0.13, 'triangle', 0);
-      tone(540, 810, 0.18, 0.13, 'sine', 0.09);
-    } else if (kind === 'overdrive') {
-      tone(240, 960, 0.3, 0.19, 'sawtooth', 0);
-      tone(480, 1280, 0.28, 0.14, 'triangle', 0.08);
-    } else if (kind === 'hurt') {
-      tone(190, 80, 0.2, 0.17, 'sawtooth');
-    } else if (kind === 'victory') {
-      tone(523.25, 523.25, 0.12, 0.14, 'triangle', 0);
-      tone(659.25, 659.25, 0.12, 0.14, 'triangle', 0.12);
-      tone(783.99, 1046.5, 0.28, 0.17, 'triangle', 0.24);
-    } else if (kind === 'defeat') {
-      tone(280, 140, 0.25, 0.17, 'sawtooth', 0);
-      tone(180, 75, 0.35, 0.19, 'sawtooth', 0.18);
-    }
-  } catch {
-    // Ignore blocked audio context
-  }
-}
+const playSynthFx = playPrismSfx;
 
 const PRIORITY_LABELS: Record<TargetPriority, string> = {
   first: 'Gần Lõi',
@@ -375,6 +229,28 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
   const [selectedGunId, setSelectedGunId] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [statusNotice, setStatusNotice] = useState<string>('');
+  const [isCompactTheater, setIsCompactTheater] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(orientation: landscape) and (max-height: 540px)').matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(orientation: landscape) and (max-height: 540px)');
+    const sync = () => setIsCompactTheater(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
+
+  const useSidebarTheater = isFullscreen || isCompactTheater;
+  const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (selectedGunId && useSidebarTheater && sidebarScrollRef.current) {
+      sidebarScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [selectedGunId, useSidebarTheater]);
 
   const [hud, setHud] = useState<HudSnapshot>(() => {
     const initSetup = getEffectiveMapSetup(activeMap, 'normal', 'campaign');
@@ -405,6 +281,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const titleCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const lastPointerTypeRef = useRef<string>('mouse');
 
   const simRef = useRef<{
     map: TdMapDef;
@@ -533,7 +410,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
     const overdriveMult = s.overdriveTimer > 0 ? 2.0 : 1;
     let total = 0;
     for (const g of s.guns) {
-      const buff = computeBeaconBuffAtTile(s.guns, g.col, g.row);
+      const buff = computeTeamSupportBuffAtTile(s.guns, g.col, g.row);
       total +=
         getGunCombatProfile(g.type, g.level, g.variant ?? 'alpha').dpsEstimate *
         buff.speedMult *
@@ -677,6 +554,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
       recomputeFirepower();
       syncHudFromSim();
       setGameState('playing');
+      unlockPrismAudio(audioCtxRef);
       playSynthFx('wave', soundEnabled, audioCtxRef);
 
       if (document.activeElement instanceof HTMLElement) {
@@ -702,6 +580,10 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
   }, [gameState]);
 
   useEffect(() => {
+    syncPrismSoundMute(soundEnabled, audioCtxRef);
+  }, [soundEnabled]);
+
+  useEffect(() => {
     recomputeFirepower();
     syncHudFromSim();
   }, [recomputeFirepower, syncHudFromSim]);
@@ -711,6 +593,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
     if (gameState !== 'playing' || s.waveActive || s.outcome) return;
     if (s.gameMode !== 'endless' && s.wave >= s.totalWaves) return;
 
+    unlockPrismAudio(audioCtxRef);
     const earlyBonus = s.nextWaveTimer > 0.5 ? (s.wave > 0 ? 12 : 8) : 0;
     s.energy += earlyBonus;
     const nextWave = s.wave + 1;
@@ -732,6 +615,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
   const activateOverdrive = useCallback(() => {
     const s = simRef.current;
     if (gameState !== 'playing' || s.overdriveCharge < 100 || s.overdriveTimer > 0) return;
+    unlockPrismAudio(audioCtxRef);
     s.overdriveCharge = 0;
     s.overdriveTimer = 5.0;
     if (s.speedMult < 2) {
@@ -802,7 +686,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
       const vSpec = spec.variants[chosen];
       emitParticles(pt.x, pt.y, vSpec.accentColor, 14, 110, 1.1);
       pushCombatText(pt.x, pt.y - 8, vSpec.shortTag, vSpec.accentColor, 1.05);
-      playSynthFx('select', soundEnabled, audioCtxRef);
+      playPrismSfx('variant', soundEnabled, audioCtxRef);
       setStatusNotice(`Đã chuyển biến thể sang ${vSpec.name}: ${vSpec.summary}`);
     },
     [selectedGunId, gameState, recomputeFirepower, syncHudFromSim, emitParticles, pushCombatText, soundEnabled]
@@ -872,20 +756,28 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
     setStatusNotice(`Đã thu hồi trụ súng (+${refund}⚡).`);
   }, [selectedGunId, gameState, recomputeFirepower, syncHudFromSim, emitParticles, soundEnabled]);
 
-  const screenToGrid = useCallback((clientX: number, clientY: number): { col: number; row: number } | null => {
+  const screenToWorld = useCallback((clientX: number, clientY: number): { x: number; y: number } | null => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return null;
-    const x = ((clientX - rect.left) / rect.width) * CANVAS_WIDTH;
-    const y = ((clientY - rect.top) / rect.height) * CANVAS_HEIGHT;
-    const col = Math.floor(x / TILE_SIZE);
-    const row = Math.floor(y / TILE_SIZE);
-    if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) return null;
-    return { col, row };
+    return {
+      x: ((clientX - rect.left) / rect.width) * CANVAS_WIDTH,
+      y: ((clientY - rect.top) / rect.height) * CANVAS_HEIGHT,
+    };
   }, []);
 
+  const screenToGrid = useCallback((clientX: number, clientY: number): { col: number; row: number } | null => {
+    const world = screenToWorld(clientX, clientY);
+    if (!world) return null;
+    const col = Math.floor(world.x / TILE_SIZE);
+    const row = Math.floor(world.y / TILE_SIZE);
+    if (col < 0 || col >= GRID_COLS || row < 0 || row >= GRID_ROWS) return null;
+    return { col, row };
+  }, [screenToWorld]);
+
   const handleCanvasPointerMove = (e: ReactPointerEvent<HTMLCanvasElement>) => {
+    lastPointerTypeRef.current = e.pointerType || 'mouse';
     if (gameState !== 'playing') return;
     simRef.current.hoverTile = screenToGrid(e.clientX, e.clientY);
   };
@@ -896,11 +788,24 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
 
   const handleCanvasClick = (e: ReactMouseEvent<HTMLCanvasElement>) => {
     if (gameState !== 'playing') return;
+    unlockPrismAudio(audioCtxRef);
+    const world = screenToWorld(e.clientX, e.clientY);
     const tile = screenToGrid(e.clientX, e.clientY);
-    if (!tile) return;
+    if (!tile || !world) return;
 
     const s = simRef.current;
-    const existing = s.guns.find((g) => g.col === tile.col && g.row === tile.row);
+    let existing = s.guns.find((g) => g.col === tile.col && g.row === tile.row);
+    if (!existing && lastPointerTypeRef.current === 'touch') {
+      let nearestDist = TILE_SIZE * 0.6;
+      for (const g of s.guns) {
+        const pt = gridToWorldCenter(g.col, g.row);
+        const d = Math.hypot(world.x - pt.x, world.y - pt.y);
+        if (d <= nearestDist) {
+          nearestDist = d;
+          existing = g;
+        }
+      }
+    }
 
     if (existing) {
       s.selectedGunId = existing.id;
@@ -1417,7 +1322,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
         ) => {
           const oh = profile.overheatSkill;
           pushCombatText(origin.x, origin.y - 18, `⚡ ${oh.name}!`, oh.color, 1.06);
-          playSynthFx('overheat', soundEnabled, audioCtxRef);
+          playOverheatSkillSfx(oh.key, gun.type, soundEnabled, audioCtxRef);
 
           if (gun.type === 'gatling') {
             for (let k = 0; k < 7; k++) {
@@ -1695,6 +1600,83 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
                 if (res.killed) recordKill(en, gun.id);
               }
             }
+          } else if (gun.type === 'amp_spire') {
+            s.overheatEffects.push({ kind: 'supply_pulse', x: origin.x, y: origin.y, radius: profile.rangePx * 1.22, angle: 0, life: 0.85, maxLife: 0.85, color: '#34D399' });
+            s.energy += 18;
+            let healedCore = false;
+            if (gun.level >= 7 && s.coreHp < s.maxCoreHp) {
+              s.coreHp = Math.min(s.maxCoreHp, s.coreHp + 1);
+              healedCore = true;
+            }
+            pushCombatText(origin.x, origin.y - 28, healedCore ? '+18⚡ · +1 Lõi · Tản Nhiệt Team!' : '+18⚡ · Tiếp Năng Đồng Minh!', '#34D399', 1.05);
+            for (const ally of s.guns) {
+              if (ally.id === gun.id) continue;
+              const apt = gridToWorldCenter(ally.col, ally.row);
+              if (Math.hypot(apt.x - origin.x, apt.y - origin.y) <= profile.rangePx * 1.25) {
+                ally.heat = Math.max(0, (ally.heat ?? 0) - 40);
+                ally.chargeTimer += 0.3;
+              }
+            }
+            for (const en of liveEnemies) {
+              if (Math.hypot(en.x - origin.x, en.y - origin.y) <= profile.rangePx * 1.15) {
+                const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.5), { armorPierce: 0.8, shieldMult: 1.4 });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+          } else if (gun.type === 'radar') {
+            const scanR = profile.rangePx * 1.4;
+            s.overheatEffects.push({ kind: 'radar_sweep', x: origin.x, y: origin.y, radius: scanR, angle: gun.aimAngle, life: 0.85, maxLife: 0.85, color: '#22D3EE' });
+            const targets = liveEnemies
+              .filter((e) => Math.hypot(e.x - origin.x, e.y - origin.y) <= scanR)
+              .sort((a, b) => b.hp + b.shield - (a.hp + a.shield));
+            targets.slice(0, 4).forEach((tEn) => {
+              s.overheatEffects.push({ kind: 'target_lock', x: tEn.x, y: tEn.y, radius: tEn.radius + 14, angle: 0, life: 0.9, maxLife: 0.9, color: '#22D3EE' });
+            });
+            for (const en of targets) {
+              en.slowTimer = Math.max(en.slowTimer, 3.2);
+              en.slowFactor = Math.min(en.slowFactor || 1, 0.72);
+              en.armorShred = Math.max(en.armorShred, 0.35);
+              en.brittleBonus = Math.max(en.brittleBonus, 0.35);
+              const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.6), { armorPierce: 0.95, shieldMult: 1.65 });
+              s.totalDamage += res.actualDamage;
+              gun.totalDamageDealt += res.actualDamage;
+              if (res.killed) recordKill(en, gun.id);
+            }
+            pushCombatText(origin.x, origin.y - 28, `RADAR KHÓA ${targets.length} MỤC TIÊU!`, '#22D3EE', 1.04);
+          } else if (gun.type === 'aegis_field') {
+            const domeR = profile.rangePx * 1.25;
+            s.overheatEffects.push({ kind: 'aegis_dome', x: origin.x, y: origin.y, radius: domeR, angle: 0, life: 0.95, maxLife: 0.95, color: '#60A5FA' });
+            let shieldCore = false;
+            if (s.coreHp < s.maxCoreHp) {
+              s.coreHp = Math.min(s.maxCoreHp, s.coreHp + 1);
+              shieldCore = true;
+            }
+            for (const ally of s.guns) {
+              if (ally.id === gun.id) continue;
+              const apt = gridToWorldCenter(ally.col, ally.row);
+              if (Math.hypot(apt.x - origin.x, apt.y - origin.y) <= domeR) {
+                ally.chargeTimer += 0.5;
+              }
+            }
+            for (const en of liveEnemies) {
+              if (Math.hypot(en.x - origin.x, en.y - origin.y) <= domeR + en.radius) {
+                en.stunTimer = Math.max(en.stunTimer, 0.65);
+                en.slowTimer = Math.max(en.slowTimer, 2.5);
+                en.slowFactor = Math.min(en.slowFactor || 1, 0.65);
+                const prevWp = s.map.path[Math.max(0, en.waypointIndex - 1)];
+                if (prevWp) {
+                  const prevPt = gridToWorldCenter(prevWp.col, prevWp.row);
+                  pullEnemyAlongTrack(en, s.map, prevPt.x, prevPt.y, 16);
+                }
+                const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.7), { armorPierce: 0.75, shieldMult: 2.3 });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+            pushCombatText(origin.x, origin.y - 28, shieldCore ? 'AEGIS ĐẨY LÙI & +1 LÕI!' : 'AEGIS ĐẨY LÙI ĐỊCH!', '#60A5FA', 1.05);
           } else if (gun.type === 'cannon') {
             for (let c = 0; c < 4; c++) {
               const a = gun.aimAngle + (c - 1.5) * 0.14;
@@ -2314,7 +2296,16 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
           if ((gun.overheatTimer ?? 0) > 0) {
             gun.overheatTimer = Math.max(0, (gun.overheatTimer ?? 0) - simDt);
           }
-          const profile = getGunCombatProfile(gun.type, gun.level, gun.variant ?? 'alpha');
+          const rawProfile = getGunCombatProfile(gun.type, gun.level, gun.variant ?? 'alpha');
+          const teamBuff = computeTeamSupportBuffAtTile(s.guns, gun.col, gun.row);
+          const profile = teamBuff.hasSupportLink
+            ? {
+                ...rawProfile,
+                rangePx: rawProfile.rangePx + Math.round(teamBuff.rangeBonusTiles * TILE_SIZE),
+                armorPierce: Math.min(1, rawProfile.armorPierce + teamBuff.armorPierceBonus),
+                shieldMult: Number((rawProfile.shieldMult + teamBuff.shieldMultBonus).toFixed(2)),
+              }
+            : rawProfile;
           const origin = gridToWorldCenter(gun.col, gun.row);
           const rangeSq = profile.rangePx * profile.rangePx;
 
@@ -2343,18 +2334,20 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
 
           if (target) {
             gun.aimAngle = Math.atan2(target.y - origin.y, target.x - origin.x);
+            if (teamBuff.heatCoolMult > 1 && (gun.heat ?? 0) > 0 && (gun.overheatTimer ?? 0) <= 0) {
+              gun.heat = Math.max(0, (gun.heat ?? 0) - simDt * 4 * (teamBuff.heatCoolMult - 1));
+            }
           } else if ((gun.heat ?? 0) > 0 && (gun.overheatTimer ?? 0) <= 0) {
-            gun.heat = Math.max(0, (gun.heat ?? 0) - simDt * 12);
+            gun.heat = Math.max(0, (gun.heat ?? 0) - simDt * 12 * teamBuff.heatCoolMult);
           }
 
-          const beaconBuff = computeBeaconBuffAtTile(s.guns, gun.col, gun.row);
-          gun.chargeTimer += simDt * overdriveSpeedMult * beaconBuff.speedMult;
+          gun.chargeTimer += simDt * overdriveSpeedMult * teamBuff.speedMult;
 
           // Allow manual/overdrive triggered Overheat skill to unleash immediately when heat >= 100
           if ((gun.heat ?? 0) >= 100 && (gun.overheatTimer ?? 0) <= 0 && target) {
             gun.heat = 0;
             gun.overheatTimer = 3.5;
-            const ohDmg = Math.round(profile.damage * overdriveDmgMult * beaconBuff.damageMult);
+            const ohDmg = Math.round(profile.damage * overdriveDmgMult * teamBuff.damageMult);
             triggerGunOverheatSkill(gun, origin, profile, ohDmg, target);
           }
 
@@ -2362,7 +2355,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
 
           gun.chargeTimer = 0;
           gun.recoil = 1;
-          const shotDmg = Math.round(profile.damage * overdriveDmgMult * beaconBuff.damageMult);
+          const shotDmg = Math.round(profile.damage * overdriveDmgMult * teamBuff.damageMult);
 
           if ((gun.overheatTimer ?? 0) <= 0) {
             const heatGain = profile.overheatSkill.heatPerShot * (GAME_MODE_CONFIGS[s.gameMode].heatMult ?? 1);
@@ -3026,6 +3019,113 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
               }
             }
             playSynthFx('beacon', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'amp_spire') {
+            const gain = gun.level >= 10 ? 5 : gun.level >= 7 ? 4 : gun.level >= 3 ? 3 : 2;
+            s.energy += gain;
+            pushCombatText(origin.x, origin.y - 14, `+${gain}⚡`, '#34D399', 0.92);
+            if (gun.level >= 7) {
+              for (const ally of s.guns) {
+                if (ally.id === gun.id) continue;
+                const apt = gridToWorldCenter(ally.col, ally.row);
+                if (Math.hypot(apt.x - origin.x, apt.y - origin.y) <= profile.rangePx + 4) {
+                  ally.chargeTimer += 0.25;
+                  ally.heat = Math.max(0, (ally.heat ?? 0) - 6);
+                }
+              }
+            }
+            const rayCount = 4 + profile.visualTier;
+            for (let r = 0; r < rayCount; r++) {
+              const ra = (r * Math.PI * 2) / rayCount - s.animTime * 0.65;
+              s.harmonicRays.push({
+                x: origin.x,
+                y: origin.y,
+                angle: ra,
+                length: profile.rangePx * 0.72,
+                alpha: 0.55,
+                color: '#34D399',
+              });
+            }
+            emitParticles(origin.x, origin.y, '#34D399', 10 + profile.visualTier * 2, 115, 0.95);
+            for (const en of liveEnemies) {
+              if ((en.x - origin.x) ** 2 + (en.y - origin.y) ** 2 <= rangeSq) {
+                const res = applyDamageToEnemy(en, shotDmg, {
+                  armorPierce: profile.armorPierce,
+                  shieldMult: profile.shieldMult,
+                });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+            playSynthFx('amp_spire', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'radar') {
+            const rayCount = 4 + profile.visualTier;
+            for (let r = 0; r < rayCount; r++) {
+              const ra = gun.aimAngle + (r - (rayCount - 1) / 2) * 0.16;
+              s.harmonicRays.push({
+                x: origin.x,
+                y: origin.y,
+                angle: ra,
+                length: profile.rangePx * 0.88,
+                alpha: 0.62,
+                color: '#22D3EE',
+              });
+            }
+            emitParticles(origin.x, origin.y, '#22D3EE', 9 + profile.visualTier * 2, 120, 0.95);
+            const shredAmt = gun.level >= 7 ? 0.22 : 0.12;
+            for (const en of liveEnemies) {
+              if ((en.x - origin.x) ** 2 + (en.y - origin.y) ** 2 <= rangeSq) {
+                en.slowTimer = Math.max(en.slowTimer, 2.2);
+                en.slowFactor = Math.min(en.slowFactor || 1, 1 - profile.slowPct);
+                en.brittleBonus = Math.max(en.brittleBonus, profile.brittleBonus);
+                en.armorShred = Math.max(en.armorShred, shredAmt);
+                emitParticles(en.x, en.y, '#67E8F9', 3, 65, 0.75);
+                const res = applyDamageToEnemy(en, shotDmg, {
+                  armorPierce: profile.armorPierce,
+                  shieldMult: profile.shieldMult,
+                });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+            playSynthFx('radar', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'aegis_field') {
+            s.shockwaves.push({
+              x: origin.x,
+              y: origin.y,
+              radius: 16,
+              maxRadius: profile.rangePx,
+              alpha: 0.68,
+              color: '#60A5FA',
+              lineWidth: 2.2 + profile.visualTier * 0.35,
+            });
+            emitParticles(origin.x, origin.y, '#60A5FA', 12 + profile.visualTier * 2, 130, 1);
+            for (const en of liveEnemies) {
+              if ((en.x - origin.x) ** 2 + (en.y - origin.y) ** 2 <= rangeSq) {
+                en.slowTimer = Math.max(en.slowTimer, 1.8);
+                en.slowFactor = Math.min(en.slowFactor || 1, 1 - profile.slowPct);
+                if (gun.level >= 10) {
+                  en.stunTimer = Math.max(en.stunTimer, 0.3);
+                }
+                if (profile.pullForce > 0) {
+                  const prevWp = s.map.path[Math.max(0, en.waypointIndex - 1)];
+                  if (prevWp) {
+                    const prevPt = gridToWorldCenter(prevWp.col, prevWp.row);
+                    pullEnemyAlongTrack(en, s.map, prevPt.x, prevPt.y, profile.pullForce);
+                  }
+                }
+                emitParticles(en.x, en.y, '#93C5FD', 4, 70, 0.8);
+                const res = applyDamageToEnemy(en, shotDmg, {
+                  armorPierce: profile.armorPierce,
+                  shieldMult: profile.shieldMult,
+                });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+            playSynthFx('aegis_field', soundEnabled, audioCtxRef);
           } else if (gun.type === 'cannon') {
             const count = profile.projectilesPerShot;
             for (let c = 0; c < count; c++) {
@@ -3360,7 +3460,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
                 }
               }
             }
-            playSynthFx('railgun', soundEnabled, audioCtxRef);
+            playPrismSfx('gravity_lance', soundEnabled, audioCtxRef);
           } else if (gun.type === 'map01_cyber_smg' || gun.type === 'map07_cyclone_rotary' || gun.type === 'map05_dune_needler') {
             const count = profile.projectilesPerShot;
             const kind: ProjectileItem['kind'] =
@@ -3404,7 +3504,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
               });
               s.muzzleFlashes.push({ x: mx, y: my, angle: shotAngle, radius: 14 + profile.visualTier * 2, alpha: 0.92, color: profile.accentColor });
             }
-            playSynthFx('gatling', soundEnabled, audioCtxRef);
+            playPrismSfx(gun.type, soundEnabled, audioCtxRef);
           } else if (gun.type === 'map02_matrix_spire' || gun.type === 'map06_aurora_beam') {
             const chainTotal = Math.max(1, profile.chainCount);
             const hitIds = new Set<number>([target.id]);
@@ -3443,7 +3543,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
               if (nextHop) hitIds.add(nextHop.id);
               cur = nextHop;
             }
-            playSynthFx('prism_laser', soundEnabled, audioCtxRef);
+            playPrismSfx(gun.type, soundEnabled, audioCtxRef);
           } else if (gun.type === 'map03_forge_magma' || gun.type === 'map08_titan_flak' || gun.type === 'map11_cryo_shatter' || gun.type === 'map14_omega_disruptor') {
             const count = profile.projectilesPerShot;
             const kind: ProjectileItem['kind'] =
@@ -3489,7 +3589,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
               });
               s.muzzleFlashes.push({ x: mx, y: my, angle: a, radius: 18 + profile.visualTier * 2, alpha: 0.94, color: profile.accentColor });
             }
-            playSynthFx(kind === 'cryo_spike' ? 'cryo' : kind === 'omega_pulse' ? 'plasma' : 'cannon', soundEnabled, audioCtxRef);
+            playPrismSfx(gun.type, soundEnabled, audioCtxRef);
           } else if (gun.type === 'map04_void_katana') {
             const count = profile.projectilesPerShot;
             for (let k = 0; k < count; k++) {
@@ -3524,7 +3624,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
               });
               s.muzzleFlashes.push({ x: mx, y: my, angle: a, radius: 18, alpha: 0.95, color: '#FB7185' });
             }
-            playSynthFx('saw', soundEnabled, audioCtxRef);
+            playPrismSfx('map04_void_katana', soundEnabled, audioCtxRef);
           } else if (gun.type === 'map09_venom_hydra' || gun.type === 'map12_hellfire_organ' || gun.type === 'map13_shadow_hive' || gun.type === 'map16_void_sovereign') {
             const count = profile.projectilesPerShot;
             const kind: ProjectileItem['kind'] =
@@ -3572,7 +3672,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
             if (gun.type === 'map16_void_sovereign') {
               s.railBeams.push({ x1: origin.x, y1: origin.y, x2: target.x, y2: target.y, alpha: 0.85, color: '#FDE047', visualTier: profile.visualTier, variant: 'sovereign_beam' });
             }
-            playSynthFx(kind === 'hydra_fang' ? 'acid' : kind === 'shadow_drone' ? 'hunter' : 'missile', soundEnabled, audioCtxRef);
+            playPrismSfx(gun.type, soundEnabled, audioCtxRef);
           } else if (gun.type === 'map10_meteor_rail') {
             const beams = profile.projectilesPerShot;
             for (let b = 0; b < beams; b++) {
@@ -3598,7 +3698,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
                 }
               }
             }
-            playSynthFx('railgun', soundEnabled, audioCtxRef);
+            playPrismSfx('map10_meteor_rail', soundEnabled, audioCtxRef);
           } else if (gun.type === 'map15_emerald_reaper') {
             const count = profile.projectilesPerShot;
             for (let sw = 0; sw < count; sw++) {
@@ -3635,7 +3735,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
               });
               s.muzzleFlashes.push({ x: mx, y: my, angle: a, radius: 16 + profile.visualTier * 2, alpha: 0.94, color: '#34D399' });
             }
-            playSynthFx('saw', soundEnabled, audioCtxRef);
+            playPrismSfx('map15_emerald_reaper', soundEnabled, audioCtxRef);
           }
         }
 
@@ -4840,26 +4940,28 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
             ctx.restore();
           }
 
-          // 8. Placed Guns (Lv1 .. Lv10 Evolving Sprites + Beacon Ally Buff Tethers)
-          for (const beacon of s.guns) {
-            if (beacon.type !== 'beacon') continue;
-            const bPt = gridToWorldCenter(beacon.col, beacon.row);
-            const bProfile = getGunCombatProfile('beacon', beacon.level);
+          // 8. Placed Guns (Lv1 .. Lv10 Evolving Sprites + All Support Gun Ally Buff Tethers)
+          for (const sup of s.guns) {
+            if (!isSupportGunType(sup.type)) continue;
+            const sPt = gridToWorldCenter(sup.col, sup.row);
+            const sProfile = getGunCombatProfile(sup.type, sup.level, sup.variant ?? 'alpha');
+            const colorHex = sProfile.accentColor;
             ctx.save();
-            ctx.strokeStyle = beacon.id === s.selectedGunId ? 'rgba(250, 204, 21, 0.2)' : 'rgba(250, 204, 21, 0.08)';
+            ctx.strokeStyle = colorHex;
+            ctx.globalAlpha = sup.id === s.selectedGunId ? 0.28 : 0.11;
             ctx.lineWidth = 1;
             ctx.setLineDash([6, 6]);
             ctx.beginPath();
-            ctx.arc(bPt.x, bPt.y, bProfile.rangePx, 0, Math.PI * 2);
+            ctx.arc(sPt.x, sPt.y, sProfile.rangePx, 0, Math.PI * 2);
             ctx.stroke();
             for (const ally of s.guns) {
-              if (ally.id === beacon.id) continue;
+              if (ally.id === sup.id) continue;
               const aPt = gridToWorldCenter(ally.col, ally.row);
-              if (Math.hypot(aPt.x - bPt.x, aPt.y - bPt.y) <= bProfile.rangePx + 4) {
-                ctx.strokeStyle = 'rgba(250, 204, 21, 0.24)';
+              if (Math.hypot(aPt.x - sPt.x, aPt.y - sPt.y) <= sProfile.rangePx + 4) {
+                ctx.globalAlpha = 0.28;
                 ctx.setLineDash([3, 4]);
                 ctx.beginPath();
-                ctx.moveTo(bPt.x, bPt.y);
+                ctx.moveTo(sPt.x, sPt.y);
                 ctx.lineTo(aPt.x, aPt.y);
                 ctx.stroke();
               }
@@ -4872,16 +4974,18 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
             const isSelected = gun.id === s.selectedGunId;
             const variant = gun.variant ?? 'alpha';
             const profile = getGunCombatProfile(gun.type, gun.level, variant);
-            const hasBeaconBuff = computeBeaconBuffAtTile(s.guns, gun.col, gun.row).speedMult > 1;
+            const teamBuff = computeTeamSupportBuffAtTile(s.guns, gun.col, gun.row);
 
             ctx.save();
             ctx.translate(pt.x, pt.y);
-            if (hasBeaconBuff) {
-              ctx.strokeStyle = 'rgba(250, 204, 21, 0.72)';
+            if (teamBuff.hasSupportLink) {
+              ctx.strokeStyle = teamBuff.linkColors[0] ?? 'rgba(250, 204, 21, 0.72)';
+              ctx.globalAlpha = 0.72;
               ctx.lineWidth = 1.6;
               ctx.beginPath();
               ctx.arc(0, 0, 26, 0, Math.PI * 2);
               ctx.stroke();
+              ctx.globalAlpha = 1;
             }
             if (isSelected) {
               ctx.strokeStyle = '#FBBF24';
@@ -4895,7 +4999,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
               ctx.strokeStyle = 'rgba(251, 191, 36, 0.25)';
               ctx.lineWidth = 1.5;
               ctx.beginPath();
-              ctx.arc(0, 0, profile.rangePx, 0, Math.PI * 2);
+              ctx.arc(0, 0, profile.rangePx + Math.round(teamBuff.rangeBonusTiles * TILE_SIZE), 0, Math.PI * 2);
               ctx.stroke();
             }
 
@@ -5040,7 +5144,9 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
         }
       }
 
-      rafId = window.requestAnimationFrame(tickAndDraw);
+      if (gameState === 'playing') {
+        rafId = window.requestAnimationFrame(tickAndDraw);
+      }
     };
 
     rafId = window.requestAnimationFrame(tickAndDraw);
@@ -5063,33 +5169,40 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
   const selectedSpec = selectedGun ? getGunCatalogItem(selectedGun.type) : null;
   const selectedUpgradeCost = selectedGun ? getGunUpgradeCost(selectedGun.type, selectedGun.level) : null;
   const selectedSellRefund = selectedGun ? getGunSellRefund(selectedGun) : 0;
+  const selectedTeamBuff = selectedGun
+    ? computeTeamSupportBuffAtTile(simRef.current.guns, selectedGun.col, selectedGun.row)
+    : null;
 
   return (
     <section
       id="prism-td-section"
       aria-label="Thủ Thành Pháo Đài — Thuần Súng Nâng Cấp Lv10"
       data-theme={theme}
-      className={`relative bg-[#070B14] text-[#F1F5F9] overflow-hidden ${
+      className={`relative bg-[#070B14] text-[#F1F5F9] ${
         isFullscreen
-          ? 'rounded-xl border border-slate-800/80 min-h-full flex flex-col justify-between'
-          : 'rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] shadow-[0_20px_50px_-24px_rgba(56,189,248,0.22)]'
+          ? gameState === 'playing' || gameState === 'paused'
+            ? 'rounded-xl border border-slate-800/80 min-h-full lg:h-full lg:max-h-full mobile-ls:h-full mobile-ls:max-h-full mobile-ls:overflow-hidden lg:overflow-hidden flex flex-col'
+            : 'rounded-xl border border-slate-800/80 min-h-full flex flex-col justify-between'
+          : gameState === 'playing' || gameState === 'paused'
+            ? 'overflow-hidden rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] shadow-[0_20px_50px_-24px_rgba(56,189,248,0.22)] mobile-ls:h-[calc(100dvh-46px)] mobile-ls:flex mobile-ls:flex-col'
+            : 'overflow-hidden rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] shadow-[0_20px_50px_-24px_rgba(56,189,248,0.22)]'
       }`}
     >
       {/* TITLE SCREEN */}
       {gameState === 'title' && (
-        <div className="p-3.5 sm:p-5 lg:p-6 space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-7 items-center">
-            <div className="lg:col-span-7 space-y-4">
-              <div className="flex items-center gap-3.5">
-                <div className="w-11 h-11 rounded-xl bg-amber-500/15 border border-amber-400/50 flex items-center justify-center shrink-0">
-                  <Crosshair className="w-6 h-6 text-amber-300" aria-hidden="true" />
+        <div className={`p-3 sm:p-4 lg:p-5 mobile-ls:p-2.5 space-y-3 mobile-ls:space-y-2 ${isFullscreen ? 'pt-12 sm:pt-5 mobile-ls:pt-10' : ''}`}>
+          <div className="grid grid-cols-1 lg:grid-cols-12 mobile-ls:grid-cols-12 gap-5 lg:gap-7 mobile-ls:gap-3 items-start lg:items-center">
+            <div className="lg:col-span-7 mobile-ls:col-span-7 space-y-4 mobile-ls:space-y-2">
+              <div className="flex items-center gap-3.5 mobile-ls:gap-2.5">
+                <div className="w-11 h-11 mobile-ls:w-9 mobile-ls:h-9 rounded-xl bg-amber-500/15 border border-amber-400/50 flex items-center justify-center shrink-0">
+                  <Crosshair className="w-6 h-6 mobile-ls:w-5 mobile-ls:h-5 text-amber-300" aria-hidden="true" />
                 </div>
-                <div>
-                  <h1 className="font-serif text-2xl sm:text-3xl lg:text-[2.15rem] font-bold tracking-tight text-white leading-tight">
+                <div className="min-w-0">
+                  <h1 className="font-serif text-2xl sm:text-3xl lg:text-[2.15rem] mobile-ls:text-lg font-bold tracking-tight text-white leading-tight">
                     Thủ Thành Pháo Đài Lv10
                   </h1>
-                  <p className="text-xs sm:text-sm text-sky-300/90 font-mono">
-                    4 Cấp · 8 Chế Độ · 16 Màn 16×10 (x2 Thời Lượng) · 36 Súng (20 Chung + 16 Đặc Quyền)
+                  <p className="text-xs sm:text-sm mobile-ls:text-[10px] text-sky-300/90 font-mono">
+                    4 Cấp · 8 Chế Độ · 16 Màn 16×10 (x2 Thời Lượng) · 39 Súng (23 Chung + 16 Đặc Quyền)
                     {hud.bestScore > 0 ? ` · Kỷ lục: ${hud.bestScore}đ` : ''}
                   </p>
                 </div>
@@ -5278,33 +5391,37 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
               </div>
             </div>
 
-            <div className="lg:col-span-5">
-              <div className="rounded-xl border border-slate-700/80 bg-[#0B1222] p-3 space-y-2.5">
+            <div className="lg:col-span-5 mobile-ls:col-span-5">
+              <div className="rounded-xl border border-slate-700/80 bg-[#0B1222] p-3 mobile-ls:p-2 space-y-2.5 mobile-ls:space-y-1.5">
                 <canvas
                   ref={titleCanvasRef}
                   aria-label="Mô phỏng pháo đài súng Lv10 giao tranh Boss"
                   className="w-full h-auto rounded-lg block border border-slate-800"
                 />
-                <p className="text-xs text-slate-400 text-center">
-                  Kho <strong className="text-amber-300">{GUN_CATALOG.length} loại súng</strong> (20 Chung + 16 Súng Đặc Quyền riêng theo từng màn) · Biến thể <strong className="text-cyan-300">α / ω</strong> · Kỹ năng <strong className="text-rose-300">Quá Nhiệt</strong>
+                <p className="text-xs mobile-ls:text-[10px] text-slate-400 text-center">
+                  Kho <strong className="text-amber-300">{GUN_CATALOG.length} loại súng</strong> (23 Chung + 16 Súng Đặc Quyền riêng theo từng màn) · Biến thể <strong className="text-cyan-300">α / ω</strong> · Kỹ năng <strong className="text-rose-300">Quá Nhiệt</strong>
                 </p>
               </div>
             </div>
           </div>
 
-          <p className="text-[11px] font-mono text-slate-400 border-t border-slate-800/80 pt-3 text-center">
-            Phím Y chọn Súng Đặc Quyền · 1-9, 0, Q, E, Z, X, C, V, B, N, F, G chọn Súng Chung · U nâng cấp · R α/ω · T mục tiêu · Space Quá Tải
+          <p className="text-[11px] font-mono text-slate-400 border-t border-slate-800/80 pt-3 mobile-ls:pt-2 mobile-ls:text-[10px] text-center">
+            Phím Y chọn Súng Đặc Quyền · 1-9, 0, Q, E, Z, X, C, V, B, N, F, G, K, L, H chọn Súng Chung · U nâng cấp · R α/ω · T mục tiêu · Space Quá Tải
           </p>
         </div>
       )}
 
       {/* PLAYING / PAUSED SHELL */}
       {(gameState === 'playing' || gameState === 'paused') && (
-        <div className={`relative ${isFullscreen ? 'flex-1 flex flex-col justify-between' : ''}`}>
+        <div
+          className={`relative ${
+            useSidebarTheater ? 'flex-1 min-h-0 flex flex-col' : ''
+          }`}
+        >
           {/* Top Unified HUD Strip (reserves top-right gap in Fullscreen so Exit Button never overlaps) */}
           <div
-            className={`border-b border-slate-800 bg-[#0B1222] px-2.5 sm:px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 ${
-              isFullscreen ? 'pr-16 sm:pr-52' : ''
+            className={`shrink-0 border-b border-slate-800 bg-[#0B1222] px-2.5 sm:px-4 mobile-ls:px-2 py-1.5 mobile-ls:py-1 flex flex-wrap items-center justify-between gap-2 mobile-ls:gap-1 ${
+              isFullscreen ? 'pr-24 sm:pr-52 mobile-ls:pr-24' : ''
             }`}
           >
             <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 tabular-nums">
@@ -5411,6 +5528,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
                 tabIndex={-1}
                 onClick={(e) => {
                   e.currentTarget.blur();
+                  unlockPrismAudio(audioCtxRef);
                   setSoundEnabled((p) => !p);
                 }}
                 aria-label={soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
@@ -5447,172 +5565,167 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
             </div>
           </div>
 
-          {/* Arena Canvas (Responsive 16:10 — fills viewport height/width cleanly in F11) */}
-          <div className={`p-1 sm:p-1.5 bg-[#050811] ${isFullscreen ? 'flex-1 flex items-center justify-center' : ''}`}>
+          {/* Main Theater Area: Widescreen 2-Col in Fullscreen or iPhone Mobile Landscape so Map + Support Guns + Start Wave stay side-by-side */}
+          <div
+            className={
+              useSidebarTheater
+                ? 'flex-1 min-h-0 flex flex-col mobile-ls:grid mobile-ls:grid-cols-[minmax(0,1fr)_268px] lg:grid lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]'
+                : ''
+            }
+          >
+            {/* Arena Canvas (Responsive 16:10) */}
             <div
-              className={
-                isFullscreen
-                  ? 'w-full mx-auto max-w-[min(100%,calc((100dvh-230px)*1.6))]'
-                  : 'max-w-[940px] mx-auto'
-              }
+              className={`p-1 sm:p-1.5 bg-[#050811] ${
+                useSidebarTheater ? 'min-w-0 min-h-0 flex-1 flex items-center justify-center lg:p-2 mobile-ls:p-1' : ''
+              }`}
             >
-              <canvas
-                ref={canvasRef}
-                width={CANVAS_WIDTH}
-                height={CANVAS_HEIGHT}
-                data-testid="prism-td-canvas"
-                aria-label="Bản đồ Thủ Thành Pháo Đài 16x10"
-                onPointerMove={handleCanvasPointerMove}
-                onPointerLeave={handleCanvasPointerLeave}
-                onClick={handleCanvasClick}
-                onContextMenu={handleCanvasContextMenu}
-                className="w-full h-auto aspect-[16/10] rounded-xl border border-slate-800 block cursor-crosshair select-none touch-manipulation"
-              />
-            </div>
-          </div>
-
-          {/* 21-Gun Arsenal Dock (1 Map-Exclusive + 20 Global Guns) */}
-          <div className="border-t border-slate-800 bg-[#0B1222] px-2.5 sm:px-4 py-2 space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[11px] font-mono uppercase tracking-[0.08em] text-slate-400">
-                Kho {availableGuns.length} Súng (★ Đặc Quyền {exclusiveGun?.shortName ?? ''} + 20 Chung)
-              </span>
-              <div className="flex items-center gap-1.5" role="group" aria-label="Biến thể mặc định khi đặt súng">
-                <button
-                  type="button"
-                  onClick={() => setSelectedVariant('alpha')}
-                  className={`min-h-[34px] px-2.5 rounded-lg border text-[11px] font-mono font-bold transition-colors cursor-pointer ${
-                    selectedVariant === 'alpha'
-                      ? 'bg-sky-500/20 border-sky-400 text-sky-200'
-                      : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  α Alpha · Tốc/Đa Tia
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedVariant('omega')}
-                  className={`min-h-[34px] px-2.5 rounded-lg border text-[11px] font-mono font-bold transition-colors cursor-pointer ${
-                    selectedVariant === 'omega'
-                      ? 'bg-amber-500/20 border-amber-400 text-amber-200'
-                      : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  ω Omega · Sát Thương
-                </button>
+              <div
+                className={
+                  useSidebarTheater
+                    ? isFullscreen
+                      ? 'w-full mx-auto max-w-[min(100%,calc((100dvh-280px)*1.6))] mobile-ls:max-w-[min(100%,calc((100dvh-58px)*1.6))] lg:max-w-[min(100%,calc((100dvh-82px)*1.6))]'
+                      : 'w-full mx-auto max-w-[940px] mobile-ls:max-w-[min(100%,calc((100dvh-96px)*1.6))]'
+                    : 'max-w-[940px] mx-auto'
+                }
+              >
+                <canvas
+                  ref={canvasRef}
+                  width={CANVAS_WIDTH}
+                  height={CANVAS_HEIGHT}
+                  data-testid="prism-td-canvas"
+                  aria-label="Bản đồ Thủ Thành Pháo Đài 16x10"
+                  onPointerDown={(e) => {
+                    lastPointerTypeRef.current = e.pointerType || 'touch';
+                  }}
+                  onPointerMove={handleCanvasPointerMove}
+                  onPointerLeave={handleCanvasPointerLeave}
+                  onClick={handleCanvasClick}
+                  onContextMenu={handleCanvasContextMenu}
+                  className="w-full h-auto aspect-[16/10] rounded-xl border border-slate-800 block cursor-crosshair select-none touch-manipulation"
+                />
               </div>
             </div>
 
-            <div className="flex flex-nowrap overflow-x-auto gap-1.5 pb-1 md:grid md:grid-cols-7 md:overflow-visible md:pb-0">
-              {availableGuns.map((item) => {
-                const isActive = selectedTool === item.type;
-                const canAfford = hud.energy >= item.cost;
-                const isExclusive = Boolean(item.exclusiveMapId);
-                return (
+            {/* 24-Gun Arsenal Dock & Tactical Command Sidebar */}
+            <div
+              className={`border-t border-slate-800 bg-[#0B1222] ${
+                useSidebarTheater
+                  ? 'mobile-ls:border-t-0 mobile-ls:border-l lg:border-t-0 lg:border-l flex flex-col min-h-0 mobile-ls:max-h-full'
+                  : 'px-2.5 sm:px-4 py-2 space-y-2'
+              }`}
+            >
+              {/* Dock Header */}
+              <div
+                className={`flex flex-wrap items-center justify-between gap-2 mobile-ls:gap-1 ${
+                  useSidebarTheater ? 'shrink-0 px-2.5 py-2 mobile-ls:px-2 mobile-ls:py-1 border-b border-slate-800/80' : ''
+                }`}
+              >
+                <span className="text-[11px] mobile-ls:text-[10px] font-mono uppercase tracking-[0.08em] text-slate-400">
+                  Kho {availableGuns.length} Súng (★ {exclusiveGun?.shortName ?? ''} + 23 Chung)
+                </span>
+                <div className="flex items-center gap-1.5" role="group" aria-label="Biến thể mặc định khi đặt súng">
                   <button
-                    key={item.type}
                     type="button"
-                    data-testid={`td-gun-${item.type}`}
-                    onClick={(e) => {
-                      e.currentTarget.blur();
-                      setSelectedTool(item.type);
-                    }}
-                    className={`min-w-[122px] md:min-w-0 min-h-[46px] shrink-0 px-2 py-1 rounded-xl border text-left transition-colors cursor-pointer ${
-                      isActive
-                        ? 'bg-amber-950/65 border-amber-400 text-white shadow-[0_0_0_1px_rgba(251,191,36,0.45)]'
-                        : isExclusive
-                          ? 'bg-amber-950/25 border-amber-500/50 text-amber-100 hover:border-amber-400'
-                          : 'bg-slate-900/90 border-slate-700/80 text-slate-200 hover:border-slate-500'
+                    onClick={() => setSelectedVariant('alpha')}
+                    className={`min-h-[32px] mobile-ls:min-h-[28px] px-2 rounded-lg border text-[11px] mobile-ls:text-[10px] font-mono font-bold transition-colors cursor-pointer ${
+                      selectedVariant === 'alpha'
+                        ? 'bg-sky-500/20 border-sky-400 text-sky-200'
+                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-1 text-[11px] font-bold">
-                      <span className="truncate">
-                        <span className="hidden lg:inline">[{item.hotkey.toUpperCase()}] </span>
-                        {item.shortName}
-                      </span>
-                      <span className={`font-mono shrink-0 ${canAfford ? 'text-amber-300' : 'text-rose-400'}`}>
-                        {item.cost}⚡
-                      </span>
-                    </div>
-                    <p className={`text-[10px] truncate mt-0.5 ${isExclusive ? 'text-amber-300/90 font-semibold' : 'text-slate-400'}`}>
-                      {isExclusive ? '★ Súng Đặc Quyền Màn' : item.roleClue}
-                    </p>
+                    α Alpha{!useSidebarTheater && ' · Tốc/Đa Tia'}
                   </button>
-                );
-              })}
-            </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedVariant('omega')}
+                    className={`min-h-[32px] mobile-ls:min-h-[28px] px-2 rounded-lg border text-[11px] mobile-ls:text-[10px] font-mono font-bold transition-colors cursor-pointer ${
+                      selectedVariant === 'omega'
+                        ? 'bg-amber-500/20 border-amber-400 text-amber-200'
+                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    ω Omega{!useSidebarTheater && ' · Sát Thương'}
+                  </button>
+                </div>
+              </div>
 
-            {/* Redesigned Selected Gun Inspector: Lv1..10 Timeline, Stat Deltas, Heat/Overheat & α/ω Variant Cards */}
-            {selectedGun && selectedProfile && selectedSpec && (
+              {/* Scrollable Middle in Sidebar Theater: Inspector (on top when selected) + All 24 Guns */}
               <div
-                data-testid="td-gun-inspector"
-                className="rounded-xl border bg-gradient-to-br from-slate-900/95 via-[#0E1729] to-slate-950 p-3 space-y-2.5 transition-all"
-                style={{ borderColor: `${selectedProfile.accentColor}66` }}
+                ref={sidebarScrollRef}
+                className={useSidebarTheater ? 'flex-1 min-h-0 overflow-y-auto p-2 mobile-ls:p-1.5 space-y-2 mobile-ls:space-y-1.5' : 'space-y-2'}
               >
-                {/* Header + Live Stats + Next-Level Deltas */}
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
-                  <div className="space-y-1.5 min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-bold text-white">{selectedSpec.name}</span>
-                      <span
-                        data-testid="td-gun-level-badge"
-                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md ${
-                          selectedGun.level === MAX_GUN_LEVEL
-                            ? 'bg-amber-400 text-[#070B14]'
-                            : selectedGun.level >= 7
-                              ? 'bg-rose-500/20 border border-rose-400/50 text-rose-200'
-                              : selectedGun.level >= 4
-                                ? 'bg-sky-500/20 border border-sky-400/50 text-sky-200'
-                                : 'bg-slate-800 text-slate-300'
-                        }`}
-                      >
-                        Lv.{selectedGun.level}/{MAX_GUN_LEVEL} · {selectedProfile.tierLabel}
-                      </span>
-                      <span
-                        className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border"
-                        style={{
-                          color: selectedProfile.variantSpec.accentColor,
-                          borderColor: `${selectedProfile.variantSpec.accentColor}66`,
-                          backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                        }}
-                      >
-                        {selectedProfile.variantSpec.shortTag}
-                      </span>
+                {/* Selected Gun Inspector (placed first in sidebar so clicking/tapping a gun reveals upgrades immediately) */}
+                {useSidebarTheater && selectedGun && selectedProfile && selectedSpec && (
+                  <div
+                    data-testid="td-gun-inspector"
+                    className="rounded-xl border bg-gradient-to-br from-slate-900/95 via-[#0E1729] to-slate-950 p-2.5 mobile-ls:p-2 space-y-2 mobile-ls:space-y-1.5 transition-all"
+                    style={{ borderColor: `${selectedProfile.accentColor}66` }}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                      <span className="text-xs font-bold text-white truncate">{selectedSpec.name}</span>
+                      <div className="flex items-center gap-1">
+                        <span
+                          data-testid="td-gun-level-badge"
+                          className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                            selectedGun.level === MAX_GUN_LEVEL
+                              ? 'bg-amber-400 text-[#070B14]'
+                              : selectedGun.level >= 7
+                                ? 'bg-rose-500/20 border border-rose-400/50 text-rose-200'
+                                : selectedGun.level >= 4
+                                  ? 'bg-sky-500/20 border border-sky-400/50 text-sky-200'
+                                  : 'bg-slate-800 text-slate-300'
+                          }`}
+                        >
+                          Lv.{selectedGun.level}/{MAX_GUN_LEVEL} · {selectedProfile.tierLabel}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            simRef.current.selectedGunId = null;
+                            setSelectedGunId(null);
+                          }}
+                          aria-label="Đóng bảng súng và quay lại kho súng"
+                          className="min-h-[24px] px-1.5 rounded border border-slate-700 bg-slate-800 hover:border-cyan-400 text-slate-300 hover:text-white text-[10px] font-mono inline-flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <X className="w-3 h-3" />
+                          <span>Kho</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-300 tabular-nums">
                       <span>
                         DMG <strong className="text-white">{selectedProfile.damage}</strong>
                         {selectedNextProfile && selectedNextProfile.damage > selectedProfile.damage && (
-                          <span className="text-emerald-400 ml-0.5">
-                            (+{selectedNextProfile.damage - selectedProfile.damage})
-                          </span>
+                          <span className="text-emerald-400 ml-0.5">(+{selectedNextProfile.damage - selectedProfile.damage})</span>
                         )}
                       </span>
-                      <span className="text-slate-600">·</span>
+                      <span>·</span>
                       <span>
                         DPS <strong className="text-sky-300">{selectedProfile.dpsEstimate}</strong>
                         {selectedNextProfile && selectedNextProfile.dpsEstimate > selectedProfile.dpsEstimate && (
-                          <span className="text-emerald-400 ml-0.5">
-                            (+{selectedNextProfile.dpsEstimate - selectedProfile.dpsEstimate})
-                          </span>
+                          <span className="text-emerald-400 ml-0.5">(+{selectedNextProfile.dpsEstimate - selectedProfile.dpsEstimate})</span>
                         )}
                       </span>
-                      <span className="text-slate-600">·</span>
-                      <span>
-                        Tầm <strong className="text-cyan-300">{selectedProfile.rangeTiles}ô</strong>
-                        {selectedNextProfile && selectedNextProfile.rangeTiles > selectedProfile.rangeTiles && (
-                          <span className="text-emerald-400 ml-0.5">
-                            (+{Number((selectedNextProfile.rangeTiles - selectedProfile.rangeTiles).toFixed(2))})
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-slate-600">·</span>
+                      <span>·</span>
+                      <span>Tầm <strong className="text-cyan-300">{selectedProfile.rangeTiles}ô</strong></span>
+                      <span>·</span>
                       <span>Hạ <strong className="text-amber-300">{selectedGun.kills}</strong></span>
                     </div>
 
-                    {/* 10-Step Level Progression Bar */}
-                    <div className="flex items-center gap-1 pt-0.5" aria-label="Tiến trình nâng cấp Lv1 đến Lv10">
+                    {selectedTeamBuff?.hasSupportLink && (
+                      <div className="flex flex-wrap items-center gap-1 text-[9px] font-mono text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 rounded-md px-1.5 py-1">
+                        <span className="font-bold">BUFF TEAM:</span>
+                        {selectedTeamBuff.speedMult > 1 && <span>+{Math.round((selectedTeamBuff.speedMult - 1) * 100)}% Tốc</span>}
+                        {selectedTeamBuff.damageMult > 1 && <span>+{Math.round((selectedTeamBuff.damageMult - 1) * 100)}% DMG</span>}
+                        {selectedTeamBuff.rangeBonusTiles > 0 && <span>+{selectedTeamBuff.rangeBonusTiles}ô Tầm</span>}
+                        {selectedTeamBuff.armorPierceBonus > 0 && <span>+{Math.round(selectedTeamBuff.armorPierceBonus * 100)}% Giáp</span>}
+                        {selectedTeamBuff.shieldMultBonus > 0 && <span>+{Math.round(selectedTeamBuff.shieldMultBonus * 100)}% Khiên</span>}
+                        {selectedTeamBuff.heatCoolMult > 1 && <span>+{Math.round((selectedTeamBuff.heatCoolMult - 1) * 100)}% Tản Nhiệt</span>}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-1" aria-label="Tiến trình nâng cấp Lv1 đến Lv10">
                       {Array.from({ length: MAX_GUN_LEVEL }, (_, i) => {
                         const lv = i + 1;
                         const active = selectedGun.level >= lv;
@@ -5620,7 +5733,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
                         return (
                           <div
                             key={lv}
-                            className={`h-1.5 flex-1 rounded-full transition-colors ${
+                            className={`h-1.5 flex-1 rounded-full ${
                               active
                                 ? lv === 10
                                   ? 'bg-amber-400'
@@ -5635,166 +5748,441 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
                         );
                       })}
                     </div>
-                  </div>
 
-                  {/* Primary Action Buttons (Touch >= 44px) */}
-                  <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.currentTarget.blur();
-                        cycleSelectedPriority();
-                      }}
-                      title="Đổi ưu tiên mục tiêu [T]"
-                      className="min-h-[44px] px-3 rounded-xl border border-slate-700 bg-slate-800 hover:border-cyan-400 text-cyan-200 text-xs font-mono cursor-pointer"
-                    >
-                      [T] {PRIORITY_LABELS[selectedGun.priority]}
-                    </button>
-                    <button
-                      type="button"
-                      data-testid="td-upgrade-btn"
-                      onClick={(e) => {
-                        e.currentTarget.blur();
-                        upgradeSelectedGun();
-                      }}
-                      disabled={selectedUpgradeCost === null || hud.energy < selectedUpgradeCost}
-                      className={`min-h-[44px] px-3.5 rounded-xl text-xs font-mono font-bold cursor-pointer transition-colors ${
-                        selectedUpgradeCost === null
-                          ? 'bg-amber-400/20 border border-amber-400 text-amber-300 cursor-default'
-                          : hud.energy >= selectedUpgradeCost
-                            ? 'bg-amber-400 text-[#070B14] hover:bg-amber-300'
-                            : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                      }`}
-                    >
-                      {selectedUpgradeCost === null
-                        ? 'MAX LV 10'
-                        : `[U] Nâng Lv${selectedGun.level + 1} (${selectedUpgradeCost}⚡)`}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.currentTarget.blur();
-                        sellSelectedGun();
-                      }}
-                      aria-label="Thu hồi trụ súng"
-                      className="min-h-[44px] px-3 rounded-xl bg-slate-800 hover:bg-rose-900/60 text-rose-300 text-xs font-mono inline-flex items-center gap-1 cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>+{selectedSellRefund}⚡</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Live Heat / Overheat Skill + α/ω Variant Switcher Row */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 pt-1 border-t border-slate-800/90">
-                  {/* Live Heat & Unique Overheat Skill Box */}
-                  <div className="lg:col-span-6 rounded-lg border border-slate-800 bg-[#080E1C] p-2 space-y-1">
-                    <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
-                      <span className="font-bold flex items-center gap-1" style={{ color: selectedProfile.overheatSkill.color }}>
-                        <Flame className="w-3.5 h-3.5 shrink-0" />
-                        Quá Nhiệt: {selectedProfile.overheatSkill.name}
-                      </span>
-                      <span className="tabular-nums text-slate-300">
-                        {(selectedGun.overheatTimer ?? 0) > 0
-                          ? 'ĐANG BÙNG NỔ!'
-                          : `${Math.round(selectedGun.heat ?? 0)}%`}
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
-                      <div
-                        className="h-full transition-all duration-150"
-                        style={{
-                          width: `${(selectedGun.overheatTimer ?? 0) > 0 ? 100 : Math.min(100, selectedGun.heat ?? 0)}%`,
-                          backgroundColor: (selectedGun.overheatTimer ?? 0) > 0 ? '#FB7185' : selectedProfile.overheatSkill.color,
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.currentTarget.blur();
+                          cycleSelectedPriority();
                         }}
-                      />
-                    </div>
-                    <p className="text-[10px] text-slate-400 leading-snug">
-                      {selectedProfile.overheatSkill.summary}
-                    </p>
-                  </div>
-
-                  {/* α / ω Variant Switcher Cards */}
-                  <div className="lg:col-span-6 grid grid-cols-2 gap-1.5">
-                    {(['alpha', 'omega'] as const).map((vId) => {
-                      const vSpec = selectedSpec.variants[vId];
-                      const active = inspectedVariant === vId;
-                      return (
-                        <button
-                          key={vId}
-                          type="button"
-                          data-testid={`td-variant-${vId}`}
-                          onClick={(e) => {
-                            e.currentTarget.blur();
-                            switchSelectedGunVariant(vId);
-                          }}
-                          className={`min-h-[44px] px-2.5 py-1.5 rounded-lg border text-left transition-colors cursor-pointer ${
-                            active
-                              ? 'bg-slate-800/95 text-white'
-                              : 'border-slate-800 bg-slate-950/70 text-slate-400 hover:border-slate-600'
-                          }`}
-                          style={
-                            active
-                              ? { borderColor: vSpec.accentColor, boxShadow: `0 0 0 1px ${vSpec.accentColor}55` }
-                              : undefined
-                          }
-                        >
-                          <div className="flex items-center justify-between gap-1 text-[11px] font-bold">
-                            <span style={{ color: active ? vSpec.accentColor : undefined }}>{vSpec.shortTag}</span>
-                            {active && <span className="text-[9px] font-mono text-emerald-400">ĐANG DÙNG</span>}
-                          </div>
-                          <p className="text-[10px] text-slate-400 truncate mt-0.5">{vSpec.summary}</p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Milestones Pills */}
-                <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-                  {selectedSpec.milestones.map((ms) => {
-                    const unlocked = selectedGun.level >= ms.level;
-                    return (
-                      <span
-                        key={ms.level}
-                        title={ms.summary}
-                        className={`px-2 py-0.5 rounded-md border font-mono ${
-                          unlocked
-                            ? 'border-emerald-500/50 bg-emerald-950/50 text-emerald-300'
-                            : 'border-slate-700 bg-slate-950/60 text-slate-500'
+                        className="min-h-[38px] mobile-ls:min-h-[34px] px-2 rounded-lg border border-slate-700 bg-slate-800 hover:border-cyan-400 text-cyan-200 text-[11px] font-mono cursor-pointer truncate"
+                      >
+                        [T] {PRIORITY_LABELS[selectedGun.priority]}
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="td-upgrade-btn"
+                        onClick={(e) => {
+                          e.currentTarget.blur();
+                          upgradeSelectedGun();
+                        }}
+                        disabled={selectedUpgradeCost === null || hud.energy < selectedUpgradeCost}
+                        className={`min-h-[38px] mobile-ls:min-h-[34px] px-2 rounded-lg text-[11px] font-mono font-bold cursor-pointer truncate ${
+                          selectedUpgradeCost === null
+                            ? 'bg-amber-400/20 border border-amber-400 text-amber-300 cursor-default'
+                            : hud.energy >= selectedUpgradeCost
+                              ? 'bg-amber-400 text-[#070B14] hover:bg-amber-300'
+                              : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                         }`}
                       >
-                        {unlocked ? '✓ ' : ''}Lv{ms.level}: {ms.name}
-                      </span>
+                        {selectedUpgradeCost === null ? 'MAX LV10' : `[U] Lv${selectedGun.level + 1} (${selectedUpgradeCost}⚡)`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.currentTarget.blur();
+                          sellSelectedGun();
+                        }}
+                        aria-label="Thu hồi trụ súng"
+                        className="min-h-[38px] mobile-ls:min-h-[34px] px-2 rounded-lg bg-slate-800 hover:bg-rose-900/60 text-rose-300 text-[11px] font-mono inline-flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>+{selectedSellRefund}⚡</span>
+                      </button>
+                    </div>
+
+                    <div className="rounded-lg border border-slate-800 bg-[#080E1C] p-2 space-y-1">
+                      <div className="flex items-center justify-between gap-1 text-[10px] font-mono">
+                        <span className="font-bold flex items-center gap-1 truncate" style={{ color: selectedProfile.overheatSkill.color }}>
+                          <Flame className="w-3 h-3 shrink-0" />
+                          {selectedProfile.overheatSkill.name}
+                        </span>
+                        <span className="tabular-nums text-slate-300 shrink-0">
+                          {(selectedGun.overheatTimer ?? 0) > 0 ? 'BÙNG NỔ!' : `${Math.round(selectedGun.heat ?? 0)}%`}
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                          className="h-full transition-all duration-150"
+                          style={{
+                            width: `${(selectedGun.overheatTimer ?? 0) > 0 ? 100 : Math.min(100, selectedGun.heat ?? 0)}%`,
+                            backgroundColor: (selectedGun.overheatTimer ?? 0) > 0 ? '#FB7185' : selectedProfile.overheatSkill.color,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(['alpha', 'omega'] as const).map((vId) => {
+                        const vSpec = selectedSpec.variants[vId];
+                        const active = inspectedVariant === vId;
+                        return (
+                          <button
+                            key={vId}
+                            type="button"
+                            data-testid={`td-variant-${vId}`}
+                            onClick={(e) => {
+                              e.currentTarget.blur();
+                              switchSelectedGunVariant(vId);
+                            }}
+                            className={`min-h-[38px] mobile-ls:min-h-[34px] px-2 py-1 rounded-lg border text-left transition-colors cursor-pointer ${
+                              active ? 'bg-slate-800/95 text-white' : 'border-slate-800 bg-slate-950/70 text-slate-400 hover:border-slate-600'
+                            }`}
+                            style={active ? { borderColor: vSpec.accentColor } : undefined}
+                          >
+                            <div className="text-[10px] font-bold truncate" style={{ color: active ? vSpec.accentColor : undefined }}>
+                              {vSpec.shortTag}
+                            </div>
+                            <p className="text-[9px] text-slate-400 truncate">{vSpec.summary}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 24-Gun Arsenal Grid */}
+                <div
+                  className={
+                    useSidebarTheater
+                      ? 'flex flex-nowrap overflow-x-auto gap-1.5 pb-1 mobile-ls:grid mobile-ls:grid-cols-2 mobile-ls:overflow-visible mobile-ls:pb-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:pb-0'
+                      : 'flex flex-nowrap overflow-x-auto gap-1.5 pb-1 md:grid md:grid-cols-8 md:overflow-visible md:pb-0'
+                  }
+                >
+                  {availableGuns.map((item) => {
+                    const isActive = selectedTool === item.type;
+                    const canAfford = hud.energy >= item.cost;
+                    const isExclusive = Boolean(item.exclusiveMapId);
+                    const isSupport = isSupportGunType(item.type);
+                    return (
+                      <button
+                        key={item.type}
+                        type="button"
+                        data-testid={`td-gun-${item.type}`}
+                        onClick={(e) => {
+                          e.currentTarget.blur();
+                          unlockPrismAudio(audioCtxRef);
+                          setSelectedTool(item.type);
+                        }}
+                        className={`min-w-[116px] ${
+                          useSidebarTheater ? 'mobile-ls:min-w-0 mobile-ls:min-h-[38px] lg:min-w-0 min-h-[42px]' : 'md:min-w-0 min-h-[46px]'
+                        } shrink-0 px-2 py-1 rounded-xl border text-left transition-colors cursor-pointer ${
+                          isActive
+                            ? 'bg-amber-950/65 border-amber-400 text-white shadow-[0_0_0_1px_rgba(251,191,36,0.45)]'
+                            : isExclusive
+                              ? 'bg-amber-950/25 border-amber-500/50 text-amber-100 hover:border-amber-400'
+                              : isSupport
+                                ? 'bg-emerald-950/25 border-emerald-500/45 text-emerald-100 hover:border-emerald-400'
+                                : 'bg-slate-900/90 border-slate-700/80 text-slate-200 hover:border-slate-500'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 text-[11px] mobile-ls:text-[10px] font-bold">
+                          <span className="truncate">
+                            <span className="hidden lg:inline">[{item.hotkey.toUpperCase()}] </span>
+                            {item.shortName}
+                          </span>
+                          <span className={`font-mono shrink-0 ${canAfford ? 'text-amber-300' : 'text-rose-400'}`}>
+                            {item.cost}⚡
+                          </span>
+                        </div>
+                        <p className={`text-[9px] truncate mt-0.5 ${isExclusive ? 'text-amber-300/90 font-semibold' : isSupport ? 'text-emerald-300/90' : 'text-slate-400'}`}>
+                          {isExclusive ? '★ Đặc Quyền' : isSupport ? '✦ Hỗ Trợ Team' : item.roleClue}
+                        </p>
+                      </button>
                     );
                   })}
                 </div>
+
+                {/* Embedded (non-sidebar) Selected Gun Inspector */}
+                {!useSidebarTheater && selectedGun && selectedProfile && selectedSpec && (
+                  <div
+                    data-testid="td-gun-inspector"
+                    className="rounded-xl border bg-gradient-to-br from-slate-900/95 via-[#0E1729] to-slate-950 p-3 space-y-2.5 transition-all"
+                    style={{ borderColor: `${selectedProfile.accentColor}66` }}
+                  >
+                    {/* Header + Live Stats + Next-Level Deltas */}
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+                      <div className="space-y-1.5 min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-bold text-white">{selectedSpec.name}</span>
+                          <span
+                            data-testid="td-gun-level-badge"
+                            className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md ${
+                              selectedGun.level === MAX_GUN_LEVEL
+                                ? 'bg-amber-400 text-[#070B14]'
+                                : selectedGun.level >= 7
+                                  ? 'bg-rose-500/20 border border-rose-400/50 text-rose-200'
+                                  : selectedGun.level >= 4
+                                    ? 'bg-sky-500/20 border border-sky-400/50 text-sky-200'
+                                    : 'bg-slate-800 text-slate-300'
+                            }`}
+                          >
+                            Lv.{selectedGun.level}/{MAX_GUN_LEVEL} · {selectedProfile.tierLabel}
+                          </span>
+                          <span
+                            className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border"
+                            style={{
+                              color: selectedProfile.variantSpec.accentColor,
+                              borderColor: `${selectedProfile.variantSpec.accentColor}66`,
+                              backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                            }}
+                          >
+                            {selectedProfile.variantSpec.shortTag}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              simRef.current.selectedGunId = null;
+                              setSelectedGunId(null);
+                            }}
+                            aria-label="Đóng bảng súng"
+                            className="ml-auto min-h-[26px] px-2 rounded-md border border-slate-700 bg-slate-800 hover:border-cyan-400 text-slate-300 hover:text-white text-[10px] font-mono inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                            <span>Kho Súng</span>
+                          </button>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-300 tabular-nums">
+                          <span>
+                            DMG <strong className="text-white">{selectedProfile.damage}</strong>
+                            {selectedNextProfile && selectedNextProfile.damage > selectedProfile.damage && (
+                              <span className="text-emerald-400 ml-0.5">
+                                (+{selectedNextProfile.damage - selectedProfile.damage})
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-slate-600">·</span>
+                          <span>
+                            DPS <strong className="text-sky-300">{selectedProfile.dpsEstimate}</strong>
+                            {selectedNextProfile && selectedNextProfile.dpsEstimate > selectedProfile.dpsEstimate && (
+                              <span className="text-emerald-400 ml-0.5">
+                                (+{selectedNextProfile.dpsEstimate - selectedProfile.dpsEstimate})
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-slate-600">·</span>
+                          <span>
+                            Tầm <strong className="text-cyan-300">{selectedProfile.rangeTiles}ô</strong>
+                            {selectedNextProfile && selectedNextProfile.rangeTiles > selectedProfile.rangeTiles && (
+                              <span className="text-emerald-400 ml-0.5">
+                                (+{Number((selectedNextProfile.rangeTiles - selectedProfile.rangeTiles).toFixed(2))})
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-slate-600">·</span>
+                          <span>Hạ <strong className="text-amber-300">{selectedGun.kills}</strong></span>
+                        </div>
+
+                        {selectedTeamBuff?.hasSupportLink && (
+                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 rounded-md px-2 py-1">
+                            <span className="font-bold">BUFF ĐỘI HÌNH:</span>
+                            {selectedTeamBuff.speedMult > 1 && <span>+{Math.round((selectedTeamBuff.speedMult - 1) * 100)}% Tốc</span>}
+                            {selectedTeamBuff.damageMult > 1 && <span>+{Math.round((selectedTeamBuff.damageMult - 1) * 100)}% DMG</span>}
+                            {selectedTeamBuff.rangeBonusTiles > 0 && <span>+{selectedTeamBuff.rangeBonusTiles}ô Tầm</span>}
+                            {selectedTeamBuff.armorPierceBonus > 0 && <span>+{Math.round(selectedTeamBuff.armorPierceBonus * 100)}% Xuyên Giáp</span>}
+                            {selectedTeamBuff.shieldMultBonus > 0 && <span>+{Math.round(selectedTeamBuff.shieldMultBonus * 100)}% Phá Khiên</span>}
+                            {selectedTeamBuff.heatCoolMult > 1 && <span>+{Math.round((selectedTeamBuff.heatCoolMult - 1) * 100)}% Tản Nhiệt</span>}
+                          </div>
+                        )}
+
+                        {/* 10-Step Level Progression Bar */}
+                        <div className="flex items-center gap-1 pt-0.5" aria-label="Tiến trình nâng cấp Lv1 đến Lv10">
+                          {Array.from({ length: MAX_GUN_LEVEL }, (_, i) => {
+                            const lv = i + 1;
+                            const active = selectedGun.level >= lv;
+                            const isBreakthrough = lv === 3 || lv === 5 || lv === 7 || lv === 10;
+                            return (
+                              <div
+                                key={lv}
+                                className={`h-1.5 flex-1 rounded-full transition-colors ${
+                                  active
+                                    ? lv === 10
+                                      ? 'bg-amber-400'
+                                      : isBreakthrough
+                                        ? 'bg-cyan-400'
+                                        : 'bg-emerald-400'
+                                    : isBreakthrough
+                                      ? 'bg-slate-700 ring-1 ring-amber-400/40'
+                                      : 'bg-slate-800'
+                                }`}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Primary Action Buttons (Touch >= 44px) */}
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.currentTarget.blur();
+                            cycleSelectedPriority();
+                          }}
+                          title="Đổi ưu tiên mục tiêu [T]"
+                          className="min-h-[44px] px-3 rounded-xl border border-slate-700 bg-slate-800 hover:border-cyan-400 text-cyan-200 text-xs font-mono cursor-pointer"
+                        >
+                          [T] {PRIORITY_LABELS[selectedGun.priority]}
+                        </button>
+                        <button
+                          type="button"
+                          data-testid="td-upgrade-btn"
+                          onClick={(e) => {
+                            e.currentTarget.blur();
+                            upgradeSelectedGun();
+                          }}
+                          disabled={selectedUpgradeCost === null || hud.energy < selectedUpgradeCost}
+                          className={`min-h-[44px] px-3.5 rounded-xl text-xs font-mono font-bold cursor-pointer transition-colors ${
+                            selectedUpgradeCost === null
+                              ? 'bg-amber-400/20 border border-amber-400 text-amber-300 cursor-default'
+                              : hud.energy >= selectedUpgradeCost
+                                ? 'bg-amber-400 text-[#070B14] hover:bg-amber-300'
+                                : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                          }`}
+                        >
+                          {selectedUpgradeCost === null
+                            ? 'MAX LV 10'
+                            : `[U] Nâng Lv${selectedGun.level + 1} (${selectedUpgradeCost}⚡)`}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.currentTarget.blur();
+                            sellSelectedGun();
+                          }}
+                          aria-label="Thu hồi trụ súng"
+                          className="min-h-[44px] px-3 rounded-xl bg-slate-800 hover:bg-rose-900/60 text-rose-300 text-xs font-mono inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>+{selectedSellRefund}⚡</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Live Heat / Overheat Skill + α/ω Variant Switcher Row */}
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 pt-1 border-t border-slate-800/90">
+                      <div className="lg:col-span-6 rounded-lg border border-slate-800 bg-[#080E1C] p-2 space-y-1">
+                        <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
+                          <span className="font-bold flex items-center gap-1" style={{ color: selectedProfile.overheatSkill.color }}>
+                            <Flame className="w-3.5 h-3.5 shrink-0" />
+                            Quá Nhiệt: {selectedProfile.overheatSkill.name}
+                          </span>
+                          <span className="tabular-nums text-slate-300">
+                            {(selectedGun.overheatTimer ?? 0) > 0
+                              ? 'ĐANG BÙNG NỔ!'
+                              : `${Math.round(selectedGun.heat ?? 0)}%`}
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                          <div
+                            className="h-full transition-all duration-150"
+                            style={{
+                              width: `${(selectedGun.overheatTimer ?? 0) > 0 ? 100 : Math.min(100, selectedGun.heat ?? 0)}%`,
+                              backgroundColor: (selectedGun.overheatTimer ?? 0) > 0 ? '#FB7185' : selectedProfile.overheatSkill.color,
+                            }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-slate-400 leading-snug">
+                          {selectedProfile.overheatSkill.summary}
+                        </p>
+                      </div>
+
+                      <div className="lg:col-span-6 grid grid-cols-2 gap-1.5">
+                        {(['alpha', 'omega'] as const).map((vId) => {
+                          const vSpec = selectedSpec.variants[vId];
+                          const active = inspectedVariant === vId;
+                          return (
+                            <button
+                              key={vId}
+                              type="button"
+                              data-testid={`td-variant-${vId}`}
+                              onClick={(e) => {
+                                e.currentTarget.blur();
+                                switchSelectedGunVariant(vId);
+                              }}
+                              className={`min-h-[44px] px-2.5 py-1.5 rounded-lg border text-left transition-colors cursor-pointer ${
+                                active
+                                  ? 'bg-slate-800/95 text-white'
+                                  : 'border-slate-800 bg-slate-950/70 text-slate-400 hover:border-slate-600'
+                              }`}
+                              style={
+                                active
+                                  ? { borderColor: vSpec.accentColor, boxShadow: `0 0 0 1px ${vSpec.accentColor}55` }
+                                  : undefined
+                              }
+                            >
+                              <div className="flex items-center justify-between gap-1 text-[11px] font-bold">
+                                <span style={{ color: active ? vSpec.accentColor : undefined }}>{vSpec.shortTag}</span>
+                                {active && <span className="text-[9px] font-mono text-emerald-400">ĐANG DÙNG</span>}
+                              </div>
+                              <p className="text-[10px] text-slate-400 truncate mt-0.5">{vSpec.summary}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                      {selectedSpec.milestones.map((ms) => {
+                        const unlocked = selectedGun.level >= ms.level;
+                        return (
+                          <span
+                            key={ms.level}
+                            title={ms.summary}
+                            className={`px-2 py-0.5 rounded-md border font-mono ${
+                              unlocked
+                                ? 'border-emerald-500/50 bg-emerald-950/50 text-emerald-300'
+                                : 'border-slate-700 bg-slate-950/60 text-slate-500'
+                            }`}
+                          >
+                            {unlocked ? '✓ ' : ''}Lv{ms.level}: {ms.name}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
 
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[11px] font-mono text-slate-400 line-clamp-2 sm:truncate max-w-lg">
-                {statusNotice || `${activeMap.name} · Chạm ô trống đặt súng hoặc chạm súng để nâng Lv1→Lv10 & đổi α/ω.`}
-              </p>
-
-              <button
-                type="button"
-                data-testid="prism-wave-btn"
-                onClick={launchNextWave}
-                disabled={hud.waveActive || (hud.gameMode !== 'endless' && hud.wave >= hud.totalWaves)}
-                className={`min-h-[44px] w-full sm:w-auto px-4 py-1.5 rounded-xl font-bold text-xs sm:text-sm inline-flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer ${
-                  hud.waveActive
-                    ? 'bg-slate-800 text-slate-300 border border-slate-700 cursor-not-allowed'
-                    : 'bg-emerald-500 hover:bg-emerald-400 text-[#070B14]'
-                }`}
+              {/* Pinned Bottom Action Bar (ALWAYS visible in Sidebar Theater & Normal mode) */}
+              <div
+                className={
+                  useSidebarTheater
+                    ? 'shrink-0 border-t border-slate-800 bg-[#080E1C] p-2 mobile-ls:p-1.5 space-y-1.5 mobile-ls:space-y-1'
+                    : 'flex flex-wrap items-center justify-between gap-2'
+                }
               >
-                <Play className="w-4 h-4 shrink-0" />
-                <span>
-                  {hud.waveActive
-                    ? `Đợt ${hud.wave}/${hud.gameMode === 'endless' ? '∞' : hud.totalWaves} · Còn ${hud.remainingEnemies} quái`
-                    : `Gọi Đợt ${hud.wave + 1}/${hud.gameMode === 'endless' ? '∞' : hud.totalWaves} (Tự gọi: ${hud.nextWaveCountdown}s)`}
-                </span>
-              </button>
+                <p
+                  className={`text-[11px] mobile-ls:text-[10px] font-mono text-slate-400 ${
+                    useSidebarTheater ? 'line-clamp-2 mobile-ls:line-clamp-1' : 'line-clamp-2 sm:truncate max-w-lg'
+                  }`}
+                >
+                  {statusNotice || `${activeMap.name} · Chạm ô trống đặt súng hoặc chạm súng để nâng Lv1→Lv10 & đổi α/ω.`}
+                </p>
+
+                <button
+                  type="button"
+                  data-testid="prism-wave-btn"
+                  onClick={launchNextWave}
+                  disabled={hud.waveActive || (hud.gameMode !== 'endless' && hud.wave >= hud.totalWaves)}
+                  className={`min-h-[44px] mobile-ls:min-h-[38px] ${
+                    useSidebarTheater ? 'w-full' : 'w-full sm:w-auto'
+                  } px-4 py-1.5 rounded-xl font-bold text-xs sm:text-sm mobile-ls:text-xs inline-flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer ${
+                    hud.waveActive
+                      ? 'bg-slate-800 text-slate-300 border border-slate-700 cursor-not-allowed'
+                      : 'bg-emerald-500 hover:bg-emerald-400 text-[#070B14]'
+                  }`}
+                >
+                  <Play className="w-4 h-4 shrink-0" />
+                  <span>
+                    {hud.waveActive
+                      ? `Đợt ${hud.wave}/${hud.gameMode === 'endless' ? '∞' : hud.totalWaves} · Còn ${hud.remainingEnemies} quái`
+                      : `Gọi Đợt ${hud.wave + 1}/${hud.gameMode === 'endless' ? '∞' : hud.totalWaves} (Tự gọi: ${hud.nextWaveCountdown}s)`}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
 

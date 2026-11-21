@@ -885,10 +885,10 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
       } bg-[#050A08] text-emerald-200 overflow-hidden transition-colors`}
     >
       {/* Top Game Shell HUD */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-3 sm:px-5 py-2.5 bg-[#08120E] border-b border-emerald-900/80">
+      <div className="flex flex-wrap items-center justify-between gap-3 mobile-ls:gap-2 px-3 sm:px-5 mobile-ls:px-2.5 py-2.5 mobile-ls:py-1.5 bg-[#08120E] border-b border-emerald-900/80">
         {/* Left: Mission + Domain */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center shrink-0">
+        <div className="flex items-center gap-3 mobile-ls:gap-2 min-w-0">
+          <div className="w-8 h-8 mobile-ls:w-7 mobile-ls:h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center shrink-0">
             <Terminal className="w-4 h-4 text-emerald-400" aria-hidden="true" />
           </div>
           <div className="min-w-0">
@@ -907,7 +907,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
         </div>
 
         {/* Center: Hero SLA Alert Meter */}
-        <div className="flex-1 min-w-[200px] max-w-md space-y-1">
+        <div className="flex-1 min-w-[200px] mobile-ls:min-w-[160px] max-w-md space-y-1">
           <div className="flex items-center justify-between font-mono text-xs">
             <span className={`font-bold uppercase tracking-wider ${traceTone.split(' ')[0]}`}>
               {runtime.traceFreezeTimer > 0
@@ -997,8 +997,8 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
       </div>
 
       {/* Live Interactive Production Server Topology & Hardware Telemetry Strip */}
-      <div className="px-3 sm:px-4 pt-3 space-y-2">
-        <div className="rounded-xl border border-emerald-900/80 bg-[#040B08] p-2.5 sm:p-3 space-y-2.5">
+      <div className="px-3 sm:px-4 mobile-ls:px-2 pt-3 mobile-ls:pt-1.5 space-y-2">
+        <div className="rounded-xl border border-emerald-900/80 bg-[#040B08] p-2.5 sm:p-3 mobile-ls:p-1.5 space-y-2.5 mobile-ls:space-y-1.5">
           <div className="flex flex-wrap items-center justify-between gap-2 font-mono text-[11px]">
             <div className="flex items-center gap-2">
               <span
@@ -1012,7 +1012,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
               >
                 NODE STATUS: {telemetry.overallHealth}
               </span>
-              <span className="text-emerald-400/85 hidden sm:inline">
+              <span className="text-emerald-400/85 hidden sm:inline mobile-ls:hidden">
                 Nhấp từng lớp hạ tầng để kiểm tra trạng thái qua CLI
               </span>
             </div>
@@ -1033,7 +1033,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 font-mono">
+          <div className="grid grid-cols-2 sm:grid-cols-5 mobile-ls:grid-cols-5 gap-1.5 font-mono">
             {telemetry.nodes.map((node) => {
               const tone =
                 node.status === 'critical'
@@ -1062,16 +1062,16 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                     inputRef.current?.focus();
                   }}
                   title={`Kiểm tra bằng lệnh "${node.inspectCmd}"`}
-                  className={`rounded-lg border px-2.5 py-2 text-left transition-colors cursor-pointer ${tone}`}
+                  className={`rounded-lg border px-2.5 py-2 mobile-ls:px-1.5 mobile-ls:py-1 text-left transition-colors cursor-pointer ${tone}`}
                 >
                   <div className="flex items-center justify-between gap-1 text-[11px] font-bold">
                     <span className="truncate">{node.label}</span>
                     <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} aria-hidden="true" />
                   </div>
-                  <div className="text-[10px] opacity-85 truncate mt-0.5">{node.sublabel}</div>
+                  <div className="text-[10px] opacity-85 truncate mt-0.5 mobile-ls:hidden">{node.sublabel}</div>
                   <div className="flex items-center justify-between gap-1 mt-1 pt-1 border-t border-white/10 text-[10px]">
                     <span className="text-cyan-300 font-semibold">{node.metricText}</span>
-                    <span className="opacity-70">{node.inspectCmd}</span>
+                    <span className="opacity-70 mobile-ls:hidden">{node.inspectCmd}</span>
                   </div>
                 </button>
               );
@@ -1081,9 +1081,9 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
       </div>
 
       {/* Main 2-Column Workstation */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 sm:p-4">
+      <div className="grid grid-cols-1 mobile-ls:grid-cols-[minmax(0,1fr)_265px] lg:grid-cols-12 gap-3 mobile-ls:gap-2 p-3 sm:p-4 mobile-ls:p-2">
         {/* LEFT: CRT Terminal + Power-ups + Guided Command Deck */}
-        <div className="lg:col-span-8 flex flex-col rounded-xl border border-emerald-800/70 bg-[#030705] overflow-hidden">
+        <div className="mobile-ls:min-w-0 lg:col-span-8 flex flex-col rounded-xl border border-emerald-800/70 bg-[#030705] overflow-hidden">
           {/* Terminal Window Chrome & Mitigation Powerup Bar */}
           <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-[#07110C] border-b border-emerald-900/70 font-mono text-[11px]">
             <div className="flex items-center gap-2 min-w-0">
@@ -1196,7 +1196,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
           <div
             ref={logViewportRef}
             onClick={() => inputRef.current?.focus()}
-            className="h-[300px] sm:h-[345px] overflow-y-auto p-3 sm:p-4 font-mono text-xs sm:text-[13px] leading-relaxed space-y-1.5 cursor-text"
+            className="h-[300px] sm:h-[345px] mobile-ls:h-[155px] overflow-y-auto p-3 sm:p-4 mobile-ls:p-2 font-mono text-xs sm:text-[13px] leading-relaxed space-y-1.5 cursor-text"
           >
             {runtime.logs.map((line) => {
               const colorCls =
@@ -1343,7 +1343,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
         </div>
 
         {/* RIGHT: Switchable Tactical Objectives + ASCII/Processes + Ubuntu Codex */}
-        <div className="lg:col-span-4 flex flex-col gap-3">
+        <div className="mobile-ls:max-h-[calc(100dvh-95px)] mobile-ls:overflow-y-auto mobile-ls:pr-1 lg:col-span-4 flex flex-col gap-3 mobile-ls:gap-2">
           {/* Sub-tab Switcher */}
           <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl border border-emerald-800/70 bg-[#060E0A] font-mono text-xs">
             <button

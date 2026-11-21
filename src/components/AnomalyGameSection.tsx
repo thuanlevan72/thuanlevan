@@ -574,9 +574,9 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
     >
       {/* TITLE SCREEN */}
       {screenState === 'title' && (
-        <div className="p-4 sm:p-6 lg:p-7 space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-center">
-            <div className="lg:col-span-8 space-y-3.5">
+        <div className="p-4 sm:p-6 lg:p-7 mobile-ls:p-3 space-y-4 mobile-ls:space-y-2.5">
+          <div className="grid grid-cols-1 mobile-ls:grid-cols-12 lg:grid-cols-12 gap-5 mobile-ls:gap-3 lg:gap-6 items-center">
+            <div className="mobile-ls:col-span-8 lg:col-span-8 space-y-3.5 mobile-ls:space-y-2">
               <div className="flex flex-wrap items-center gap-2 text-xs font-mono uppercase tracking-[0.12em] text-[#B45309] dark:text-amber-400">
                 <span>Sở Kiểm Duyệt Dị Biệt</span>
                 <span>·</span>
@@ -593,11 +593,11 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                 )}
               </div>
 
-              <h1 className="font-serif text-2xl sm:text-3xl lg:text-[2rem] font-bold tracking-tight text-[#0A192F] dark:text-white leading-tight">
+              <h1 className="font-serif text-2xl sm:text-3xl lg:text-[2rem] mobile-ls:text-xl font-bold tracking-tight text-[#0A192F] dark:text-white leading-tight">
                 Kiểm Duyệt Hồ Sơ Dị Biệt
               </h1>
 
-              <p className="text-sm text-[#334155] dark:text-[#CBD5E1] leading-relaxed max-w-2xl">
+              <p className="text-sm mobile-ls:text-xs text-[#334155] dark:text-[#CBD5E1] leading-relaxed max-w-2xl mobile-ls:line-clamp-2">
                 Ngồi bàn trực điều tra: soi đối chiếu chéo hồ sơ với CSDL, chạy đèn UV giải mã,
                 thẩm vấn đương sự lộ sơ hở và trích dẫn đúng điều luật vi phạm trước khi đóng dấu{' '}
                 <strong className="text-emerald-700 dark:text-emerald-400">Duyệt</strong>,{' '}
@@ -606,11 +606,11 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
               </p>
 
               {/* Difficulty Mode Selector (3 Modes) */}
-              <div className="space-y-2">
+              <div className="space-y-2 mobile-ls:space-y-1">
                 <p className="text-xs font-mono uppercase tracking-[0.08em] text-[#475569] dark:text-[#94A3B8]">
                   Chọn chế độ khó & áp lực suy luận
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 mobile-ls:grid-cols-3 gap-2">
                   {(['trainee', 'inspector', 'nightmare'] as const).map((diffId) => {
                     const cfg = ANOMALY_DIFFICULTIES[diffId];
                     const active = selectedDifficulty === diffId;
@@ -664,7 +664,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-1.5 sm:gap-2">
+                <div className="grid grid-cols-3 sm:grid-cols-4 mobile-ls:grid-cols-4 lg:grid-cols-6 gap-1.5 sm:gap-2">
                   {ANOMALY_DAYS.map((dayItem) => {
                     const isUnlocked = dayItem.day <= effectiveUnlockedDay;
                     const isSelected = selectedStartDay === dayItem.day;
@@ -737,11 +737,11 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
             </div>
 
             {/* Right Visual Seal Emblem */}
-            <div className="lg:col-span-4">
-              <div className="rounded-2xl border-2 border-[#D6CBB7] dark:border-[#1E2E4A] bg-[#F3ECDC] dark:bg-[#0F172A] p-5 sm:p-6 flex flex-col items-center text-center gap-4">
+            <div className="mobile-ls:col-span-4 lg:col-span-4">
+              <div className="rounded-2xl border-2 border-[#D6CBB7] dark:border-[#1E2E4A] bg-[#F3ECDC] dark:bg-[#0F172A] p-5 sm:p-6 mobile-ls:p-3 flex flex-col items-center text-center gap-4 mobile-ls:gap-2">
                 <svg
                   viewBox="0 0 220 220"
-                  className="w-36 h-36 sm:w-44 sm:h-44 text-[#991B1B] dark:text-[#F87171]"
+                  className="w-36 h-36 sm:w-44 sm:h-44 mobile-ls:w-24 mobile-ls:h-24 text-[#991B1B] dark:text-[#F87171]"
                   role="img"
                   aria-label="Ấn triện Sở Kiểm Duyệt Hồ Sơ Dị Biệt"
                 >
@@ -834,7 +834,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
       {(screenState === 'playing' || screenState === 'paused' || screenState === 'day_complete') && (
         <div className="relative">
           {/* Compact Shift HUD */}
-          <div className="border-b border-[#DED4C2] dark:border-[#1E2E4A] bg-[#F2EBD9] dark:bg-[#0F172A] px-3 sm:px-5 py-2.5 flex flex-wrap items-center justify-between gap-2 sm:gap-4">
+          <div className="border-b border-[#DED4C2] dark:border-[#1E2E4A] bg-[#F2EBD9] dark:bg-[#0F172A] px-3 sm:px-5 mobile-ls:px-2.5 py-2.5 mobile-ls:py-1.5 flex flex-wrap items-center justify-between gap-2 sm:gap-4">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span className="text-xs font-mono font-bold uppercase tracking-[0.08em] text-[#991B1B] dark:text-rose-400">
@@ -935,9 +935,9 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
 
           {/* Main Desk Grid */}
           {activeCase && (
-            <div className="p-3 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+            <div className="p-3 sm:p-5 mobile-ls:p-2.5 grid grid-cols-1 mobile-ls:grid-cols-[minmax(0,1fr)_275px] lg:grid-cols-12 gap-4 mobile-ls:gap-2.5 items-start">
               {/* LEFT COLUMN: Dossier + DB Comparison + Statement */}
-              <div className="lg:col-span-7 space-y-3.5">
+              <div className="mobile-ls:min-w-0 mobile-ls:max-h-[calc(100dvh-70px)] mobile-ls:overflow-y-auto mobile-ls:pr-1 lg:col-span-7 space-y-3.5 mobile-ls:space-y-2.5">
                 {/* Dossier Identity Header */}
                 <div className="rounded-xl border border-[#D8CEBC] dark:border-[#1E2E4A] bg-white dark:bg-[#111C33] p-3.5 sm:p-4 shadow-sm">
                   <div className="flex flex-wrap items-start justify-between gap-2 pb-3 border-b border-dashed border-[#D8CEBC] dark:border-[#243454]">
@@ -977,7 +977,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                   </div>
 
                   {/* Side-by-Side Fields (Document vs System DB) */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 mobile-ls:grid-cols-2 gap-3 mobile-ls:gap-2 pt-3">
                     {/* Document Submitted */}
                     <div className="rounded-lg border border-[#E2D9C8] dark:border-[#243454] bg-[#FCF9F2] dark:bg-[#0D1629] p-3 space-y-2">
                       <div className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-[0.06em] text-[#0A192F] dark:text-sky-300">
@@ -1340,9 +1340,9 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
               </div>
 
               {/* RIGHT COLUMN: Rulebook (Clickable Rule Citation) + Action Stamps + Audit Log */}
-              <div className="lg:col-span-5 space-y-3.5">
+              <div className="mobile-ls:max-h-[calc(100dvh-70px)] mobile-ls:overflow-y-auto mobile-ls:pr-1 lg:col-span-5 space-y-3.5 mobile-ls:space-y-2">
                 {/* Daily Rulebook */}
-                <div className="rounded-xl border border-[#D8CEBC] dark:border-[#1E2E4A] bg-white dark:bg-[#111C33] p-3.5 sm:p-4 shadow-sm space-y-3">
+                <div className="rounded-xl border border-[#D8CEBC] dark:border-[#1E2E4A] bg-white dark:bg-[#111C33] p-3.5 sm:p-4 mobile-ls:p-2.5 shadow-sm space-y-3 mobile-ls:space-y-2">
                   <div className="flex items-center justify-between gap-2 pb-2 border-b border-[#E8E0CF] dark:border-[#243454]">
                     <div className="flex items-center gap-2">
                       <BookOpen className="w-4 h-4 text-[#991B1B] dark:text-rose-400" aria-hidden="true" />
@@ -1410,18 +1410,18 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                 </div>
 
                 {/* Action Stamp Panel */}
-                <div className="sticky bottom-2 z-20 lg:static shadow-xl lg:shadow-none rounded-xl border border-[#D8CEBC] dark:border-[#1E2E4A] bg-[#F3ECDC] dark:bg-[#0F172A] p-2.5 sm:p-4 space-y-2 sm:space-y-2.5">
+                <div className="sticky bottom-2 z-20 mobile-ls:static lg:static shadow-xl lg:shadow-none rounded-xl border border-[#D8CEBC] dark:border-[#1E2E4A] bg-[#F3ECDC] dark:bg-[#0F172A] p-2.5 sm:p-4 mobile-ls:p-2 space-y-2 sm:space-y-2.5 mobile-ls:space-y-1.5">
                   <div className="flex items-center justify-between gap-2 text-[11px] sm:text-xs font-mono text-[#475569] dark:text-[#94A3B8]">
                     <span>BÀN ĐÓNG DẤU PHÁN QUYẾT</span>
                     <span className="hidden sm:inline">Phím 1 · 2 · 3</span>
                   </div>
 
-                  <div className="grid grid-cols-3 lg:grid-cols-1 gap-1.5 sm:gap-2">
+                  <div className="grid grid-cols-3 mobile-ls:grid-cols-1 lg:grid-cols-1 gap-1.5 sm:gap-2 mobile-ls:gap-1">
                     <button
                       type="button"
                       disabled={lastEvaluation !== null || screenState !== 'playing'}
                       onClick={() => handleSubmitVerdict('approve')}
-                      className="min-h-[48px] px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl border-2 border-emerald-700 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-xs sm:text-sm flex items-center justify-center lg:justify-between gap-1.5 sm:gap-2 transition-colors cursor-pointer"
+                      className="min-h-[48px] mobile-ls:min-h-[38px] px-2 sm:px-4 py-2 sm:py-2.5 mobile-ls:py-1.5 rounded-xl border-2 border-emerald-700 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-xs sm:text-sm flex items-center justify-center mobile-ls:justify-between lg:justify-between gap-1.5 sm:gap-2 transition-colors cursor-pointer"
                     >
                       <span className="inline-flex items-center gap-1.5 sm:gap-2">
                         <ShieldCheck className="w-4 h-4 shrink-0" aria-hidden="true" />
@@ -1434,7 +1434,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                       type="button"
                       disabled={lastEvaluation !== null || screenState !== 'playing'}
                       onClick={() => handleSubmitVerdict('reject')}
-                      className="min-h-[48px] px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl border-2 border-amber-700 bg-amber-600 hover:bg-amber-700 disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-xs sm:text-sm flex items-center justify-center lg:justify-between gap-1.5 sm:gap-2 transition-colors cursor-pointer"
+                      className="min-h-[48px] mobile-ls:min-h-[38px] px-2 sm:px-4 py-2 sm:py-2.5 mobile-ls:py-1.5 rounded-xl border-2 border-amber-700 bg-amber-600 hover:bg-amber-700 disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-xs sm:text-sm flex items-center justify-center mobile-ls:justify-between lg:justify-between gap-1.5 sm:gap-2 transition-colors cursor-pointer"
                     >
                       <span className="inline-flex items-center gap-1.5 sm:gap-2">
                         <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
@@ -1447,7 +1447,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                       type="button"
                       disabled={lastEvaluation !== null || screenState !== 'playing'}
                       onClick={() => handleSubmitVerdict('alarm')}
-                      className="min-h-[48px] px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl border-2 border-rose-800 bg-rose-700 hover:bg-rose-800 disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-xs sm:text-sm flex items-center justify-center lg:justify-between gap-1.5 sm:gap-2 transition-colors cursor-pointer"
+                      className="min-h-[48px] mobile-ls:min-h-[38px] px-2 sm:px-4 py-2 sm:py-2.5 mobile-ls:py-1.5 rounded-xl border-2 border-rose-800 bg-rose-700 hover:bg-rose-800 disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-xs sm:text-sm flex items-center justify-center mobile-ls:justify-between lg:justify-between gap-1.5 sm:gap-2 transition-colors cursor-pointer"
                     >
                       <span className="inline-flex items-center gap-1.5 sm:gap-2">
                         <ShieldAlert className="w-4 h-4 shrink-0" aria-hidden="true" />

@@ -105,8 +105,8 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     category: 'strategy',
     title: 'Thủ Thành Pháo Đài',
     shortTitle: 'Pháo Đài',
-    subtitle: 'Pure Gun TD · 16 Màn 16×10 · x2 Thời Lượng · 8 Chế Độ · 36 Súng (20 Chung + 16 Đặc Quyền)',
-    badge: '36 Súng · 8 Chế Độ',
+    subtitle: 'Pure Gun TD · 16 Màn 16×10 · x2 Thời Lượng · 8 Chế Độ · 39 Súng (23 Chung + 16 Đặc Quyền)',
+    badge: '39 Súng · 8 Chế Độ',
     playable: true,
     gameKey: 'prism_td',
   },
@@ -427,23 +427,23 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
   }, [isFullscreen, toggleFullscreen, exitFullscreen]);
 
   return (
-    <div id="game-hub" className="pt-2 sm:pt-3 pb-6 space-y-2">
+    <div id="game-hub" className="pt-2 sm:pt-3 mobile-ls:pt-1 pb-6 mobile-ls:pb-2 space-y-2 mobile-ls:space-y-1.5">
       {/* Compact Multi-Game Hub Switcher Bar */}
       <div
         role="region"
         aria-label="Kho Trò Chơi 2D Theo Danh Mục"
-        className="rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white/95 dark:bg-[#0B1222]/95 px-2.5 py-2 sm:px-3.5 shadow-[0_8px_20px_-14px_rgba(10,25,47,0.14)] space-y-2"
+        className="rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white/95 dark:bg-[#0B1222]/95 px-2.5 py-2 sm:px-3.5 mobile-ls:px-2 mobile-ls:py-1 shadow-[0_8px_20px_-14px_rgba(10,25,47,0.14)] space-y-2 mobile-ls:space-y-1.5"
       >
         {/* Ultra-compact Single Row Bar */}
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 mobile-ls:gap-1.5 min-w-0">
           <div className="flex items-center gap-2 shrink-0">
             <div
               aria-hidden="true"
-              className="w-8 h-8 rounded-lg bg-[#0A192F] dark:bg-[#0284C7] text-white flex items-center justify-center shrink-0"
+              className="w-8 h-8 mobile-ls:w-7 mobile-ls:h-7 rounded-lg bg-[#0A192F] dark:bg-[#0284C7] text-white flex items-center justify-center shrink-0"
             >
-              <Gamepad2 className="w-4 h-4" />
+              <Gamepad2 className="w-4 h-4 mobile-ls:w-3.5 mobile-ls:h-3.5" />
             </div>
-            <div className="hidden sm:block min-w-0 max-w-[175px]">
+            <div className="hidden sm:block mobile-ls:hidden min-w-0 max-w-[175px]">
               <p className="text-[10px] font-mono uppercase tracking-[0.1em] text-[#0284C7] dark:text-[#38BDF8] leading-tight">
                 Game Hub · 10 Trò
               </p>
@@ -470,7 +470,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
                   data-testid={`hub-quick-${item.id}`}
                   title={item.subtitle}
                   onClick={() => setActiveGame(item.gameKey!)}
-                  className={`inline-flex items-center gap-1.5 min-h-[38px] px-2.5 py-1 rounded-lg border text-xs font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+                  className={`inline-flex items-center gap-1.5 min-h-[38px] mobile-ls:min-h-[34px] px-2.5 py-1 mobile-ls:px-2 rounded-lg border text-xs mobile-ls:text-[11px] font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
                     isSelected
                       ? 'bg-[#0A192F] dark:bg-[#0284C7] text-white border-[#0A192F] dark:border-[#38BDF8] shadow-sm'
                       : 'bg-[#F8FAFC] dark:bg-[#111C33] text-[#334155] dark:text-[#CBD5E1] border-[#DCE6F2] dark:border-[#1E2E4A] hover:border-[#0284C7]'
@@ -491,7 +491,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
               onClick={() => setHubExpanded((v) => !v)}
               aria-expanded={hubExpanded}
               title="Mở / Thu gọn danh mục phân loại"
-              className="min-h-[38px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-[#DCE6F2] dark:border-[#1E2E4A] bg-[#F8FAFC] dark:bg-[#111C33] text-[11px] font-semibold text-[#334155] dark:text-[#CBD5E1] hover:border-[#0284C7] cursor-pointer whitespace-nowrap"
+              className="min-h-[38px] mobile-ls:min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 mobile-ls:px-2 rounded-lg border border-[#DCE6F2] dark:border-[#1E2E4A] bg-[#F8FAFC] dark:bg-[#111C33] text-[11px] font-semibold text-[#334155] dark:text-[#CBD5E1] hover:border-[#0284C7] cursor-pointer whitespace-nowrap"
             >
               <span className="hidden md:inline">{hubExpanded ? 'Thu gọn' : 'Danh mục'}</span>
               <span className="md:hidden">{hubExpanded ? 'Đóng' : 'Menu'}</span>
@@ -504,10 +504,11 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
               onClick={toggleFullscreen}
               aria-label={isFullscreen ? 'Thoát toàn màn hình (Esc)' : 'Toàn màn hình (F11)'}
               title={isFullscreen ? 'Thoát toàn màn hình (Esc)' : 'Toàn màn hình (F11)'}
-              className="min-h-[38px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-sky-500/40 bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 text-[11px] font-mono font-bold hover:border-sky-400 cursor-pointer whitespace-nowrap"
+              className="min-h-[38px] mobile-ls:min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 mobile-ls:px-2 rounded-lg border border-sky-500/40 bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 text-[11px] font-mono font-bold hover:border-sky-400 cursor-pointer whitespace-nowrap"
             >
               {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-              <span className="hidden sm:inline">{isFullscreen ? 'Esc' : 'F11'}</span>
+              <span className="hidden lg:inline">{isFullscreen ? 'Esc' : 'F11'}</span>
+              <span className="lg:hidden">{isFullscreen ? 'Thu nhỏ' : 'Toàn Màn'}</span>
             </button>
           </div>
         </div>
@@ -660,15 +661,19 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
             type="button"
             data-testid="hub-exit-fullscreen-btn"
             onClick={exitFullscreen}
-            className="fixed top-2 right-2.5 z-[60] min-h-[34px] px-2.5 py-1 rounded-lg bg-slate-900/95 hover:bg-slate-800 border border-sky-400/60 text-sky-200 text-[11px] font-mono font-bold inline-flex items-center gap-1.5 shadow-lg cursor-pointer"
+            style={{
+              top: 'max(0.5rem, env(safe-area-inset-top, 0px))',
+              right: 'max(0.625rem, env(safe-area-inset-right, 0px))',
+            }}
+            className="fixed z-[60] min-h-[34px] px-2.5 py-1 rounded-lg bg-slate-900/95 hover:bg-slate-800 border border-sky-400/60 text-sky-200 text-[11px] font-mono font-bold inline-flex items-center gap-1.5 shadow-lg cursor-pointer"
           >
             <Minimize2 className="w-3.5 h-3.5" aria-hidden="true" />
-            <span className="hidden sm:inline">Esc · Thoát Toàn Màn Hình</span>
-            <span className="sm:hidden">Esc</span>
+            <span className="hidden lg:inline">Esc · Thoát Toàn Màn Hình</span>
+            <span className="lg:hidden">Thoát</span>
           </button>
         )}
 
-        <div className={isFullscreen ? 'game-fs-inner w-full flex-1 flex flex-col' : undefined}>
+        <div className={isFullscreen ? 'game-fs-inner w-full flex-1 flex flex-col min-h-0' : undefined}>
           {activeGame === 'xiangqi' && <XiangqiGameSection theme={theme} onToggleTheme={onToggleTheme} />}
           {activeGame === 'anomaly' && <AnomalyGameSection theme={theme} onToggleTheme={onToggleTheme} />}
           {activeGame === 'asmr_organizer' && (
