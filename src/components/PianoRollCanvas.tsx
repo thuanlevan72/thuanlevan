@@ -5,6 +5,7 @@ import {
   type MelodyInstrumentId,
   type MelodyNote,
   midiToNoteName,
+  resolvePianistVoicing,
   snapMidiToScale,
 } from '../utils/lyricGrooveEngine.ts';
 import { auditionMidiNote } from '../utils/lyricGrooveAudio.ts';
@@ -17,6 +18,7 @@ interface PianoRollCanvasProps {
   keyRoot: string;
   scaleMode: 'major' | 'minor';
   scaleSnap: boolean;
+  sustainPedal?: boolean;
   melodyInstrument: MelodyInstrumentId;
   notes: MelodyNote[];
   chordMarkers: Array<{ symbol: string; beatOffset: number }>;
@@ -43,6 +45,7 @@ export function PianoRollCanvas({
   keyRoot,
   scaleMode,
   scaleSnap,
+  sustainPedal = true,
   melodyInstrument,
   notes,
   chordMarkers,
@@ -68,6 +71,21 @@ export function PianoRollCanvas({
       pcs.map((p) => Note.chroma(p)).filter((c): c is number => typeof c === 'number')
     );
   }, [keyRoot, scaleMode]);
+
+  const chordToneSpans = useMemo(() => {
+    const sorted = [...chordMarkers]
+      .filter((c) => c.beatOffset < totalBeats)
+      .sort((a, b) => a.beatOffset - b.beatOffset);
+    return sorted.map((ch, idx) => {
+      const startBeat = Math.max(0, ch.beatOffset);
+      const endBeat =
+        idx + 1 < sorted.length ? sorted[idx + 1].beatOffset : totalBeats;
+      const voicing = resolvePianistVoicing(ch.symbol);
+      const chromas = new Set<number>();
+      voicing.rightHandMidis.forEach((m) => chromas.add(((m % 12) + 12) % 12));
+      return { startBeat, endBeat, chromas };
+    });
+  }, [chordMarkers, totalBeats]);
 
   const drawRoll = () => {
     const canvas = canvasRef.current;
@@ -161,6 +179,17 @@ export function PianoRollCanvas({
       // Row background
       ctx.fillStyle = inScale ? bgInScale : bgOutScale;
       ctx.fillRect(KEY_GUTTER_W, y, gridW, rowH);
+
+      // Subtle chord-tone guide shading per active chord span (1-3-5-7 target lanes)
+      chordToneSpans.forEach((span) => {
+        if (!span.chromas.has(chroma)) return;
+        const sx = KEY_GUTTER_W + span.startBeat * beatW;
+        const sw = Math.max(4, (span.endBeat - span.startBeat) * beatW);
+        ctx.fillStyle = isDark
+          ? 'rgba(56, 189, 248, 0.085)'
+          : 'rgba(14, 165, 233, 0.08)';
+        ctx.fillRect(sx, y, sw, rowH);
+      });
 
       // Horizontal hairline
       ctx.strokeStyle = gridLine;
@@ -348,7 +377,7 @@ export function PianoRollCanvas({
     };
     dragNoteRef.current = { id: newNote.id, startBeat: pos.beat };
     onAddNote(newNote);
-    void auditionMidiNote(pos.midi, melodyInstrument);
+    void auditionMidiNote(pos.midi, melodyInstrument, sustainPedal);
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {

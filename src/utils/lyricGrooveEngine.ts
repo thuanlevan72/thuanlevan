@@ -1,4 +1,4 @@
-import { Chord, Note, Scale } from 'tonal';
+import { Chord, Interval, Note, Scale } from 'tonal';
 
 export type MoodStyleId =
   | 'pop-ballad'
@@ -8,6 +8,7 @@ export type MoodStyleId =
   | 'acoustic';
 
 export type BackingInstrumentId = 'rhodes' | 'guitar-strum' | 'piano-ballad';
+export type BackingPatternId = 'ballad-arpeggio' | 'rich-block' | 'pop-comp';
 export type DrumPatternId = 'none' | 'lofi' | 'boombap';
 export type MelodyInstrumentId = 'piano' | 'synth' | 'guitar';
 export type SectionKind =
@@ -43,6 +44,9 @@ export interface SketchpadDraft {
   mood: MoodStyleId;
   bpm: number;
   backingInstrument: BackingInstrumentId;
+  backingPattern?: BackingPatternId;
+  sustainPedal?: boolean;
+  metronomeEnabled?: boolean;
   drumPattern: DrumPatternId;
   melodyInstrument: MelodyInstrumentId;
   scaleSnap: boolean;
@@ -100,6 +104,25 @@ export interface ScheduledChordEvent {
   durationBeats: number;
   notes: string[];
   bassNote: string;
+  rightHandMidis?: number[];
+  bassMidis?: number[];
+}
+
+export interface PianistVoicing {
+  valid: boolean;
+  normalizedSymbol: string;
+  bassMidis: number[];
+  rightHandMidis: number[];
+  bassNote: string;
+  notes: string[];
+}
+
+export interface ProgressionPreset {
+  id: string;
+  label: string;
+  desc: string;
+  moodHint: MoodStyleId;
+  buildChords: (keyRoot: string, scaleMode: 'major' | 'minor') => string[];
 }
 
 export interface PitchFrame {
@@ -465,6 +488,140 @@ export function analyzeSectionLyrics(section: SongSection): {
 }
 
 /**
+ * Resolves two-hand Concert Grand Piano voicings with optional smooth voice leading
+ * against the previous chord's right-hand MIDI positions.
+ */
+export function resolvePianistVoicing(
+  symbol: string,
+  voicingShift = 0,
+  previousRightHandMidis?: number[]
+): PianistVoicing {
+  const clean = normalizeChordInput(symbol);
+  if (!clean) {
+    return {
+      valid: false,
+      normalizedSymbol: '',
+      bassMidis: [48],
+      rightHandMidis: [],
+      bassNote: 'C3',
+      notes: [],
+    };
+  }
+
+  const [mainPart, slashBass] = clean.split('/');
+  const parsed = Chord.get(mainPart);
+  if (!parsed || parsed.empty || parsed.notes.length === 0) {
+    return {
+      valid: false,
+      normalizedSymbol: clean,
+      bassMidis: [48],
+      rightHandMidis: [],
+      bassNote: 'C3',
+      notes: [],
+    };
+  }
+
+  const pitchClasses = parsed.notes.map((n) => SHARP_TO_FLAT[n] ?? n);
+  const chromas = pitchClasses
+    .map((pc) => Note.chroma(pc))
+    .filter((c): c is number => typeof c === 'number');
+
+  // Left hand bass: C2–B2 (MIDI 36..47) + gentle fifth for rich acoustic resonance
+  const rootPc = slashBass ? SHARP_TO_FLAT[slashBass] ?? slashBass : pitchClasses[0];
+  let bassRootMidi = Note.midi(`${rootPc}2`) ?? Note.midi(`${rootPc}3`) ?? 48;
+  while (bassRootMidi < 36) bassRootMidi += 12;
+  while (bassRootMidi > 48) bassRootMidi -= 12;
+
+  const bassMidis = [bassRootMidi];
+  // Add fifth in left hand if root is low enough (piano open-fifth warmth without muddiness)
+  if (bassRootMidi <= 44) {
+    bassMidis.push(bassRootMidi + 7);
+  } else {
+    bassMidis.push(bassRootMidi + 12);
+  }
+
+  // Right hand base stack around F3–G4 (MIDI 53..67)
+  const buildInversionMidis = (invIndex: number): number[] => {
+    const base: number[] = [];
+    let oct = 4;
+    let last = 0;
+    pitchClasses.forEach((pc, idx) => {
+      let m = Note.midi(`${pc}${oct}`) ?? 60;
+      if (idx === 0 && m > 65) m -= 12;
+      if (idx > 0) {
+        while (m <= last) m += 12;
+      }
+      while (m < 53) m += 12;
+      base.push(m);
+      last = m;
+    });
+
+    const shift = ((invIndex % 4) + 4) % 4;
+    if (shift === 1 && base.length > 1) {
+      base[0] += 12;
+    } else if (shift === 2 && base.length > 2) {
+      base[0] += 12;
+      base[1] += 12;
+    } else if (shift === 3 && base.length >= 3) {
+      // Open Drop-2 spread voicing: drops 2nd-highest down an octave or lifts 2nd voice
+      base[1] += 12;
+    }
+    base.sort((a, b) => a - b);
+    // Keep right hand centered comfortably around MIDI 55..76
+    const avg = base.reduce((s, v) => s + v, 0) / Math.max(1, base.length);
+    if (avg > 71) {
+      return base.map((m) => m - 12);
+    }
+    if (avg < 57) {
+      return base.map((m) => m + 12);
+    }
+    return base;
+  };
+
+  let rightHandMidis = buildInversionMidis(voicingShift);
+
+  // Automatic smooth voice leading when previous chord is provided and shift == 0
+  if (
+    voicingShift === 0 &&
+    previousRightHandMidis &&
+    previousRightHandMidis.length > 0 &&
+    chromas.length > 0
+  ) {
+    const prevAvg =
+      previousRightHandMidis.reduce((s, v) => s + v, 0) /
+      previousRightHandMidis.length;
+    const prevSet = new Set(previousRightHandMidis);
+    let bestCandidate = rightHandMidis;
+    let bestScore = Infinity;
+
+    for (let inv = 0; inv < 4; inv++) {
+      const cand = buildInversionMidis(inv);
+      const candAvg = cand.reduce((s, v) => s + v, 0) / Math.max(1, cand.length);
+      const commonTones = cand.filter((m) => prevSet.has(m)).length;
+      const rangePenalty = candAvg < 56 || candAvg > 72 ? 8 : 0;
+      const score = Math.abs(candAvg - prevAvg) - commonTones * 2.2 + rangePenalty;
+      if (score < bestScore) {
+        bestScore = score;
+        bestCandidate = cand;
+      }
+    }
+    rightHandMidis = bestCandidate;
+  }
+
+  const notes = rightHandMidis.map((m) => Note.fromMidi(m) || 'C4');
+  const bassNote = Note.fromMidi(bassRootMidi) || 'C3';
+
+  return {
+    valid: true,
+    normalizedSymbol: clean,
+    bassMidis,
+    rightHandMidis,
+    bassNote,
+    notes,
+  };
+}
+
+/**
  * Resolves playable piano/synth MIDI note names (e.g. ['A3', 'C4', 'E4', 'G4']) for any chord symbol.
  * Supports voicing shifts (0 = root, 1 = 1st inv, 2 = 2nd inv, 3 = drop-2 wide).
  */
@@ -474,59 +631,12 @@ export function resolveChordVoicingNotes(symbol: string, voicingShift = 0): {
   bassNote: string;
   normalizedSymbol: string;
 } {
-  const clean = normalizeChordInput(symbol);
-  if (!clean) {
-    return { valid: false, notes: [], bassNote: 'C3', normalizedSymbol: '' };
-  }
-
-  // Handle slash bass chords e.g. Fmaj7/G or C/E
-  const [mainPart, slashBass] = clean.split('/');
-  const parsed = Chord.get(mainPart);
-  if (!parsed || parsed.empty || parsed.notes.length === 0) {
-    return { valid: false, notes: [], bassNote: 'C3', normalizedSymbol: clean };
-  }
-
-  let pitchClasses = parsed.notes.map((n) => SHARP_TO_FLAT[n] ?? n);
-  // Assign ascending octave 3/4 voicings cleanly
-  const midiNotes: number[] = [];
-  let currentOctave = 3;
-  let lastMidi = 0;
-
-  pitchClasses.forEach((pc, idx) => {
-    let midi = Note.midi(`${pc}${currentOctave}`) ?? 60;
-    if (idx > 0 && midi <= lastMidi) {
-      currentOctave += 1;
-      midi = Note.midi(`${pc}${currentOctave}`) ?? midi + 12;
-    }
-    if (midi < 52) {
-      midi += 12;
-    }
-    midiNotes.push(midi);
-    lastMidi = midi;
-  });
-
-  const shift = ((voicingShift % 4) + 4) % 4;
-  if (shift === 1 && midiNotes.length > 1) {
-    midiNotes[0] += 12;
-  } else if (shift === 2 && midiNotes.length > 2) {
-    midiNotes[0] += 12;
-    midiNotes[1] += 12;
-  } else if (shift === 3 && midiNotes.length >= 3) {
-    // Open drop-2 voicing: raise second-highest or spread root/5th
-    midiNotes[1] += 12;
-  }
-
-  midiNotes.sort((a, b) => a - b);
-  const notes = midiNotes.map((m) => Note.fromMidi(m) || 'C4');
-  const rootPc = slashBass ? slashBass : pitchClasses[0];
-  const bassMidi = Note.midi(`${rootPc}2`) ?? Note.midi(`${rootPc}3`) ?? 48;
-  const bassNote = Note.fromMidi(bassMidi < 36 ? bassMidi + 12 : bassMidi) || 'C3';
-
+  const res = resolvePianistVoicing(symbol, voicingShift);
   return {
-    valid: true,
-    notes,
-    bassNote,
-    normalizedSymbol: clean,
+    valid: res.valid,
+    notes: res.notes,
+    bassNote: res.bassNote,
+    normalizedSymbol: res.normalizedSymbol,
   };
 }
 
@@ -760,7 +870,7 @@ export function suggestNextChords(
 }
 
 /**
- * Extracts a linear beat-aligned chord schedule across sections for instant loop playback.
+ * Extracts a linear beat-aligned chord schedule across sections with smooth pianist voice leading.
  */
 export function buildChordTimeline(sections: SongSection[]): {
   events: ScheduledChordEvent[];
@@ -768,6 +878,7 @@ export function buildChordTimeline(sections: SongSection[]): {
 } {
   const events: ScheduledChordEvent[] = [];
   let cursorBeat = 0;
+  let prevRightHandMidis: number[] | undefined;
 
   sections.forEach((section) => {
     const sectionBeats = section.bars * 4;
@@ -792,9 +903,7 @@ export function buildChordTimeline(sections: SongSection[]): {
       return;
     }
 
-    // Ensure sorted strictly & compute durations cleanly
     sectionChords.sort((a, b) => a.rawBeat - b.rawBeat);
-    // Snap starting chord cleanly to bar/half-bar feel if close to 0
     if (sectionChords[0].rawBeat < 1) {
       sectionChords[0].rawBeat = 0;
     }
@@ -806,8 +915,13 @@ export function buildChordTimeline(sections: SongSection[]): {
           ? Math.max(startLocal + 0.5, sectionChords[i + 1].rawBeat)
           : sectionBeats;
       const durationBeats = Math.max(0.5, nextLocal - startLocal);
-      const voicing = resolveChordVoicingNotes(sectionChords[i].symbol);
+      const voicing = resolvePianistVoicing(
+        sectionChords[i].symbol,
+        0,
+        prevRightHandMidis
+      );
       if (voicing.valid) {
+        prevRightHandMidis = voicing.rightHandMidis;
         events.push({
           sectionId: section.id,
           symbol: sectionChords[i].symbol,
@@ -815,6 +929,8 @@ export function buildChordTimeline(sections: SongSection[]): {
           durationBeats,
           notes: voicing.notes,
           bassNote: voicing.bassNote,
+          rightHandMidis: voicing.rightHandMidis,
+          bassMidis: voicing.bassMidis,
         });
       }
     }
@@ -1114,9 +1230,609 @@ export function encodePcmToWav(
   return new Uint8Array(buffer);
 }
 
+const CLEAN_NOTE_NAMES_BY_CHROMA = [
+  'C',
+  'Db',
+  'D',
+  'Eb',
+  'E',
+  'F',
+  'F#',
+  'G',
+  'Ab',
+  'A',
+  'Bb',
+  'B',
+];
+
+function transposePitchClassClean(pc: string, semitones: number): string {
+  const chroma = Note.chroma(pc);
+  if (typeof chroma !== 'number') {
+    return Note.transpose(pc, Interval.fromSemitones(semitones)) || pc;
+  }
+  const targetChroma = (((chroma + semitones) % 12) + 12) % 12;
+  return CLEAN_NOTE_NAMES_BY_CHROMA[targetChroma];
+}
+
+export function transposeChordSymbol(symbol: string, semitones: number): string {
+  const clean = normalizeChordInput(symbol);
+  if (!clean || semitones === 0) return clean;
+  const [mainPart, slashBass] = clean.split('/');
+  const rootMatch = mainPart.match(/^([A-Ga-g])([#b]?)(.*)$/);
+  if (!rootMatch) return clean;
+
+  const root = `${rootMatch[1].toUpperCase()}${rootMatch[2]}`;
+  const quality = rootMatch[3];
+  const nextRoot = transposePitchClassClean(root, semitones);
+
+  if (slashBass) {
+    const bassMatch = slashBass.match(/^([A-Ga-g])([#b]?)$/);
+    if (bassMatch) {
+      const nextBass = transposePitchClassClean(
+        `${bassMatch[1].toUpperCase()}${bassMatch[2]}`,
+        semitones
+      );
+      return `${nextRoot}${quality}/${nextBass}`;
+    }
+  }
+  return `${nextRoot}${quality}`;
+}
+
+export function transposeDraftAll(
+  draft: SketchpadDraft,
+  semitones: number
+): SketchpadDraft {
+  if (semitones === 0) return draft;
+  const currentChroma = Note.chroma(draft.keyRoot) ?? 0;
+  const nextChroma = (((currentChroma + semitones) % 12) + 12) % 12;
+  const nextKeyRoot =
+    KEY_ROOT_OPTIONS.find((k) => Note.chroma(k) === nextChroma) ??
+    CLEAN_NOTE_NAMES_BY_CHROMA[nextChroma];
+
+  return {
+    ...draft,
+    keyRoot: nextKeyRoot,
+    sections: draft.sections.map((sec) => ({
+      ...sec,
+      text: sec.text.replace(/\[([^\]]+)\]/g, (_m, inner) => {
+        return `[${transposeChordSymbol(String(inner), semitones)}]`;
+      }),
+    })),
+    melodyNotes: draft.melodyNotes.map((n) => ({
+      ...n,
+      midi: Math.max(48, Math.min(84, n.midi + semitones)),
+    })),
+  };
+}
+
+export const PROGRESSION_PRESETS: ProgressionPreset[] = [
+  {
+    id: 'vpop-ballad',
+    label: 'Ballad Việt Quốc Dân',
+    desc: 'VIm7 – IVmaj7 – Iadd9 – V/VII',
+    moodHint: 'pop-ballad',
+    buildChords: (keyRoot, scaleMode) => {
+      const n = getScaleNotes(keyRoot, scaleMode);
+      if (scaleMode === 'minor') {
+        return [`${n[0]}m7`, `${n[5]}maj7`, `${n[2]}maj7`, `${n[6]}7`];
+      }
+      return [`${n[5]}m7`, `${n[3]}maj7`, `${n[0]}add9`, `${n[4]}/${n[6]}`];
+    },
+  },
+  {
+    id: 'royal-road',
+    label: 'City Pop / Lofi (Royal Road)',
+    desc: 'IVmaj7 – V13 – IIIm7 – VIm9',
+    moodHint: 'lofi-chill',
+    buildChords: (keyRoot, scaleMode) => {
+      const n = getScaleNotes(keyRoot, scaleMode);
+      if (scaleMode === 'minor') {
+        return [`${n[3]}m9`, `${n[6]}13`, `${n[2]}maj7`, `${n[0]}m9`];
+      }
+      return [`${n[3]}maj7`, `${n[4]}13`, `${n[2]}m7`, `${n[5]}m9`];
+    },
+  },
+  {
+    id: 'neosoul-251',
+    label: 'Neo-Soul II–V–I–VI',
+    desc: 'IIm9 – V13 – Imaj7 – VI7',
+    moodHint: 'neo-soul',
+    buildChords: (keyRoot, scaleMode) => {
+      const n = getScaleNotes(keyRoot, scaleMode);
+      if (scaleMode === 'minor') {
+        return [`${n[1]}m7b5`, `${n[4]}7`, `${n[0]}m9`, `${n[5]}maj7`];
+      }
+      return [`${n[1]}m9`, `${n[4]}13`, `${n[0]}maj7`, `${n[5]}7`];
+    },
+  },
+  {
+    id: 'canon-modern',
+    label: 'Canon Ballad 8 Nhịp',
+    desc: 'I – V/VII – VIm7 – IIIm7 – IVmaj7 – I/III – IIm7 – Vsus4',
+    moodHint: 'pop-ballad',
+    buildChords: (keyRoot, scaleMode) => {
+      const n = getScaleNotes(keyRoot, scaleMode);
+      if (scaleMode === 'minor') {
+        return [
+          `${n[0]}m7`,
+          `${n[4]}/${n[6]}`,
+          `${n[5]}maj7`,
+          `${n[2]}maj7`,
+          `${n[3]}m7`,
+          `${n[0]}m7`,
+          `${n[1]}m7b5`,
+          `${n[4]}7`,
+        ];
+      }
+      return [
+        `${n[0]}add9`,
+        `${n[4]}/${n[6]}`,
+        `${n[5]}m7`,
+        `${n[2]}m7`,
+        `${n[3]}maj7`,
+        `${n[0]}/${n[2]}`,
+        `${n[1]}m7`,
+        `${n[4]}sus4`,
+      ];
+    },
+  },
+  {
+    id: 'rnb-borrowed',
+    label: 'R&B Sâu Lắng (IVm6)',
+    desc: 'IVmaj7 – IVm6 – IIIm7 – VIm9',
+    moodHint: 'rnb',
+    buildChords: (keyRoot, scaleMode) => {
+      const n = getScaleNotes(keyRoot, scaleMode);
+      if (scaleMode === 'minor') {
+        return [`${n[5]}maj7`, `${n[3]}m6`, `${n[2]}maj7`, `${n[4]}7`];
+      }
+      return [`${n[3]}maj7`, `${n[3]}m6`, `${n[2]}m7`, `${n[5]}m9`];
+    },
+  },
+  {
+    id: 'jazz-turnaround',
+    label: 'Vòng Quán Cũ (I–VI–II–V)',
+    desc: 'Imaj7 – VIm9 – IIm9 – V13',
+    moodHint: 'lofi-chill',
+    buildChords: (keyRoot, scaleMode) => {
+      const n = getScaleNotes(keyRoot, scaleMode);
+      if (scaleMode === 'minor') {
+        return [`${n[0]}m9`, `${n[5]}maj7`, `${n[1]}m7b5`, `${n[4]}7`];
+      }
+      return [`${n[0]}maj7`, `${n[5]}m9`, `${n[1]}m9`, `${n[4]}13`];
+    },
+  },
+];
+
+export const COMPUTER_KEY_TO_MIDI: Record<string, number> = {
+  z: 48, // C3
+  s: 49,
+  x: 50,
+  d: 51,
+  c: 52,
+  v: 53,
+  g: 54,
+  b: 55,
+  h: 56,
+  n: 57,
+  j: 58,
+  m: 59,
+  q: 60, // C4
+  '2': 61,
+  w: 62,
+  '3': 63,
+  e: 64,
+  r: 65,
+  '5': 66,
+  t: 67,
+  '6': 68,
+  y: 69,
+  '7': 70,
+  u: 71,
+  i: 72, // C5
+};
+
+export interface SectionBarSlot {
+  barIndex: number;
+  primaryChord: string;
+  secondaryChord: string | null;
+  hasExplicitChord: boolean;
+}
+
+export function extractSectionBarSlots(
+  section: SongSection,
+  fallbackChord = 'Cmaj7'
+): SectionBarSlot[] {
+  const { events } = buildChordTimeline([section]);
+  const slots: SectionBarSlot[] = [];
+  let runningChord = events[0]?.symbol ?? fallbackChord;
+
+  for (let b = 0; b < section.bars; b++) {
+    const barStart = b * 4;
+    const barEnd = (b + 1) * 4;
+    const inBar = events.filter(
+      (ev) => ev.startBeat >= barStart - 0.01 && ev.startBeat < barEnd - 0.01
+    );
+    if (inBar.length > 0) {
+      runningChord = inBar[0].symbol;
+      slots.push({
+        barIndex: b,
+        primaryChord: inBar[0].symbol,
+        secondaryChord: inBar[1]?.symbol ?? null,
+        hasExplicitChord: true,
+      });
+    } else {
+      slots.push({
+        barIndex: b,
+        primaryChord: runningChord,
+        secondaryChord: null,
+        hasExplicitChord: false,
+      });
+    }
+  }
+  return slots;
+}
+
+/**
+ * Replaces or inserts the primary chord for a given bar index cleanly inside section.text
+ * without disturbing surrounding Vietnamese lyrics.
+ */
+export function updateBarChordInSectionText(
+  section: SongSection,
+  barIndex: number,
+  newChord: string
+): string {
+  const cleanChord = normalizeChordInput(newChord);
+  if (!cleanChord) return section.text;
+
+  const lines = section.text.split(/\r?\n/);
+  const nonEmptyIndices = lines
+    .map((l, idx) => (l.trim().length > 0 ? idx : -1))
+    .filter((i) => i >= 0);
+
+  if (nonEmptyIndices.length === 0) {
+    const built: string[] = [];
+    for (let b = 0; b < section.bars; b++) {
+      built.push(b === barIndex ? `[${cleanChord}]Viết lời tại đây` : '[...]');
+    }
+    return built.join('\n');
+  }
+
+  const beatsPerLine = (section.bars * 4) / nonEmptyIndices.length;
+  const barStartBeat = barIndex * 4;
+  const barEndBeat = barStartBeat + 4;
+
+  // Locate first chord tag whose timeline beat falls in [barStartBeat, barEndBeat)
+  let targetLineIdx = -1;
+  let targetMatchStart = -1;
+  let targetMatchLen = 0;
+
+  for (let posIdx = 0; posIdx < nonEmptyIndices.length; posIdx++) {
+    const lineIdx = nonEmptyIndices[posIdx];
+    const lineText = lines[lineIdx];
+    const lineBaseBeat = posIdx * beatsPerLine;
+    const parsed = parseChordsFromLine(lineText, beatsPerLine);
+
+    const chordInBarIdx = parsed.chords.findIndex((c) => {
+      const globalBeat = lineBaseBeat + c.beatOffset;
+      return globalBeat >= barStartBeat - 0.01 && globalBeat < barEndBeat - 0.01;
+    });
+
+    if (chordInBarIdx >= 0) {
+      let count = 0;
+      const regex = /\[([^\]]+)\]/g;
+      let m: RegExpExecArray | null;
+      while ((m = regex.exec(lineText)) !== null) {
+        if (count === chordInBarIdx) {
+          targetLineIdx = lineIdx;
+          targetMatchStart = m.index;
+          targetMatchLen = m[0].length;
+          break;
+        }
+        count += 1;
+      }
+      if (targetLineIdx >= 0) break;
+    }
+  }
+
+  if (targetLineIdx >= 0 && targetMatchStart >= 0) {
+    const line = lines[targetLineIdx];
+    lines[targetLineIdx] =
+      line.slice(0, targetMatchStart) +
+      `[${cleanChord}]` +
+      line.slice(targetMatchStart + targetMatchLen);
+    return lines.join('\n');
+  }
+
+  // Otherwise prepend [newChord] at the best matching line for that bar
+  const approxPosIdx = Math.min(
+    nonEmptyIndices.length - 1,
+    Math.floor(barStartBeat / Math.max(0.5, beatsPerLine))
+  );
+  const insertLineIdx = nonEmptyIndices[approxPosIdx] ?? 0;
+  lines[insertLineIdx] = `[${cleanChord}]${lines[insertLineIdx]}`;
+  return lines.join('\n');
+}
+
+/**
+ * Maps any piano MIDI note to the lush diatonic chord at that scale degree (for 1-Key Chord Mode).
+ */
+export function getDiatonicChordForPianoKey(
+  midi: number,
+  keyRoot: string,
+  scaleMode: 'major' | 'minor',
+  mood: MoodStyleId
+): string {
+  const scaleNotes = getScaleNotes(keyRoot, scaleMode);
+  const diatonicChords = getDiatonicChordsForKey(keyRoot, scaleMode, mood);
+  const chroma = ((midi % 12) + 12) % 12;
+
+  let bestDegreeIdx = 0;
+  let bestDist = Infinity;
+  scaleNotes.forEach((pc, idx) => {
+    const c = Note.chroma(pc);
+    if (typeof c !== 'number') return;
+    const rawDiff = Math.abs(chroma - c);
+    const dist = Math.min(rawDiff, 12 - rawDiff);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestDegreeIdx = idx;
+    }
+  });
+
+  return diatonicChords[bestDegreeIdx] ?? diatonicChords[0] ?? 'Cmaj7';
+}
+
+const MELODY_RHYTHM_PATTERNS: Array<
+  Array<{ offset: number; dur: number; chordTonePrefer: number }>
+> = [
+  [
+    { offset: 0, dur: 1.5, chordTonePrefer: 2 },
+    { offset: 1.5, dur: 0.5, chordTonePrefer: 1 },
+    { offset: 2, dur: 1, chordTonePrefer: 3 },
+    { offset: 3, dur: 1, chordTonePrefer: 0 },
+  ],
+  [
+    { offset: 0, dur: 1, chordTonePrefer: 1 },
+    { offset: 1, dur: 1, chordTonePrefer: 2 },
+    { offset: 2, dur: 1.5, chordTonePrefer: 0 },
+    { offset: 3.5, dur: 0.5, chordTonePrefer: 1 },
+  ],
+  [
+    { offset: 0, dur: 2, chordTonePrefer: 2 },
+    { offset: 2, dur: 1, chordTonePrefer: 1 },
+    { offset: 3, dur: 1, chordTonePrefer: 0 },
+  ],
+  [
+    { offset: 0, dur: 1, chordTonePrefer: 0 },
+    { offset: 1, dur: 0.5, chordTonePrefer: 1 },
+    { offset: 1.5, dur: 1.5, chordTonePrefer: 2 },
+    { offset: 3, dur: 1, chordTonePrefer: 1 },
+  ],
+];
+
+/**
+ * Generates an expressive, singable Piano/Vocal melody aligned with the section's chords & key scale.
+ */
+export function generateHarmonicMelodyForSection(
+  section: SongSection,
+  keyRoot: string,
+  scaleMode: 'major' | 'minor',
+  variationSeed = 0
+): MelodyNote[] {
+  const { events } = buildChordTimeline([section]);
+  const totalBeats = section.bars * 4;
+  const fallbackVoicing = resolvePianistVoicing(
+    scaleMode === 'minor' ? `${keyRoot}m7` : `${keyRoot}maj7`,
+    0
+  );
+
+  const notes: MelodyNote[] = [];
+  let prevMidi = 69;
+
+  for (let b = 0; b < section.bars; b++) {
+    const barStart = b * 4;
+    const isLastBar = b === section.bars - 1;
+    const pattern =
+      MELODY_RHYTHM_PATTERNS[(b + Math.abs(variationSeed)) % MELODY_RHYTHM_PATTERNS.length];
+
+    pattern.forEach((step, sIdx) => {
+      const beat = barStart + step.offset;
+      if (beat >= totalBeats) return;
+      // Leave graceful vocal breath at end of final bar
+      if (isLastBar && sIdx === pattern.length - 1 && step.offset >= 2.5) {
+        return;
+      }
+
+      const activeChord =
+        [...events]
+          .reverse()
+          .find((ev) => ev.startBeat <= beat + 0.05) ?? null;
+
+      const poolMidis =
+        activeChord?.rightHandMidis && activeChord.rightHandMidis.length > 0
+          ? activeChord.rightHandMidis
+          : fallbackVoicing.rightHandMidis;
+
+      const rawPick =
+        poolMidis[(step.chordTonePrefer + variationSeed) % poolMidis.length] ?? 67;
+      let targetMidi = rawPick;
+      while (targetMidi < 62) targetMidi += 12;
+      while (targetMidi > 77) targetMidi -= 12;
+
+      // Smooth contour: avoid wide jumps > 7 semitones
+      if (Math.abs(targetMidi - prevMidi) > 7) {
+        if (targetMidi > prevMidi && targetMidi - 12 >= 60) targetMidi -= 12;
+        else if (targetMidi < prevMidi && targetMidi + 12 <= 79) targetMidi += 12;
+      }
+
+      // Snap passing weak-beat note cleanly inside active scale
+      const finalMidi = snapMidiToScale(targetMidi, keyRoot, scaleMode);
+      prevMidi = finalMidi;
+
+      const dur = isLastBar && beat >= totalBeats - 2 ? Math.min(2, totalBeats - beat) : step.dur;
+      notes.push({
+        id: `auto-${section.id}-${b}-${sIdx}-${variationSeed}`,
+        sectionId: section.id,
+        midi: finalMidi,
+        startBeat: beat,
+        durationBeats: Math.max(0.5, dur),
+        velocity: sIdx === 0 ? 0.88 : sIdx === 2 ? 0.84 : 0.76,
+      });
+    });
+  }
+
+  return notes;
+}
+
+export interface SongIdeaTemplate {
+  id: string;
+  label: string;
+  subtitle: string;
+  keyRoot: string;
+  scaleMode: 'major' | 'minor';
+  mood: MoodStyleId;
+  bpm: number;
+  backingInstrument: BackingInstrumentId;
+  backingPattern: BackingPatternId;
+  drumPattern: DrumPatternId;
+  sectionText: string;
+}
+
+export const SONG_IDEA_TEMPLATES: SongIdeaTemplate[] = [
+  {
+    id: 'idea-ballad-mua',
+    label: 'Ballad Đêm Mưa',
+    subtitle: 'Grand Piano rải · C Trưởng · 72 BPM',
+    keyRoot: 'C',
+    scaleMode: 'major',
+    mood: 'pop-ballad',
+    bpm: 72,
+    backingInstrument: 'piano-ballad',
+    backingPattern: 'ballad-arpeggio',
+    drumPattern: 'none',
+    sectionText:
+      '[Am9]Ngoài hiên mưa rơi [Fmaj7]nhẹ phím đàn\n' +
+      '[Cadd9]Gửi theo câu hát [G/B]chút mơ màng\n' +
+      '[Dm9]Bàn tay khẽ chạm [G13]nỗi nhớ sang\n' +
+      '[Cmaj7]Dịu dàng khép lại [G7]ánh đèn vàng',
+  },
+  {
+    id: 'idea-citypop-lofi',
+    label: 'City Pop Phố Khuya',
+    subtitle: 'Grand Piano dày · F Trưởng · 86 BPM',
+    keyRoot: 'F',
+    scaleMode: 'major',
+    mood: 'lofi-chill',
+    bpm: 86,
+    backingInstrument: 'piano-ballad',
+    backingPattern: 'pop-comp',
+    drumPattern: 'lofi',
+    sectionText:
+      '[Bbmaj7]Chuyến xe đêm lướt [C13]qua ánh đèn\n' +
+      '[Am7]Phố quen bỗng hóa [Dm9]giấc mơ êm\n' +
+      '[Gm9]Còn lại dư âm [C9sus4]giữa nhịp tim\n' +
+      '[Fmaj7]Vài dòng thư gửi [F7]gió đi tìm',
+  },
+  {
+    id: 'idea-neosoul-smooth',
+    label: 'Neo-Soul Hoàng Hôn',
+    subtitle: 'Rhodes + Hợp âm màu · Eb Trưởng · 88 BPM',
+    keyRoot: 'Eb',
+    scaleMode: 'major',
+    mood: 'neo-soul',
+    bpm: 88,
+    backingInstrument: 'rhodes',
+    backingPattern: 'rich-block',
+    drumPattern: 'boombap',
+    sectionText:
+      '[Fm9]Nắng nghiêng qua góc [Bb13]quán quen rồi\n' +
+      '[Ebmaj7]Khẽ ngân giai điệu [Cm9]ấm bờ môi\n' +
+      '[Fm9]Chậm lại một nhịp [Bb7]để thấy thôi\n' +
+      '[Ebmaj7]Bình yên tan nhẹ [G7]giữa mây trôi',
+  },
+  {
+    id: 'idea-acoustic-chieu',
+    label: 'Acoustic Tự Sự',
+    subtitle: 'Guitar Mộc & Piano · G Trưởng · 94 BPM',
+    keyRoot: 'G',
+    scaleMode: 'major',
+    mood: 'acoustic',
+    bpm: 94,
+    backingInstrument: 'guitar-strum',
+    backingPattern: 'ballad-arpeggio',
+    drumPattern: 'none',
+    sectionText:
+      '[Gadd9]Chiều buông tiếng gió [D/F#]hát bên đồi\n' +
+      '[Em7]Kể lại chuyện cũ [Bm7]tháng năm trôi\n' +
+      '[Cmaj7]Bật dây đàn sáng [G/B]ấm lưng trời\n' +
+      '[Am7]Hát câu mộc mạc [Dsus4]chẳng đổi dời',
+  },
+];
+
 export function createStarterDrafts(): SketchpadDraft[] {
   const now = Date.now();
   return [
+    {
+      id: 'draft-dem-pho-mua-piano',
+      title: 'Đêm Phố Mưa (Grand Piano Ballad)',
+      keyRoot: 'C',
+      scaleMode: 'major',
+      mood: 'pop-ballad',
+      bpm: 74,
+      backingInstrument: 'piano-ballad',
+      backingPattern: 'ballad-arpeggio',
+      sustainPedal: true,
+      metronomeEnabled: false,
+      drumPattern: 'none',
+      melodyInstrument: 'piano',
+      scaleSnap: true,
+      updatedAt: now,
+      sections: [
+        {
+          id: 'sec-piano-intro',
+          kind: 'Intro',
+          label: 'Intro — Piano Rải Nhẹ',
+          bars: 4,
+          text: '[Am9]Tiếng dương cầm vang [Fmaj7]lên giữa khuya\n[Cadd9]Ánh đèn đường hắt [G/B]bóng mưa qua thềm',
+        },
+        {
+          id: 'sec-piano-verse',
+          kind: 'Verse',
+          label: 'Verse 1 — Lời Tự Sự',
+          bars: 4,
+          text:
+            '[Am7]Phố vắng tênh bước [Em7]chân khẽ trôi\n' +
+            '[Fmaj7]Kỷ niệm xưa bỗng [Cadd9]quay về thôi\n' +
+            '[Dm7]Giữ lại chút ấm [G/B]áp bờ môi\n' +
+            '[Fmaj7]Nghe bản nhạc cũ [Gsus4]vẫn ngân [G]hoài',
+        },
+        {
+          id: 'sec-piano-chorus',
+          kind: 'Chorus',
+          label: 'Chorus — Cao Trào Piano Grand',
+          bars: 4,
+          text:
+            '[Fmaj7]Nếu một mai cơn [G13]gió ngừng bay\n' +
+            '[Em7]Ta gặp nhau dưới [Am9]hiên chiều nay\n' +
+            '[Dm9]Để hợp âm còn [Fm6]vang vòng tay\n' +
+            '[Cmaj7]Viết tiếp khúc hát [G7]chưa từng phai',
+        },
+      ],
+      melodyNotes: [
+        { id: 'gp1', sectionId: 'sec-piano-chorus', midi: 69, startBeat: 0, durationBeats: 1, velocity: 0.84 },
+        { id: 'gp2', sectionId: 'sec-piano-chorus', midi: 72, startBeat: 1, durationBeats: 1, velocity: 0.88 },
+        { id: 'gp3', sectionId: 'sec-piano-chorus', midi: 74, startBeat: 2, durationBeats: 1.5, velocity: 0.92 },
+        { id: 'gp4', sectionId: 'sec-piano-chorus', midi: 76, startBeat: 3.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'gp5', sectionId: 'sec-piano-chorus', midi: 79, startBeat: 4, durationBeats: 2, velocity: 0.94 },
+        { id: 'gp6', sectionId: 'sec-piano-chorus', midi: 76, startBeat: 6, durationBeats: 1, velocity: 0.85 },
+        { id: 'gp7', sectionId: 'sec-piano-chorus', midi: 74, startBeat: 7, durationBeats: 1, velocity: 0.82 },
+        { id: 'gp8', sectionId: 'sec-piano-chorus', midi: 72, startBeat: 8, durationBeats: 1.5, velocity: 0.88 },
+        { id: 'gp9', sectionId: 'sec-piano-chorus', midi: 74, startBeat: 9.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'gp10', sectionId: 'sec-piano-chorus', midi: 76, startBeat: 10, durationBeats: 2, velocity: 0.9 },
+        { id: 'gp11', sectionId: 'sec-piano-chorus', midi: 72, startBeat: 12, durationBeats: 3.5, velocity: 0.86 },
+      ],
+    },
     {
       id: 'draft-mua-ban-cong',
       title: 'Mưa Ban Công (Lo-fi Demo)',
@@ -1125,10 +1841,13 @@ export function createStarterDrafts(): SketchpadDraft[] {
       mood: 'lofi-chill',
       bpm: 84,
       backingInstrument: 'rhodes',
+      backingPattern: 'rich-block',
+      sustainPedal: true,
+      metronomeEnabled: false,
       drumPattern: 'lofi',
       melodyInstrument: 'piano',
       scaleSnap: true,
-      updatedAt: now,
+      updatedAt: now - 30_000,
       sections: [
         {
           id: 'sec-intro-1',
@@ -1182,6 +1901,9 @@ export function createStarterDrafts(): SketchpadDraft[] {
       mood: 'neo-soul',
       bpm: 88,
       backingInstrument: 'rhodes',
+      backingPattern: 'pop-comp',
+      sustainPedal: true,
+      metronomeEnabled: false,
       drumPattern: 'boombap',
       melodyInstrument: 'synth',
       scaleSnap: true,
@@ -1229,8 +1951,11 @@ export function createBlankDraft(index = 1): SketchpadDraft {
     keyRoot: 'C',
     scaleMode: 'major',
     mood: 'pop-ballad',
-    bpm: 78,
+    bpm: 76,
     backingInstrument: 'piano-ballad',
+    backingPattern: 'ballad-arpeggio',
+    sustainPedal: true,
+    metronomeEnabled: false,
     drumPattern: 'none',
     melodyInstrument: 'piano',
     scaleSnap: true,

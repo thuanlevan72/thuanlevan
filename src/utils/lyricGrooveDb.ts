@@ -43,13 +43,48 @@ function writeFallbackDrafts(drafts: SketchpadDraft[]): void {
   }
 }
 
+const PIANO_SEED_KEY = 'lyric-groove-grand-piano-seed-v1';
+
+function normalizeDraftDefaults(draft: SketchpadDraft): SketchpadDraft {
+  return {
+    ...draft,
+    backingPattern:
+      draft.backingPattern ??
+      (draft.backingInstrument === 'piano-ballad' ? 'ballad-arpeggio' : 'rich-block'),
+    sustainPedal: draft.sustainPedal ?? true,
+    metronomeEnabled: draft.metronomeEnabled ?? false,
+  };
+}
+
+function ensureGrandPianoSeedOnce(existing: SketchpadDraft[]): SketchpadDraft[] {
+  const normalized = existing.map(normalizeDraftDefaults);
+  try {
+    const seeded = localStorage.getItem(PIANO_SEED_KEY);
+    if (!seeded && !normalized.some((d) => d.id === 'draft-dem-pho-mua-piano')) {
+      localStorage.setItem(PIANO_SEED_KEY, '1');
+      const [pianoStarter] = createStarterDrafts();
+      return [pianoStarter, ...normalized];
+    }
+    if (!seeded) {
+      localStorage.setItem(PIANO_SEED_KEY, '1');
+    }
+  } catch {
+    // Ignore storage access errors
+  }
+  return normalized;
+}
+
 export async function loadAllSketchpadDrafts(): Promise<SketchpadDraft[]> {
   const db = getDb();
   if (db) {
     try {
       const existing = await db.drafts.orderBy('updatedAt').reverse().toArray();
       if (existing.length > 0) {
-        return existing;
+        const merged = ensureGrandPianoSeedOnce(existing);
+        if (merged.length > existing.length) {
+          await db.drafts.put(merged[0]);
+        }
+        return merged;
       }
       const starters = createStarterDrafts();
       await db.drafts.bulkPut(starters);
@@ -62,7 +97,9 @@ export async function loadAllSketchpadDrafts(): Promise<SketchpadDraft[]> {
 
   const cached = readFallbackDrafts();
   if (cached) {
-    return cached.sort((a, b) => b.updatedAt - a.updatedAt);
+    return ensureGrandPianoSeedOnce(
+      cached.sort((a, b) => b.updatedAt - a.updatedAt)
+    );
   }
   const starters = createStarterDrafts();
   writeFallbackDrafts(starters);

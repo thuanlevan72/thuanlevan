@@ -1,28 +1,32 @@
 import { PitchDetector } from 'pitchy';
 import * as Tone from 'tone';
+import { Note } from 'tonal';
+import { GrandPianoEngine } from './grandPianoEngine.ts';
 import {
   type BackingInstrumentId,
+  type BackingPatternId,
   buildChordTimeline,
   type DrumPatternId,
   encodePcmToWav,
   type MelodyInstrumentId,
   type MelodyNote,
   midiToNoteName,
+  type PianistVoicing,
   type PitchFrame,
-  resolveChordVoicingNotes,
+  resolvePianistVoicing,
   type SketchpadDraft,
   type SongSection,
 } from './lyricGrooveEngine.ts';
 
 interface SynthRig {
+  grandPiano: GrandPianoEngine;
   rhodes: Tone.PolySynth;
-  piano: Tone.PolySynth;
   guitar: Tone.PolySynth;
   bass: Tone.MonoSynth;
   kick: Tone.MembraneSynth;
   snare: Tone.NoiseSynth;
   hat: Tone.NoiseSynth;
-  melodyPiano: Tone.PolySynth;
+  metronome: Tone.MembraneSynth;
   melodySynth: Tone.PolySynth;
   melodyGuitar: Tone.PolySynth;
   masterGain: Tone.Gain;
@@ -30,42 +34,40 @@ interface SynthRig {
 }
 
 function createSynthRig(destination: Tone.InputNode): SynthRig {
-  const masterGain = new Tone.Gain(0.85).connect(destination);
-  const reverb = new Tone.Reverb({ decay: 1.7, wet: 0.2 }).connect(masterGain);
+  const masterGain = new Tone.Gain(0.88).connect(destination);
+  const reverb = new Tone.Reverb({ decay: 1.8, wet: 0.22 }).connect(masterGain);
 
+  // Concert Grand Piano physical model engine (connected directly to masterGain.input for zero extra synth latency)
+  const grandPiano = new GrandPianoEngine(masterGain.context, masterGain.input);
+
+  const rhodesFilter = new Tone.Filter(3400, 'lowpass').connect(reverb);
   const rhodes = new Tone.PolySynth(Tone.FMSynth, {
     harmonicity: 2,
-    modulationIndex: 1.6,
+    modulationIndex: 1.45,
     oscillator: { type: 'sine' },
     modulation: { type: 'triangle' },
-    envelope: { attack: 0.015, decay: 0.45, sustain: 0.35, release: 0.9 },
-    modulationEnvelope: { attack: 0.01, decay: 0.25, sustain: 0.08, release: 0.4 },
-    volume: -8,
-  }).connect(reverb);
-
-  const piano = new Tone.PolySynth(Tone.Synth, {
-    oscillator: { type: 'triangle8' },
-    envelope: { attack: 0.012, decay: 0.55, sustain: 0.32, release: 1.1 },
+    envelope: { attack: 0.012, decay: 0.55, sustain: 0.34, release: 0.95 },
+    modulationEnvelope: { attack: 0.008, decay: 0.24, sustain: 0.08, release: 0.38 },
     volume: -7,
-  }).connect(reverb);
+  }).connect(rhodesFilter);
 
-  const guitarFilter = new Tone.Filter(2400, 'lowpass').connect(reverb);
+  const guitarFilter = new Tone.Filter(2600, 'lowpass').connect(reverb);
   const guitar = new Tone.PolySynth(Tone.Synth, {
     oscillator: { type: 'triangle4' },
-    envelope: { attack: 0.006, decay: 0.48, sustain: 0.14, release: 0.7 },
-    volume: -7,
+    envelope: { attack: 0.005, decay: 0.52, sustain: 0.14, release: 0.72 },
+    volume: -6,
   }).connect(guitarFilter);
 
   const bass = new Tone.MonoSynth({
     oscillator: { type: 'triangle' },
-    filter: { Q: 1.5, type: 'lowpass', rolloff: -12 },
+    filter: { Q: 1.4, type: 'lowpass', rolloff: -12 },
     envelope: { attack: 0.02, decay: 0.3, sustain: 0.45, release: 0.35 },
     filterEnvelope: {
       attack: 0.01,
       decay: 0.2,
       sustain: 0.3,
       release: 0.3,
-      baseFrequency: 90,
+      baseFrequency: 95,
       octaves: 2,
     },
     volume: -9,
@@ -93,40 +95,43 @@ function createSynthRig(destination: Tone.InputNode): SynthRig {
     volume: -20,
   }).connect(hatFilter);
 
-  const melodyPiano = new Tone.PolySynth(Tone.Synth, {
-    oscillator: { type: 'triangle8' },
-    envelope: { attack: 0.01, decay: 0.35, sustain: 0.45, release: 0.55 },
-    volume: -4,
-  }).connect(reverb);
+  const metronome = new Tone.MembraneSynth({
+    pitchDecay: 0.012,
+    octaves: 2.0,
+    oscillator: { type: 'sine' },
+    envelope: { attack: 0.001, decay: 0.055, sustain: 0, release: 0.025 },
+    volume: -12,
+  }).connect(masterGain);
 
-  const synthFilter = new Tone.Filter(2100, 'lowpass').connect(reverb);
+  const synthFilter = new Tone.Filter(2300, 'lowpass').connect(reverb);
   const melodySynth = new Tone.PolySynth(Tone.Synth, {
     oscillator: { type: 'sawtooth4' },
-    envelope: { attack: 0.03, decay: 0.25, sustain: 0.55, release: 0.45 },
-    volume: -9,
+    envelope: { attack: 0.025, decay: 0.25, sustain: 0.52, release: 0.45 },
+    volume: -8,
   }).connect(synthFilter);
 
   const melodyGuitar = new Tone.PolySynth(Tone.Synth, {
     oscillator: { type: 'triangle4' },
-    envelope: { attack: 0.005, decay: 0.42, sustain: 0.2, release: 0.45 },
+    envelope: { attack: 0.004, decay: 0.46, sustain: 0.18, release: 0.48 },
     volume: -5,
   }).connect(guitarFilter);
 
   return {
+    grandPiano,
     rhodes,
-    piano,
     guitar,
     bass,
     kick,
     snare,
     hat,
-    melodyPiano,
+    metronome,
     melodySynth,
     melodyGuitar,
     masterGain,
     dispose: () => {
+      grandPiano.dispose();
       rhodes.dispose();
-      piano.dispose();
+      rhodesFilter.dispose();
       guitar.dispose();
       guitarFilter.dispose();
       bass.dispose();
@@ -135,7 +140,7 @@ function createSynthRig(destination: Tone.InputNode): SynthRig {
       snareFilter.dispose();
       hat.dispose();
       hatFilter.dispose();
-      melodyPiano.dispose();
+      metronome.dispose();
       melodySynth.dispose();
       synthFilter.dispose();
       melodyGuitar.dispose();
@@ -148,6 +153,7 @@ function createSynthRig(destination: Tone.InputNode): SynthRig {
 let liveRig: SynthRig | null = null;
 let activeLoopParts: Tone.Part[] = [];
 let playheadRafId = 0;
+let progressionTimers: number[] = [];
 
 function ensureLiveRig(): SynthRig {
   if (!liveRig) {
@@ -156,69 +162,393 @@ function ensureLiveRig(): SynthRig {
   return liveRig;
 }
 
+function resolveMidisFromNoteNames(notes: string[]): number[] {
+  return notes
+    .map((n) => Note.midi(n))
+    .filter((m): m is number => typeof m === 'number');
+}
+
+function triggerGrandPianoBacking(
+  rig: SynthRig,
+  bassMidis: number[],
+  rightHandMidis: number[],
+  durationBeats: number,
+  secPerBeat: number,
+  time: number,
+  pattern: BackingPatternId,
+  sustainPedal: boolean
+) {
+  if (rightHandMidis.length === 0 && bassMidis.length === 0) return;
+  const totalDurSec = Math.max(0.28, durationBeats * secPerBeat);
+
+  if (pattern === 'ballad-arpeggio') {
+    // Left hand warm bass root on beat 0 + subtle fifth half-beat later
+    if (bassMidis[0] !== undefined) {
+      rig.grandPiano.triggerNote(
+        bassMidis[0],
+        Math.min(totalDurSec * 0.96, 2.8),
+        time,
+        0.78,
+        sustainPedal
+      );
+    }
+    if (bassMidis[1] !== undefined && durationBeats >= 1.25) {
+      rig.grandPiano.triggerNote(
+        bassMidis[1],
+        Math.min(totalDurSec * 0.78, 2.1),
+        time + secPerBeat * 0.5,
+        0.58,
+        sustainPedal
+      );
+    }
+
+    // Expressive rolled foundation on beat 0 (inner voices subtle, top note sings slightly brighter)
+    const lastIdx = rightHandMidis.length - 1;
+    rightHandMidis.forEach((midi, idx) => {
+      const isTop = idx === lastIdx;
+      const rollDelay = idx * 0.015;
+      rig.grandPiano.triggerNote(
+        midi,
+        Math.min(totalDurSec * 0.85, 2.0),
+        time + rollDelay,
+        isTop ? 0.72 : 0.56 + (idx % 2) * 0.04,
+        sustainPedal
+      );
+    });
+
+    // Broken pianist arpeggio ripples on eighth-note subdivisions inside longer chords
+    if (rightHandMidis.length >= 2 && durationBeats >= 1.75) {
+      const steps = Math.floor((durationBeats - 0.35) / 0.5);
+      for (let s = 2; s <= steps; s++) {
+        const arpBeat = s * 0.5;
+        const noteIdx = (s - 1) % rightHandMidis.length;
+        const targetMidi = rightHandMidis[noteIdx];
+        const vel = 0.44 + (noteIdx === lastIdx ? 0.1 : 0);
+        rig.grandPiano.triggerNote(
+          targetMidi,
+          Math.max(0.45, secPerBeat * 0.95),
+          time + arpBeat * secPerBeat,
+          vel,
+          sustainPedal
+        );
+      }
+    }
+    return;
+  }
+
+  if (pattern === 'pop-comp') {
+    const hitBeats = [0, 1.5, 3].filter((b) => b < durationBeats - 0.2);
+    hitBeats.forEach((beatOff, hitIdx) => {
+      const hitTime = time + beatOff * secPerBeat;
+      const isDownbeat = hitIdx === 0;
+      const durSec = isDownbeat
+        ? Math.min(totalDurSec * 0.72, secPerBeat * 1.4)
+        : Math.max(0.28, secPerBeat * 0.65);
+
+      if (isDownbeat || beatOff >= 2.5) {
+        bassMidis.forEach((bm, bi) => {
+          rig.grandPiano.triggerNote(
+            bm,
+            Math.max(0.4, secPerBeat * 1.35),
+            hitTime + bi * 0.01,
+            isDownbeat ? (bi === 0 ? 0.8 : 0.58) : 0.62,
+            sustainPedal
+          );
+        });
+      }
+
+      rightHandMidis.forEach((midi, idx) => {
+        const isTop = idx === rightHandMidis.length - 1;
+        rig.grandPiano.triggerNote(
+          midi,
+          durSec,
+          hitTime + idx * 0.008,
+          isDownbeat ? (isTop ? 0.78 : 0.64) : isTop ? 0.62 : 0.5,
+          sustainPedal
+        );
+      });
+    });
+    return;
+  }
+
+  // 'rich-block': Concert Grand full two-hand chord with authentic finger micro-roll + midpoint breathe
+  bassMidis.forEach((bm, bi) => {
+    rig.grandPiano.triggerNote(
+      bm,
+      Math.min(totalDurSec * 0.96, 2.9),
+      time + bi * 0.012,
+      bi === 0 ? 0.82 : 0.62,
+      sustainPedal
+    );
+  });
+
+  rightHandMidis.forEach((midi, idx) => {
+    const isTop = idx === rightHandMidis.length - 1;
+    rig.grandPiano.triggerNote(
+      midi,
+      Math.min(totalDurSec * 0.94, 2.6),
+      time + 0.008 + idx * 0.013,
+      isTop ? 0.76 : 0.58 + (idx % 2) * 0.03,
+      sustainPedal
+    );
+  });
+
+  if (durationBeats >= 3 && rightHandMidis.length >= 2) {
+    const midTime = time + (durationBeats * 0.5) * secPerBeat;
+    rightHandMidis.slice(1).forEach((midi, idx) => {
+      rig.grandPiano.triggerNote(
+        midi,
+        Math.min(totalDurSec * 0.45, 1.4),
+        midTime + idx * 0.012,
+        0.46,
+        sustainPedal
+      );
+    });
+  }
+}
+
 function triggerChordWithStyle(
   rig: SynthRig,
   instrument: BackingInstrumentId,
   notes: string[],
   bassNote: string,
-  durationSec: number,
-  time: number
+  durationBeats: number,
+  secPerBeat: number,
+  time: number,
+  options?: {
+    rightHandMidis?: number[];
+    bassMidis?: number[];
+    backingPattern?: BackingPatternId;
+    sustainPedal?: boolean;
+  }
 ) {
   if (notes.length === 0) return;
-  if (instrument === 'guitar-strum') {
-    notes.forEach((n, idx) => {
-      rig.guitar.triggerAttackRelease(n, Math.min(durationSec, 1.4), time + idx * 0.038, 0.78);
-    });
-    // Gentle fingerpicked top arpeggio on beat 2 if duration allows
-    if (durationSec > 0.9 && notes.length >= 3) {
-      rig.guitar.triggerAttackRelease(notes[notes.length - 1], 0.45, time + durationSec * 0.45, 0.52);
-      rig.guitar.triggerAttackRelease(notes[1], 0.4, time + durationSec * 0.72, 0.48);
-    }
-  } else if (instrument === 'piano-ballad') {
-    rig.piano.triggerAttackRelease(notes, Math.min(durationSec * 0.92, 2.2), time, 0.76);
-  } else {
-    rig.rhodes.triggerAttackRelease(notes, Math.min(durationSec * 0.9, 2.4), time, 0.72);
+  const durationSec = Math.max(0.25, durationBeats * secPerBeat);
+  const pattern = options?.backingPattern ?? 'ballad-arpeggio';
+  const sustainPedal = options?.sustainPedal ?? true;
+
+  if (instrument === 'piano-ballad') {
+    const rightMidis =
+      options?.rightHandMidis && options.rightHandMidis.length > 0
+        ? options.rightHandMidis
+        : resolveMidisFromNoteNames(notes);
+    const bassRootFallback = Note.midi(bassNote) ?? 48;
+    const bassMidis =
+      options?.bassMidis && options.bassMidis.length > 0
+        ? options.bassMidis
+        : [bassRootFallback];
+
+    triggerGrandPianoBacking(
+      rig,
+      bassMidis,
+      rightMidis,
+      durationBeats,
+      secPerBeat,
+      time,
+      pattern,
+      sustainPedal
+    );
+    return;
   }
 
-  rig.bass.triggerAttackRelease(bassNote, Math.min(durationSec * 0.72, 1.6), time, 0.74);
+  if (instrument === 'guitar-strum') {
+    const strumSpacing = pattern === 'ballad-arpeggio' ? 0.055 : 0.034;
+    notes.forEach((n, idx) => {
+      rig.guitar.triggerAttackRelease(
+        n,
+        Math.min(durationSec, 1.5),
+        time + idx * strumSpacing,
+        0.78
+      );
+    });
+    if (durationSec > 0.85 && notes.length >= 3) {
+      if (pattern === 'pop-comp' && durationBeats >= 2) {
+        notes.forEach((n, idx) => {
+          rig.guitar.triggerAttackRelease(
+            n,
+            0.4,
+            time + secPerBeat * 1.5 + idx * 0.02,
+            0.55
+          );
+        });
+      } else {
+        rig.guitar.triggerAttackRelease(
+          notes[notes.length - 1],
+          0.45,
+          time + durationSec * 0.46,
+          0.54
+        );
+        rig.guitar.triggerAttackRelease(
+          notes[1],
+          0.4,
+          time + durationSec * 0.72,
+          0.48
+        );
+      }
+    }
+  } else {
+    // Rhodes EP warm backing
+    if (pattern === 'pop-comp' && durationBeats >= 2.2) {
+      rig.rhodes.triggerAttackRelease(
+        notes,
+        Math.min(secPerBeat * 1.3, 1.2),
+        time,
+        0.74
+      );
+      rig.rhodes.triggerAttackRelease(
+        notes,
+        Math.min(secPerBeat * 1.1, 1.0),
+        time + secPerBeat * 1.5,
+        0.58
+      );
+    } else {
+      rig.rhodes.triggerAttackRelease(
+        notes,
+        Math.min(durationSec * 0.92, 2.4),
+        time,
+        0.72
+      );
+    }
+  }
+
+  rig.bass.triggerAttackRelease(
+    bassNote,
+    Math.min(durationSec * 0.72, 1.6),
+    time,
+    0.72
+  );
 }
 
 function triggerMelodyNote(
   rig: SynthRig,
   instrument: MelodyInstrumentId,
-  noteName: string,
+  midi: number,
   durationSec: number,
   velocity: number,
-  time: number
+  time: number,
+  sustainPedal = true
 ) {
-  const synth =
-    instrument === 'synth'
-      ? rig.melodySynth
-      : instrument === 'guitar'
-      ? rig.melodyGuitar
-      : rig.melodyPiano;
+  if (instrument === 'piano') {
+    rig.grandPiano.triggerNote(
+      midi,
+      Math.max(0.14, durationSec),
+      time,
+      velocity,
+      sustainPedal
+    );
+    return;
+  }
+  const noteName = midiToNoteName(midi);
+  const synth = instrument === 'synth' ? rig.melodySynth : rig.melodyGuitar;
   synth.triggerAttackRelease(noteName, Math.max(0.12, durationSec), time, velocity);
 }
 
 export async function auditionChord(
   symbol: string,
   instrument: BackingInstrumentId,
-  voicingShift = 0
-): Promise<void> {
+  voicingShift = 0,
+  sustainPedal = true,
+  backingPattern: BackingPatternId = 'rich-block'
+): Promise<PianistVoicing | null> {
   await Tone.start();
-  const voicing = resolveChordVoicingNotes(symbol, voicingShift);
-  if (!voicing.valid) return;
+  const voicing = resolvePianistVoicing(symbol, voicingShift);
+  if (!voicing.valid) return null;
   const rig = ensureLiveRig();
-  triggerChordWithStyle(rig, instrument, voicing.notes, voicing.bassNote, 1.2, Tone.now() + 0.01);
+  triggerChordWithStyle(
+    rig,
+    instrument,
+    voicing.notes,
+    voicing.bassNote,
+    2.4,
+    0.72,
+    Tone.now() + 0.015,
+    {
+      rightHandMidis: voicing.rightHandMidis,
+      bassMidis: voicing.bassMidis,
+      backingPattern,
+      sustainPedal,
+    }
+  );
+  return voicing;
+}
+
+export function stopProgressionAudition(): void {
+  progressionTimers.forEach((id) => window.clearTimeout(id));
+  progressionTimers = [];
+}
+
+export async function auditionProgression(
+  symbols: string[],
+  instrument: BackingInstrumentId,
+  backingPattern: BackingPatternId,
+  bpm: number,
+  sustainPedal = true,
+  onStepChord?: (step: { symbol: string; voicing: PianistVoicing; index: number } | null) => void
+): Promise<void> {
+  stopProgressionAudition();
+  if (symbols.length === 0) return;
+
+  await Tone.start();
+  const rig = ensureLiveRig();
+  const secPerBeat = 60 / Math.max(55, Math.min(165, bpm));
+  const chordBeats = 2;
+  const stepSec = Math.max(0.75, Math.min(1.85, chordBeats * secPerBeat));
+  const baseTime = Tone.now() + 0.03;
+
+  let prevRh: number[] | undefined;
+  symbols.forEach((sym, idx) => {
+    const voicing = resolvePianistVoicing(sym, 0, prevRh);
+    if (!voicing.valid) return;
+    prevRh = voicing.rightHandMidis;
+    const when = baseTime + idx * stepSec;
+    triggerChordWithStyle(
+      rig,
+      instrument,
+      voicing.notes,
+      voicing.bassNote,
+      chordBeats,
+      stepSec / chordBeats,
+      when,
+      {
+        rightHandMidis: voicing.rightHandMidis,
+        bassMidis: voicing.bassMidis,
+        backingPattern,
+        sustainPedal,
+      }
+    );
+
+    if (onStepChord) {
+      const tid = window.setTimeout(() => {
+        onStepChord({ symbol: sym, voicing, index: idx });
+      }, Math.round(idx * stepSec * 1000));
+      progressionTimers.push(tid);
+    }
+  });
+
+  if (onStepChord) {
+    const endTid = window.setTimeout(() => {
+      onStepChord(null);
+    }, Math.round(symbols.length * stepSec * 1000 + 350));
+    progressionTimers.push(endTid);
+  }
 }
 
 export async function auditionMidiNote(
   midi: number,
-  instrument: MelodyInstrumentId
+  instrument: MelodyInstrumentId,
+  sustainPedal = true
 ): Promise<void> {
   await Tone.start();
   const rig = ensureLiveRig();
-  triggerMelodyNote(rig, instrument, midiToNoteName(midi), 0.35, 0.85, Tone.now() + 0.01);
+  triggerMelodyNote(
+    rig,
+    instrument,
+    midi,
+    instrument === 'piano' ? 0.55 : 0.35,
+    0.84,
+    Tone.now() + 0.01,
+    sustainPedal
+  );
 }
 
 export interface LoopPlaybackOptions {
@@ -226,23 +556,41 @@ export interface LoopPlaybackOptions {
   melodyNotes: MelodyNote[];
   bpm: number;
   backingInstrument: BackingInstrumentId;
+  backingPattern?: BackingPatternId;
+  sustainPedal?: boolean;
+  metronomeEnabled?: boolean;
   drumPattern: DrumPatternId;
   melodyInstrument: MelodyInstrumentId;
-  onProgressBeat?: (beatInLoop: number, totalLoopBeats: number, currentSectionId: string) => void;
+  onProgressBeat?: (
+    beatInLoop: number,
+    totalLoopBeats: number,
+    currentSectionId: string
+  ) => void;
 }
 
 export function stopGrooveLoop(): void {
+  stopProgressionAudition();
   if (playheadRafId) {
     cancelAnimationFrame(playheadRafId);
     playheadRafId = 0;
   }
-  Tone.getTransport().stop();
-  Tone.getTransport().cancel(0);
-  activeLoopParts.forEach((p) => {
-    p.stop();
-    p.dispose();
-  });
+  const partsToDispose = activeLoopParts;
   activeLoopParts = [];
+  partsToDispose.forEach((p) => {
+    try {
+      p.clear();
+      p.dispose();
+    } catch {
+      // Ignore cleanup errors on already-disposed parts
+    }
+  });
+  try {
+    const transport = Tone.getTransport();
+    transport.stop();
+    transport.cancel(0);
+  } catch {
+    // Ignore transport reset edge cases
+  }
 }
 
 function schedulePatternToTransport(
@@ -250,19 +598,28 @@ function schedulePatternToTransport(
   options: LoopPlaybackOptions,
   targetTransport: ReturnType<typeof Tone.getTransport>,
   isLoop: boolean
-): { totalBeats: number; sectionBeatSpans: Array<{ id: string; start: number; end: number }> } {
+): {
+  totalBeats: number;
+  sectionBeatSpans: Array<{ id: string; start: number; end: number }>;
+} {
   const { events, totalBeats } = buildChordTimeline(options.sections);
   const secPerBeat = 60 / Math.max(45, Math.min(180, options.bpm));
+  const backingPattern = options.backingPattern ?? 'ballad-arpeggio';
+  const sustainPedal = options.sustainPedal ?? true;
 
   const sectionBeatSpans: Array<{ id: string; start: number; end: number }> = [];
   let beatCursor = 0;
   options.sections.forEach((sec) => {
     const dur = sec.bars * 4;
-    sectionBeatSpans.push({ id: sec.id, start: beatCursor, end: beatCursor + dur });
+    sectionBeatSpans.push({
+      id: sec.id,
+      start: beatCursor,
+      end: beatCursor + dur,
+    });
     beatCursor += dur;
   });
 
-  // Schedule chords
+  // Schedule chords with smooth two-hand voicing & pattern style
   const chordSchedule: Array<[number, (typeof events)[number]]> = events.map((ev) => [
     ev.startBeat * secPerBeat,
     ev,
@@ -273,8 +630,15 @@ function schedulePatternToTransport(
       options.backingInstrument,
       ev.notes,
       ev.bassNote,
-      ev.durationBeats * secPerBeat,
-      time
+      ev.durationBeats,
+      secPerBeat,
+      time,
+      {
+        rightHandMidis: ev.rightHandMidis,
+        bassMidis: ev.bassMidis,
+        backingPattern,
+        sustainPedal,
+      }
     );
   }, chordSchedule);
 
@@ -283,15 +647,17 @@ function schedulePatternToTransport(
   chordPart.start(0);
   activeLoopParts.push(chordPart);
 
-  // Schedule melody notes for sections in playback scope
-  const melodySchedule: Array<[number, { noteName: string; durSec: number; vel: number }]> = [];
+  // Schedule melody notes
+  const melodySchedule: Array<
+    [number, { midi: number; durSec: number; vel: number }]
+  > = [];
   sectionBeatSpans.forEach((span) => {
     const notesInSec = options.melodyNotes.filter((n) => n.sectionId === span.id);
     notesInSec.forEach((n) => {
       melodySchedule.push([
         (span.start + n.startBeat) * secPerBeat,
         {
-          noteName: midiToNoteName(n.midi),
+          midi: n.midi,
           durSec: n.durationBeats * secPerBeat,
           vel: n.velocity,
         },
@@ -301,7 +667,15 @@ function schedulePatternToTransport(
 
   if (melodySchedule.length > 0) {
     const melodyPart = new Tone.Part((time, ev) => {
-      triggerMelodyNote(rig, options.melodyInstrument, ev.noteName, ev.durSec, ev.vel, time);
+      triggerMelodyNote(
+        rig,
+        options.melodyInstrument,
+        ev.midi,
+        ev.durSec,
+        ev.vel,
+        time,
+        sustainPedal
+      );
     }, melodySchedule);
     melodyPart.loop = isLoop;
     melodyPart.loopEnd = totalBeats * secPerBeat;
@@ -309,15 +683,38 @@ function schedulePatternToTransport(
     activeLoopParts.push(melodyPart);
   }
 
+  // Schedule Optional Metronome Quarter-Note Clicks
+  if (options.metronomeEnabled) {
+    const metroEvents: Array<[number, { isBarAccent: boolean }]> = [];
+    for (let beat = 0; beat < totalBeats; beat++) {
+      metroEvents.push([beat * secPerBeat, { isBarAccent: beat % 4 === 0 }]);
+    }
+    const metroPart = new Tone.Part((time, ev) => {
+      rig.metronome.triggerAttackRelease(
+        ev.isBarAccent ? 'G5' : 'C5',
+        '32n',
+        time,
+        ev.isBarAccent ? 0.72 : 0.42
+      );
+    }, metroEvents);
+    metroPart.loop = isLoop;
+    metroPart.loopEnd = totalBeats * secPerBeat;
+    metroPart.start(0);
+    activeLoopParts.push(metroPart);
+  }
+
   // Schedule Drums across 16th steps (4 steps per beat)
   if (options.drumPattern !== 'none') {
     const totalSteps = Math.round(totalBeats * 4);
     const stepSec = secPerBeat / 4;
-    const drumEvents: Array<[number, { kick?: boolean; snare?: boolean; hat?: boolean; vel: number }]> = [];
+    const drumEvents: Array<
+      [number, { kick?: boolean; snare?: boolean; hat?: boolean; vel: number }]
+    > = [];
 
     for (let step = 0; step < totalSteps; step++) {
       const stepInBar = step % 16;
-      const swingOffset = options.drumPattern === 'lofi' && step % 2 === 1 ? stepSec * 0.14 : 0;
+      const swingOffset =
+        options.drumPattern === 'lofi' && step % 2 === 1 ? stepSec * 0.14 : 0;
       const isKick =
         options.drumPattern === 'lofi'
           ? stepInBar === 0 || stepInBar === 7 || stepInBar === 10
@@ -355,7 +752,12 @@ export async function startGrooveLoop(options: LoopPlaybackOptions): Promise<voi
   const transport = Tone.getTransport();
   transport.position = 0;
 
-  const { totalBeats, sectionBeatSpans } = schedulePatternToTransport(rig, options, transport, true);
+  const { totalBeats, sectionBeatSpans } = schedulePatternToTransport(
+    rig,
+    options,
+    transport,
+    true
+  );
   const secPerBeat = 60 / Math.max(45, Math.min(180, options.bpm));
   const loopDurationSec = totalBeats * secPerBeat;
 
@@ -377,12 +779,14 @@ export async function startGrooveLoop(options: LoopPlaybackOptions): Promise<voi
 }
 
 /**
- * Offline renders the complete song sketch into a downloadable 16-bit PCM .WAV file!
+ * Offline renders the complete song sketch into a downloadable 16-bit PCM .WAV file using Concert Grand Piano!
  */
-export async function renderDraftToWavBytes(draft: SketchpadDraft): Promise<Uint8Array> {
+export async function renderDraftToWavBytes(
+  draft: SketchpadDraft
+): Promise<Uint8Array> {
   const { totalBeats } = buildChordTimeline(draft.sections);
   const secPerBeat = 60 / Math.max(45, Math.min(180, draft.bpm));
-  const durationSec = Math.min(120, Math.max(2, totalBeats * secPerBeat + 1.2));
+  const durationSec = Math.min(120, Math.max(2, totalBeats * secPerBeat + 1.6));
 
   const buffer = await Tone.Offline(({ transport }) => {
     const rig = createSynthRig(Tone.getDestination());
@@ -395,6 +799,9 @@ export async function renderDraftToWavBytes(draft: SketchpadDraft): Promise<Uint
         melodyNotes: draft.melodyNotes,
         bpm: draft.bpm,
         backingInstrument: draft.backingInstrument,
+        backingPattern: draft.backingPattern ?? 'ballad-arpeggio',
+        sustainPedal: draft.sustainPedal ?? true,
+        metronomeEnabled: false,
         drumPattern: draft.drumPattern,
         melodyInstrument: draft.melodyInstrument,
       },
