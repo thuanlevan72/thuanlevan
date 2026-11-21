@@ -9,6 +9,7 @@ import {
   Gauge,
   Gift,
   Grid3X3,
+  LampDesk,
   Layers,
   LayoutGrid,
   Maximize2,
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 import { AnomalyGameSection } from './AnomalyGameSection.tsx';
+import { AntiqueShopGameSection } from './AntiqueShopGameSection.tsx';
 import { AsmrOrganizerGameSection } from './AsmrOrganizerGameSection.tsx';
 import { BlindBoxMergeGameSection } from './BlindBoxMergeGameSection.tsx';
 import { FeAcademyGameSection } from './FeAcademyGameSection.tsx';
@@ -36,6 +38,7 @@ type GameId =
   | 'anomaly'
   | 'asmr_organizer'
   | 'blind_box'
+  | 'antique_shop'
   | 'prism_td'
   | 'linux_hacker'
   | 'traffic_router'
@@ -120,6 +123,16 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     badge: '12 Súng · 4 Chế Độ',
     playable: true,
     gameKey: 'gear_arena',
+  },
+  {
+    id: 'antique-shop',
+    category: 'casual',
+    title: 'Tiệm Đồ Cũ Giờ Đóng Cửa',
+    shortTitle: 'Tiệm Đồ Cũ',
+    subtitle: 'Tìm đồ giải mã tâm sự · 3 Hộp Kỷ Niệm Đêm · Tương tác 2 lớp, Zoom/Pan & Góc Bàn Trà',
+    badge: '3 Hộp · 34 Kỷ Vật',
+    playable: true,
+    gameKey: 'antique_shop',
   },
   {
     id: 'anomaly',
@@ -217,6 +230,16 @@ interface GameHubSectionProps {
 }
 
 function renderGameIcon(gameKey: GameId | undefined, isSelected: boolean) {
+  if (gameKey === 'antique_shop') {
+    return (
+      <LampDesk
+        className={`w-3.5 h-3.5 shrink-0 ${
+          isSelected ? 'text-amber-300' : 'text-amber-600 dark:text-amber-400'
+        }`}
+        aria-hidden="true"
+      />
+    );
+  }
   if (gameKey === 'anomaly') {
     return (
       <FileSearch
@@ -314,6 +337,14 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
   const [activeGame, setActiveGame] = useState<GameId>(() => {
     if (typeof window !== 'undefined') {
       const playParam = new URLSearchParams(window.location.search).get('play');
+      if (
+        playParam === 'antique' ||
+        playParam === 'tiemdocu' ||
+        playParam === 'ngankeo' ||
+        playParam === 'hidden'
+      ) {
+        return 'antique_shop';
+      }
       if (playParam === 'anomaly') return 'anomaly';
       if (playParam === 'asmr' || playParam === 'ocd' || playParam === 'organizer') {
         return 'asmr_organizer';
@@ -465,7 +496,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
             </div>
             <div className="hidden sm:block mobile-ls:hidden min-w-0 max-w-[175px]">
               <p className="text-[10px] font-mono uppercase tracking-[0.1em] text-[#0284C7] dark:text-[#38BDF8] leading-tight">
-                Game Hub · 10 Trò
+                Game Hub · 11 Trò
               </p>
               <p className="text-xs font-semibold text-[#0A192F] dark:text-[#E2E8F0] leading-tight truncate">
                 {activeGameMeta?.shortTitle ?? 'Kho Game'}
@@ -698,6 +729,9 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
 
         <div className={isFullscreen ? 'game-fs-inner w-full flex-1 flex flex-col min-h-0' : undefined}>
           {activeGame === 'xiangqi' && <XiangqiGameSection theme={theme} onToggleTheme={onToggleTheme} />}
+          {activeGame === 'antique_shop' && (
+            <AntiqueShopGameSection theme={theme} onToggleTheme={onToggleTheme} />
+          )}
           {activeGame === 'anomaly' && <AnomalyGameSection theme={theme} onToggleTheme={onToggleTheme} />}
           {activeGame === 'asmr_organizer' && (
             <AsmrOrganizerGameSection theme={theme} onToggleTheme={onToggleTheme} />
