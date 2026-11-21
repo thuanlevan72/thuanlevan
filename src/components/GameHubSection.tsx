@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Cat,
   ChevronDown,
   ChevronUp,
   Code2,
@@ -24,6 +25,7 @@ import { AnomalyGameSection } from './AnomalyGameSection.tsx';
 import { AntiqueShopGameSection } from './AntiqueShopGameSection.tsx';
 import { AsmrOrganizerGameSection } from './AsmrOrganizerGameSection.tsx';
 import { BlindBoxMergeGameSection } from './BlindBoxMergeGameSection.tsx';
+import { CatFinderGameSection } from './CatFinderGameSection.tsx';
 import { FeAcademyGameSection } from './FeAcademyGameSection.tsx';
 import { FidgetCockpitGameSection } from './FidgetCockpitGameSection.tsx';
 import { GearArenaGameSection } from './GearArenaGameSection.tsx';
@@ -39,6 +41,7 @@ type GameId =
   | 'asmr_organizer'
   | 'blind_box'
   | 'antique_shop'
+  | 'cat_finder'
   | 'prism_td'
   | 'linux_hacker'
   | 'traffic_router'
@@ -133,6 +136,16 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     badge: '3 Hộp · 34 Kỷ Vật',
     playable: true,
     gameKey: 'antique_shop',
+  },
+  {
+    id: 'cat-finder',
+    category: 'casual',
+    title: 'Tìm Mèo & Đồ Xinh',
+    shortTitle: 'Tìm Mèo',
+    subtitle: 'Tiệm Tạp Hóa Tí Hon · Tranh pastel 0% chữ · Tap-to-reveal · Combo pháo hoa & Mèo Vàng ẩn',
+    badge: '5 Màn · Mèo Vàng',
+    playable: true,
+    gameKey: 'cat_finder',
   },
   {
     id: 'anomaly',
@@ -235,6 +248,16 @@ function renderGameIcon(gameKey: GameId | undefined, isSelected: boolean) {
       <LampDesk
         className={`w-3.5 h-3.5 shrink-0 ${
           isSelected ? 'text-amber-300' : 'text-amber-600 dark:text-amber-400'
+        }`}
+        aria-hidden="true"
+      />
+    );
+  }
+  if (gameKey === 'cat_finder') {
+    return (
+      <Cat
+        className={`w-3.5 h-3.5 shrink-0 ${
+          isSelected ? 'text-rose-200' : 'text-rose-500 dark:text-rose-400'
         }`}
         aria-hidden="true"
       />
@@ -344,6 +367,15 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
         playParam === 'hidden'
       ) {
         return 'antique_shop';
+      }
+      if (
+        playParam === 'cat' ||
+        playParam === 'timmeo' ||
+        playParam === 'meo' ||
+        playParam === 'taphoa' ||
+        playParam === 'doxinh'
+      ) {
+        return 'cat_finder';
       }
       if (playParam === 'anomaly') return 'anomaly';
       if (playParam === 'asmr' || playParam === 'ocd' || playParam === 'organizer') {
@@ -496,7 +528,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
             </div>
             <div className="hidden sm:block mobile-ls:hidden min-w-0 max-w-[175px]">
               <p className="text-[10px] font-mono uppercase tracking-[0.1em] text-[#0284C7] dark:text-[#38BDF8] leading-tight">
-                Game Hub · 11 Trò
+                Game Hub · 12 Trò
               </p>
               <p className="text-xs font-semibold text-[#0A192F] dark:text-[#E2E8F0] leading-tight truncate">
                 {activeGameMeta?.shortTitle ?? 'Kho Game'}
@@ -731,6 +763,9 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
           {activeGame === 'xiangqi' && <XiangqiGameSection theme={theme} onToggleTheme={onToggleTheme} />}
           {activeGame === 'antique_shop' && (
             <AntiqueShopGameSection theme={theme} onToggleTheme={onToggleTheme} />
+          )}
+          {activeGame === 'cat_finder' && (
+            <CatFinderGameSection theme={theme} onToggleTheme={onToggleTheme} />
           )}
           {activeGame === 'anomaly' && <AnomalyGameSection theme={theme} onToggleTheme={onToggleTheme} />}
           {activeGame === 'asmr_organizer' && (
