@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import {
+  ChevronLeft,
+  ChevronRight,
   Crosshair,
   FastForward,
   Flame,
+  Maximize2,
+  Minimize2,
   Pause,
   Play,
   RotateCcw,
   Shield,
+  Smartphone,
   Sparkles,
   Trash2,
   Trophy,
@@ -65,6 +70,11 @@ import {
   WaveSpawnItem,
 } from '../utils/prismTdEngine.ts';
 import {
+  computeCombatVisualDamping,
+  filterArsenalGuns,
+  GunArsenalFilter,
+} from '../utils/prismTdMobileHelpers.ts';
+import {
   drawEnemySprite,
   drawGroundCraters,
   drawGunTurretSprite,
@@ -83,6 +93,7 @@ import {
   unlockPrismAudio,
 } from '../utils/prismTdSound.ts';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
+import { PwaInstallButton } from './PwaInstallControls.tsx';
 
 type GameState = 'title' | 'playing' | 'paused' | 'gameover';
 
@@ -90,6 +101,8 @@ interface PrismTdGameSectionProps {
   theme: ThemeMode;
   onToggleTheme: () => void;
   isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
+  onExitFullscreen?: () => void;
 }
 
 interface PooledParticle {
@@ -204,7 +217,12 @@ function nextPriority(cur: TargetPriority): TargetPriority {
   return 'first';
 }
 
-export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameSectionProps) {
+export function PrismTdGameSection({
+  theme,
+  isFullscreen = false,
+  onToggleFullscreen,
+  onExitFullscreen,
+}: PrismTdGameSectionProps) {
   const [gameState, setGameState] = useState<GameState>(() => {
     if (typeof window !== 'undefined') {
       const autostart = new URLSearchParams(window.location.search).get('autostart');
@@ -229,28 +247,62 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
   const [selectedGunId, setSelectedGunId] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [statusNotice, setStatusNotice] = useState<string>('');
+  const [arsenalFilter, setArsenalFilter] = useState<GunArsenalFilter>('all');
+  const [sidebarTab, setSidebarTab] = useState<'arsenal' | 'inspector'>('arsenal');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [portraitHintDismissed, setPortraitHintDismissed] = useState<boolean>(false);
   const [isCompactTheater, setIsCompactTheater] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(orientation: landscape) and (max-height: 540px)').matches;
   });
+  const [isPortraitMobile, setIsPortraitMobile] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(orientation: portrait) and (max-width: 640px)').matches;
+  });
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(orientation: landscape) and (max-height: 540px)');
-    const sync = () => setIsCompactTheater(mq.matches);
+    const mqLs = window.matchMedia('(orientation: landscape) and (max-height: 540px)');
+    const mqPt = window.matchMedia('(orientation: portrait) and (max-width: 640px)');
+    const sync = () => {
+      setIsCompactTheater(mqLs.matches);
+      setIsPortraitMobile(mqPt.matches);
+    };
     sync();
-    mq.addEventListener('change', sync);
-    return () => mq.removeEventListener('change', sync);
+    mqLs.addEventListener('change', sync);
+    mqPt.addEventListener('change', sync);
+    return () => {
+      mqLs.removeEventListener('change', sync);
+      mqPt.removeEventListener('change', sync);
+    };
   }, []);
+
+  const isCompactViewportRef = useRef<boolean>(false);
+  useEffect(() => {
+    isCompactViewportRef.current = isCompactTheater || isPortraitMobile;
+  }, [isCompactTheater, isPortraitMobile]);
+
+  const filteredArsenalGuns = useMemo(
+    () => filterArsenalGuns(availableGuns, arsenalFilter),
+    [availableGuns, arsenalFilter]
+  );
 
   const useSidebarTheater = isFullscreen || isCompactTheater;
   const sidebarScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (selectedGunId && useSidebarTheater && sidebarScrollRef.current) {
-      sidebarScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    if (selectedGunId) {
+      setSidebarTab('inspector');
+      if (isCompactTheater) {
+        setSidebarCollapsed(false);
+      }
+      if (useSidebarTheater && sidebarScrollRef.current) {
+        sidebarScrollRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    } else {
+      setSidebarTab('arsenal');
     }
-  }, [selectedGunId, useSidebarTheater]);
+  }, [selectedGunId, useSidebarTheater, isCompactTheater]);
 
   const [hud, setHud] = useState<HudSnapshot>(() => {
     const initSetup = getEffectiveMapSetup(activeMap, 'normal', 'campaign');
@@ -449,7 +501,18 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
   const emitParticles = useCallback(
     (x: number, y: number, color: string, count: number, speed = 110, sizeScale = 1) => {
       const s = simRef.current;
-      for (let i = 0; i < count; i++) {
+      const damp = computeCombatVisualDamping({
+        activeBeams: s.railBeams.length + s.lightningArcs.length,
+        activeProjectiles: s.projectiles.length,
+        activeFlashes: s.muzzleFlashes.length + s.impactFlashes.length,
+        speedMult: s.speedMult,
+        isCompactViewport: isCompactViewportRef.current,
+      });
+      const scaledCount = Math.max(
+        count >= 4 ? 1 : 0,
+        Math.round(count * damp.particleSpawnScale)
+      );
+      for (let i = 0; i < scaledCount; i++) {
         const slot = s.particles[s.particleCursor];
         s.particleCursor = (s.particleCursor + 1) % PARTICLE_POOL_SIZE;
         const angle = Math.random() * Math.PI * 2;
@@ -471,7 +534,20 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
   const pushCombatText = useCallback(
     (x: number, y: number, text: string, color: string, scale = 1) => {
       const s = simRef.current;
-      if (s.floatingTexts.length > 28) s.floatingTexts.shift();
+      const damp = computeCombatVisualDamping({
+        activeBeams: s.railBeams.length + s.lightningArcs.length,
+        activeProjectiles: s.projectiles.length,
+        activeFlashes: s.muzzleFlashes.length + s.impactFlashes.length,
+        speedMult: s.speedMult,
+        isCompactViewport: isCompactViewportRef.current,
+      });
+      const isMinorPopup = scale <= 1.02 && (text.startsWith('+') || text.startsWith('-'));
+      if (!damp.allowMinorPopups && isMinorPopup) {
+        return;
+      }
+      while (s.floatingTexts.length >= damp.maxFloatingTexts) {
+        s.floatingTexts.shift();
+      }
       s.floatingTexts.push({
         x: x + (Math.random() * 14 - 7),
         y: y - 10,
@@ -4818,14 +4894,21 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
             ctx.restore();
           }
 
-          // 5c. Ground Scorch / Frost / Plasma Craters & Overheat Signature Effects
+          // 5c. Ground Scorch / Frost / Plasma Craters & Overheat Signature Effects (adaptive combat glare damping)
+          const vfxDamp = computeCombatVisualDamping({
+            activeBeams: s.railBeams.length + s.lightningArcs.length,
+            activeProjectiles: s.projectiles.length,
+            activeFlashes: s.muzzleFlashes.length + s.impactFlashes.length,
+            speedMult: s.speedMult,
+            isCompactViewport: isCompactViewportRef.current,
+          });
           drawGroundCraters(ctx, s.groundCraters);
-          drawOverheatSpecialFx(ctx, s.overheatEffects, s.animTime);
+          drawOverheatSpecialFx(ctx, s.overheatEffects, s.animTime, vfxDamp.effectAlphaScale);
 
           // 6. Shockwaves (ultra-faint hairline pulse for non-combat UI/status cues only)
           for (const sw of s.shockwaves) {
             ctx.save();
-            ctx.globalAlpha = sw.alpha * 0.16;
+            ctx.globalAlpha = sw.alpha * 0.16 * vfxDamp.effectAlphaScale;
             ctx.strokeStyle = sw.color;
             ctx.lineWidth = Math.min(1.2, sw.lineWidth * 0.4);
             ctx.beginPath();
@@ -4837,7 +4920,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
           // 6b. Beacon Harmonic Star-Rays & Cryo Flying Ice Shards
           for (const hr of s.harmonicRays) {
             ctx.save();
-            ctx.globalAlpha = hr.alpha * 0.55;
+            ctx.globalAlpha = hr.alpha * 0.55 * vfxDamp.effectAlphaScale;
             ctx.strokeStyle = hr.color;
             ctx.lineWidth = 2;
             ctx.lineCap = 'round';
@@ -4851,7 +4934,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
           for (const fs of s.frostShards) {
             const fade = Math.max(0, fs.life / fs.maxLife);
             ctx.save();
-            ctx.globalAlpha = fade * 0.92;
+            ctx.globalAlpha = fade * 0.86 * vfxDamp.effectAlphaScale;
             ctx.translate(fs.x, fs.y);
             ctx.rotate(fs.rot);
             ctx.fillStyle = fs.color;
@@ -4867,7 +4950,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
 
           // 7. Railgun Mach-Ring Hyper-Beams, Prism Rainbow Beams & Sniper Razor Tracers
           for (const rb of s.railBeams) {
-            drawRailBeamEnhanced(ctx, rb, s.animTime);
+            drawRailBeamEnhanced(ctx, rb, s.animTime, vfxDamp.beamAlphaScale);
           }
 
           for (const fc of s.flameCones) {
@@ -4876,7 +4959,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
             ctx.translate(fc.x, fc.y);
             if (fc.isNova360) {
               // Lv10 360° Swirling Blue-White Plasma Nova Petals
-              ctx.globalAlpha = fc.alpha * 0.48;
+              ctx.globalAlpha = fc.alpha * 0.44 * vfxDamp.effectAlphaScale;
               const novaGrad = ctx.createRadialGradient(0, 0, 8, 0, 0, fc.range);
               novaGrad.addColorStop(0, '#FFFFFF');
               novaGrad.addColorStop(0.35, '#38BDF8');
@@ -4895,7 +4978,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
               continue;
             }
             ctx.rotate(fc.angle);
-            ctx.globalAlpha = fc.alpha * 0.56;
+            ctx.globalAlpha = fc.alpha * 0.52 * vfxDamp.effectAlphaScale;
             const outerGrad = ctx.createRadialGradient(0, 0, 6, 0, 0, fc.range);
             if (fTier >= 3) {
               outerGrad.addColorStop(0, '#E0F2FE');
@@ -4913,7 +4996,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
             ctx.closePath();
             ctx.fill();
 
-            ctx.globalAlpha = fc.alpha * 0.85;
+            ctx.globalAlpha = fc.alpha * 0.78 * vfxDamp.effectAlphaScale;
             const innerGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, fc.range * 0.68);
             innerGrad.addColorStop(0, '#FFFFFF');
             innerGrad.addColorStop(0.45, fTier >= 3 ? '#7DD3FC' : '#FEF08A');
@@ -4929,7 +5012,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
 
           for (const hb of s.healBeams) {
             ctx.save();
-            ctx.globalAlpha = hb.alpha;
+            ctx.globalAlpha = hb.alpha * vfxDamp.beamAlphaScale;
             ctx.strokeStyle = '#4ADE80';
             ctx.lineWidth = 2.5;
             ctx.setLineDash([5, 4]);
@@ -4948,8 +5031,8 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
             const colorHex = sProfile.accentColor;
             ctx.save();
             ctx.strokeStyle = colorHex;
-            ctx.globalAlpha = sup.id === s.selectedGunId ? 0.28 : 0.11;
-            ctx.lineWidth = 1;
+            ctx.globalAlpha = sup.id === s.selectedGunId ? 0.36 : 0.11;
+            ctx.lineWidth = sup.id === s.selectedGunId ? 1.8 : 1;
             ctx.setLineDash([6, 6]);
             ctx.beginPath();
             ctx.arc(sPt.x, sPt.y, sProfile.rangePx, 0, Math.PI * 2);
@@ -4958,7 +5041,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
               if (ally.id === sup.id) continue;
               const aPt = gridToWorldCenter(ally.col, ally.row);
               if (Math.hypot(aPt.x - sPt.x, aPt.y - sPt.y) <= sProfile.rangePx + 4) {
-                ctx.globalAlpha = 0.28;
+                ctx.globalAlpha = sup.id === s.selectedGunId ? 0.52 : 0.24;
                 ctx.setLineDash([3, 4]);
                 ctx.beginPath();
                 ctx.moveTo(sPt.x, sPt.y);
@@ -4988,19 +5071,68 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
               ctx.globalAlpha = 1;
             }
             if (isSelected) {
-              ctx.strokeStyle = '#FBBF24';
-              ctx.lineWidth = 2.2;
-              ctx.setLineDash([4, 3]);
+              const effectiveRangePx =
+                profile.rangePx + Math.round(teamBuff.rangeBonusTiles * TILE_SIZE);
+              const halfTile = TILE_SIZE / 2;
+              const pad = 2;
+              const cornerLen = 11;
+
+              // Clear translucent firing range coverage + crisp perimeter ring
+              ctx.fillStyle = 'rgba(251, 191, 36, 0.08)';
               ctx.beginPath();
-              ctx.arc(0, 0, 29, 0, Math.PI * 2);
+              ctx.arc(0, 0, effectiveRangePx, 0, Math.PI * 2);
+              ctx.fill();
+
+              ctx.strokeStyle = 'rgba(251, 191, 36, 0.68)';
+              ctx.lineWidth = 2;
+              ctx.setLineDash([7, 5]);
+              ctx.beginPath();
+              ctx.arc(0, 0, effectiveRangePx, 0, Math.PI * 2);
               ctx.stroke();
               ctx.setLineDash([]);
 
-              ctx.strokeStyle = 'rgba(251, 191, 36, 0.25)';
-              ctx.lineWidth = 1.5;
+              // Bright selected-tile highlight plate & glowing tactical corner brackets
+              ctx.fillStyle = 'rgba(251, 191, 36, 0.16)';
+              ctx.strokeStyle = 'rgba(253, 224, 71, 0.78)';
+              ctx.lineWidth = 1.8;
               ctx.beginPath();
-              ctx.arc(0, 0, profile.rangePx + Math.round(teamBuff.rangeBonusTiles * TILE_SIZE), 0, Math.PI * 2);
+              ctx.roundRect(-halfTile + pad, -halfTile + pad, TILE_SIZE - pad * 2, TILE_SIZE - pad * 2, 7);
+              ctx.fill();
               ctx.stroke();
+
+              ctx.strokeStyle = '#FEF08A';
+              ctx.lineWidth = 3;
+              ctx.lineCap = 'round';
+              const bx = halfTile - 1;
+              ctx.beginPath();
+              // Top-left
+              ctx.moveTo(-bx, -bx + cornerLen);
+              ctx.lineTo(-bx, -bx);
+              ctx.lineTo(-bx + cornerLen, -bx);
+              // Top-right
+              ctx.moveTo(bx - cornerLen, -bx);
+              ctx.lineTo(bx, -bx);
+              ctx.lineTo(bx, -bx + cornerLen);
+              // Bottom-right
+              ctx.moveTo(bx, bx - cornerLen);
+              ctx.lineTo(bx, bx);
+              ctx.lineTo(bx - cornerLen, bx);
+              // Bottom-left
+              ctx.moveTo(-bx + cornerLen, bx);
+              ctx.lineTo(-bx, bx);
+              ctx.lineTo(-bx, bx - cornerLen);
+              ctx.stroke();
+
+              // Inner rotating selection reticle
+              ctx.save();
+              ctx.rotate(s.visualTime * 1.4);
+              ctx.strokeStyle = '#FDE047';
+              ctx.lineWidth = 2;
+              ctx.setLineDash([5, 4]);
+              ctx.beginPath();
+              ctx.arc(0, 0, 29, 0, Math.PI * 2);
+              ctx.stroke();
+              ctx.restore();
             }
 
             if (s.overdriveTimer > 0) {
@@ -5037,10 +5169,10 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
             drawProjectileEnhanced(ctx, pr, s.animTime);
           }
 
-          // 11. Muzzle Flashes & Starburst Impact Blooms (zero hard concentric ring clutter)
+          // 11. Muzzle Flashes & Starburst Impact Blooms (damped during dense barrages to keep grid sharp)
           for (const mf of s.muzzleFlashes) {
             ctx.save();
-            ctx.globalAlpha = mf.alpha;
+            ctx.globalAlpha = mf.alpha * vfxDamp.flashAlphaScale;
             ctx.translate(mf.x, mf.y);
             ctx.rotate(mf.angle);
             ctx.fillStyle = mf.color;
@@ -5062,7 +5194,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
 
           for (const im of s.impactFlashes) {
             ctx.save();
-            ctx.globalAlpha = im.alpha * 0.85;
+            ctx.globalAlpha = im.alpha * 0.8 * vfxDamp.flashAlphaScale;
             ctx.translate(im.x, im.y);
             ctx.rotate(im.rot);
             const bloom = ctx.createRadialGradient(0, 0, 1, 0, 0, im.radius);
@@ -5094,11 +5226,11 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
           for (const arc of s.lightningArcs) {
             if (arc.points.length < 2) continue;
             ctx.save();
-            ctx.globalAlpha = arc.alpha;
+            ctx.globalAlpha = arc.alpha * vfxDamp.beamAlphaScale;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.strokeStyle = arc.color;
-            ctx.lineWidth = arc.width * 2.4;
+            ctx.lineWidth = arc.width * 2.2;
             ctx.beginPath();
             ctx.moveTo(arc.points[0].x, arc.points[0].y);
             for (let i = 1; i < arc.points.length; i++) {
@@ -5107,7 +5239,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
             ctx.stroke();
 
             ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = arc.width * 0.7;
+            ctx.lineWidth = arc.width * 0.65;
             ctx.beginPath();
             ctx.moveTo(arc.points[0].x, arc.points[0].y);
             for (let i = 1; i < arc.points.length; i++) {
@@ -5121,7 +5253,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
           for (const p of s.particles) {
             if (!p.active) continue;
             ctx.save();
-            ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+            ctx.globalAlpha = Math.max(0, p.life / p.maxLife) * Math.max(0.48, vfxDamp.effectAlphaScale);
             ctx.fillStyle = p.color;
             ctx.beginPath();
             ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
@@ -5129,10 +5261,10 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
             ctx.restore();
           }
 
-          // 14. Floating Combat Text
+          // 14. Floating Combat Text (capped density for crystal-clear combat readability)
           for (const ft of s.floatingTexts) {
             ctx.save();
-            ctx.globalAlpha = ft.alpha;
+            ctx.globalAlpha = ft.alpha * Math.max(0.72, vfxDamp.beamAlphaScale);
             ctx.font = `bold ${Math.round(11 * ft.scale)}px monospace`;
             ctx.textAlign = 'center';
             ctx.fillStyle = '#070B14';
@@ -5184,7 +5316,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
             ? 'rounded-xl border border-slate-800/80 min-h-full lg:h-full lg:max-h-full mobile-ls:h-full mobile-ls:max-h-full mobile-ls:overflow-hidden lg:overflow-hidden flex flex-col'
             : 'rounded-xl border border-slate-800/80 min-h-full flex flex-col justify-between'
           : gameState === 'playing' || gameState === 'paused'
-            ? 'overflow-hidden rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] shadow-[0_20px_50px_-24px_rgba(56,189,248,0.22)] mobile-ls:h-[calc(100dvh-46px)] mobile-ls:flex mobile-ls:flex-col'
+            ? 'overflow-hidden rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] shadow-[0_20px_50px_-24px_rgba(56,189,248,0.22)] mobile-ls:h-[calc(100dvh-56px)] mobile-ls:flex mobile-ls:flex-col'
             : 'overflow-hidden rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] shadow-[0_20px_50px_-24px_rgba(56,189,248,0.22)]'
       }`}
     >
@@ -5418,75 +5550,106 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
             useSidebarTheater ? 'flex-1 min-h-0 flex flex-col' : ''
           }`}
         >
-          {/* Top Unified HUD Strip (reserves top-right gap in Fullscreen so Exit Button never overlaps) */}
-          <div
-            className={`shrink-0 border-b border-slate-800 bg-[#0B1222] px-2.5 sm:px-4 mobile-ls:px-2 py-1.5 mobile-ls:py-1 flex flex-wrap items-center justify-between gap-2 mobile-ls:gap-1 ${
-              isFullscreen ? 'pr-24 sm:pr-52 mobile-ls:pr-24' : ''
-            }`}
-          >
-            <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 tabular-nums">
-              <div
+          {/* Portrait Mobile Rotate / Fullscreen / PWA Guidance Banner */}
+          {isPortraitMobile && !portraitHintDismissed && (
+            <div
+              data-testid="td-portrait-guide"
+              className="shrink-0 border-b border-sky-500/35 bg-sky-950/60 px-3 py-2 flex flex-col gap-2 safe-area-x"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2 min-w-0">
+                  <Smartphone className="w-4 h-4 text-sky-300 rotate-90 shrink-0 mt-0.5" aria-hidden="true" />
+                  <p className="text-xs text-sky-100 leading-snug">
+                    <strong className="text-white">Xoay ngang điện thoại</strong> để bản đồ rộng ~75% và thao tác chọn/nâng tháp thoải mái hơn.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPortraitHintDismissed(true)}
+                  aria-label="Ẩn gợi ý xoay ngang"
+                  className="min-w-[36px] min-h-[36px] rounded-lg border border-slate-700 bg-slate-900/90 text-slate-300 hover:text-white flex items-center justify-center cursor-pointer shrink-0"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                {onToggleFullscreen && !isFullscreen && (
+                  <button
+                    type="button"
+                    onClick={onToggleFullscreen}
+                    className="flex-1 min-h-[40px] px-3 rounded-lg bg-sky-500 hover:bg-sky-400 text-[#070B14] font-mono font-bold text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  >
+                    <Maximize2 className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Chơi Toàn Màn</span>
+                  </button>
+                )}
+                <PwaInstallButton compact className="flex-1 min-h-[40px] px-3 text-xs" />
+              </div>
+            </div>
+          )}
+
+          {/* Top Unified 1-Row HUD Strip: Compact Tabular Metrics Left · Separated 40-44px Action Controls Right */}
+          <div className="shrink-0 border-b border-slate-800 bg-[#0B1222] px-2.5 sm:px-4 mobile-ls:px-2 py-1.5 mobile-ls:py-1 flex flex-wrap mobile-ls:flex-nowrap items-center justify-between gap-2 mobile-ls:gap-1.5 safe-area-x">
+            {/* Compact 1-Row Core Stats (Wave · Energy · DPS · Core) with crisp tabular-nums */}
+            <div className="flex items-center gap-2.5 sm:gap-4 mobile-ls:gap-2.5 tabular-nums min-w-0 overflow-x-auto no-scrollbar">
+              <span
                 data-testid="td-hud-difficulty"
-                className="px-2 py-0.5 rounded-md border text-[10px] font-mono font-bold tracking-wider uppercase"
-                style={{
-                  color: DIFFICULTY_CONFIGS[hud.difficulty].badgeColor,
-                  borderColor: DIFFICULTY_CONFIGS[hud.difficulty].badgeColor,
-                  backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                }}
+                className="hidden xl:inline-block text-[10px] font-mono font-bold tracking-wider uppercase whitespace-nowrap shrink-0"
+                style={{ color: DIFFICULTY_CONFIGS[hud.difficulty].badgeColor }}
               >
                 {DIFFICULTY_CONFIGS[hud.difficulty].shortLabel} · {GAME_MODE_CONFIGS[hud.gameMode].shortLabel}
-              </div>
+              </span>
 
-              <div className="flex items-center gap-1.5">
-                <Shield className="w-4 h-4 text-emerald-400" aria-hidden="true" />
-                <div>
-                  <div className="text-[10px] font-mono text-slate-400 leading-none">LÕI</div>
-                  <div className="text-xs sm:text-base font-bold text-white leading-tight">
-                    {hud.coreHp}/{hud.maxCoreHp}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <Zap className="w-4 h-4 text-amber-400" aria-hidden="true" />
-                <div>
-                  <div className="text-[10px] font-mono text-slate-400 leading-none">NĂNG LƯỢNG</div>
-                  <div className="text-xs sm:text-base font-bold text-amber-300 leading-tight">
-                    {hud.energy}⚡
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="text-[10px] font-mono text-slate-400 leading-none">ĐỢT</div>
-                <div className="text-xs sm:text-base font-bold text-cyan-300 leading-tight">
+              <div className="flex items-center gap-1 shrink-0" data-testid="td-stat-wave">
+                <span className="text-[10px] font-mono uppercase text-slate-400">Đợt</span>
+                <span className="text-sm sm:text-base mobile-ls:text-sm font-bold text-cyan-300 leading-none">
                   {hud.wave}/{hud.gameMode === 'endless' ? '∞' : hud.totalWaves}
-                </div>
+                </span>
               </div>
 
-              <div className="hidden sm:block">
-                <div className="text-[10px] font-mono text-slate-400 leading-none">HỎA LỰC</div>
-                <div className="text-sm sm:text-base font-bold text-sky-300 leading-tight">
-                  {hud.totalDps} DPS
-                </div>
+              <span className="text-slate-700 select-none" aria-hidden="true">·</span>
+
+              <div className="flex items-center gap-1 shrink-0" data-testid="td-stat-energy">
+                <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true" />
+                <span className="text-sm sm:text-base mobile-ls:text-sm font-bold text-amber-300 leading-none">
+                  {hud.energy}
+                </span>
               </div>
 
-              <div className="hidden md:block">
-                <div className="text-[10px] font-mono text-slate-400 leading-none">ĐIỂM</div>
-                <div className="text-sm sm:text-base font-bold text-white leading-tight">
-                  {hud.score}
-                </div>
+              <span className="text-slate-700 select-none" aria-hidden="true">·</span>
+
+              <div className="flex items-center gap-1 shrink-0" data-testid="td-stat-dps">
+                <span className="text-[10px] font-mono uppercase text-slate-400">DPS</span>
+                <span className="text-sm sm:text-base mobile-ls:text-sm font-bold text-sky-300 leading-none">
+                  {hud.totalDps}
+                </span>
+              </div>
+
+              <span className="text-slate-700 select-none" aria-hidden="true">·</span>
+
+              <div className="flex items-center gap-1 shrink-0" data-testid="td-stat-core">
+                <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" aria-hidden="true" />
+                <span className="text-sm sm:text-base mobile-ls:text-sm font-bold text-white leading-none">
+                  {hud.coreHp}/{hud.maxCoreHp}
+                </span>
+              </div>
+
+              <div className="hidden xl:flex items-center gap-1 shrink-0">
+                <span className="text-slate-700 select-none" aria-hidden="true">·</span>
+                <span className="text-[10px] font-mono uppercase text-slate-400">Điểm</span>
+                <span className="text-sm font-bold text-white leading-none">{hud.score}</span>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-1.5">
+            {/* Dedicated Separated Action Controls Cluster (min 40px-44px touch targets) */}
+            <div className="flex flex-wrap mobile-ls:flex-nowrap items-center gap-1 sm:gap-1.5 max-w-full shrink-0">
               <button
                 type="button"
                 data-testid="td-overdrive-btn"
                 onClick={activateOverdrive}
                 disabled={hud.overdrivePct < 100 || hud.overdriveActive}
                 title="Kích hoạt Hội Tụ Hỏa Lực & bùng nổ Quá Nhiệt toàn đội hình (Space)"
-                className={`min-h-[38px] sm:h-9 px-2.5 sm:px-3 rounded-lg border text-xs font-mono font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                className={`min-h-[40px] px-2 sm:px-3 rounded-lg border text-xs font-mono font-bold inline-flex items-center gap-1 sm:gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 tabular-nums ${
                   hud.overdriveActive
                     ? 'bg-rose-600 border-rose-400 text-white'
                     : hud.overdrivePct >= 100
@@ -5494,7 +5657,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
                       : 'bg-slate-900 border-slate-700 text-slate-400 cursor-not-allowed'
                 }`}
               >
-                <Flame className="w-3.5 h-3.5" aria-hidden="true" />
+                <Flame className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                 <span>
                   {hud.overdriveActive ? 'QUÁ TẢI!' : `Hỏa Lực ${hud.overdrivePct}%`}
                 </span>
@@ -5511,7 +5674,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
                   syncHudFromSim();
                 }}
                 aria-label="Đổi tốc độ mô phỏng (1x, 2x, 3x)"
-                className={`min-h-[38px] sm:h-9 px-2.5 rounded-lg border text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer touch-manipulation select-none ${
+                className={`min-h-[40px] min-w-[44px] px-2 sm:px-2.5 rounded-lg border text-xs font-mono font-bold inline-flex items-center justify-center gap-1 cursor-pointer touch-manipulation select-none whitespace-nowrap shrink-0 tabular-nums ${
                   hud.speedMult === 3
                     ? 'bg-amber-400 text-[#070B14] border-amber-300'
                     : hud.speedMult === 2
@@ -5519,7 +5682,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
                       : 'bg-slate-900 text-slate-200 border-slate-700 hover:border-cyan-400'
                 }`}
               >
-                <FastForward className="w-3.5 h-3.5" aria-hidden="true" />
+                <FastForward className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                 <span>{hud.speedMult}×</span>
               </button>
 
@@ -5532,7 +5695,7 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
                   setSoundEnabled((p) => !p);
                 }}
                 aria-label={soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
-                className="min-w-[40px] min-h-[40px] sm:w-9 sm:h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 flex items-center justify-center hover:border-cyan-400 cursor-pointer"
+                className="min-w-[40px] min-h-[40px] rounded-lg border border-slate-700 bg-slate-900 text-slate-200 flex items-center justify-center hover:border-cyan-400 cursor-pointer shrink-0"
               >
                 {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
               </button>
@@ -5544,8 +5707,8 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
                   e.currentTarget.blur();
                   setGameState((prev) => (prev === 'paused' ? 'playing' : 'paused'));
                 }}
-                aria-label={gameState === 'paused' ? 'Đóng tạm dừng' : 'Tạm dừng'}
-                className="min-w-[40px] min-h-[40px] sm:w-9 sm:h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 flex items-center justify-center hover:border-cyan-400 cursor-pointer"
+                aria-label={gameState === 'paused' ? 'Tiếp tục' : 'Tạm dừng'}
+                className="min-w-[40px] min-h-[40px] rounded-lg border border-slate-700 bg-slate-900 text-slate-200 flex items-center justify-center hover:border-cyan-400 cursor-pointer shrink-0"
               >
                 <Pause className="w-4 h-4" />
               </button>
@@ -5558,23 +5721,51 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
                   startNewRun(selectedMapIndex, difficulty, gameMode);
                 }}
                 aria-label="Chơi lại ván này"
-                className="min-w-[40px] min-h-[40px] sm:w-9 sm:h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 flex items-center justify-center hover:border-cyan-400 cursor-pointer"
+                className="min-w-[40px] min-h-[40px] rounded-lg border border-slate-700 bg-slate-900 text-slate-200 flex items-center justify-center hover:border-cyan-400 cursor-pointer shrink-0"
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
+
+              {isFullscreen && onExitFullscreen ? (
+                <button
+                  type="button"
+                  data-testid="hub-exit-fullscreen-btn"
+                  onClick={onExitFullscreen}
+                  aria-label="Thoát toàn màn hình (Esc)"
+                  className="min-h-[40px] px-2.5 rounded-lg border border-sky-400/60 bg-sky-950/80 hover:bg-sky-900 text-sky-200 text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  <Minimize2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  <span>Thoát</span>
+                </button>
+              ) : onToggleFullscreen ? (
+                <button
+                  type="button"
+                  data-testid="td-fullscreen-btn"
+                  onClick={onToggleFullscreen}
+                  aria-label="Chơi toàn màn hình"
+                  title="Chơi toàn màn hình (F11)"
+                  className="min-w-[40px] min-h-[40px] px-2 rounded-lg border border-sky-500/45 bg-sky-950/60 hover:border-sky-400 text-sky-300 flex items-center justify-center cursor-pointer shrink-0"
+                >
+                  <Maximize2 className="w-4 h-4" aria-hidden="true" />
+                </button>
+              ) : null}
             </div>
           </div>
 
-          {/* Main Theater Area: Widescreen 2-Col in Fullscreen or iPhone Mobile Landscape so Map + Support Guns + Start Wave stay side-by-side */}
+          {/* Main Theater Area: Mobile Landscape gives 73%-75% width to Map & 25%-27% to Tabbed Collapsible Dock */}
           <div
+            data-testid="td-theater-grid"
             className={
               useSidebarTheater
-                ? 'flex-1 min-h-0 flex flex-col mobile-ls:grid mobile-ls:grid-cols-[minmax(0,1fr)_268px] lg:grid lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_400px]'
+                ? sidebarCollapsed
+                  ? 'flex-1 min-h-0 flex flex-col mobile-ls:grid mobile-ls:grid-cols-[minmax(0,1fr)_52px] lg:grid lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_396px]'
+                  : 'flex-1 min-h-0 flex flex-col mobile-ls:grid mobile-ls:grid-cols-[minmax(0,1fr)_clamp(212px,27vw,252px)] lg:grid lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_396px]'
                 : ''
             }
           >
-            {/* Arena Canvas (Responsive 16:10) */}
+            {/* Arena Canvas (Responsive 16:10, maximized area) */}
             <div
+              data-testid="td-map-pane"
               className={`p-1 sm:p-1.5 bg-[#050811] ${
                 useSidebarTheater ? 'min-w-0 min-h-0 flex-1 flex items-center justify-center lg:p-2 mobile-ls:p-1' : ''
               }`}
@@ -5583,8 +5774,8 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
                 className={
                   useSidebarTheater
                     ? isFullscreen
-                      ? 'w-full mx-auto max-w-[min(100%,calc((100dvh-280px)*1.6))] mobile-ls:max-w-[min(100%,calc((100dvh-58px)*1.6))] lg:max-w-[min(100%,calc((100dvh-82px)*1.6))]'
-                      : 'w-full mx-auto max-w-[940px] mobile-ls:max-w-[min(100%,calc((100dvh-96px)*1.6))]'
+                      ? 'w-full mx-auto max-w-[min(100%,calc((100dvh-260px)*1.6))] mobile-ls:max-w-[min(100%,calc((100dvh-60px)*1.6))] lg:max-w-[min(100%,calc((100dvh-76px)*1.6))]'
+                      : 'w-full mx-auto max-w-[940px] mobile-ls:max-w-[min(100%,calc((100dvh-116px)*1.6))]'
                     : 'max-w-[940px] mx-auto'
                 }
               >
@@ -5606,584 +5797,757 @@ export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameS
               </div>
             </div>
 
-            {/* 24-Gun Arsenal Dock & Tactical Command Sidebar */}
-            <div
-              className={`border-t border-slate-800 bg-[#0B1222] ${
-                useSidebarTheater
-                  ? 'mobile-ls:border-t-0 mobile-ls:border-l lg:border-t-0 lg:border-l flex flex-col min-h-0 mobile-ls:max-h-full'
-                  : 'px-2.5 sm:px-4 py-2 space-y-2'
-              }`}
-            >
-              {/* Dock Header */}
+            {/* Collapsible Narrow Rail (Mobile Landscape Only when Collapsed -> gives Map ~94% Width) */}
+            {useSidebarTheater && sidebarCollapsed && isCompactTheater ? (
               <div
-                className={`flex flex-wrap items-center justify-between gap-2 mobile-ls:gap-1 ${
-                  useSidebarTheater ? 'shrink-0 px-2.5 py-2 mobile-ls:px-2 mobile-ls:py-1 border-b border-slate-800/80' : ''
-                }`}
+                data-testid="td-sidebar-collapsed"
+                className="hidden mobile-ls:flex flex-col items-center justify-between py-1.5 px-1 border-l border-slate-800 bg-[#0B1222] gap-2"
               >
-                <span className="text-[11px] mobile-ls:text-[10px] font-mono uppercase tracking-[0.08em] text-slate-400">
-                  Kho {availableGuns.length} Súng (★ {exclusiveGun?.shortName ?? ''} + 23 Chung)
-                </span>
-                <div className="flex items-center gap-1.5" role="group" aria-label="Biến thể mặc định khi đặt súng">
+                <div className="flex flex-col items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setSelectedVariant('alpha')}
-                    className={`min-h-[32px] mobile-ls:min-h-[28px] px-2 rounded-lg border text-[11px] mobile-ls:text-[10px] font-mono font-bold transition-colors cursor-pointer ${
-                      selectedVariant === 'alpha'
-                        ? 'bg-sky-500/20 border-sky-400 text-sky-200'
-                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
-                    }`}
+                    data-testid="td-expand-sidebar-btn"
+                    onClick={() => setSidebarCollapsed(false)}
+                    aria-label="Mở kho súng và chi tiết tháp"
+                    title="Mở bảng điều khiển"
+                    className="min-w-[42px] min-h-[42px] rounded-xl border border-sky-400/50 bg-sky-950/70 text-sky-200 flex items-center justify-center cursor-pointer"
                   >
-                    α Alpha{!useSidebarTheater && ' · Tốc/Đa Tia'}
+                    <ChevronLeft className="w-5 h-5" />
                   </button>
                   <button
                     type="button"
-                    onClick={() => setSelectedVariant('omega')}
-                    className={`min-h-[32px] mobile-ls:min-h-[28px] px-2 rounded-lg border text-[11px] mobile-ls:text-[10px] font-mono font-bold transition-colors cursor-pointer ${
-                      selectedVariant === 'omega'
-                        ? 'bg-amber-500/20 border-amber-400 text-amber-200'
-                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
-                    }`}
+                    onClick={() => {
+                      setSidebarTab('arsenal');
+                      setSidebarCollapsed(false);
+                    }}
+                    className="min-w-[42px] min-h-[40px] rounded-lg border border-slate-700 bg-slate-900 text-[10px] font-mono font-bold text-amber-300 flex items-center justify-center cursor-pointer"
                   >
-                    ω Omega{!useSidebarTheater && ' · Sát Thương'}
+                    Kho
                   </button>
+                  {selectedGun && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSidebarTab('inspector');
+                        setSidebarCollapsed(false);
+                      }}
+                      className="min-w-[42px] min-h-[40px] rounded-lg border border-amber-400/70 bg-amber-950/60 text-[10px] font-mono font-bold text-amber-200 flex items-center justify-center cursor-pointer"
+                    >
+                      Lv{selectedGun.level}
+                    </button>
+                  )}
                 </div>
-              </div>
-
-              {/* Scrollable Middle in Sidebar Theater: Inspector (on top when selected) + All 24 Guns */}
-              <div
-                ref={sidebarScrollRef}
-                className={useSidebarTheater ? 'flex-1 min-h-0 overflow-y-auto p-2 mobile-ls:p-1.5 space-y-2 mobile-ls:space-y-1.5' : 'space-y-2'}
-              >
-                {/* Selected Gun Inspector (placed first in sidebar so clicking/tapping a gun reveals upgrades immediately) */}
-                {useSidebarTheater && selectedGun && selectedProfile && selectedSpec && (
-                  <div
-                    data-testid="td-gun-inspector"
-                    className="rounded-xl border bg-gradient-to-br from-slate-900/95 via-[#0E1729] to-slate-950 p-2.5 mobile-ls:p-2 space-y-2 mobile-ls:space-y-1.5 transition-all"
-                    style={{ borderColor: `${selectedProfile.accentColor}66` }}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-1.5">
-                      <span className="text-xs font-bold text-white truncate">{selectedSpec.name}</span>
-                      <div className="flex items-center gap-1">
-                        <span
-                          data-testid="td-gun-level-badge"
-                          className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                            selectedGun.level === MAX_GUN_LEVEL
-                              ? 'bg-amber-400 text-[#070B14]'
-                              : selectedGun.level >= 7
-                                ? 'bg-rose-500/20 border border-rose-400/50 text-rose-200'
-                                : selectedGun.level >= 4
-                                  ? 'bg-sky-500/20 border border-sky-400/50 text-sky-200'
-                                  : 'bg-slate-800 text-slate-300'
-                          }`}
-                        >
-                          Lv.{selectedGun.level}/{MAX_GUN_LEVEL} · {selectedProfile.tierLabel}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            simRef.current.selectedGunId = null;
-                            setSelectedGunId(null);
-                          }}
-                          aria-label="Đóng bảng súng và quay lại kho súng"
-                          className="min-h-[24px] px-1.5 rounded border border-slate-700 bg-slate-800 hover:border-cyan-400 text-slate-300 hover:text-white text-[10px] font-mono inline-flex items-center gap-0.5 cursor-pointer"
-                        >
-                          <X className="w-3 h-3" />
-                          <span>Kho</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-300 tabular-nums">
-                      <span>
-                        DMG <strong className="text-white">{selectedProfile.damage}</strong>
-                        {selectedNextProfile && selectedNextProfile.damage > selectedProfile.damage && (
-                          <span className="text-emerald-400 ml-0.5">(+{selectedNextProfile.damage - selectedProfile.damage})</span>
-                        )}
-                      </span>
-                      <span>·</span>
-                      <span>
-                        DPS <strong className="text-sky-300">{selectedProfile.dpsEstimate}</strong>
-                        {selectedNextProfile && selectedNextProfile.dpsEstimate > selectedProfile.dpsEstimate && (
-                          <span className="text-emerald-400 ml-0.5">(+{selectedNextProfile.dpsEstimate - selectedProfile.dpsEstimate})</span>
-                        )}
-                      </span>
-                      <span>·</span>
-                      <span>Tầm <strong className="text-cyan-300">{selectedProfile.rangeTiles}ô</strong></span>
-                      <span>·</span>
-                      <span>Hạ <strong className="text-amber-300">{selectedGun.kills}</strong></span>
-                    </div>
-
-                    {selectedTeamBuff?.hasSupportLink && (
-                      <div className="flex flex-wrap items-center gap-1 text-[9px] font-mono text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 rounded-md px-1.5 py-1">
-                        <span className="font-bold">BUFF TEAM:</span>
-                        {selectedTeamBuff.speedMult > 1 && <span>+{Math.round((selectedTeamBuff.speedMult - 1) * 100)}% Tốc</span>}
-                        {selectedTeamBuff.damageMult > 1 && <span>+{Math.round((selectedTeamBuff.damageMult - 1) * 100)}% DMG</span>}
-                        {selectedTeamBuff.rangeBonusTiles > 0 && <span>+{selectedTeamBuff.rangeBonusTiles}ô Tầm</span>}
-                        {selectedTeamBuff.armorPierceBonus > 0 && <span>+{Math.round(selectedTeamBuff.armorPierceBonus * 100)}% Giáp</span>}
-                        {selectedTeamBuff.shieldMultBonus > 0 && <span>+{Math.round(selectedTeamBuff.shieldMultBonus * 100)}% Khiên</span>}
-                        {selectedTeamBuff.heatCoolMult > 1 && <span>+{Math.round((selectedTeamBuff.heatCoolMult - 1) * 100)}% Tản Nhiệt</span>}
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-1" aria-label="Tiến trình nâng cấp Lv1 đến Lv10">
-                      {Array.from({ length: MAX_GUN_LEVEL }, (_, i) => {
-                        const lv = i + 1;
-                        const active = selectedGun.level >= lv;
-                        const isBreakthrough = lv === 3 || lv === 5 || lv === 7 || lv === 10;
-                        return (
-                          <div
-                            key={lv}
-                            className={`h-1.5 flex-1 rounded-full ${
-                              active
-                                ? lv === 10
-                                  ? 'bg-amber-400'
-                                  : isBreakthrough
-                                    ? 'bg-cyan-400'
-                                    : 'bg-emerald-400'
-                                : isBreakthrough
-                                  ? 'bg-slate-700 ring-1 ring-amber-400/40'
-                                  : 'bg-slate-800'
-                            }`}
-                          />
-                        );
-                      })}
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-1.5">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.currentTarget.blur();
-                          cycleSelectedPriority();
-                        }}
-                        className="min-h-[38px] mobile-ls:min-h-[34px] px-2 rounded-lg border border-slate-700 bg-slate-800 hover:border-cyan-400 text-cyan-200 text-[11px] font-mono cursor-pointer truncate"
-                      >
-                        [T] {PRIORITY_LABELS[selectedGun.priority]}
-                      </button>
-                      <button
-                        type="button"
-                        data-testid="td-upgrade-btn"
-                        onClick={(e) => {
-                          e.currentTarget.blur();
-                          upgradeSelectedGun();
-                        }}
-                        disabled={selectedUpgradeCost === null || hud.energy < selectedUpgradeCost}
-                        className={`min-h-[38px] mobile-ls:min-h-[34px] px-2 rounded-lg text-[11px] font-mono font-bold cursor-pointer truncate ${
-                          selectedUpgradeCost === null
-                            ? 'bg-amber-400/20 border border-amber-400 text-amber-300 cursor-default'
-                            : hud.energy >= selectedUpgradeCost
-                              ? 'bg-amber-400 text-[#070B14] hover:bg-amber-300'
-                              : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                        }`}
-                      >
-                        {selectedUpgradeCost === null ? 'MAX LV10' : `[U] Lv${selectedGun.level + 1} (${selectedUpgradeCost}⚡)`}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.currentTarget.blur();
-                          sellSelectedGun();
-                        }}
-                        aria-label="Thu hồi trụ súng"
-                        className="min-h-[38px] mobile-ls:min-h-[34px] px-2 rounded-lg bg-slate-800 hover:bg-rose-900/60 text-rose-300 text-[11px] font-mono inline-flex items-center justify-center gap-1 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>+{selectedSellRefund}⚡</span>
-                      </button>
-                    </div>
-
-                    <div className="rounded-lg border border-slate-800 bg-[#080E1C] p-2 space-y-1">
-                      <div className="flex items-center justify-between gap-1 text-[10px] font-mono">
-                        <span className="font-bold flex items-center gap-1 truncate" style={{ color: selectedProfile.overheatSkill.color }}>
-                          <Flame className="w-3 h-3 shrink-0" />
-                          {selectedProfile.overheatSkill.name}
-                        </span>
-                        <span className="tabular-nums text-slate-300 shrink-0">
-                          {(selectedGun.overheatTimer ?? 0) > 0 ? 'BÙNG NỔ!' : `${Math.round(selectedGun.heat ?? 0)}%`}
-                        </span>
-                      </div>
-                      <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
-                        <div
-                          className="h-full transition-all duration-150"
-                          style={{
-                            width: `${(selectedGun.overheatTimer ?? 0) > 0 ? 100 : Math.min(100, selectedGun.heat ?? 0)}%`,
-                            backgroundColor: (selectedGun.overheatTimer ?? 0) > 0 ? '#FB7185' : selectedProfile.overheatSkill.color,
-                          }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {(['alpha', 'omega'] as const).map((vId) => {
-                        const vSpec = selectedSpec.variants[vId];
-                        const active = inspectedVariant === vId;
-                        return (
-                          <button
-                            key={vId}
-                            type="button"
-                            data-testid={`td-variant-${vId}`}
-                            onClick={(e) => {
-                              e.currentTarget.blur();
-                              switchSelectedGunVariant(vId);
-                            }}
-                            className={`min-h-[38px] mobile-ls:min-h-[34px] px-2 py-1 rounded-lg border text-left transition-colors cursor-pointer ${
-                              active ? 'bg-slate-800/95 text-white' : 'border-slate-800 bg-slate-950/70 text-slate-400 hover:border-slate-600'
-                            }`}
-                            style={active ? { borderColor: vSpec.accentColor } : undefined}
-                          >
-                            <div className="text-[10px] font-bold truncate" style={{ color: active ? vSpec.accentColor : undefined }}>
-                              {vSpec.shortTag}
-                            </div>
-                            <p className="text-[9px] text-slate-400 truncate">{vSpec.summary}</p>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* 24-Gun Arsenal Grid */}
-                <div
-                  className={
-                    useSidebarTheater
-                      ? 'flex flex-nowrap overflow-x-auto gap-1.5 pb-1 mobile-ls:grid mobile-ls:grid-cols-2 mobile-ls:overflow-visible mobile-ls:pb-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:pb-0'
-                      : 'flex flex-nowrap overflow-x-auto gap-1.5 pb-1 md:grid md:grid-cols-8 md:overflow-visible md:pb-0'
-                  }
-                >
-                  {availableGuns.map((item) => {
-                    const isActive = selectedTool === item.type;
-                    const canAfford = hud.energy >= item.cost;
-                    const isExclusive = Boolean(item.exclusiveMapId);
-                    const isSupport = isSupportGunType(item.type);
-                    return (
-                      <button
-                        key={item.type}
-                        type="button"
-                        data-testid={`td-gun-${item.type}`}
-                        onClick={(e) => {
-                          e.currentTarget.blur();
-                          unlockPrismAudio(audioCtxRef);
-                          setSelectedTool(item.type);
-                        }}
-                        className={`min-w-[116px] ${
-                          useSidebarTheater ? 'mobile-ls:min-w-0 mobile-ls:min-h-[38px] lg:min-w-0 min-h-[42px]' : 'md:min-w-0 min-h-[46px]'
-                        } shrink-0 px-2 py-1 rounded-xl border text-left transition-colors cursor-pointer ${
-                          isActive
-                            ? 'bg-amber-950/65 border-amber-400 text-white shadow-[0_0_0_1px_rgba(251,191,36,0.45)]'
-                            : isExclusive
-                              ? 'bg-amber-950/25 border-amber-500/50 text-amber-100 hover:border-amber-400'
-                              : isSupport
-                                ? 'bg-emerald-950/25 border-emerald-500/45 text-emerald-100 hover:border-emerald-400'
-                                : 'bg-slate-900/90 border-slate-700/80 text-slate-200 hover:border-slate-500'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-1 text-[11px] mobile-ls:text-[10px] font-bold">
-                          <span className="truncate">
-                            <span className="hidden lg:inline">[{item.hotkey.toUpperCase()}] </span>
-                            {item.shortName}
-                          </span>
-                          <span className={`font-mono shrink-0 ${canAfford ? 'text-amber-300' : 'text-rose-400'}`}>
-                            {item.cost}⚡
-                          </span>
-                        </div>
-                        <p className={`text-[9px] truncate mt-0.5 ${isExclusive ? 'text-amber-300/90 font-semibold' : isSupport ? 'text-emerald-300/90' : 'text-slate-400'}`}>
-                          {isExclusive ? '★ Đặc Quyền' : isSupport ? '✦ Hỗ Trợ Team' : item.roleClue}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Embedded (non-sidebar) Selected Gun Inspector */}
-                {!useSidebarTheater && selectedGun && selectedProfile && selectedSpec && (
-                  <div
-                    data-testid="td-gun-inspector"
-                    className="rounded-xl border bg-gradient-to-br from-slate-900/95 via-[#0E1729] to-slate-950 p-3 space-y-2.5 transition-all"
-                    style={{ borderColor: `${selectedProfile.accentColor}66` }}
-                  >
-                    {/* Header + Live Stats + Next-Level Deltas */}
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
-                      <div className="space-y-1.5 min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-bold text-white">{selectedSpec.name}</span>
-                          <span
-                            data-testid="td-gun-level-badge"
-                            className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md ${
-                              selectedGun.level === MAX_GUN_LEVEL
-                                ? 'bg-amber-400 text-[#070B14]'
-                                : selectedGun.level >= 7
-                                  ? 'bg-rose-500/20 border border-rose-400/50 text-rose-200'
-                                  : selectedGun.level >= 4
-                                    ? 'bg-sky-500/20 border border-sky-400/50 text-sky-200'
-                                    : 'bg-slate-800 text-slate-300'
-                            }`}
-                          >
-                            Lv.{selectedGun.level}/{MAX_GUN_LEVEL} · {selectedProfile.tierLabel}
-                          </span>
-                          <span
-                            className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border"
-                            style={{
-                              color: selectedProfile.variantSpec.accentColor,
-                              borderColor: `${selectedProfile.variantSpec.accentColor}66`,
-                              backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                            }}
-                          >
-                            {selectedProfile.variantSpec.shortTag}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              simRef.current.selectedGunId = null;
-                              setSelectedGunId(null);
-                            }}
-                            aria-label="Đóng bảng súng"
-                            className="ml-auto min-h-[26px] px-2 rounded-md border border-slate-700 bg-slate-800 hover:border-cyan-400 text-slate-300 hover:text-white text-[10px] font-mono inline-flex items-center gap-1 cursor-pointer"
-                          >
-                            <X className="w-3 h-3" />
-                            <span>Kho Súng</span>
-                          </button>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-300 tabular-nums">
-                          <span>
-                            DMG <strong className="text-white">{selectedProfile.damage}</strong>
-                            {selectedNextProfile && selectedNextProfile.damage > selectedProfile.damage && (
-                              <span className="text-emerald-400 ml-0.5">
-                                (+{selectedNextProfile.damage - selectedProfile.damage})
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-slate-600">·</span>
-                          <span>
-                            DPS <strong className="text-sky-300">{selectedProfile.dpsEstimate}</strong>
-                            {selectedNextProfile && selectedNextProfile.dpsEstimate > selectedProfile.dpsEstimate && (
-                              <span className="text-emerald-400 ml-0.5">
-                                (+{selectedNextProfile.dpsEstimate - selectedProfile.dpsEstimate})
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-slate-600">·</span>
-                          <span>
-                            Tầm <strong className="text-cyan-300">{selectedProfile.rangeTiles}ô</strong>
-                            {selectedNextProfile && selectedNextProfile.rangeTiles > selectedProfile.rangeTiles && (
-                              <span className="text-emerald-400 ml-0.5">
-                                (+{Number((selectedNextProfile.rangeTiles - selectedProfile.rangeTiles).toFixed(2))})
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-slate-600">·</span>
-                          <span>Hạ <strong className="text-amber-300">{selectedGun.kills}</strong></span>
-                        </div>
-
-                        {selectedTeamBuff?.hasSupportLink && (
-                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 rounded-md px-2 py-1">
-                            <span className="font-bold">BUFF ĐỘI HÌNH:</span>
-                            {selectedTeamBuff.speedMult > 1 && <span>+{Math.round((selectedTeamBuff.speedMult - 1) * 100)}% Tốc</span>}
-                            {selectedTeamBuff.damageMult > 1 && <span>+{Math.round((selectedTeamBuff.damageMult - 1) * 100)}% DMG</span>}
-                            {selectedTeamBuff.rangeBonusTiles > 0 && <span>+{selectedTeamBuff.rangeBonusTiles}ô Tầm</span>}
-                            {selectedTeamBuff.armorPierceBonus > 0 && <span>+{Math.round(selectedTeamBuff.armorPierceBonus * 100)}% Xuyên Giáp</span>}
-                            {selectedTeamBuff.shieldMultBonus > 0 && <span>+{Math.round(selectedTeamBuff.shieldMultBonus * 100)}% Phá Khiên</span>}
-                            {selectedTeamBuff.heatCoolMult > 1 && <span>+{Math.round((selectedTeamBuff.heatCoolMult - 1) * 100)}% Tản Nhiệt</span>}
-                          </div>
-                        )}
-
-                        {/* 10-Step Level Progression Bar */}
-                        <div className="flex items-center gap-1 pt-0.5" aria-label="Tiến trình nâng cấp Lv1 đến Lv10">
-                          {Array.from({ length: MAX_GUN_LEVEL }, (_, i) => {
-                            const lv = i + 1;
-                            const active = selectedGun.level >= lv;
-                            const isBreakthrough = lv === 3 || lv === 5 || lv === 7 || lv === 10;
-                            return (
-                              <div
-                                key={lv}
-                                className={`h-1.5 flex-1 rounded-full transition-colors ${
-                                  active
-                                    ? lv === 10
-                                      ? 'bg-amber-400'
-                                      : isBreakthrough
-                                        ? 'bg-cyan-400'
-                                        : 'bg-emerald-400'
-                                    : isBreakthrough
-                                      ? 'bg-slate-700 ring-1 ring-amber-400/40'
-                                      : 'bg-slate-800'
-                                }`}
-                              />
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Primary Action Buttons (Touch >= 44px) */}
-                      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.currentTarget.blur();
-                            cycleSelectedPriority();
-                          }}
-                          title="Đổi ưu tiên mục tiêu [T]"
-                          className="min-h-[44px] px-3 rounded-xl border border-slate-700 bg-slate-800 hover:border-cyan-400 text-cyan-200 text-xs font-mono cursor-pointer"
-                        >
-                          [T] {PRIORITY_LABELS[selectedGun.priority]}
-                        </button>
-                        <button
-                          type="button"
-                          data-testid="td-upgrade-btn"
-                          onClick={(e) => {
-                            e.currentTarget.blur();
-                            upgradeSelectedGun();
-                          }}
-                          disabled={selectedUpgradeCost === null || hud.energy < selectedUpgradeCost}
-                          className={`min-h-[44px] px-3.5 rounded-xl text-xs font-mono font-bold cursor-pointer transition-colors ${
-                            selectedUpgradeCost === null
-                              ? 'bg-amber-400/20 border border-amber-400 text-amber-300 cursor-default'
-                              : hud.energy >= selectedUpgradeCost
-                                ? 'bg-amber-400 text-[#070B14] hover:bg-amber-300'
-                                : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                          }`}
-                        >
-                          {selectedUpgradeCost === null
-                            ? 'MAX LV 10'
-                            : `[U] Nâng Lv${selectedGun.level + 1} (${selectedUpgradeCost}⚡)`}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.currentTarget.blur();
-                            sellSelectedGun();
-                          }}
-                          aria-label="Thu hồi trụ súng"
-                          className="min-h-[44px] px-3 rounded-xl bg-slate-800 hover:bg-rose-900/60 text-rose-300 text-xs font-mono inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>+{selectedSellRefund}⚡</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Live Heat / Overheat Skill + α/ω Variant Switcher Row */}
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 pt-1 border-t border-slate-800/90">
-                      <div className="lg:col-span-6 rounded-lg border border-slate-800 bg-[#080E1C] p-2 space-y-1">
-                        <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
-                          <span className="font-bold flex items-center gap-1" style={{ color: selectedProfile.overheatSkill.color }}>
-                            <Flame className="w-3.5 h-3.5 shrink-0" />
-                            Quá Nhiệt: {selectedProfile.overheatSkill.name}
-                          </span>
-                          <span className="tabular-nums text-slate-300">
-                            {(selectedGun.overheatTimer ?? 0) > 0
-                              ? 'ĐANG BÙNG NỔ!'
-                              : `${Math.round(selectedGun.heat ?? 0)}%`}
-                          </span>
-                        </div>
-                        <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
-                          <div
-                            className="h-full transition-all duration-150"
-                            style={{
-                              width: `${(selectedGun.overheatTimer ?? 0) > 0 ? 100 : Math.min(100, selectedGun.heat ?? 0)}%`,
-                              backgroundColor: (selectedGun.overheatTimer ?? 0) > 0 ? '#FB7185' : selectedProfile.overheatSkill.color,
-                            }}
-                          />
-                        </div>
-                        <p className="text-[10px] text-slate-400 leading-snug">
-                          {selectedProfile.overheatSkill.summary}
-                        </p>
-                      </div>
-
-                      <div className="lg:col-span-6 grid grid-cols-2 gap-1.5">
-                        {(['alpha', 'omega'] as const).map((vId) => {
-                          const vSpec = selectedSpec.variants[vId];
-                          const active = inspectedVariant === vId;
-                          return (
-                            <button
-                              key={vId}
-                              type="button"
-                              data-testid={`td-variant-${vId}`}
-                              onClick={(e) => {
-                                e.currentTarget.blur();
-                                switchSelectedGunVariant(vId);
-                              }}
-                              className={`min-h-[44px] px-2.5 py-1.5 rounded-lg border text-left transition-colors cursor-pointer ${
-                                active
-                                  ? 'bg-slate-800/95 text-white'
-                                  : 'border-slate-800 bg-slate-950/70 text-slate-400 hover:border-slate-600'
-                              }`}
-                              style={
-                                active
-                                  ? { borderColor: vSpec.accentColor, boxShadow: `0 0 0 1px ${vSpec.accentColor}55` }
-                                  : undefined
-                              }
-                            >
-                              <div className="flex items-center justify-between gap-1 text-[11px] font-bold">
-                                <span style={{ color: active ? vSpec.accentColor : undefined }}>{vSpec.shortTag}</span>
-                                {active && <span className="text-[9px] font-mono text-emerald-400">ĐANG DÙNG</span>}
-                              </div>
-                              <p className="text-[10px] text-slate-400 truncate mt-0.5">{vSpec.summary}</p>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-                      {selectedSpec.milestones.map((ms) => {
-                        const unlocked = selectedGun.level >= ms.level;
-                        return (
-                          <span
-                            key={ms.level}
-                            title={ms.summary}
-                            className={`px-2 py-0.5 rounded-md border font-mono ${
-                              unlocked
-                                ? 'border-emerald-500/50 bg-emerald-950/50 text-emerald-300'
-                                : 'border-slate-700 bg-slate-950/60 text-slate-500'
-                            }`}
-                          >
-                            {unlocked ? '✓ ' : ''}Lv{ms.level}: {ms.name}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Pinned Bottom Action Bar (ALWAYS visible in Sidebar Theater & Normal mode) */}
-              <div
-                className={
-                  useSidebarTheater
-                    ? 'shrink-0 border-t border-slate-800 bg-[#080E1C] p-2 mobile-ls:p-1.5 space-y-1.5 mobile-ls:space-y-1'
-                    : 'flex flex-wrap items-center justify-between gap-2'
-                }
-              >
-                <p
-                  className={`text-[11px] mobile-ls:text-[10px] font-mono text-slate-400 ${
-                    useSidebarTheater ? 'line-clamp-2 mobile-ls:line-clamp-1' : 'line-clamp-2 sm:truncate max-w-lg'
-                  }`}
-                >
-                  {statusNotice || `${activeMap.name} · Chạm ô trống đặt súng hoặc chạm súng để nâng Lv1→Lv10 & đổi α/ω.`}
-                </p>
 
                 <button
                   type="button"
                   data-testid="prism-wave-btn"
                   onClick={launchNextWave}
                   disabled={hud.waveActive || (hud.gameMode !== 'endless' && hud.wave >= hud.totalWaves)}
-                  className={`min-h-[44px] mobile-ls:min-h-[38px] ${
-                    useSidebarTheater ? 'w-full' : 'w-full sm:w-auto'
-                  } px-4 py-1.5 rounded-xl font-bold text-xs sm:text-sm mobile-ls:text-xs inline-flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer ${
+                  aria-label="Gọi đợt quái sớm"
+                  className={`min-w-[42px] min-h-[44px] rounded-xl font-bold flex items-center justify-center cursor-pointer ${
                     hud.waveActive
-                      ? 'bg-slate-800 text-slate-300 border border-slate-700 cursor-not-allowed'
+                      ? 'bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed'
                       : 'bg-emerald-500 hover:bg-emerald-400 text-[#070B14]'
                   }`}
                 >
-                  <Play className="w-4 h-4 shrink-0" />
-                  <span>
-                    {hud.waveActive
-                      ? `Đợt ${hud.wave}/${hud.gameMode === 'endless' ? '∞' : hud.totalWaves} · Còn ${hud.remainingEnemies} quái`
-                      : `Gọi Đợt ${hud.wave + 1}/${hud.gameMode === 'endless' ? '∞' : hud.totalWaves} (Tự gọi: ${hud.nextWaveCountdown}s)`}
-                  </span>
+                  <Play className="w-4 h-4" />
                 </button>
               </div>
-            </div>
+            ) : (
+              /* 24-Gun Arsenal Dock & Tactical Command Sidebar (Tabbed on Sidebar Theater: Kho | Chi tiết) */
+              <div
+                data-testid="td-control-pane"
+                className={`border-t border-slate-800 bg-[#0B1222] safe-area-bottom ${
+                  useSidebarTheater
+                    ? 'mobile-ls:border-t-0 mobile-ls:border-l lg:border-t-0 lg:border-l flex flex-col min-h-0 mobile-ls:max-h-full'
+                    : 'px-2.5 sm:px-4 py-2.5 space-y-2.5'
+                }`}
+              >
+                {/* Dock Header: Mode Tabs (Kho / Chi tiết) + Collapse Toggle in Sidebar Theater */}
+                {useSidebarTheater ? (
+                  <div className="shrink-0 px-2 py-1.5 border-b border-slate-800/90 flex items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1 flex-1 min-w-0" role="tablist" aria-label="Chuyển bảng Kho súng và Chi tiết tháp">
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={sidebarTab === 'arsenal'}
+                        data-testid="td-tab-arsenal"
+                        onClick={() => setSidebarTab('arsenal')}
+                        className={`flex-1 min-h-[40px] px-2 rounded-lg border text-xs font-mono font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                          sidebarTab === 'arsenal'
+                            ? 'bg-amber-400/15 border-amber-400 text-amber-200'
+                            : 'bg-slate-900 border-slate-700/80 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Kho ({availableGuns.length})
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={sidebarTab === 'inspector'}
+                        data-testid="td-tab-inspector"
+                        onClick={() => setSidebarTab('inspector')}
+                        className={`flex-1 min-h-[40px] px-2 rounded-lg border text-xs font-mono font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                          sidebarTab === 'inspector'
+                            ? 'bg-sky-500/20 border-sky-400 text-sky-200'
+                            : selectedGun
+                              ? 'bg-slate-900 border-amber-400/50 text-amber-200 hover:border-amber-300'
+                              : 'bg-slate-900 border-slate-700/80 text-slate-500 hover:text-slate-300'
+                        }`}
+                      >
+                        {selectedGun ? `Tháp Lv${selectedGun.level}` : 'Chi tiết'}
+                      </button>
+                    </div>
+                    {isCompactTheater && (
+                      <button
+                        type="button"
+                        data-testid="td-collapse-sidebar-btn"
+                        onClick={() => setSidebarCollapsed(true)}
+                        aria-label="Thu gọn bảng điều khiển để mở rộng bản đồ"
+                        title="Thu gọn bảng điều khiển"
+                        className="min-w-[40px] min-h-[40px] rounded-lg border border-slate-700 bg-slate-900 text-slate-300 hover:text-white flex items-center justify-center cursor-pointer shrink-0"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-mono uppercase tracking-[0.08em] text-slate-400">
+                      Kho {availableGuns.length} Súng (★ {exclusiveGun?.shortName ?? ''} + 23 Chung)
+                    </span>
+                    <div className="flex items-center gap-1.5" role="group" aria-label="Biến thể mặc định khi đặt súng">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedVariant('alpha')}
+                        className={`min-h-[40px] px-3 rounded-lg border text-xs font-mono font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                          selectedVariant === 'alpha'
+                            ? 'bg-sky-500/20 border-sky-400 text-sky-200'
+                            : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        α Alpha · Tốc/Đa Tia
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedVariant('omega')}
+                        className={`min-h-[40px] px-3 rounded-lg border text-xs font-mono font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                          selectedVariant === 'omega'
+                            ? 'bg-amber-500/20 border-amber-400 text-amber-200'
+                            : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        ω Omega · Sát Thương
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Scrollable Middle: Tabbed Content in Sidebar Theater, Stacked in Standard Mode */}
+                <div
+                  ref={sidebarScrollRef}
+                  className={useSidebarTheater ? 'flex-1 min-h-0 overflow-y-auto p-2 mobile-ls:p-1.5 space-y-2' : 'space-y-2.5'}
+                >
+                  {/* SELECTED GUN INSPECTOR (Dedicated Tab in Sidebar Theater) */}
+                  {useSidebarTheater && sidebarTab === 'inspector' && (
+                    selectedGun && selectedProfile && selectedSpec ? (
+                      <div
+                        data-testid="td-gun-inspector"
+                        className="rounded-xl border bg-gradient-to-br from-slate-900/95 via-[#0E1729] to-slate-950 p-2.5 space-y-2.5 mobile-ls:p-2 mobile-ls:space-y-1.5 transition-all"
+                        style={{ borderColor: `${selectedProfile.accentColor}88` }}
+                      >
+                        {/* Clear Selected Tower Title + Level */}
+                        <div className="flex items-center justify-between gap-1.5">
+                          <div className="min-w-0">
+                            <h3 className="text-sm mobile-ls:text-xs font-bold text-white leading-tight truncate">
+                              {selectedSpec.name}
+                            </h3>
+                            <p className="text-[11px] font-mono text-slate-400 mt-0.5 truncate mobile-ls:hidden">
+                              {selectedProfile.tierLabel} · {selectedProfile.variantSpec.shortTag}
+                            </p>
+                          </div>
+                          <span
+                            data-testid="td-gun-level-badge"
+                            className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-md shrink-0 tabular-nums ${
+                              selectedGun.level === MAX_GUN_LEVEL
+                                ? 'bg-amber-400 text-[#070B14]'
+                                : selectedGun.level >= 7
+                                  ? 'bg-rose-500/25 border border-rose-400/50 text-rose-200'
+                                  : selectedGun.level >= 4
+                                    ? 'bg-sky-500/25 border border-sky-400/50 text-sky-200'
+                                    : 'bg-slate-800 text-slate-200'
+                            }`}
+                          >
+                            Lv.{selectedGun.level}/{MAX_GUN_LEVEL}
+                          </span>
+                        </div>
+
+                        {/* Structured 4-Cell Core Stat Strip (DMG · DPS · Tầm · Buff) */}
+                        <div className="grid grid-cols-2 gap-1.5 mobile-ls:gap-1 font-mono tabular-nums">
+                          <div className="rounded-lg bg-[#080E1C] border border-slate-800/90 px-2 py-1 mobile-ls:px-1.5 mobile-ls:py-0.5 mobile-ls:flex mobile-ls:items-baseline mobile-ls:justify-between mobile-ls:gap-1">
+                            <div className="text-[9px] text-slate-400 uppercase shrink-0">DMG</div>
+                            <div className="text-xs font-bold text-white leading-tight truncate">
+                              {selectedProfile.damage}
+                              {selectedNextProfile && selectedNextProfile.damage > selectedProfile.damage && (
+                                <span className="text-[10px] text-emerald-400 ml-0.5">
+                                  +{selectedNextProfile.damage - selectedProfile.damage}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="rounded-lg bg-[#080E1C] border border-slate-800/90 px-2 py-1 mobile-ls:px-1.5 mobile-ls:py-0.5 mobile-ls:flex mobile-ls:items-baseline mobile-ls:justify-between mobile-ls:gap-1">
+                            <div className="text-[9px] text-slate-400 uppercase shrink-0">DPS</div>
+                            <div className="text-xs font-bold text-sky-300 leading-tight truncate">
+                              {selectedProfile.dpsEstimate}
+                              {selectedNextProfile && selectedNextProfile.dpsEstimate > selectedProfile.dpsEstimate && (
+                                <span className="text-[10px] text-emerald-400 ml-0.5">
+                                  +{selectedNextProfile.dpsEstimate - selectedProfile.dpsEstimate}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="rounded-lg bg-[#080E1C] border border-slate-800/90 px-2 py-1 mobile-ls:px-1.5 mobile-ls:py-0.5 mobile-ls:flex mobile-ls:items-baseline mobile-ls:justify-between mobile-ls:gap-1">
+                            <div className="text-[9px] text-slate-400 uppercase shrink-0">Tầm</div>
+                            <div className="text-xs font-bold text-cyan-300 leading-tight">
+                              {Number((selectedProfile.rangeTiles + (selectedTeamBuff?.rangeBonusTiles ?? 0)).toFixed(1))}ô
+                            </div>
+                          </div>
+                          <div className="rounded-lg bg-[#080E1C] border border-slate-800/90 px-2 py-1 mobile-ls:px-1.5 mobile-ls:py-0.5 mobile-ls:flex mobile-ls:items-baseline mobile-ls:justify-between mobile-ls:gap-1">
+                            <div className="text-[9px] text-slate-400 uppercase shrink-0">Buff</div>
+                            <div className="text-xs font-bold leading-tight truncate">
+                              {selectedTeamBuff?.hasSupportLink ? (
+                                <span className="text-emerald-300">
+                                  +{Math.round((selectedTeamBuff.damageMult - 1) * 100)}%
+                                </span>
+                              ) : (
+                                <span className="text-amber-300">{selectedGun.kills} hạ</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Large Primary Touch Action Buttons (immediately visible above fold on 390px landscape, min-h 44px) */}
+                        <div className="space-y-1.5">
+                          <button
+                            type="button"
+                            data-testid="td-upgrade-btn"
+                            onClick={(e) => {
+                              e.currentTarget.blur();
+                              upgradeSelectedGun();
+                            }}
+                            disabled={selectedUpgradeCost === null || hud.energy < selectedUpgradeCost}
+                            className={`w-full min-h-[44px] px-3 rounded-xl text-xs font-mono font-bold cursor-pointer transition-colors tabular-nums ${
+                              selectedUpgradeCost === null
+                                ? 'bg-amber-400/20 border border-amber-400 text-amber-300 cursor-default'
+                                : hud.energy >= selectedUpgradeCost
+                                  ? 'bg-amber-400 text-[#070B14] hover:bg-amber-300'
+                                  : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                            }`}
+                          >
+                            {selectedUpgradeCost === null
+                              ? 'ĐÃ ĐẠT MAX LV.10'
+                              : `Nâng Cấp Lv.${selectedGun.level + 1} (${selectedUpgradeCost}⚡)`}
+                          </button>
+
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.currentTarget.blur();
+                                cycleSelectedPriority();
+                              }}
+                              className="min-h-[42px] px-2 rounded-xl border border-slate-700 bg-slate-800 hover:border-cyan-400 text-cyan-200 text-xs font-mono cursor-pointer truncate"
+                            >
+                              {PRIORITY_LABELS[selectedGun.priority]}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.currentTarget.blur();
+                                sellSelectedGun();
+                              }}
+                              aria-label="Thu hồi trụ súng"
+                              className="min-h-[42px] px-2 rounded-xl border border-rose-500/35 bg-rose-950/40 hover:bg-rose-900/60 text-rose-200 text-xs font-mono font-bold inline-flex items-center justify-center gap-1 cursor-pointer tabular-nums"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                              <span>Bán +{selectedSellRefund}⚡</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {selectedTeamBuff?.hasSupportLink && (
+                          <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 rounded-lg px-2 py-1.5">
+                            <span className="font-bold">BUFF:</span>
+                            {selectedTeamBuff.speedMult > 1 && <span>+{Math.round((selectedTeamBuff.speedMult - 1) * 100)}% Tốc</span>}
+                            {selectedTeamBuff.damageMult > 1 && <span>+{Math.round((selectedTeamBuff.damageMult - 1) * 100)}% DMG</span>}
+                            {selectedTeamBuff.rangeBonusTiles > 0 && <span>+{selectedTeamBuff.rangeBonusTiles}ô Tầm</span>}
+                            {selectedTeamBuff.armorPierceBonus > 0 && <span>+{Math.round(selectedTeamBuff.armorPierceBonus * 100)}% Giáp</span>}
+                            {selectedTeamBuff.shieldMultBonus > 0 && <span>+{Math.round(selectedTeamBuff.shieldMultBonus * 100)}% Khiên</span>}
+                          </div>
+                        )}
+
+                        {/* 10-Step Level Progress + Overheat Gauge */}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center gap-1" aria-label="Tiến trình nâng cấp Lv1 đến Lv10">
+                            {Array.from({ length: MAX_GUN_LEVEL }, (_, i) => {
+                              const lv = i + 1;
+                              const active = selectedGun.level >= lv;
+                              const isBreakthrough = lv === 3 || lv === 5 || lv === 7 || lv === 10;
+                              return (
+                                <div
+                                  key={lv}
+                                  className={`h-1.5 flex-1 rounded-full ${
+                                    active
+                                      ? lv === 10
+                                        ? 'bg-amber-400'
+                                        : isBreakthrough
+                                          ? 'bg-cyan-400'
+                                          : 'bg-emerald-400'
+                                      : isBreakthrough
+                                        ? 'bg-slate-700 ring-1 ring-amber-400/40'
+                                        : 'bg-slate-800'
+                                  }`}
+                                />
+                              );
+                            })}
+                          </div>
+
+                          <div className="rounded-lg border border-slate-800 bg-[#080E1C] px-2 py-1.5 space-y-1">
+                            <div className="flex items-center justify-between gap-1 text-[10px] font-mono">
+                              <span className="font-bold flex items-center gap-1 truncate" style={{ color: selectedProfile.overheatSkill.color }}>
+                                <Flame className="w-3 h-3 shrink-0" />
+                                {selectedProfile.overheatSkill.name}
+                              </span>
+                              <span className="tabular-nums text-slate-300 shrink-0">
+                                {(selectedGun.overheatTimer ?? 0) > 0 ? 'BÙNG NỔ!' : `${Math.round(selectedGun.heat ?? 0)}%`}
+                              </span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                              <div
+                                className="h-full transition-all duration-150"
+                                style={{
+                                  width: `${(selectedGun.overheatTimer ?? 0) > 0 ? 100 : Math.min(100, selectedGun.heat ?? 0)}%`,
+                                  backgroundColor: (selectedGun.overheatTimer ?? 0) > 0 ? '#FB7185' : selectedProfile.overheatSkill.color,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* α / ω Variant Switcher (min-h 42px) */}
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {(['alpha', 'omega'] as const).map((vId) => {
+                            const vSpec = selectedSpec.variants[vId];
+                            const active = inspectedVariant === vId;
+                            return (
+                              <button
+                                key={vId}
+                                type="button"
+                                data-testid={`td-variant-${vId}`}
+                                onClick={(e) => {
+                                  e.currentTarget.blur();
+                                  switchSelectedGunVariant(vId);
+                                }}
+                                className={`min-h-[42px] px-2 py-1.5 rounded-lg border text-left transition-colors cursor-pointer ${
+                                  active ? 'bg-slate-800/95 text-white' : 'border-slate-800 bg-slate-950/70 text-slate-400 hover:border-slate-600'
+                                }`}
+                                style={active ? { borderColor: vSpec.accentColor } : undefined}
+                              >
+                                <div className="text-[11px] font-bold truncate" style={{ color: active ? vSpec.accentColor : undefined }}>
+                                  {vSpec.shortTag}
+                                </div>
+                                <p className="text-[9px] text-slate-400 truncate">{vSpec.summary}</p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-slate-700/80 bg-[#080E1C] p-4 text-center space-y-2">
+                        <p className="text-xs font-semibold text-slate-200">Chưa chọn tháp trên bản đồ</p>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          Chạm vào một tháp đã đặt trên lưới để xem DMG, DPS, Tầm bắn và nâng cấp Lv1→Lv10.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setSidebarTab('arsenal')}
+                          className="min-h-[42px] px-4 rounded-xl bg-amber-400 text-[#070B14] font-bold text-xs cursor-pointer"
+                        >
+                          Mở Kho Súng
+                        </button>
+                      </div>
+                    )
+                  )}
+
+                  {/* ARSENAL TAB (Visible on Sidebar Theater when 'arsenal' active, or always in Standard Mode) */}
+                  {(!useSidebarTheater || sidebarTab === 'arsenal') && (
+                    <>
+                      {useSidebarTheater && (
+                        <div className="space-y-1.5">
+                          {/* Quick Category Filter + α/ω Selector */}
+                          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                            {(
+                              [
+                                { id: 'all', label: 'Tất cả' },
+                                { id: 'support', label: 'Hỗ trợ' },
+                                { id: 'exclusive', label: '★ Riêng' },
+                                { id: 'dps', label: 'Sát thương' },
+                              ] as const
+                            ).map((f) => (
+                              <button
+                                key={f.id}
+                                type="button"
+                                onClick={() => setArsenalFilter(f.id)}
+                                className={`min-h-[36px] px-2.5 rounded-lg border text-[11px] font-mono font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                                  arsenalFilter === f.id
+                                    ? 'bg-sky-500/20 border-sky-400 text-sky-200'
+                                    : 'bg-slate-900 border-slate-700/80 text-slate-400 hover:text-white'
+                                }`}
+                              >
+                                {f.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-1.5" role="group" aria-label="Biến thể mặc định khi đặt súng">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedVariant('alpha')}
+                              className={`min-h-[38px] px-2 rounded-lg border text-[11px] font-mono font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                                selectedVariant === 'alpha'
+                                  ? 'bg-sky-500/20 border-sky-400 text-sky-200'
+                                  : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              α Alpha
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedVariant('omega')}
+                              className={`min-h-[38px] px-2 rounded-lg border text-[11px] font-mono font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                                selectedVariant === 'omega'
+                                  ? 'bg-amber-500/20 border-amber-400 text-amber-200'
+                                  : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              ω Omega
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 24-Gun Arsenal Grid (comfortable touch targets >= 44px) */}
+                      <div
+                        className={
+                          useSidebarTheater
+                            ? 'flex flex-nowrap overflow-x-auto gap-1.5 pb-1 mobile-ls:grid mobile-ls:grid-cols-2 mobile-ls:overflow-visible mobile-ls:pb-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:pb-0'
+                            : 'flex flex-nowrap overflow-x-auto gap-1.5 pb-1 md:grid md:grid-cols-8 md:overflow-visible md:pb-0'
+                        }
+                      >
+                        {(useSidebarTheater ? filteredArsenalGuns : availableGuns).map((item) => {
+                          const isActive = selectedTool === item.type;
+                          const canAfford = hud.energy >= item.cost;
+                          const isExclusive = Boolean(item.exclusiveMapId);
+                          const isSupport = isSupportGunType(item.type);
+                          return (
+                            <button
+                              key={item.type}
+                              type="button"
+                              data-testid={`td-gun-${item.type}`}
+                              onClick={(e) => {
+                                e.currentTarget.blur();
+                                unlockPrismAudio(audioCtxRef);
+                                setSelectedTool(item.type);
+                              }}
+                              className={`min-w-[116px] ${
+                                useSidebarTheater ? 'mobile-ls:min-w-0 lg:min-w-0 min-h-[46px]' : 'md:min-w-0 min-h-[48px]'
+                              } shrink-0 px-2 py-1.5 rounded-xl border text-left transition-colors cursor-pointer ${
+                                isActive
+                                  ? 'bg-amber-950/65 border-amber-400 text-white shadow-[0_0_0_1px_rgba(251,191,36,0.45)]'
+                                  : isExclusive
+                                    ? 'bg-amber-950/25 border-amber-500/50 text-amber-100 hover:border-amber-400'
+                                    : isSupport
+                                      ? 'bg-emerald-950/25 border-emerald-500/45 text-emerald-100 hover:border-emerald-400'
+                                      : 'bg-slate-900/90 border-slate-700/80 text-slate-200 hover:border-slate-500'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1 text-[11px] font-bold">
+                                <span className="truncate">
+                                  <span className="hidden lg:inline">[{item.hotkey.toUpperCase()}] </span>
+                                  {item.shortName}
+                                </span>
+                                <span className={`font-mono shrink-0 tabular-nums ${canAfford ? 'text-amber-300' : 'text-rose-400'}`}>
+                                  {item.cost}⚡
+                                </span>
+                              </div>
+                              <p className={`text-[9px] truncate mt-0.5 ${isExclusive ? 'text-amber-300/90 font-semibold' : isSupport ? 'text-emerald-300/90' : 'text-slate-400'}`}>
+                                {isExclusive ? '★ Đặc Quyền' : isSupport ? '✦ Hỗ Trợ Team' : item.roleClue}
+                              </p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Embedded (non-sidebar / Portrait & Standard Desktop) Selected Gun Inspector */}
+                  {!useSidebarTheater && selectedGun && selectedProfile && selectedSpec && (
+                    <div
+                      data-testid="td-gun-inspector"
+                      className="rounded-xl border bg-gradient-to-br from-slate-900/95 via-[#0E1729] to-slate-950 p-3 space-y-3 transition-all"
+                      style={{ borderColor: `${selectedProfile.accentColor}77` }}
+                    >
+                      {/* Header + Core Stats */}
+                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                        <div className="space-y-2 min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm sm:text-base font-bold text-white">{selectedSpec.name}</span>
+                            <span
+                              data-testid="td-gun-level-badge"
+                              className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-md tabular-nums ${
+                                selectedGun.level === MAX_GUN_LEVEL
+                                  ? 'bg-amber-400 text-[#070B14]'
+                                  : selectedGun.level >= 7
+                                    ? 'bg-rose-500/20 border border-rose-400/50 text-rose-200'
+                                    : selectedGun.level >= 4
+                                      ? 'bg-sky-500/20 border border-sky-400/50 text-sky-200'
+                                      : 'bg-slate-800 text-slate-300'
+                              }`}
+                            >
+                              Lv.{selectedGun.level}/{MAX_GUN_LEVEL} · {selectedProfile.tierLabel}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                simRef.current.selectedGunId = null;
+                                setSelectedGunId(null);
+                              }}
+                              aria-label="Đóng bảng súng"
+                              className="ml-auto min-h-[40px] px-3 rounded-lg border border-slate-700 bg-slate-800 hover:border-cyan-400 text-slate-200 text-xs font-mono inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              <span>Đóng</span>
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono tabular-nums">
+                            <div className="rounded-lg bg-[#080E1C] border border-slate-800 px-2.5 py-1.5">
+                              <span className="text-[10px] text-slate-400 block">DMG</span>
+                              <strong className="text-white text-sm">{selectedProfile.damage}</strong>
+                              {selectedNextProfile && selectedNextProfile.damage > selectedProfile.damage && (
+                                <span className="text-emerald-400 text-[10px] ml-1">
+                                  +{selectedNextProfile.damage - selectedProfile.damage}
+                                </span>
+                              )}
+                            </div>
+                            <div className="rounded-lg bg-[#080E1C] border border-slate-800 px-2.5 py-1.5">
+                              <span className="text-[10px] text-slate-400 block">DPS</span>
+                              <strong className="text-sky-300 text-sm">{selectedProfile.dpsEstimate}</strong>
+                              {selectedNextProfile && selectedNextProfile.dpsEstimate > selectedProfile.dpsEstimate && (
+                                <span className="text-emerald-400 text-[10px] ml-1">
+                                  +{selectedNextProfile.dpsEstimate - selectedProfile.dpsEstimate}
+                                </span>
+                              )}
+                            </div>
+                            <div className="rounded-lg bg-[#080E1C] border border-slate-800 px-2.5 py-1.5">
+                              <span className="text-[10px] text-slate-400 block">Tầm</span>
+                              <strong className="text-cyan-300 text-sm">
+                                {Number((selectedProfile.rangeTiles + (selectedTeamBuff?.rangeBonusTiles ?? 0)).toFixed(1))}ô
+                              </strong>
+                            </div>
+                            <div className="rounded-lg bg-[#080E1C] border border-slate-800 px-2.5 py-1.5">
+                              <span className="text-[10px] text-slate-400 block">Buff / Hạ</span>
+                              {selectedTeamBuff?.hasSupportLink ? (
+                                <strong className="text-emerald-300 text-xs">
+                                  +{Math.round((selectedTeamBuff.damageMult - 1) * 100)}% DMG
+                                </strong>
+                              ) : (
+                                <strong className="text-amber-300 text-sm">{selectedGun.kills} hạ</strong>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 10-Step Level Progression Bar */}
+                          <div className="flex items-center gap-1 pt-0.5" aria-label="Tiến trình nâng cấp Lv1 đến Lv10">
+                            {Array.from({ length: MAX_GUN_LEVEL }, (_, i) => {
+                              const lv = i + 1;
+                              const active = selectedGun.level >= lv;
+                              const isBreakthrough = lv === 3 || lv === 5 || lv === 7 || lv === 10;
+                              return (
+                                <div
+                                  key={lv}
+                                  className={`h-1.5 flex-1 rounded-full transition-colors ${
+                                    active
+                                      ? lv === 10
+                                        ? 'bg-amber-400'
+                                        : isBreakthrough
+                                          ? 'bg-cyan-400'
+                                          : 'bg-emerald-400'
+                                      : isBreakthrough
+                                        ? 'bg-slate-700 ring-1 ring-amber-400/40'
+                                        : 'bg-slate-800'
+                                  }`}
+                                />
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Primary Action Buttons (Touch >= 44px) */}
+                        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            data-testid="td-upgrade-btn"
+                            onClick={(e) => {
+                              e.currentTarget.blur();
+                              upgradeSelectedGun();
+                            }}
+                            disabled={selectedUpgradeCost === null || hud.energy < selectedUpgradeCost}
+                            className={`col-span-2 sm:col-span-1 min-h-[44px] px-4 rounded-xl text-xs font-mono font-bold cursor-pointer transition-colors tabular-nums ${
+                              selectedUpgradeCost === null
+                                ? 'bg-amber-400/20 border border-amber-400 text-amber-300 cursor-default'
+                                : hud.energy >= selectedUpgradeCost
+                                  ? 'bg-amber-400 text-[#070B14] hover:bg-amber-300'
+                                  : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                            }`}
+                          >
+                            {selectedUpgradeCost === null
+                              ? 'MAX LV 10'
+                              : `[U] Nâng Lv${selectedGun.level + 1} (${selectedUpgradeCost}⚡)`}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.currentTarget.blur();
+                              cycleSelectedPriority();
+                            }}
+                            title="Đổi ưu tiên mục tiêu [T]"
+                            className="min-h-[44px] px-3 rounded-xl border border-slate-700 bg-slate-800 hover:border-cyan-400 text-cyan-200 text-xs font-mono cursor-pointer"
+                          >
+                            [T] {PRIORITY_LABELS[selectedGun.priority]}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.currentTarget.blur();
+                              sellSelectedGun();
+                            }}
+                            aria-label="Thu hồi trụ súng"
+                            className="min-h-[44px] px-3 rounded-xl border border-rose-500/35 bg-rose-950/40 hover:bg-rose-900/60 text-rose-200 text-xs font-mono font-bold inline-flex items-center justify-center gap-1 cursor-pointer tabular-nums"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Bán +{selectedSellRefund}⚡</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Live Heat / Overheat Skill + α/ω Variant Switcher Row */}
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 pt-2 border-t border-slate-800/90">
+                        <div className="lg:col-span-6 rounded-lg border border-slate-800 bg-[#080E1C] p-2.5 space-y-1">
+                          <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
+                            <span className="font-bold flex items-center gap-1" style={{ color: selectedProfile.overheatSkill.color }}>
+                              <Flame className="w-3.5 h-3.5 shrink-0" />
+                              Quá Nhiệt: {selectedProfile.overheatSkill.name}
+                            </span>
+                            <span className="tabular-nums text-slate-300">
+                              {(selectedGun.overheatTimer ?? 0) > 0
+                                ? 'ĐANG BÙNG NỔ!'
+                                : `${Math.round(selectedGun.heat ?? 0)}%`}
+                            </span>
+                          </div>
+                          <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                            <div
+                              className="h-full transition-all duration-150"
+                              style={{
+                                width: `${(selectedGun.overheatTimer ?? 0) > 0 ? 100 : Math.min(100, selectedGun.heat ?? 0)}%`,
+                                backgroundColor: (selectedGun.overheatTimer ?? 0) > 0 ? '#FB7185' : selectedProfile.overheatSkill.color,
+                              }}
+                            />
+                          </div>
+                          <p className="text-[10px] text-slate-400 leading-snug">
+                            {selectedProfile.overheatSkill.summary}
+                          </p>
+                        </div>
+
+                        <div className="lg:col-span-6 grid grid-cols-2 gap-2">
+                          {(['alpha', 'omega'] as const).map((vId) => {
+                            const vSpec = selectedSpec.variants[vId];
+                            const active = inspectedVariant === vId;
+                            return (
+                              <button
+                                key={vId}
+                                type="button"
+                                data-testid={`td-variant-${vId}`}
+                                onClick={(e) => {
+                                  e.currentTarget.blur();
+                                  switchSelectedGunVariant(vId);
+                                }}
+                                className={`min-h-[44px] px-2.5 py-1.5 rounded-lg border text-left transition-colors cursor-pointer ${
+                                  active
+                                    ? 'bg-slate-800/95 text-white'
+                                    : 'border-slate-800 bg-slate-950/70 text-slate-400 hover:border-slate-600'
+                                }`}
+                                style={
+                                  active
+                                    ? { borderColor: vSpec.accentColor, boxShadow: `0 0 0 1px ${vSpec.accentColor}55` }
+                                    : undefined
+                                }
+                              >
+                                <div className="flex items-center justify-between gap-1 text-[11px] font-bold">
+                                  <span style={{ color: active ? vSpec.accentColor : undefined }}>{vSpec.shortTag}</span>
+                                  {active && <span className="text-[9px] font-mono text-emerald-400">ĐANG DÙNG</span>}
+                                </div>
+                                <p className="text-[10px] text-slate-400 truncate mt-0.5">{vSpec.summary}</p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Pinned Bottom Action Bar (min-h 44px Early Wave CTA) */}
+                <div
+                  className={
+                    useSidebarTheater
+                      ? 'shrink-0 border-t border-slate-800 bg-[#080E1C] p-2 space-y-1.5'
+                      : 'flex flex-wrap items-center justify-between gap-2 pt-1'
+                  }
+                >
+                  {!isCompactTheater && (
+                    <p
+                      className={`text-[11px] font-mono text-slate-400 ${
+                        useSidebarTheater ? 'line-clamp-1' : 'line-clamp-2 sm:truncate max-w-lg'
+                      }`}
+                    >
+                      {statusNotice || `${activeMap.name} · Chạm ô trống đặt súng hoặc chạm súng để nâng Lv1→Lv10.`}
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    data-testid="prism-wave-btn"
+                    onClick={launchNextWave}
+                    disabled={hud.waveActive || (hud.gameMode !== 'endless' && hud.wave >= hud.totalWaves)}
+                    className={`min-h-[44px] ${
+                      useSidebarTheater ? 'w-full' : 'w-full sm:w-auto'
+                    } px-4 py-2 rounded-xl font-bold text-xs sm:text-sm inline-flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer tabular-nums ${
+                      hud.waveActive
+                        ? 'bg-slate-800 text-slate-300 border border-slate-700 cursor-not-allowed'
+                        : 'bg-emerald-500 hover:bg-emerald-400 text-[#070B14]'
+                    }`}
+                  >
+                    <Play className="w-4 h-4 shrink-0" />
+                    <span className="truncate">
+                      {hud.waveActive
+                        ? `Đợt ${hud.wave}/${hud.gameMode === 'endless' ? '∞' : hud.totalWaves} · Còn ${hud.remainingEnemies} quái`
+                        : `Gọi Đợt ${hud.wave + 1}/${hud.gameMode === 'endless' ? '∞' : hud.totalWaves} (${hud.nextWaveCountdown}s)`}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* PAUSED MODAL */}

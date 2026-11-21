@@ -15,6 +15,7 @@ import { SkillsSection } from './components/SkillsSection.tsx';
 import { GameHubSection } from './components/GameHubSection.tsx';
 import { LyricGrooveSketchpadSection } from './components/LyricGrooveSketchpadSection.tsx';
 import { TopBarAndHeader } from './components/TopBarAndHeader.tsx';
+import { OfflineIndicator } from './components/PwaInstallControls.tsx';
 import { GALLERY_ARTWORKS } from './data/portfolioData.ts';
 import {
   AppRoute,
@@ -218,7 +219,13 @@ export default function App() {
     <div className="min-h-screen editorial-grid-bg flex flex-col">
       <TopBarAndHeader activeRoute={activeRoute} onNavigate={handleNavigate} />
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 space-y-16 sm:space-y-20 pb-8">
+      <main
+        className={`flex-1 max-w-7xl mx-auto w-full ${
+          activeRoute === 'game'
+            ? 'px-3 sm:px-6 mobile-ls:px-1.5 mobile-ls:pb-1 space-y-6 mobile-ls:space-y-0 pb-6 safe-area-x'
+            : 'px-4 sm:px-6 space-y-16 sm:space-y-20 pb-8'
+        }`}
+      >
         {activeRoute === 'gallery' ? (
           <GallerySection
             theme={theme}
@@ -275,6 +282,7 @@ export default function App() {
         onNext={handleNextArtwork}
         onSelectIndex={handleSelectLightboxIndex}
       />
+      <OfflineIndicator />
     </div>
   );
 }

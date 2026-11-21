@@ -27,6 +27,7 @@ import { FidgetCockpitGameSection } from './FidgetCockpitGameSection.tsx';
 import { GearArenaGameSection } from './GearArenaGameSection.tsx';
 import { LinuxHackerGameSection } from './LinuxHackerGameSection.tsx';
 import { PrismTdGameSection } from './PrismTdGameSection.tsx';
+import { PwaInstallButton } from './PwaInstallControls.tsx';
 import { TrafficRouterGameSection } from './TrafficRouterGameSection.tsx';
 import { XiangqiGameSection } from './XiangqiGameSection.tsx';
 
@@ -370,6 +371,12 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
 
   const exitFullscreen = useCallback(() => {
     setIsFullscreen(false);
+    try {
+      const orientation = screen.orientation as ScreenOrientation & { unlock?: () => void };
+      orientation?.unlock?.();
+    } catch {
+      // Ignore unsupported orientation unlock
+    }
     if (typeof document !== 'undefined' && document.fullscreenElement) {
       void document.exitFullscreen().catch(() => {});
     }
@@ -381,8 +388,21 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
     if (target && typeof target.requestFullscreen === 'function') {
       try {
         const res = target.requestFullscreen();
-        if (res && typeof res.catch === 'function') {
-          void res.catch(() => {});
+        if (res && typeof res.then === 'function') {
+          void res
+            .then(() => {
+              try {
+                const orientation = screen.orientation as ScreenOrientation & {
+                  lock?: (mode: string) => Promise<void>;
+                };
+                if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) {
+                  void orientation?.lock?.('landscape')?.catch(() => {});
+                }
+              } catch {
+                // Ignore orientation lock failures on browsers that restrict it
+              }
+            })
+            .catch(() => {});
         }
       } catch {
         // Fallback smoothly to fixed viewport overlay
@@ -483,15 +503,18 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
             })}
           </div>
 
-          {/* Right Action Controls: Catalog Drawer Toggle + Fullscreen F11 */}
+          {/* Right Action Controls: PWA Install + Catalog Drawer Toggle + Fullscreen F11 */}
           <div className="flex items-center gap-1.5 shrink-0">
+            <div className="hidden sm:block">
+              <PwaInstallButton compact className="min-h-[40px] px-2.5 text-[11px]" />
+            </div>
             <button
               type="button"
               data-testid="hub-catalog-toggle"
               onClick={() => setHubExpanded((v) => !v)}
               aria-expanded={hubExpanded}
               title="Mở / Thu gọn danh mục phân loại"
-              className="min-h-[38px] mobile-ls:min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 mobile-ls:px-2 rounded-lg border border-[#DCE6F2] dark:border-[#1E2E4A] bg-[#F8FAFC] dark:bg-[#111C33] text-[11px] font-semibold text-[#334155] dark:text-[#CBD5E1] hover:border-[#0284C7] cursor-pointer whitespace-nowrap"
+              className="min-h-[40px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-[#DCE6F2] dark:border-[#1E2E4A] bg-[#F8FAFC] dark:bg-[#111C33] text-[11px] font-semibold text-[#334155] dark:text-[#CBD5E1] hover:border-[#0284C7] cursor-pointer whitespace-nowrap"
             >
               <span className="hidden md:inline">{hubExpanded ? 'Thu gọn' : 'Danh mục'}</span>
               <span className="md:hidden">{hubExpanded ? 'Đóng' : 'Menu'}</span>
@@ -504,7 +527,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
               onClick={toggleFullscreen}
               aria-label={isFullscreen ? 'Thoát toàn màn hình (Esc)' : 'Toàn màn hình (F11)'}
               title={isFullscreen ? 'Thoát toàn màn hình (Esc)' : 'Toàn màn hình (F11)'}
-              className="min-h-[38px] mobile-ls:min-h-[34px] inline-flex items-center gap-1 px-2.5 py-1 mobile-ls:px-2 rounded-lg border border-sky-500/40 bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 text-[11px] font-mono font-bold hover:border-sky-400 cursor-pointer whitespace-nowrap"
+              className="min-h-[40px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-sky-500/40 bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 text-[11px] font-mono font-bold hover:border-sky-400 cursor-pointer whitespace-nowrap"
             >
               {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
               <span className="hidden lg:inline">{isFullscreen ? 'Esc' : 'F11'}</span>
@@ -656,7 +679,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
             : 'relative'
         }
       >
-        {isFullscreen && (
+        {isFullscreen && activeGame !== 'prism_td' && (
           <button
             type="button"
             data-testid="hub-exit-fullscreen-btn"
@@ -665,7 +688,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
               top: 'max(0.5rem, env(safe-area-inset-top, 0px))',
               right: 'max(0.625rem, env(safe-area-inset-right, 0px))',
             }}
-            className="fixed z-[60] min-h-[34px] px-2.5 py-1 rounded-lg bg-slate-900/95 hover:bg-slate-800 border border-sky-400/60 text-sky-200 text-[11px] font-mono font-bold inline-flex items-center gap-1.5 shadow-lg cursor-pointer"
+            className="fixed z-[60] min-h-[40px] px-3 py-1.5 rounded-lg bg-slate-900/95 hover:bg-slate-800 border border-sky-400/60 text-sky-200 text-xs font-mono font-bold inline-flex items-center gap-1.5 shadow-lg cursor-pointer"
           >
             <Minimize2 className="w-3.5 h-3.5" aria-hidden="true" />
             <span className="hidden lg:inline">Esc · Thoát Toàn Màn Hình</span>
@@ -687,6 +710,8 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
               theme={theme}
               onToggleTheme={onToggleTheme}
               isFullscreen={isFullscreen}
+              onToggleFullscreen={toggleFullscreen}
+              onExitFullscreen={exitFullscreen}
             />
           )}
           {activeGame === 'linux_hacker' && (

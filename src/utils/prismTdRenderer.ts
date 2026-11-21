@@ -133,10 +133,12 @@ export function drawShellCasings(ctx: CanvasRenderingContext2D, casings: readonl
 export function drawOverheatSpecialFx(
   ctx: CanvasRenderingContext2D,
   effects: readonly OverheatFx[],
-  animTime: number
+  animTime: number,
+  alphaScale = 1
 ) {
+  const safeScale = Math.max(0.35, Math.min(1, alphaScale));
   for (const fx of effects) {
-    const t = Math.max(0, Math.min(1, fx.life / fx.maxLife));
+    const t = Math.max(0, Math.min(1, fx.life / fx.maxLife)) * safeScale;
     ctx.save();
 
     if (fx.kind === 'phoenix') {
@@ -465,11 +467,13 @@ export function drawOverheatSpecialFx(
 export function drawRailBeamEnhanced(
   ctx: CanvasRenderingContext2D,
   rb: RailBeamFx,
-  animTime: number
+  animTime: number,
+  alphaScale = 1
 ) {
   ctx.save();
   const rTier = rb.visualTier;
-  ctx.globalAlpha = rb.alpha;
+  const effAlpha = rb.alpha * Math.max(0.4, Math.min(1, alphaScale));
+  ctx.globalAlpha = effAlpha;
   ctx.lineCap = 'round';
 
   if (rb.variant === 'sniper') {
