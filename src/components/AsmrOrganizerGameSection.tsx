@@ -1261,7 +1261,7 @@ export function AsmrOrganizerGameSection({ theme }: AsmrOrganizerGameSectionProp
           <button
             type="button"
             onClick={() => setPhase('TITLE')}
-            className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 ${subSurfaceClass} hover:border-[#6B8E78]`}
+            className={`min-h-[40px] px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 ${subSurfaceClass} hover:border-[#6B8E78]`}
           >
             Chọn Màn ({levelIdx + 1}/{ORGANIZER_LEVELS.length})
           </button>
@@ -1275,19 +1275,19 @@ export function AsmrOrganizerGameSection({ theme }: AsmrOrganizerGameSectionProp
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Tabular Progress & Moves */}
-          <div className={`px-3 py-1.5 rounded-lg border text-xs font-medium tabular-nums ${subSurfaceClass}`}>
+          <div className={`min-h-[40px] inline-flex items-center px-3 py-1.5 rounded-lg border text-xs font-medium tabular-nums ${subSurfaceClass}`}>
             Khớp chuẩn:{' '}
-            <strong className="text-[#567A63] dark:text-[#9FC0A5]">
+            <strong className="text-[#567A63] dark:text-[#9FC0A5] ml-1">
               {progress.correctCount}/{progress.totalCount}
             </strong>
             <span className="mx-2 opacity-40" aria-hidden="true">·</span>
-            Thao tác: <strong>{moves}</strong>
+            Thao tác: <strong className="ml-1">{moves}</strong>
           </div>
 
           <button
             type="button"
             onClick={() => setShowRuleClue((v) => !v)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
               showRuleClue
                 ? 'bg-[#6B8E78] text-white border-[#587964]'
                 : `${subSurfaceClass} hover:border-[#6B8E78]`
@@ -1301,7 +1301,7 @@ export function AsmrOrganizerGameSection({ theme }: AsmrOrganizerGameSectionProp
             type="button"
             data-testid="asmr-hint-btn"
             onClick={handleRequestHint}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 ${subSurfaceClass} hover:border-[#C59B6D]`}
+            className={`min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0 ${subSurfaceClass} hover:border-[#C59B6D]`}
           >
             <Lightbulb className="w-3.5 h-3.5 text-[#C59B6D]" aria-hidden="true" />
             <span>Gợi ý 1 món</span>
@@ -1311,7 +1311,7 @@ export function AsmrOrganizerGameSection({ theme }: AsmrOrganizerGameSectionProp
             type="button"
             onClick={() => setMuted((m) => !m)}
             aria-label={muted ? 'Bật âm thanh ASMR' : 'Tắt âm thanh ASMR'}
-            className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${subSurfaceClass} hover:border-[#6B8E78]`}
+            className={`min-w-[40px] min-h-[40px] p-2 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${subSurfaceClass} hover:border-[#6B8E78]`}
           >
             {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-[#6B8E78]" />}
           </button>
@@ -1320,7 +1320,7 @@ export function AsmrOrganizerGameSection({ theme }: AsmrOrganizerGameSectionProp
             type="button"
             onClick={() => startLevel(levelIdx)}
             aria-label="Xáo trộn lại màn này"
-            className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${subSurfaceClass} hover:border-[#6B8E78]`}
+            className={`min-w-[40px] min-h-[40px] p-2 rounded-lg border flex items-center justify-center transition-colors cursor-pointer ${subSurfaceClass} hover:border-[#6B8E78]`}
           >
             <RotateCcw className="w-4 h-4" />
           </button>
@@ -1553,14 +1553,14 @@ export function AsmrOrganizerGameSection({ theme }: AsmrOrganizerGameSectionProp
       </div>
 
       {/* Bottom Item Controls & Rotate Bar */}
-      <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-2.5 border-t border-[#E4DDD3] dark:border-[#38322E]">
+      <div className="sticky bottom-2 z-20 sm:static mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 p-2.5 sm:p-0 sm:pt-2.5 rounded-xl sm:rounded-none border sm:border-0 sm:border-t border-[#E4DDD3] dark:border-[#38322E] bg-[#FAF7F2]/95 dark:bg-[#221E1B]/95 sm:bg-transparent sm:dark:bg-transparent shadow-lg sm:shadow-none">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             data-testid="asmr-rotate-left-btn"
             disabled={!selectedId}
             onClick={() => selectedId && rotateItemById(selectedId, -1)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+            className={`min-h-[44px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
               selectedId
                 ? `${subSurfaceClass} hover:border-[#6B8E78] cursor-pointer`
                 : 'opacity-45 cursor-not-allowed border-transparent'
@@ -1574,7 +1574,7 @@ export function AsmrOrganizerGameSection({ theme }: AsmrOrganizerGameSectionProp
             data-testid="asmr-rotate-right-btn"
             disabled={!selectedId}
             onClick={() => selectedId && rotateItemById(selectedId, 1)}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+            className={`min-h-[44px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
               selectedId
                 ? 'bg-[#6B8E78] hover:bg-[#5B7D67] text-white border-[#587964] cursor-pointer'
                 : 'opacity-45 cursor-not-allowed border-transparent'
@@ -1583,8 +1583,17 @@ export function AsmrOrganizerGameSection({ theme }: AsmrOrganizerGameSectionProp
             <RotateCw className="w-3.5 h-3.5" aria-hidden="true" />
             <span>Xoay +90° [R]</span>
           </button>
+          {selectedId && (
+            <button
+              type="button"
+              onClick={() => setSelectedId(null)}
+              className={`min-h-[44px] sm:hidden inline-flex items-center justify-center px-3 py-2 rounded-lg border text-xs font-medium cursor-pointer whitespace-nowrap shrink-0 ${subSurfaceClass}`}
+            >
+              Bỏ chọn
+            </button>
+          )}
 
-          <span className="text-xs text-[#6D635A] dark:text-[#BEB5AB]">
+          <span className="text-xs text-[#6D635A] dark:text-[#BEB5AB] w-full sm:w-auto">
             {selectedDef
               ? `Đang chọn: ${selectedDef.name} (${items.find((i) => i.id === selectedDef.id)?.rotation ?? 0}°)`
               : 'Nhấp chọn đồ vật để xoay hoặc kéo thẳng vào khay'}
@@ -1613,7 +1622,7 @@ export function AsmrOrganizerGameSection({ theme }: AsmrOrganizerGameSectionProp
           aria-label="Hoàn thành sắp xếp chuẩn OCD"
           className="absolute inset-0 z-20 rounded-2xl bg-[#1D1A18]/55 backdrop-blur-xs flex items-center justify-center p-4"
         >
-          <div className={`w-full max-w-md rounded-2xl border p-6 text-center space-y-4 shadow-xl ${surfaceClass}`}>
+          <div className={`w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border p-6 text-center space-y-4 shadow-xl ${surfaceClass}`}>
             <div className="mx-auto w-12 h-12 rounded-full bg-[#6B8E78]/15 text-[#6B8E78] flex items-center justify-center">
               <CheckCircle2 className="w-7 h-7" />
             </div>

@@ -33,7 +33,9 @@ import {
   GAME_MODE_CONFIGS,
   GAME_MODE_ORDER,
   GameModeId,
+  getAvailableGunsForMap,
   getEffectiveMapSetup,
+  getExclusiveGunForMap,
   getGunCatalogItem,
   getGunCombatProfile,
   getGunSellRefund,
@@ -44,6 +46,7 @@ import {
   gridToWorldCenter,
   GUN_CATALOG,
   GunType,
+  GunVariant,
   LightningArc,
   MAX_GUN_LEVEL,
   PlacedGun,
@@ -59,6 +62,18 @@ import {
   TILE_SIZE,
   WaveSpawnItem,
 } from '../utils/prismTdEngine.ts';
+import {
+  drawEnemySprite,
+  drawGroundCraters,
+  drawGunTurretSprite,
+  drawOverheatSpecialFx,
+  drawProjectileEnhanced,
+  drawRailBeamEnhanced,
+  drawShellCasings,
+  GroundCraterFx,
+  OverheatFx,
+  ShellCasingFx,
+} from '../utils/prismTdRenderer.ts';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 
 type GameState = 'title' | 'playing' | 'paused' | 'gameover';
@@ -66,6 +81,7 @@ type GameState = 'title' | 'playing' | 'paused' | 'gameover';
 interface PrismTdGameSectionProps {
   theme: ThemeMode;
   onToggleTheme: () => void;
+  isFullscreen?: boolean;
 }
 
 interface PooledParticle {
@@ -188,6 +204,10 @@ function playSynthFx(
     | 'plasma'
     | 'cluster'
     | 'hunter'
+    | 'prism_laser'
+    | 'tempest'
+    | 'sonic'
+    | 'overheat'
     | 'explosion'
     | 'kill'
     | 'wave'
@@ -280,6 +300,18 @@ function playSynthFx(
       tone(280, 88, 0.2, 0.12, 'triangle');
     } else if (kind === 'hunter') {
       tone(940, 520, 0.09, 0.07, 'triangle');
+    } else if (kind === 'prism_laser') {
+      tone(1180, 1620, 0.12, 0.08, 'sine', 0);
+      tone(880, 1320, 0.1, 0.06, 'triangle', 0.02);
+    } else if (kind === 'tempest') {
+      tone(520, 220, 0.14, 0.095, 'sawtooth', 0);
+      tone(980, 440, 0.12, 0.07, 'sine', 0.02);
+    } else if (kind === 'sonic') {
+      tone(620, 260, 0.14, 0.085, 'sine', 0);
+      tone(920, 460, 0.1, 0.05, 'triangle', 0.02);
+    } else if (kind === 'overheat') {
+      tone(320, 1080, 0.22, 0.13, 'sawtooth', 0);
+      tone(640, 1480, 0.18, 0.1, 'triangle', 0.04);
     } else if (kind === 'explosion') {
       tone(150, 42, 0.2, 0.13, 'sawtooth');
     } else if (kind === 'kill') {
@@ -318,986 +350,7 @@ function nextPriority(cur: TargetPriority): TargetPriority {
   return 'first';
 }
 
-function drawGunTurretSprite(
-  ctx: CanvasRenderingContext2D,
-  type: GunType,
-  level: number,
-  aimAngle: number,
-  recoil: number,
-  animTime: number
-) {
-  const tier: 1 | 2 | 3 | 4 = level >= 10 ? 4 : level >= 7 ? 3 : level >= 4 ? 2 : 1;
-  const baseRadius = 19 + (tier - 1) * 1.4;
-
-  // Tier 4 MYTHIC LV10 Aura Halo (Dual counter-rotating crown rings)
-  if (tier === 4) {
-    ctx.save();
-    ctx.rotate(animTime * 2.5);
-    ctx.strokeStyle = 'rgba(250, 204, 21, 0.85)';
-    ctx.lineWidth = 2.2;
-    ctx.setLineDash([7, 4]);
-    ctx.beginPath();
-    ctx.arc(0, 0, 27, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-
-    ctx.save();
-    ctx.rotate(-animTime * 3.2);
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.72)';
-    ctx.lineWidth = 1.6;
-    ctx.setLineDash([4, 6]);
-    ctx.beginPath();
-    ctx.arc(0, 0, 24, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  } else if (tier === 3) {
-    ctx.save();
-    ctx.rotate(animTime * 2.1);
-    ctx.strokeStyle = 'rgba(251, 191, 36, 0.65)';
-    ctx.lineWidth = 1.6;
-    ctx.setLineDash([6, 5]);
-    ctx.beginPath();
-    ctx.arc(0, 0, 25, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // Pedestal chassis (evolves across Tier 1..4)
-  ctx.fillStyle =
-    tier === 4 ? '#1E1B4B' : tier === 3 ? '#172554' : tier === 2 ? '#111D38' : '#0F172A';
-  ctx.strokeStyle =
-    tier === 4 ? '#FDE047' : tier === 3 ? '#FBBF24' : tier === 2 ? '#38BDF8' : '#475569';
-  ctx.lineWidth = tier >= 3 ? 2.5 : 2;
-  ctx.beginPath();
-  if (tier >= 3) {
-    // Armored octagonal mount
-    for (let i = 0; i < 8; i++) {
-      const a = (i * Math.PI) / 4 + Math.PI / 8;
-      const px = Math.cos(a) * baseRadius;
-      const py = Math.sin(a) * baseRadius;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-  } else {
-    ctx.arc(0, 0, baseRadius, 0, Math.PI * 2);
-  }
-  ctx.fill();
-  ctx.stroke();
-
-  if (tier >= 2) {
-    ctx.fillStyle = tier === 4 ? '#FDE047' : tier === 3 ? '#F59E0B' : '#64748B';
-    ctx.fillRect(-baseRadius - 2, -4, 4, 8);
-    ctx.fillRect(baseRadius - 2, -4, 4, 8);
-  }
-
-  // Weapon Barrel / Emitter Head
-  if (type === 'gatling') {
-    ctx.save();
-    ctx.rotate(aimAngle);
-    const kick = recoil * 4.5;
-    if (tier >= 2) {
-      ctx.fillStyle = tier === 4 ? '#FDE047' : '#F59E0B';
-      ctx.fillRect(-14 - kick, -10, 11, 20);
-    }
-    const len = 19 + tier * 2.2;
-    ctx.fillStyle = tier === 4 ? '#FDE047' : tier === 3 ? '#FBBF24' : '#38BDF8';
-    ctx.fillRect(4 - kick, -8, len, 3.8);
-    ctx.fillRect(4 - kick, 4.2, len, 3.8);
-    if (tier >= 3) {
-      ctx.fillStyle = '#00E5FF';
-      ctx.fillRect(5 - kick, -2, len + 3, 4);
-    }
-    if (tier === 4) {
-      ctx.fillStyle = '#FB7185';
-      ctx.fillRect(4 - kick, -13, len - 3, 3);
-      ctx.fillRect(4 - kick, 10, len - 3, 3);
-    }
-    ctx.fillStyle = '#1E293B';
-    ctx.strokeStyle = tier >= 3 ? '#FDE047' : '#38BDF8';
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.arc(0, 0, 12 + tier * 0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  } else if (type === 'shotgun') {
-    ctx.save();
-    ctx.rotate(aimAngle);
-    const kick = recoil * 5;
-    ctx.fillStyle = tier >= 3 ? '#F59E0B' : '#EA580C';
-    ctx.strokeStyle = tier >= 2 ? '#FDE047' : '#FDBA74';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.moveTo(4 - kick, -8);
-    ctx.lineTo(20 + tier * 2 - kick, -12 - tier);
-    ctx.lineTo(20 + tier * 2 - kick, 12 + tier);
-    ctx.lineTo(4 - kick, 8);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#431407';
-    ctx.beginPath();
-    ctx.arc(-2, 0, 11 + tier * 0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  } else if (type === 'flamer') {
-    ctx.save();
-    ctx.rotate(aimAngle);
-    const kick = recoil * 3;
-    ctx.fillStyle = tier >= 3 ? '#0284C7' : '#EA580C';
-    ctx.fillRect(4 - kick, -5 - tier * 0.6, 16 + tier * 2, 10 + tier * 1.2);
-    ctx.fillStyle = tier >= 3 ? '#38BDF8' : '#FACC15';
-    ctx.fillRect(18 + tier * 1.5 - kick, -5, 5, 10);
-    if (tier === 4) {
-      ctx.fillStyle = '#E0F2FE';
-      ctx.fillRect(10 - kick, -11, 10, 4);
-      ctx.fillRect(10 - kick, 7, 10, 4);
-    }
-    ctx.fillStyle = tier >= 3 ? '#0C4A6E' : '#431407';
-    ctx.strokeStyle = tier >= 3 ? '#7DD3FC' : '#FB923C';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(-2, 0, 11 + tier * 0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  } else if (type === 'cryo') {
-    ctx.save();
-    ctx.rotate(animTime * (1.4 + tier * 0.6));
-    ctx.strokeStyle = tier >= 3 ? '#FFFFFF' : '#67E8F9';
-    ctx.fillStyle = tier >= 3 ? 'rgba(56, 189, 248, 0.5)' : 'rgba(6, 182, 212, 0.35)';
-    ctx.lineWidth = 2.2;
-    const sides = tier >= 3 ? 8 : 6;
-    ctx.beginPath();
-    for (let i = 0; i < sides; i++) {
-      const a = (i * Math.PI * 2) / sides;
-      const rad = i % 2 === 1 && tier >= 3 ? 19 : 14 + tier;
-      const px = Math.cos(a) * rad;
-      const py = Math.sin(a) * rad;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-    ctx.fillStyle = tier === 4 ? '#FDE047' : '#ECFEFF';
-    ctx.beginPath();
-    ctx.arc(0, 0, 5 + tier * 0.8, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (type === 'tesla') {
-    if (tier >= 2) {
-      const pylons = tier === 4 ? 4 : 3;
-      for (let k = 0; k < pylons; k++) {
-        const ka = (k * Math.PI * 2) / pylons + animTime * 2.4;
-        ctx.strokeStyle = tier === 4 ? '#FDE047' : '#38BDF8';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(Math.cos(ka) * 18, Math.sin(ka) * 18);
-        ctx.stroke();
-        ctx.fillStyle = tier === 4 ? '#FEF08A' : '#38BDF8';
-        ctx.beginPath();
-        ctx.arc(Math.cos(ka) * 18, Math.sin(ka) * 18, 3.2, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-    ctx.strokeStyle = tier >= 3 ? '#FDE047' : '#38BDF8';
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.arc(0, 0, 14 + tier * 0.7, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = tier >= 3 ? '#FEF08A' : '#BAE6FD';
-    ctx.beginPath();
-    ctx.arc(0, 0, 6.5 + tier + Math.sin(animTime * 9) * 1.2, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (type === 'missile') {
-    ctx.save();
-    ctx.rotate(aimAngle);
-    const kick = recoil * 3;
-    if (tier >= 3) {
-      ctx.fillStyle = tier === 4 ? '#FDE047' : '#F59E0B';
-      ctx.beginPath();
-      ctx.moveTo(-4 - kick, -19);
-      ctx.lineTo(6 - kick, -11);
-      ctx.lineTo(6 - kick, 11);
-      ctx.lineTo(-4 - kick, 19);
-      ctx.closePath();
-      ctx.fill();
-    }
-    ctx.fillStyle = tier >= 3 ? '#BE123C' : '#E11D48';
-    ctx.strokeStyle = tier >= 2 ? '#FDE047' : '#FDA4AF';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.roundRect(-12 - kick, -12 - tier * 0.6, 24 + tier * 2, 24 + tier * 1.2, 5);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#FDE047';
-    ctx.fillRect(10 - kick, -8, 5, 4.5);
-    ctx.fillRect(10 - kick, 3.5, 5, 4.5);
-    if (tier >= 2) {
-      ctx.fillStyle = '#38BDF8';
-      ctx.fillRect(10 - kick, -2, 6, 4);
-    }
-    ctx.restore();
-  } else if (type === 'railgun') {
-    ctx.save();
-    ctx.rotate(aimAngle);
-    const kick = recoil * 5;
-    const len = 23 + tier * 3;
-    ctx.fillStyle = tier >= 3 ? '#FDE047' : tier === 2 ? '#C084FC' : '#A78BFA';
-    ctx.fillRect(2 - kick, -6.5, len, 3.2);
-    ctx.fillRect(2 - kick, 3.3, len, 3.2);
-    ctx.fillStyle = tier >= 3 ? '#38BDF8' : '#F43F5E';
-    ctx.fillRect(4 - kick, -1.8, len - 3, 3.6);
-    if (tier >= 3) {
-      ctx.fillStyle = '#F43F5E';
-      ctx.fillRect(len - 4 - kick, -9, 4, 18);
-    }
-    ctx.fillStyle = '#1E1B4B';
-    ctx.strokeStyle = tier >= 3 ? '#FDE047' : '#C4B5FD';
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.arc(0, 0, 12.5 + tier * 0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  } else if (type === 'mortar') {
-    ctx.save();
-    ctx.rotate(aimAngle);
-    const kick = recoil * 4;
-    if (tier >= 3) {
-      ctx.save();
-      ctx.rotate(animTime * 6);
-      ctx.strokeStyle = '#FDE047';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, 20, 8.5, 0, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
-    ctx.fillStyle = tier >= 3 ? '#3B0764' : '#581C87';
-    ctx.strokeStyle = tier >= 2 ? '#FDE047' : '#E879F9';
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.arc(-kick, 0, 13.5 + tier * 0.7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = tier === 4 ? '#38BDF8' : '#FDE047';
-    ctx.beginPath();
-    ctx.arc(7 - kick, 0, 5 + tier * 0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  } else if (type === 'sniper') {
-    ctx.save();
-    ctx.rotate(aimAngle);
-    const kick = recoil * 5.5;
-    const len = 28 + tier * 3;
-    ctx.fillStyle = tier >= 3 ? '#FDE047' : '#34D399';
-    ctx.fillRect(4 - kick, -2.5, len, 5);
-    ctx.fillStyle = '#064E3B';
-    ctx.fillRect(10 - kick, -4.5, 11, 9);
-    if (tier >= 2) {
-      ctx.fillStyle = '#6EE7B7';
-      ctx.fillRect(len - 2 - kick, -5, 5, 10);
-    }
-    if (tier >= 3) {
-      ctx.fillStyle = '#38BDF8';
-      ctx.fillRect(-10 - kick, -8, 12, 3);
-      ctx.fillRect(-10 - kick, 5, 12, 3);
-    }
-    ctx.fillStyle = '#065F46';
-    ctx.strokeStyle = tier >= 3 ? '#FDE047' : '#34D399';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(-1, 0, 11.5 + tier * 0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#F43F5E';
-    ctx.beginPath();
-    ctx.arc(4, -5.5, 2.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  } else if (type === 'acid') {
-    ctx.save();
-    ctx.rotate(aimAngle);
-    const kick = recoil * 3.5;
-    ctx.fillStyle = '#365314';
-    ctx.strokeStyle = tier >= 3 ? '#FDE047' : '#A3E635';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(2 - kick, -7 - tier * 0.4, 17 + tier * 2, 14 + tier * 0.8, 4);
-    ctx.fill();
-    ctx.stroke();
-    // Bubbling twin canisters
-    ctx.fillStyle = '#BEF264';
-    ctx.beginPath();
-    ctx.arc(-7, -7, 4.5 + tier * 0.4, 0, Math.PI * 2);
-    ctx.arc(-7, 7, 4.5 + tier * 0.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#1A2E05';
-    ctx.beginPath();
-    ctx.arc(-1, 0, 10 + tier * 0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  } else if (type === 'saw') {
-    ctx.save();
-    ctx.rotate(aimAngle);
-    const kick = recoil * 4;
-    ctx.fillStyle = tier >= 3 ? '#9F1239' : '#4C0519';
-    ctx.strokeStyle = tier >= 2 ? '#FDE047' : '#FB7185';
-    ctx.lineWidth = 2;
-    ctx.fillRect(-10 - kick, -8, 22, 16);
-    ctx.strokeRect(-10 - kick, -8, 22, 16);
-    // Spinning loaded saw blade on rail
-    ctx.save();
-    ctx.translate(10 - kick, 0);
-    ctx.rotate(animTime * 11);
-    ctx.fillStyle = tier === 4 ? '#FDE047' : '#FDA4AF';
-    ctx.beginPath();
-    for (let t = 0; t < 12; t++) {
-      const a = (t * Math.PI * 2) / 12;
-      const r = t % 2 === 0 ? 11 + tier : 6.5;
-      const sx = Math.cos(a) * r;
-      const sy = Math.sin(a) * r;
-      if (t === 0) ctx.moveTo(sx, sy);
-      else ctx.lineTo(sx, sy);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-    ctx.restore();
-  } else if (type === 'beacon') {
-    ctx.save();
-    ctx.rotate(animTime * (1.8 + tier * 0.6));
-    ctx.strokeStyle = tier >= 3 ? '#FEF08A' : '#FACC15';
-    ctx.fillStyle = 'rgba(250, 204, 21, 0.25)';
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    for (let i = 0; i < 4; i++) {
-      const a = (i * Math.PI) / 2;
-      const r = 16 + tier * 1.1;
-      const px = Math.cos(a) * r;
-      const py = Math.sin(a) * r;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-    ctx.fillStyle = tier === 4 ? '#FFFFFF' : '#FDE047';
-    ctx.beginPath();
-    ctx.arc(0, 0, 6.5 + tier * 0.7 + Math.sin(animTime * 7) * 1.1, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (type === 'cannon') {
-    ctx.save();
-    ctx.rotate(aimAngle);
-    const kick = recoil * 6;
-    const len = 21 + tier * 2.5;
-    ctx.fillStyle = tier >= 3 ? '#B45309' : '#78350F';
-    ctx.strokeStyle = tier >= 2 ? '#FDE047' : '#F59E0B';
-    ctx.lineWidth = 2;
-    ctx.fillRect(2 - kick, -6, len, 12);
-    ctx.strokeRect(2 - kick, -6, len, 12);
-    ctx.fillStyle = '#FDE047';
-    ctx.fillRect(len - 3 - kick, -8, 6, 16);
-    if (tier >= 3) {
-      ctx.fillStyle = '#FB7185';
-      ctx.fillRect(-10 - kick, -12, 12, 5);
-      ctx.fillRect(-10 - kick, 7, 12, 5);
-    }
-    ctx.fillStyle = '#451A03';
-    ctx.beginPath();
-    ctx.arc(-2, 0, 12 + tier * 0.6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-  } else if (type === 'plasma') {
-    ctx.save();
-    ctx.rotate(aimAngle);
-    const kick = recoil * 3.5;
-    ctx.fillStyle = tier >= 3 ? '#BE185D' : '#831843';
-    ctx.strokeStyle = tier >= 2 ? '#F9A8D4' : '#EC4899';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(-8 - kick, -9, 24 + tier * 2, 18, 6);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = tier === 4 ? '#FFFFFF' : '#F472B6';
-    ctx.beginPath();
-    ctx.arc(14 + tier - kick, 0, 4.5 + tier * 0.6 + Math.sin(animTime * 12) * 1, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  } else if (type === 'cluster') {
-    ctx.save();
-    ctx.rotate(aimAngle);
-    const kick = recoil * 4;
-    ctx.fillStyle = tier >= 3 ? '#047857' : '#064E3B';
-    ctx.strokeStyle = tier >= 2 ? '#6EE7B7' : '#10B981';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(-11 - kick, -11, 22 + tier, 22, 5);
-    ctx.fill();
-    ctx.stroke();
-    const pods = tier >= 3 ? [[-4, -5], [4, -5], [0, 0], [-4, 5], [4, 5]] : [[-4, -4], [4, -4], [0, 4]];
-    ctx.fillStyle = '#FDE047';
-    for (const [px, py] of pods) {
-      ctx.beginPath();
-      ctx.arc(px + 2 - kick, py, 2.4, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  } else if (type === 'hunter') {
-    ctx.save();
-    ctx.rotate(aimAngle);
-    const kick = recoil * 3;
-    ctx.fillStyle = '#083344';
-    ctx.strokeStyle = tier >= 3 ? '#FDE047' : '#22D3EE';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(19 + tier * 2 - kick, 0);
-    ctx.lineTo(-10 - kick, -12 - tier * 0.5);
-    ctx.lineTo(-5 - kick, 0);
-    ctx.lineTo(-10 - kick, 12 + tier * 0.5);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#22D3EE';
-    ctx.beginPath();
-    ctx.arc(3 - kick, 0, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // Crisp Level Badge Pill at bottom of turret (Lv.1 .. Lv.10)
-  ctx.fillStyle = tier === 4 ? '#FDE047' : tier === 3 ? '#FB923C' : tier === 2 ? '#38BDF8' : '#0F172A';
-  ctx.strokeStyle = '#070B14';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.roundRect(-13, 13, 26, 12, 4);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = tier >= 2 ? '#070B14' : '#E2E8F0';
-  ctx.font = 'bold 9px monospace';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(level === MAX_GUN_LEVEL ? 'MAX' : `L${level}`, 0, 19.3);
-}
-
-/**
- * High-detail multi-layered Canvas 2D enemy sprite renderer (Zero shadowBlur, crisp silhouettes).
- */
-function drawEnemySprite(
-  ctx: CanvasRenderingContext2D,
-  en: TdEnemy,
-  animTime: number
-) {
-  ctx.save();
-  const isKo = en.koTimer > 0;
-  const koAlpha = isKo ? Math.max(0, en.koTimer / 0.28) : 1;
-  const koScale = 1;
-  const stealthFade =
-    en.kind === 'stealth' && en.slowTimer <= 0 && en.burnTimer <= 0
-      ? 0.48 + Math.sin(animTime * 9 + en.id) * 0.22
-      : 1;
-  ctx.globalAlpha = koAlpha * stealthFade;
-  ctx.translate(en.x, en.y);
-
-  // Ambient ground shadow
-  if (!isKo) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.48)';
-    ctx.beginPath();
-    ctx.ellipse(0, 7, en.radius * 0.96, en.radius * 0.46, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Elite golden under-aura
-  if (en.isElite && !isKo) {
-    ctx.strokeStyle = 'rgba(251, 191, 36, 0.8)';
-    ctx.lineWidth = 1.8;
-    ctx.setLineDash([4, 3]);
-    ctx.beginPath();
-    ctx.arc(0, 0, en.radius + 7, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
-  // Cryo Frost Encasing & Brittle Warning
-  if (en.slowTimer > 0 && !isKo) {
-    ctx.strokeStyle = en.brittleBonus > 0 ? '#E0F2FE' : '#67E8F9';
-    ctx.lineWidth = en.brittleBonus > 0 ? 2.4 : 1.8;
-    for (let ic = 0; ic < 6; ic++) {
-      const ia = (ic * Math.PI) / 3 + animTime * 1.1;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(ia) * (en.radius - 1), Math.sin(ia) * (en.radius - 1));
-      ctx.lineTo(Math.cos(ia) * (en.radius + 7.5), Math.sin(ia) * (en.radius + 7.5));
-      ctx.stroke();
-    }
-  }
-
-  // Stun Electric Spark Cross
-  if (en.stunTimer > 0 && !isKo) {
-    ctx.strokeStyle = '#FDE047';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(0, 0, en.radius + 4, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  // Shield Dome Ring
-  if (en.shield > 0 && !isKo) {
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.88)';
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.11)';
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.arc(0, 0, en.radius + 5.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  }
-
-  ctx.save();
-  ctx.rotate(en.heading);
-  ctx.scale(koScale, koScale);
-  const flash = en.hitFlash > 0;
-  const pulse = 0.85 + Math.sin(animTime * 18 + en.id) * 0.2;
-
-  if (en.kind === 'scout') {
-    // Twin Supersonic Thruster Plumes
-    ctx.fillStyle = '#38BDF8';
-    ctx.beginPath();
-    ctx.moveTo(-10, -6.5);
-    ctx.lineTo(-20 * pulse, -4.5);
-    ctx.lineTo(-10, -2.5);
-    ctx.moveTo(-10, 2.5);
-    ctx.lineTo(-20 * pulse, 4.5);
-    ctx.lineTo(-10, 6.5);
-    ctx.fill();
-
-    // Swept Composite Wings + Beveled Nacelles
-    ctx.fillStyle = flash ? '#FFFFFF' : '#0F172A';
-    ctx.strokeStyle = '#38BDF8';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.moveTo(17, 0);
-    ctx.lineTo(1, -6);
-    ctx.lineTo(-11, -15);
-    ctx.lineTo(-8, -4);
-    ctx.lineTo(-13, 0);
-    ctx.lineTo(-8, 4);
-    ctx.lineTo(-11, 15);
-    ctx.lineTo(1, 6);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Wingtip Laser Strobe & Inner Armored Fuselage
-    ctx.fillStyle = flash ? '#FFFFFF' : '#0284C7';
-    ctx.beginPath();
-    ctx.moveTo(16, 0);
-    ctx.lineTo(-7, -4.5);
-    ctx.lineTo(-7, 4.5);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = '#FDE047';
-    ctx.beginPath();
-    ctx.ellipse(3.5, 0, 5.2, 2.2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#FB7185';
-    ctx.fillRect(-10, -14, 2.5, 2.5);
-    ctx.fillRect(-10, 11.5, 2.5, 2.5);
-  } else if (en.kind === 'armored') {
-    // Heavy Siege Tank: Animated Caterpillar Tracks + Sloped Reactive Armor + Twin Turret
-    const treadShift = (animTime * 24) % 6;
-    ctx.fillStyle = '#0F172A';
-    ctx.fillRect(-17, -17, 34, 6.5);
-    ctx.fillRect(-17, 10.5, 34, 6.5);
-    ctx.fillStyle = '#64748B';
-    for (let tx = -15 + treadShift; tx < 15; tx += 6) {
-      ctx.fillRect(tx, -17, 2.5, 6.5);
-      ctx.fillRect(tx, 10.5, 2.5, 6.5);
-    }
-
-    // Sloped Hull
-    ctx.fillStyle = flash ? '#FFFFFF' : '#78350F';
-    ctx.strokeStyle = '#F59E0B';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(16, -9.5);
-    ctx.lineTo(19, 0);
-    ctx.lineTo(16, 9.5);
-    ctx.lineTo(-15, 11.5);
-    ctx.lineTo(-17, -11.5);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Reactive Armor Chevron & Rivet Core
-    ctx.strokeStyle = '#FBBF24';
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.moveTo(8, -7);
-    ctx.lineTo(13, 0);
-    ctx.lineTo(8, 7);
-    ctx.stroke();
-
-    // Dual Siege Barrels + Dome Turret
-    ctx.fillStyle = flash ? '#FFFFFF' : '#FBBF24';
-    ctx.fillRect(5, -5.5, 16, 3);
-    ctx.fillRect(5, 2.5, 16, 3);
-    ctx.fillStyle = '#451A03';
-    ctx.strokeStyle = '#FDE047';
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.arc(-1, 0, 8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  } else if (en.kind === 'splitter') {
-    const sScale = en.radius < 12 ? 0.72 : 1;
-    ctx.scale(sScale, sScale);
-    // 6-Legged Cyber-Arachnid Swarmer with Scuttling Blades & Volatile Abdomen
-    const legWiggle = Math.sin(animTime * 18 + en.id) * 0.16;
-    ctx.strokeStyle = '#E879F9';
-    ctx.fillStyle = flash ? '#FFFFFF' : '#581C87';
-    ctx.lineWidth = 1.6;
-    for (let b = 0; b < 6; b++) {
-      ctx.save();
-      ctx.rotate((b * Math.PI) / 3 + (b % 2 === 0 ? legWiggle : -legWiggle));
-      ctx.beginPath();
-      ctx.moveTo(4, -2);
-      ctx.lineTo(12, -6);
-      ctx.lineTo(17, 0);
-      ctx.lineTo(9, 2.5);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
-    }
-    ctx.fillStyle = '#A855F7';
-    ctx.beginPath();
-    ctx.arc(0, 0, 6.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#FDE047';
-    ctx.beginPath();
-    ctx.arc(2, 0, 3.2, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (en.kind === 'stealth') {
-    // Faceted Diamond Ghost Bomber with Holographic Cloaking Scanlines
-    ctx.fillStyle = flash ? '#FFFFFF' : '#064E3B';
-    ctx.strokeStyle = '#34D399';
-    ctx.lineWidth = 1.7;
-    ctx.beginPath();
-    ctx.moveTo(19, 0);
-    ctx.lineTo(-2, -15);
-    ctx.lineTo(-15, -7);
-    ctx.lineTo(-8, 0);
-    ctx.lineTo(-15, 7);
-    ctx.lineTo(-2, 15);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.strokeStyle = '#A7F3D0';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(13, 0);
-    ctx.lineTo(-8, 0);
-    ctx.moveTo(3, -8);
-    ctx.lineTo(-9, -3);
-    ctx.moveTo(3, 8);
-    ctx.lineTo(-9, 3);
-    ctx.stroke();
-
-    ctx.fillStyle = '#6EE7B7';
-    ctx.beginPath();
-    ctx.arc(4, 0, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (en.kind === 'healer') {
-    // Twin-Nacelle Bio-Med Frigate + 3 Orbiting Repair Satellites
-    ctx.fillStyle = flash ? '#FFFFFF' : '#065F46';
-    ctx.strokeStyle = '#4ADE80';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(-13, -12, 26, 24, 8);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#10B981';
-    ctx.fillRect(-10, -15, 16, 4);
-    ctx.fillRect(-10, 11, 16, 4);
-
-    ctx.fillStyle = '#ECFDF5';
-    ctx.fillRect(-5.5, -2, 11, 4);
-    ctx.fillRect(-2, -5.5, 4, 11);
-
-    for (let o = 0; o < 3; o++) {
-      const oa = animTime * 4.2 + (o * Math.PI * 2) / 3;
-      const ox = Math.cos(oa) * 17;
-      const oy = Math.sin(oa) * 17;
-      ctx.strokeStyle = 'rgba(74, 222, 128, 0.45)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(ox, oy);
-      ctx.stroke();
-      ctx.fillStyle = '#86EFAC';
-      ctx.beginPath();
-      ctx.arc(ox, oy, 2.8, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  } else if (en.kind === 'teleporter') {
-    // Chrono-Warp Strider with Levitating Resonance Wings & Spinning Warp Halo
-    const wingSpread = 2.5 + Math.sin(animTime * 11) * 2;
-    ctx.save();
-    ctx.rotate(animTime * 5);
-    ctx.strokeStyle = 'rgba(232, 121, 249, 0.65)';
-    ctx.lineWidth = 1.4;
-    ctx.setLineDash([4, 3]);
-    ctx.beginPath();
-    ctx.arc(0, 0, 14, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-
-    ctx.fillStyle = flash ? '#FFFFFF' : '#4C1D95';
-    ctx.strokeStyle = '#E879F9';
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.moveTo(16, 0);
-    ctx.lineTo(0, -6.5);
-    ctx.lineTo(-15, 0);
-    ctx.lineTo(0, 6.5);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#C084FC';
-    ctx.beginPath();
-    ctx.moveTo(6, -8 - wingSpread);
-    ctx.lineTo(-10, -15 - wingSpread);
-    ctx.lineTo(-5, -7 - wingSpread);
-    ctx.closePath();
-    ctx.moveTo(6, 8 + wingSpread);
-    ctx.lineTo(-10, 15 + wingSpread);
-    ctx.lineTo(-5, 7 + wingSpread);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.beginPath();
-    ctx.arc(0, 0, 3.8, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (en.kind === 'shieldbearer') {
-    // Heavy Aegis Mech Walker with Pauldrons + Curved Hex Forcefield
-    ctx.fillStyle = flash ? '#FFFFFF' : '#1E3A8A';
-    ctx.strokeStyle = '#93C5FD';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(-14, -15, 24, 30, 5);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#3B82F6';
-    ctx.fillRect(-11, -17, 13, 5.5);
-    ctx.fillRect(-11, 11.5, 13, 5.5);
-
-    ctx.fillStyle = '#E0F2FE';
-    ctx.fillRect(0, -4, 6, 8);
-
-    // Animated Curved Hex Energy Barrier
-    ctx.strokeStyle = '#38BDF8';
-    ctx.lineWidth = 4.2;
-    ctx.beginPath();
-    ctx.arc(5, 0, 20, -Math.PI * 0.46, Math.PI * 0.46);
-    ctx.stroke();
-    ctx.strokeStyle = '#E0F2FE';
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.arc(5, 0, 20, -Math.PI * 0.34, Math.PI * 0.34);
-    ctx.stroke();
-  } else if (en.kind === 'boss') {
-    // OMEGA DREADNOUGHT TITAN: Heavy Battleship Hull + Twin Plasma Engines + Sponsons + Reactor Core
-    ctx.fillStyle = '#FB7185';
-    ctx.beginPath();
-    ctx.moveTo(-22, -12);
-    ctx.lineTo(-37 * pulse, -8.5);
-    ctx.lineTo(-22, -5);
-    ctx.moveTo(-22, 5);
-    ctx.lineTo(-37 * pulse, 8.5);
-    ctx.lineTo(-22, 12);
-    ctx.fill();
-
-    // Outer Wing Bulkheads
-    ctx.fillStyle = flash ? '#FFFFFF' : '#4C0519';
-    ctx.strokeStyle = '#FDA4AF';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(31, 0);
-    ctx.lineTo(14, -16);
-    ctx.lineTo(-6, -25);
-    ctx.lineTo(-24, -20);
-    ctx.lineTo(-20, -7);
-    ctx.lineTo(-25, 0);
-    ctx.lineTo(-20, 7);
-    ctx.lineTo(-24, 20);
-    ctx.lineTo(-6, 25);
-    ctx.lineTo(14, 16);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Broadside Sponson Cannons
-    ctx.fillStyle = '#F59E0B';
-    ctx.fillRect(2, -23, 12, 4);
-    ctx.fillRect(2, 19, 12, 4);
-
-    // Armored Bridge Deck
-    ctx.fillStyle = flash ? '#FFFFFF' : '#9F1239';
-    ctx.beginPath();
-    ctx.moveTo(22, 0);
-    ctx.lineTo(5, -11);
-    ctx.lineTo(-14, -10);
-    ctx.lineTo(-14, 10);
-    ctx.lineTo(5, 11);
-    ctx.closePath();
-    ctx.fill();
-
-    // Spinning Omega Reactor Core
-    ctx.save();
-    ctx.rotate(animTime * 4.4);
-    ctx.strokeStyle = '#FDE047';
-    ctx.lineWidth = 2.8;
-    ctx.setLineDash([7, 4]);
-    ctx.beginPath();
-    ctx.arc(0, 0, 11.5, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.restore();
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.beginPath();
-    ctx.arc(2, 0, 5.2, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (en.kind === 'berserker') {
-    if (en.enraged) {
-      ctx.strokeStyle = '#EF4444';
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.arc(0, 0, 18 + Math.sin(animTime * 16) * 2.2, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.fillStyle = flash ? '#FFFFFF' : en.enraged ? '#991B1B' : '#7C2D12';
-    ctx.strokeStyle = en.enraged ? '#FCA5A5' : '#FB923C';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(17, 0);
-    ctx.lineTo(2, -13);
-    ctx.lineTo(-12, -9);
-    ctx.lineTo(-9, 0);
-    ctx.lineTo(-12, 9);
-    ctx.lineTo(2, 13);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    // Twin Spinning Energy Axes
-    ctx.fillStyle = en.enraged ? '#FDE047' : '#F97316';
-    ctx.fillRect(6, -15, 7, 4);
-    ctx.fillRect(6, 11, 7, 4);
-  } else if (en.kind === 'juggernaut') {
-    ctx.fillStyle = '#0F172A';
-    ctx.fillRect(-20, -20, 40, 7);
-    ctx.fillRect(-20, 13, 40, 7);
-    ctx.fillStyle = flash ? '#FFFFFF' : '#334155';
-    ctx.strokeStyle = '#F59E0B';
-    ctx.lineWidth = 2.4;
-    ctx.beginPath();
-    ctx.roundRect(-18, -15, 36, 30, 6);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#F59E0B';
-    ctx.fillRect(14, -12, 6, 24);
-    ctx.fillStyle = '#78350F';
-    ctx.beginPath();
-    ctx.arc(-2, 0, 9.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  } else if (en.kind === 'summoner') {
-    ctx.fillStyle = flash ? '#FFFFFF' : '#4C1D95';
-    ctx.strokeStyle = '#C084FC';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const a = (i * Math.PI) / 3;
-      const px = Math.cos(a) * 18;
-      const py = Math.sin(a) * 15;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = '#F472B6';
-    ctx.beginPath();
-    ctx.arc(0, 0, 6 + Math.sin(animTime * 8) * 1.2, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (en.kind === 'leech') {
-    ctx.save();
-    ctx.rotate(-animTime * 4);
-    ctx.strokeStyle = '#22D3EE';
-    ctx.lineWidth = 1.6;
-    for (let c = 0; c < 3; c++) {
-      const ca = (c * Math.PI * 2) / 3;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(Math.cos(ca) * 16, Math.sin(ca) * 16);
-      ctx.stroke();
-      ctx.fillStyle = '#A855F7';
-      ctx.beginPath();
-      ctx.arc(Math.cos(ca) * 16, Math.sin(ca) * 16, 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-    ctx.fillStyle = flash ? '#FFFFFF' : '#164E63';
-    ctx.strokeStyle = '#67E8F9';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(0, 0, 10, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-  }
-  ctx.restore();
-
-  // Burn ring
-  if (en.burnTimer > 0 && !isKo) {
-    ctx.strokeStyle = 'rgba(249, 115, 22, 0.88)';
-    ctx.lineWidth = 2.2;
-    ctx.beginPath();
-    ctx.arc(0, 0, en.radius + 1.5, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  // Dual HP + Shield Bar
-  if (!isKo && (en.hp < en.maxHp || en.shield < en.maxShield || en.kind === 'boss')) {
-    const bw = en.radius * 2 + 12;
-    const bh = en.kind === 'boss' ? 6 : 4.8;
-    const hpRatio = Math.max(0, en.hp / en.maxHp);
-    ctx.fillStyle = '#070B14';
-    ctx.fillRect(-bw / 2 - 1, -en.radius - 14, bw + 2, bh + 2);
-    ctx.fillStyle = hpRatio > 0.5 ? '#10B981' : hpRatio > 0.25 ? '#F59E0B' : '#F43F5E';
-    ctx.fillRect(-bw / 2, -en.radius - 13, bw * hpRatio, bh);
-
-    if (en.maxShield > 0 && en.shield > 0) {
-      const shRatio = Math.max(0, en.shield / en.maxShield);
-      ctx.fillStyle = '#38BDF8';
-      ctx.fillRect(-bw / 2, -en.radius - 17.5, bw * shRatio, 2.5);
-    }
-  }
-  ctx.restore();
-}
-
-export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
+export function PrismTdGameSection({ theme, isFullscreen = false }: PrismTdGameSectionProps) {
   const [gameState, setGameState] = useState<GameState>(() => {
     if (typeof window !== 'undefined') {
       const autostart = new URLSearchParams(window.location.search).get('autostart');
@@ -1310,12 +363,15 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
   const [difficulty, setDifficulty] = useState<DifficultyId>('normal');
   const [gameMode, setGameMode] = useState<GameModeId>('campaign');
   const activeMap = PRISM_MAPS[selectedMapIndex] ?? PRISM_MAPS[0];
+  const availableGuns = useMemo(() => getAvailableGunsForMap(activeMap.id), [activeMap.id]);
+  const exclusiveGun = useMemo(() => getExclusiveGunForMap(activeMap.id), [activeMap.id]);
   const effectiveSetup = useMemo(
     () => getEffectiveMapSetup(activeMap, difficulty, gameMode),
     [activeMap, difficulty, gameMode]
   );
 
   const [selectedTool, setSelectedTool] = useState<GunType>('gatling');
+  const [selectedVariant, setSelectedVariant] = useState<GunVariant>('alpha');
   const [selectedGunId, setSelectedGunId] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [statusNotice, setStatusNotice] = useState<string>('');
@@ -1369,6 +425,9 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     impactFlashes: ImpactFlashFx[];
     frostShards: FrostShardFx[];
     harmonicRays: HarmonicRayFx[];
+    shellCasings: ShellCasingFx[];
+    groundCraters: GroundCraterFx[];
+    overheatEffects: OverheatFx[];
     floatingTexts: FloatingCombatText[];
     spawnQueue: WaveSpawnItem[];
     waveElapsed: number;
@@ -1390,6 +449,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     hoverTile: { col: number; row: number } | null;
     selectedGunId: string | null;
     selectedTool: GunType;
+    selectedVariant: GunVariant;
     selectedGunVersion: number;
     shockwaves: ShockwaveRing[];
     particles: PooledParticle[];
@@ -1416,6 +476,9 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     impactFlashes: [],
     frostShards: [],
     harmonicRays: [],
+    shellCasings: [],
+    groundCraters: [],
+    overheatEffects: [],
     floatingTexts: [],
     spawnQueue: [],
     waveElapsed: 0,
@@ -1437,6 +500,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     hoverTile: null,
     selectedGunId: null,
     selectedTool: 'gatling',
+    selectedVariant: 'alpha',
     selectedGunVersion: 0,
     shockwaves: [],
     particles: Array.from({ length: PARTICLE_POOL_SIZE }, () => ({
@@ -1460,6 +524,10 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     simRef.current.selectedTool = selectedTool;
   }, [selectedTool]);
 
+  useEffect(() => {
+    simRef.current.selectedVariant = selectedVariant;
+  }, [selectedVariant]);
+
   const recomputeFirepower = useCallback(() => {
     const s = simRef.current;
     const overdriveMult = s.overdriveTimer > 0 ? 2.0 : 1;
@@ -1467,7 +535,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     for (const g of s.guns) {
       const buff = computeBeaconBuffAtTile(s.guns, g.col, g.row);
       total +=
-        getGunCombatProfile(g.type, g.level).dpsEstimate *
+        getGunCombatProfile(g.type, g.level, g.variant ?? 'alpha').dpsEstimate *
         buff.speedMult *
         buff.damageMult *
         overdriveMult;
@@ -1564,6 +632,9 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
       s.impactFlashes = [];
       s.frostShards = [];
       s.harmonicRays = [];
+      s.shellCasings = [];
+      s.groundCraters = [];
+      s.overheatEffects = [];
       s.floatingTexts = [];
       s.spawnQueue = [];
       s.waveElapsed = 0;
@@ -1593,8 +664,15 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
       setDifficulty(diff);
       setGameMode(mode);
       setSelectedGunId(null);
+      const mapGuns = getAvailableGunsForMap(targetMap.id);
+      const mapEx = getExclusiveGunForMap(targetMap.id);
+      if (!mapGuns.some((g) => g.type === s.selectedTool)) {
+        const fallback = mapEx?.type ?? 'gatling';
+        s.selectedTool = fallback;
+        setSelectedTool(fallback);
+      }
       setStatusNotice(
-        `${modeCfg.label} · ${diffCfg.label} (${mode === 'endless' ? '∞' : effective.totalWaves} Đợt) · Phím [1-9,0,Q,E,Z,X,C,V] chọn súng!`
+        `${modeCfg.label} · ${diffCfg.label} (${mode === 'endless' ? '∞' : effective.totalWaves} Đợt) · ${mapGuns.length} Súng (★ ${mapEx?.shortName ?? ''})!`
       );
       recomputeFirepower();
       syncHudFromSim();
@@ -1607,6 +685,14 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     },
     [selectedMapIndex, difficulty, gameMode, recomputeFirepower, syncHudFromSim, soundEnabled]
   );
+
+  useEffect(() => {
+    if (!availableGuns.some((g) => g.type === selectedTool)) {
+      const nextTool = exclusiveGun?.type ?? 'gatling';
+      setSelectedTool(nextTool);
+      simRef.current.selectedTool = nextTool;
+    }
+  }, [availableGuns, exclusiveGun, selectedTool]);
 
   useEffect(() => {
     document.body.dataset.state = gameState;
@@ -1653,6 +739,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     }
 
     for (const g of s.guns) {
+      g.heat = 100; // Immediately unleashes every gun's unique Overheat skill on next combat step!
       const pt = gridToWorldCenter(g.col, g.row);
       s.shockwaves.push({
         x: pt.x,
@@ -1678,9 +765,10 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
         emitParticles(en.x, en.y, '#FBBF24', 18, 150, 1.2);
       }
     }
+    s.selectedGunVersion += 1;
     recomputeFirepower();
     syncHudFromSim();
-    setStatusNotice('HỘI TỤ HỎA LỰC ×1.75 ĐÃ KÍCH HOẠT (5s)! Toàn bộ pháo đài tăng tốc xả đạn!');
+    setStatusNotice('HỘI TỤ HỎA LỰC ×1.75 ĐÃ KÍCH HOẠT! Toàn bộ ụ súng kích nổ kỹ năng Quá Nhiệt!');
     playSynthFx('overdrive', soundEnabled, audioCtxRef);
   }, [gameState, recomputeFirepower, syncHudFromSim, soundEnabled, emitParticles]);
 
@@ -1695,6 +783,30 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     playSynthFx('select', soundEnabled, audioCtxRef);
     setStatusNotice(`Chế độ khóa mục tiêu: ${PRIORITY_LABELS[target.priority]}`);
   }, [selectedGunId, gameState, syncHudFromSim, soundEnabled]);
+
+  const switchSelectedGunVariant = useCallback(
+    (nextVar?: GunVariant) => {
+      if (!selectedGunId || gameState !== 'playing') return;
+      const s = simRef.current;
+      const target = s.guns.find((g) => g.id === selectedGunId);
+      if (!target) return;
+      const cur = target.variant ?? 'alpha';
+      const chosen = nextVar ?? (cur === 'alpha' ? 'omega' : 'alpha');
+      if (chosen === cur) return;
+      target.variant = chosen;
+      s.selectedGunVersion += 1;
+      recomputeFirepower();
+      syncHudFromSim();
+      const pt = gridToWorldCenter(target.col, target.row);
+      const spec = getGunCatalogItem(target.type);
+      const vSpec = spec.variants[chosen];
+      emitParticles(pt.x, pt.y, vSpec.accentColor, 14, 110, 1.1);
+      pushCombatText(pt.x, pt.y - 8, vSpec.shortTag, vSpec.accentColor, 1.05);
+      playSynthFx('select', soundEnabled, audioCtxRef);
+      setStatusNotice(`Đã chuyển biến thể sang ${vSpec.name}: ${vSpec.summary}`);
+    },
+    [selectedGunId, gameState, recomputeFirepower, syncHudFromSim, emitParticles, pushCombatText, soundEnabled]
+  );
 
   const upgradeSelectedGun = useCallback(() => {
     if (!selectedGunId || gameState !== 'playing') return;
@@ -1819,11 +931,14 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
       row: tile.row,
       type: selectedTool,
       level: 1,
+      variant: selectedVariant,
       priority:
         selectedTool === 'railgun' || selectedTool === 'missile' || selectedTool === 'sniper'
           ? 'strongest'
           : 'first',
       chargeTimer: 0,
+      heat: 0,
+      overheatTimer: 0,
       aimAngle: -Math.PI / 2,
       recoil: 0,
       totalDamageDealt: 0,
@@ -1887,7 +1002,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
       }
 
       if (gameState === 'playing' || gameState === 'paused') {
-        if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') {
+        if (e.key === 'p' || e.key === 'P' || (e.key === 'Escape' && !isFullscreen)) {
           e.preventDefault();
           setGameState((prev) => (prev === 'paused' ? 'playing' : 'paused'));
           return;
@@ -1896,7 +1011,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
 
       if (gameState !== 'playing') return;
 
-      const gunByKey = GUN_CATALOG.find(
+      const gunByKey = availableGuns.find(
         (g) => g.hotkey.toLowerCase() === e.key.toLowerCase()
       );
       if (gunByKey) {
@@ -1904,6 +1019,13 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
       } else if (e.key === 'u' || e.key === 'U') {
         e.preventDefault();
         upgradeSelectedGun();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        if (selectedGunId) {
+          switchSelectedGunVariant();
+        } else {
+          setSelectedVariant((v) => (v === 'alpha' ? 'omega' : 'alpha'));
+        }
       } else if (e.key === 't' || e.key === 'T') {
         e.preventDefault();
         cycleSelectedPriority();
@@ -1927,9 +1049,13 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
     gameState,
+    isFullscreen,
+    availableGuns,
     selectedMapIndex,
+    selectedGunId,
     startNewRun,
     upgradeSelectedGun,
+    switchSelectedGunVariant,
     cycleSelectedPriority,
     sellSelectedGun,
     activateOverdrive,
@@ -2037,45 +1163,48 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           drawEnemySprite(ctx, bossEnemy, t);
           drawEnemySprite(ctx, escortTank, t);
 
-          // Showcase 3 Evolved Lv10 Mythic Turrets firing
-          const vulcanAngle = Math.atan2(bossEnemy.y - 165, bossEnemy.x - 105);
-          const railAngle = Math.atan2(bossEnemy.y - 165, bossEnemy.x - 215);
-          const teslaPt = { x: 255, y: 175 };
+          // Showcase 4 Evolved Lv10 Mythic Turrets (incl. Prism Laser rainbow refraction!)
+          const vulcanAngle = Math.atan2(bossEnemy.y - 165, bossEnemy.x - 88);
+          const railAngle = Math.atan2(bossEnemy.y - 165, bossEnemy.x - 185);
+          const prismPt = { x: 268, y: 165 };
 
           // Railgun cinematic beam pulsing
           const pulseA = Math.max(0.25, Math.sin(t * 4) * 0.5 + 0.5);
-          ctx.save();
-          ctx.globalAlpha = pulseA;
-          ctx.lineCap = 'round';
-          ctx.strokeStyle = '#C084FC';
-          ctx.lineWidth = 10;
-          ctx.beginPath();
-          ctx.moveTo(215, 165);
-          ctx.lineTo(bossEnemy.x, bossEnemy.y);
-          ctx.stroke();
-          ctx.strokeStyle = '#FFFFFF';
-          ctx.lineWidth = 2.6;
-          ctx.beginPath();
-          ctx.moveTo(215, 165);
-          ctx.lineTo(bossEnemy.x, bossEnemy.y);
-          ctx.stroke();
-          ctx.restore();
+          drawRailBeamEnhanced(
+            ctx,
+            {
+              x1: 185,
+              y1: 165,
+              x2: bossEnemy.x,
+              y2: bossEnemy.y,
+              alpha: pulseA,
+              color: '#C084FC',
+              visualTier: 4,
+              variant: 'railgun',
+            },
+            t
+          );
 
-          // Tesla jagged arc to shieldbearer
-          ctx.save();
-          ctx.strokeStyle = '#38BDF8';
-          ctx.lineWidth = 2.6;
-          ctx.beginPath();
-          ctx.moveTo(teslaPt.x, teslaPt.y);
-          ctx.lineTo(298, 152 + Math.sin(t * 20) * 6);
-          ctx.lineTo(escortTank.x, escortTank.y);
-          ctx.stroke();
-          ctx.restore();
+          // Prism Laser Rainbow Refraction Beam
+          drawRailBeamEnhanced(
+            ctx,
+            {
+              x1: prismPt.x,
+              y1: prismPt.y,
+              x2: escortTank.x,
+              y2: escortTank.y,
+              alpha: 0.85,
+              color: '#E879F9',
+              visualTier: 4,
+              variant: 'prism_laser',
+            },
+            t
+          );
 
           // Vulcan tracers
           for (let b = 0; b < 3; b++) {
-            const frac = ((t * 2.4 + b * 0.33) % 1);
-            const bx = 105 + (bossEnemy.x - 105) * frac;
+            const frac = (t * 2.4 + b * 0.33) % 1;
+            const bx = 88 + (bossEnemy.x - 88) * frac;
             const by = 165 + (bossEnemy.y - 165) * frac;
             ctx.fillStyle = '#FDE047';
             ctx.beginPath();
@@ -2084,18 +1213,28 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           }
 
           ctx.save();
-          ctx.translate(105, 165);
-          drawGunTurretSprite(ctx, 'gatling', 10, vulcanAngle, 0.25, t);
+          ctx.translate(88, 165);
+          drawGunTurretSprite(ctx, 'gatling', 10, vulcanAngle, 0.25, t, 'alpha', 72, false);
           ctx.restore();
 
           ctx.save();
-          ctx.translate(215, 165);
-          drawGunTurretSprite(ctx, 'railgun', 10, railAngle, 0.3, t);
+          ctx.translate(185, 165);
+          drawGunTurretSprite(ctx, 'railgun', 10, railAngle, 0.3, t, 'omega', 100, true);
           ctx.restore();
 
           ctx.save();
-          ctx.translate(teslaPt.x, teslaPt.y);
-          drawGunTurretSprite(ctx, 'tesla', 7, 0, 0, t);
+          ctx.translate(prismPt.x, prismPt.y);
+          drawGunTurretSprite(
+            ctx,
+            'prism_laser',
+            10,
+            Math.atan2(escortTank.y - prismPt.y, escortTank.x - prismPt.x),
+            0.1,
+            t,
+            'alpha',
+            54,
+            false
+          );
           ctx.restore();
         }
       }
@@ -2163,7 +1302,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             maxShield: 0,
             speed: en.speed * 1.24,
             radius: 9,
-            reward: 5,
+            reward: Math.max(6, Math.round(5 * 1.1)),
             scoreValue: 16,
             koTimer: 0,
             hitFlash: 0.12,
@@ -2242,14 +1381,940 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           }
         }
 
-        // 2. Pure Gun Turrets Combat Simulation (Lv1 -> Lv10 Skills & FX)
+        // 2. Pure Gun Turrets Combat Simulation (Lv1 -> Lv10, α/ω Variants, 18 Unique Overheat Ultimates)
         const liveEnemies = s.enemies.filter((e) => e.hp > 0 && e.koTimer <= 0);
         const overdriveSpeedMult = s.overdriveTimer > 0 ? 1.45 : 1;
         const overdriveDmgMult = s.overdriveTimer > 0 ? 1.22 : 1;
 
+        const spawnCasing = (ox: number, oy: number, angle: number, color = '#FBBF24') => {
+          if (s.shellCasings.length >= 64) s.shellCasings.shift();
+          const ejectA = angle + Math.PI * 0.58 + (Math.random() - 0.5) * 0.45;
+          const spd = 48 + Math.random() * 45;
+          s.shellCasings.push({
+            x: ox + Math.cos(ejectA) * 8,
+            y: oy + Math.sin(ejectA) * 8,
+            vx: Math.cos(ejectA) * spd,
+            vy: Math.sin(ejectA) * spd - 14,
+            rot: Math.random() * Math.PI,
+            vrot: (Math.random() > 0.5 ? 1 : -1) * (10 + Math.random() * 10),
+            life: 0.48,
+            maxLife: 0.48,
+            color,
+          });
+        };
+
+        const spawnCrater = (x: number, y: number, radius: number, kind: GroundCraterFx['kind']) => {
+          if (s.groundCraters.length >= 24) s.groundCraters.shift();
+          s.groundCraters.push({ x, y, radius, life: 2.6, maxLife: 2.6, kind });
+        };
+
+        const triggerGunOverheatSkill = (
+          gun: PlacedGun,
+          origin: { x: number; y: number },
+          profile: ReturnType<typeof getGunCombatProfile>,
+          shotDmg: number,
+          target: TdEnemy | null
+        ) => {
+          const oh = profile.overheatSkill;
+          pushCombatText(origin.x, origin.y - 18, `⚡ ${oh.name}!`, oh.color, 1.06);
+          playSynthFx('overheat', soundEnabled, audioCtxRef);
+
+          if (gun.type === 'gatling') {
+            for (let k = 0; k < 7; k++) {
+              const a = gun.aimAngle + (k - 3) * 0.09;
+              const mx = origin.x + Math.cos(a) * 22;
+              const my = origin.y + Math.sin(a) * 22;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'bullet',
+                sourceGunId: gun.id,
+                x: mx,
+                y: my,
+                vx: Math.cos(a) * 720,
+                vy: Math.sin(a) * 720,
+                targetId: target?.id ?? -1,
+                damage: Math.round(shotDmg * 0.95),
+                armorPierce: Math.min(1, profile.armorPierce + 0.25),
+                shieldMult: profile.shieldMult,
+                splashRadius: 24,
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0,
+                pierceLeft: 1,
+                life: 0.95,
+                maxLife: 0.95,
+                age: 0,
+                speed: 720,
+                color: '#FDE047',
+                visualTier: 4,
+              });
+              spawnCasing(origin.x, origin.y, a, '#FDE047');
+            }
+            s.muzzleFlashes.push({ x: origin.x + Math.cos(gun.aimAngle) * 24, y: origin.y + Math.sin(gun.aimAngle) * 24, angle: gun.aimAngle, radius: 28, alpha: 1, color: '#FDE047' });
+          } else if (gun.type === 'shotgun') {
+            for (let k = 0; k < 16; k++) {
+              const a = (k * Math.PI * 2) / 16;
+              const mx = origin.x + Math.cos(a) * 18;
+              const my = origin.y + Math.sin(a) * 18;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'pellet',
+                sourceGunId: gun.id,
+                x: mx,
+                y: my,
+                vx: Math.cos(a) * 510,
+                vy: Math.sin(a) * 510,
+                targetId: -1,
+                damage: Math.round(shotDmg * 0.72),
+                armorPierce: Math.min(1, profile.armorPierce + 0.2),
+                shieldMult: profile.shieldMult,
+                splashRadius: 0,
+                pullForce: 0,
+                burnDps: Math.max(14, profile.burnDps * 1.4),
+                burnDuration: 2.4,
+                slowAmount: 0,
+                pierceLeft: 1,
+                hitIds: [],
+                life: 0.55,
+                maxLife: 0.55,
+                age: 0,
+                speed: 510,
+                color: '#FB7185',
+                visualTier: 4,
+              });
+            }
+            s.impactFlashes.push({ x: origin.x, y: origin.y, radius: 46, alpha: 0.95, color: '#FB7185', spikes: 8, rot: s.animTime });
+          } else if (gun.type === 'flamer') {
+            const fxRange = profile.rangePx * 1.32;
+            s.overheatEffects.push({ kind: 'phoenix', x: origin.x, y: origin.y, radius: fxRange, angle: gun.aimAngle, life: 0.85, maxLife: 0.85, color: '#F97316' });
+            s.flameCones.push({ x: origin.x, y: origin.y, angle: gun.aimAngle, range: fxRange, halfArc: Math.PI, alpha: 1, visualTier: 4, isNova360: true });
+            for (const en of liveEnemies) {
+              if (Math.hypot(en.x - origin.x, en.y - origin.y) <= fxRange + en.radius) {
+                en.burnTimer = Math.max(en.burnTimer, 3.6);
+                en.burnDps = Math.max(en.burnDps, Math.round(profile.burnDps * 1.8));
+                en.armorShred = Math.max(en.armorShred, 0.35);
+                const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.45), { armorPierce: 0.8, shieldMult: 1.25 });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+          } else if (gun.type === 'cryo') {
+            const cryoR = profile.rangePx * 1.28;
+            s.overheatEffects.push({ kind: 'hex_lattice', x: origin.x, y: origin.y, radius: cryoR, angle: 0, life: 0.9, maxLife: 0.9, color: '#BAE6FD' });
+            spawnCrater(origin.x, origin.y, Math.min(82, cryoR * 0.6), 'frost');
+            for (let sh = 0; sh < 16; sh++) {
+              const sa = (sh * Math.PI * 2) / 16;
+              s.frostShards.push({ x: origin.x, y: origin.y, vx: Math.cos(sa) * 320, vy: Math.sin(sa) * 320, life: 0.45, maxLife: 0.45, size: 9, rot: sa, color: '#FFFFFF' });
+            }
+            for (const en of liveEnemies) {
+              if (Math.hypot(en.x - origin.x, en.y - origin.y) <= cryoR + en.radius) {
+                en.slowTimer = Math.max(en.slowTimer, 3.2);
+                en.slowFactor = Math.min(en.slowFactor || 1, 0.6);
+                en.brittleBonus = Math.max(en.brittleBonus, Math.min(0.4, profile.brittleBonus + 0.16));
+                const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.6), { armorPierce: 0.5, shieldMult: 1.3 });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+          } else if (gun.type === 'tesla') {
+            const webRange = profile.rangePx * 1.35;
+            const picked = liveEnemies
+              .filter((e) => Math.hypot(e.x - origin.x, e.y - origin.y) <= webRange)
+              .slice(0, 6);
+            for (const en of picked) {
+              const midX = (origin.x + en.x) * 0.5 + (Math.random() * 26 - 13);
+              const midY = (origin.y + en.y) * 0.5 + (Math.random() * 26 - 13);
+              s.lightningArcs.push({
+                points: [{ x: origin.x, y: origin.y }, { x: midX, y: midY }, { x: en.x, y: en.y }],
+                alpha: 1,
+                color: '#FDE047',
+                width: 4.5,
+              });
+              en.stunTimer = Math.max(en.stunTimer, 0.25);
+              en.slowTimer = Math.max(en.slowTimer, 2.0);
+              en.slowFactor = Math.min(en.slowFactor || 1, 0.68);
+              const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.35), { armorPierce: 0.6, shieldMult: profile.shieldMult * 1.5 });
+              s.totalDamage += res.actualDamage;
+              gun.totalDamageDealt += res.actualDamage;
+              if (res.killed) recordKill(en, gun.id);
+            }
+            s.overheatEffects.push({ kind: 'cyclone', x: origin.x, y: origin.y, radius: 56, angle: 0, life: 0.65, maxLife: 0.65, color: '#38BDF8' });
+          } else if (gun.type === 'missile') {
+            const cands = liveEnemies.length > 0 ? liveEnemies : [];
+            for (let m = 0; m < 6; m++) {
+              const lock = cands[m % Math.max(1, cands.length)] ?? target;
+              const a = gun.aimAngle + (m - 2.5) * 0.24;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'missile',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 18,
+                y: origin.y + Math.sin(a) * 18,
+                vx: Math.cos(a) * 340,
+                vy: Math.sin(a) * 340,
+                targetId: lock?.id ?? -1,
+                damage: Math.round(shotDmg * 0.72),
+                armorPierce: Math.min(1, profile.armorPierce + 0.15),
+                shieldMult: profile.shieldMult,
+                splashRadius: Math.max(76, profile.splashRadius),
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0,
+                pierceLeft: 0,
+                life: 2.8,
+                maxLife: 2.8,
+                age: 0,
+                speed: 340,
+                color: '#FDE047',
+                visualTier: 4,
+                spawnCluster: true,
+              });
+            }
+          } else if (gun.type === 'railgun') {
+            for (let b = -1; b <= 1; b++) {
+              const ba = gun.aimAngle + b * 0.085;
+              const mx = origin.x + Math.cos(ba) * 24;
+              const my = origin.y + Math.sin(ba) * 24;
+              const ex = origin.x + Math.cos(ba) * 680;
+              const ey = origin.y + Math.sin(ba) * 680;
+              s.railBeams.push({ x1: mx, y1: my, x2: ex, y2: ey, alpha: 1.15, color: '#E879F9', visualTier: 4, variant: 'railgun' });
+              const segLenSq = (ex - origin.x) ** 2 + (ey - origin.y) ** 2;
+              for (const en of liveEnemies) {
+                const tProj = Math.max(0, Math.min(1, ((en.x - origin.x) * (ex - origin.x) + (en.y - origin.y) * (ey - origin.y)) / segLenSq));
+                const px = origin.x + tProj * (ex - origin.x);
+                const py = origin.y + tProj * (ey - origin.y);
+                if ((en.x - px) ** 2 + (en.y - py) ** 2 <= (en.radius + 22) ** 2) {
+                  spawnCrater(en.x, en.y, 28, 'scorch');
+                  const res = applyDamageToEnemy(en, Math.round(shotDmg * 0.82), { armorPierce: 1, shieldMult: 2.0 });
+                  s.totalDamage += res.actualDamage;
+                  gun.totalDamageDealt += res.actualDamage;
+                  if (res.killed) recordKill(en, gun.id);
+                }
+              }
+            }
+          } else if (gun.type === 'mortar') {
+            const cx = target?.x ?? origin.x + Math.cos(gun.aimAngle) * 140;
+            const cy = target?.y ?? origin.y + Math.sin(gun.aimAngle) * 140;
+            s.overheatEffects.push({ kind: 'vortex', x: cx, y: cy, radius: 96, angle: 0, life: 1.1, maxLife: 1.1, color: '#A855F7' });
+            spawnCrater(cx, cy, 52, 'plasma');
+            for (const en of liveEnemies) {
+              const dist = Math.hypot(en.x - cx, en.y - cy);
+              if (dist <= 115 + en.radius) {
+                if (en.kind !== 'boss') pullEnemyAlongTrack(en, s.map, cx, cy, 24);
+                const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.45), { armorPierce: 0.75, shieldMult: 1.4 });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+          } else if (gun.type === 'sniper') {
+            const highTargets = liveEnemies
+              .filter((e) => Math.hypot(e.x - origin.x, e.y - origin.y) <= profile.rangePx * 1.25)
+              .sort((a, b) => b.hp + b.shield - (a.hp + a.shield))
+              .slice(0, 3);
+            for (const ht of highTargets) {
+              s.overheatEffects.push({ kind: 'target_lock', x: origin.x, y: origin.y, tx: ht.x, ty: ht.y, radius: 18, angle: 0, life: 0.75, maxLife: 0.75, color: '#F43F5E' });
+              s.railBeams.push({ x1: origin.x, y1: origin.y, x2: ht.x, y2: ht.y, alpha: 1, color: '#F43F5E', visualTier: 4, variant: 'sniper' });
+              const critDmg = Math.round(shotDmg * 2.1);
+              const res = applyDamageToEnemy(ht, critDmg, { armorPierce: 1, shieldMult: 1.8 });
+              s.totalDamage += res.actualDamage;
+              gun.totalDamageDealt += res.actualDamage;
+              if (res.actualDamage > 0) pushCombatText(ht.x, ht.y - 12, `EXEC! -${res.actualDamage}`, '#F43F5E', 1.18);
+              if (res.killed) recordKill(ht, gun.id);
+            }
+          } else if (gun.type === 'acid') {
+            const inR = liveEnemies.filter((e) => Math.hypot(e.x - origin.x, e.y - origin.y) <= profile.rangePx * 1.15).slice(0, 3);
+            for (const en of inR) {
+              if (s.acidPools.length >= 16) s.acidPools.shift();
+              s.acidPools.push({
+                x: en.x,
+                y: en.y,
+                radius: Math.max(66, profile.splashRadius * 1.25),
+                life: 4.5,
+                maxLife: 4.5,
+                dps: Math.max(22, profile.burnDps * 1.6),
+                shred: 0.55,
+                slowPct: Math.min(0.36, profile.slowPct + 0.08),
+                tickAccum: 0.25,
+                sourceGunId: gun.id,
+                visualTier: 4,
+              });
+              emitParticles(en.x, en.y, '#BEF264', 14, 130, 1.2);
+            }
+          } else if (gun.type === 'saw') {
+            for (let sw = 0; sw < 4; sw++) {
+              const a = gun.aimAngle + (sw - 1.5) * 0.42;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'sawblade',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 18,
+                y: origin.y + Math.sin(a) * 18,
+                vx: Math.cos(a) * 520,
+                vy: Math.sin(a) * 520,
+                targetId: target?.id ?? -1,
+                damage: Math.round(shotDmg * 0.9),
+                armorPierce: 0.7,
+                shieldMult: profile.shieldMult,
+                splashRadius: 0,
+                pullForce: 0,
+                burnDps: Math.max(12, profile.burnDps),
+                burnDuration: 2,
+                slowAmount: 0,
+                pierceLeft: 0,
+                bounceLeft: 8,
+                hitIds: [],
+                life: 3.1,
+                maxLife: 3.1,
+                age: 0,
+                speed: 520,
+                color: '#FDE047',
+                visualTier: 4,
+              });
+            }
+          } else if (gun.type === 'beacon') {
+            s.overheatEffects.push({ kind: 'solar_flare', x: origin.x, y: origin.y, radius: profile.rangePx * 1.1, angle: 0, life: 0.75, maxLife: 0.75, color: '#FDE047' });
+            s.energy += 8;
+            pushCombatText(origin.x, origin.y - 28, '+8⚡ Tản Nhiệt Đồng Minh!', '#FDE047', 1);
+            for (const ally of s.guns) {
+              if (ally.id === gun.id) continue;
+              const apt = gridToWorldCenter(ally.col, ally.row);
+              if (Math.hypot(apt.x - origin.x, apt.y - origin.y) <= profile.rangePx * 1.25) {
+                ally.heat = Math.max(0, (ally.heat ?? 0) - 25);
+              }
+            }
+            for (const en of liveEnemies) {
+              if (Math.hypot(en.x - origin.x, en.y - origin.y) <= profile.rangePx * 1.15) {
+                const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.8), { armorPierce: 0.85, shieldMult: 1.6 });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+          } else if (gun.type === 'cannon') {
+            for (let c = 0; c < 4; c++) {
+              const a = gun.aimAngle + (c - 1.5) * 0.14;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'cannon',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 24,
+                y: origin.y + Math.sin(a) * 24,
+                vx: Math.cos(a) * 490,
+                vy: Math.sin(a) * 490,
+                targetId: target?.id ?? -1,
+                damage: Math.round(shotDmg * 0.78),
+                armorPierce: Math.min(1, profile.armorPierce + 0.18),
+                shieldMult: profile.shieldMult,
+                splashRadius: Math.max(76, profile.splashRadius),
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0.45,
+                pierceLeft: 0,
+                life: 1.35,
+                maxLife: 1.35,
+                age: 0,
+                speed: 490,
+                color: '#FDE047',
+                visualTier: 4,
+              });
+              spawnCasing(origin.x, origin.y, a, '#F59E0B');
+            }
+          } else if (gun.type === 'plasma') {
+            s.overheatEffects.push({ kind: 'vortex', x: origin.x, y: origin.y, radius: 52, angle: 0, life: 0.65, maxLife: 0.65, color: '#F472B6' });
+            for (let p = 0; p < 2; p++) {
+              const a = gun.aimAngle + (p === 0 ? -0.18 : 0.18);
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'plasma',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 20,
+                y: origin.y + Math.sin(a) * 20,
+                vx: Math.cos(a) * 410,
+                vy: Math.sin(a) * 410,
+                targetId: target?.id ?? -1,
+                damage: Math.round(shotDmg * 1.45),
+                armorPierce: 0.7,
+                shieldMult: profile.shieldMult * 1.45,
+                splashRadius: Math.max(78, profile.splashRadius),
+                pullForce: 22,
+                burnDps: Math.max(18, profile.burnDps * 1.4),
+                burnDuration: 2.5,
+                slowAmount: 0,
+                pierceLeft: 0,
+                life: 1.5,
+                maxLife: 1.5,
+                age: 0,
+                speed: 410,
+                color: '#F9A8D4',
+                visualTier: 4,
+              });
+            }
+          } else if (gun.type === 'cluster') {
+            const cands = liveEnemies.filter((e) => Math.hypot(e.x - origin.x, e.y - origin.y) <= profile.rangePx * 1.15);
+            for (let b = 0; b < 10; b++) {
+              const tgt = cands[b % Math.max(1, cands.length)];
+              const tx = (tgt?.x ?? (target?.x ?? origin.x + 80)) + (Math.random() * 54 - 27);
+              const ty = (tgt?.y ?? (target?.y ?? origin.y)) + (Math.random() * 54 - 27);
+              const ang = Math.atan2(ty - origin.y, tx - origin.x);
+              const dist = Math.hypot(tx - origin.x, ty - origin.y);
+              const spd = Math.max(210, Math.min(360, dist * 2.1));
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'bomblet',
+                sourceGunId: gun.id,
+                x: origin.x,
+                y: origin.y,
+                vx: Math.cos(ang) * spd,
+                vy: Math.sin(ang) * spd,
+                targetId: -1,
+                damage: Math.round(shotDmg * 0.54),
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: 52,
+                pullForce: 0,
+                burnDps: Math.max(12, profile.burnDps),
+                burnDuration: 2.0,
+                slowAmount: 0,
+                pierceLeft: 0,
+                life: Math.min(0.65, dist / spd + 0.05),
+                maxLife: 0.65,
+                age: 0,
+                speed: spd,
+                color: '#34D399',
+                visualTier: 4,
+                isClusterBomblet: true,
+              });
+            }
+          } else if (gun.type === 'hunter') {
+            const targets = [...liveEnemies].sort((a, b) => {
+              const pa = a.kind === 'stealth' || a.kind === 'teleporter' || a.kind === 'healer' || a.kind === 'boss' ? 1 : 0;
+              const pb = b.kind === 'stealth' || b.kind === 'teleporter' || b.kind === 'healer' || b.kind === 'boss' ? 1 : 0;
+              return pb - pa || b.waypointIndex - a.waypointIndex;
+            });
+            for (let h = 0; h < 6; h++) {
+              const lock = targets[h % Math.max(1, targets.length)] ?? target;
+              const a = gun.aimAngle + (h - 2.5) * 0.3;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'hunter',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 18,
+                y: origin.y + Math.sin(a) * 18,
+                vx: Math.cos(a) * 470,
+                vy: Math.sin(a) * 470,
+                targetId: lock?.id ?? -1,
+                damage: Math.round(shotDmg * 0.85),
+                armorPierce: Math.min(1, profile.armorPierce + 0.2),
+                shieldMult: profile.shieldMult * 1.25,
+                splashRadius: 28,
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 1.35,
+                pierceLeft: 0,
+                life: 2.4,
+                maxLife: 2.4,
+                age: 0,
+                speed: 470,
+                color: '#22D3EE',
+                visualTier: 4,
+              });
+            }
+          } else if (gun.type === 'prism_laser') {
+            s.overheatEffects.push({ kind: 'rainbow_star', x: origin.x, y: origin.y, radius: 64, angle: 0, life: 0.72, maxLife: 0.72, color: '#E879F9' });
+            const spectrum = ['#FB7185', '#FB923C', '#FACC15', '#4ADE80', '#38BDF8', '#818CF8', '#E879F9', '#F472B6'];
+            const targets = liveEnemies.filter((e) => Math.hypot(e.x - origin.x, e.y - origin.y) <= profile.rangePx * 1.25).slice(0, 8);
+            targets.forEach((en, idx) => {
+              const c = spectrum[idx % spectrum.length];
+              s.railBeams.push({ x1: origin.x, y1: origin.y, x2: en.x, y2: en.y, alpha: 1.05, color: c, visualTier: 4, variant: 'prism_laser' });
+              en.burnTimer = Math.max(en.burnTimer, 2.2);
+              en.burnDps = Math.max(en.burnDps, Math.round(profile.burnDps * 1.3));
+              const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.25), { armorPierce: 0.9, shieldMult: 1.75 });
+              s.totalDamage += res.actualDamage;
+              gun.totalDamageDealt += res.actualDamage;
+              if (res.killed) recordKill(en, gun.id);
+            });
+          } else if (gun.type === 'tempest') {
+            const tx = target?.x ?? origin.x + Math.cos(gun.aimAngle) * 120;
+            const ty = target?.y ?? origin.y + Math.sin(gun.aimAngle) * 120;
+            s.overheatEffects.push({ kind: 'cyclone', x: tx, y: ty, radius: 92, angle: 0, life: 0.95, maxLife: 0.95, color: '#818CF8' });
+            for (let q = 0; q < 4; q++) {
+              const a = gun.aimAngle + (q - 1.5) * 0.28;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'tempest_orb',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 20,
+                y: origin.y + Math.sin(a) * 20,
+                vx: Math.cos(a) * 380,
+                vy: Math.sin(a) * 380,
+                targetId: target?.id ?? -1,
+                damage: Math.round(shotDmg * 1.05),
+                armorPierce: Math.min(1, profile.armorPierce + 0.15),
+                shieldMult: profile.shieldMult * 1.35,
+                splashRadius: Math.max(76, profile.splashRadius),
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0.34,
+                pierceLeft: 0,
+                life: 1.8,
+                maxLife: 1.8,
+                age: 0,
+                speed: 380,
+                color: '#A5B4FC',
+                visualTier: 4,
+              });
+            }
+          } else if (gun.type === 'sonic') {
+            const ohR = profile.rangePx * 1.45;
+            s.overheatEffects.push({ kind: 'sonic_nova', x: origin.x, y: origin.y, radius: ohR, angle: 0, life: 0.72, maxLife: 0.72, color: '#2DD4BF' });
+            for (const en of liveEnemies) {
+              if (Math.hypot(en.x - origin.x, en.y - origin.y) <= ohR + en.radius) {
+                en.armorShred = Math.max(en.armorShred, 0.5);
+                en.slowTimer = Math.max(en.slowTimer, 2.2);
+                en.slowFactor = Math.min(en.slowFactor || 1, 0.72);
+                const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.75), { armorPierce: 0.85, shieldMult: profile.shieldMult * 1.35 });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+          } else if (gun.type === 'gravity_lance') {
+            const tx = target?.x ?? origin.x + Math.cos(gun.aimAngle) * 160;
+            const ty = target?.y ?? origin.y + Math.sin(gun.aimAngle) * 160;
+            s.overheatEffects.push({ kind: 'vortex', x: tx, y: ty, radius: 95, angle: 0, life: 0.95, maxLife: 0.95, color: '#A855F7' });
+            const ex = origin.x + Math.cos(gun.aimAngle) * 620;
+            const ey = origin.y + Math.sin(gun.aimAngle) * 620;
+            s.railBeams.push({ x1: origin.x, y1: origin.y, x2: ex, y2: ey, alpha: 1.1, color: '#A855F7', visualTier: 4, variant: 'gravity_lance' });
+            for (const en of liveEnemies) {
+              if (Math.hypot(en.x - tx, en.y - ty) <= 110 + en.radius) {
+                pullEnemyAlongTrack(en, s.map, tx, ty, 20);
+                const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.85), { armorPierce: 1, shieldMult: 1.75 });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+          } else if (gun.type === 'map01_cyber_smg') {
+            s.overheatEffects.push({ kind: 'cyclone', x: origin.x, y: origin.y, radius: 52, angle: 0, life: 0.55, maxLife: 0.55, color: '#00E5FF' });
+            for (let k = 0; k < 10; k++) {
+              const a = gun.aimAngle + (k - 4.5) * 0.08;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'cyber_bolt',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 20,
+                y: origin.y + Math.sin(a) * 20,
+                vx: Math.cos(a) * 680,
+                vy: Math.sin(a) * 680,
+                targetId: target?.id ?? -1,
+                damage: Math.round(shotDmg * 0.9),
+                armorPierce: Math.min(1, profile.armorPierce + 0.25),
+                shieldMult: profile.shieldMult * 1.3,
+                splashRadius: 18,
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0.18,
+                pierceLeft: 1,
+                hitIds: [],
+                life: 0.9,
+                maxLife: 0.9,
+                age: 0,
+                speed: 680,
+                color: '#00E5FF',
+                visualTier: 4,
+              });
+            }
+          } else if (gun.type === 'map02_matrix_spire') {
+            s.overheatEffects.push({ kind: 'rainbow_star', x: origin.x, y: origin.y, radius: 66, angle: 0, life: 0.72, maxLife: 0.72, color: '#34D399' });
+            const picked = liveEnemies.filter((e) => Math.hypot(e.x - origin.x, e.y - origin.y) <= profile.rangePx * 1.3).slice(0, 7);
+            for (const en of picked) {
+              s.railBeams.push({ x1: origin.x, y1: origin.y, x2: en.x, y2: en.y, alpha: 1.0, color: '#34D399', visualTier: 4, variant: 'aurora_beam' });
+              en.armorShred = Math.max(en.armorShred, 0.28);
+              const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.4), { armorPierce: 0.9, shieldMult: 1.7 });
+              s.totalDamage += res.actualDamage;
+              gun.totalDamageDealt += res.actualDamage;
+              if (res.killed) recordKill(en, gun.id);
+            }
+          } else if (gun.type === 'map03_forge_magma') {
+            const cx = target?.x ?? origin.x + Math.cos(gun.aimAngle) * 120;
+            const cy = target?.y ?? origin.y + Math.sin(gun.aimAngle) * 120;
+            s.overheatEffects.push({ kind: 'meteor_shower', x: cx, y: cy, radius: 96, angle: gun.aimAngle, life: 0.85, maxLife: 0.85, color: '#F97316' });
+            spawnCrater(cx, cy, 56, 'scorch');
+            for (const en of liveEnemies) {
+              if (Math.hypot(en.x - cx, en.y - cy) <= 105 + en.radius) {
+                en.burnTimer = Math.max(en.burnTimer, 3.8);
+                en.burnDps = Math.max(en.burnDps, Math.max(24, Math.round(profile.burnDps * 1.7)));
+                const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.6), { armorPierce: 0.82, shieldMult: 1.25 });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+          } else if (gun.type === 'map04_void_katana') {
+            s.overheatEffects.push({ kind: 'void_slash', x: origin.x, y: origin.y, radius: 64, angle: gun.aimAngle, life: 0.65, maxLife: 0.65, color: '#F43F5E' });
+            for (let k = 0; k < 5; k++) {
+              const a = gun.aimAngle + (k - 2) * 0.22;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'katana_blade',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 18,
+                y: origin.y + Math.sin(a) * 18,
+                vx: Math.cos(a) * 560,
+                vy: Math.sin(a) * 560,
+                targetId: -1,
+                damage: Math.round(shotDmg * 1.15),
+                armorPierce: 0.95,
+                shieldMult: 1.45,
+                splashRadius: 22,
+                pullForce: 0,
+                burnDps: Math.max(12, profile.burnDps),
+                burnDuration: 2.0,
+                slowAmount: 0,
+                pierceLeft: 4,
+                hitIds: [],
+                life: 1.0,
+                maxLife: 1.0,
+                age: 0,
+                speed: 560,
+                color: '#FB7185',
+                visualTier: 4,
+              });
+            }
+          } else if (gun.type === 'map05_dune_needler') {
+            s.overheatEffects.push({ kind: 'solar_flare', x: origin.x, y: origin.y, radius: 58, angle: 0, life: 0.65, maxLife: 0.65, color: '#FACC15' });
+            for (let k = 0; k < 12; k++) {
+              const a = (k * Math.PI * 2) / 12;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'dune_needle',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 18,
+                y: origin.y + Math.sin(a) * 18,
+                vx: Math.cos(a) * 580,
+                vy: Math.sin(a) * 580,
+                targetId: -1,
+                damage: Math.round(shotDmg * 0.85),
+                armorPierce: 0.85,
+                shieldMult: 1.25,
+                splashRadius: 34,
+                pullForce: 0,
+                burnDps: Math.max(10, profile.burnDps),
+                burnDuration: 2.0,
+                slowAmount: 0.22,
+                pierceLeft: 1,
+                hitIds: [],
+                life: 0.85,
+                maxLife: 0.85,
+                age: 0,
+                speed: 580,
+                color: '#FACC15',
+                visualTier: 4,
+              });
+            }
+          } else if (gun.type === 'map06_aurora_beam') {
+            s.overheatEffects.push({ kind: 'hex_lattice', x: origin.x, y: origin.y, radius: profile.rangePx * 1.2, angle: 0, life: 0.85, maxLife: 0.85, color: '#7DD3FC' });
+            const picked = liveEnemies.filter((e) => Math.hypot(e.x - origin.x, e.y - origin.y) <= profile.rangePx * 1.25).slice(0, 8);
+            for (const en of picked) {
+              s.railBeams.push({ x1: origin.x, y1: origin.y, x2: en.x, y2: en.y, alpha: 1.0, color: '#7DD3FC', visualTier: 4, variant: 'aurora_beam' });
+              en.slowTimer = Math.max(en.slowTimer, 2.8);
+              en.slowFactor = Math.min(en.slowFactor || 1, 0.65);
+              en.brittleBonus = Math.max(en.brittleBonus, 0.25);
+              const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.35), { armorPierce: 0.88, shieldMult: 1.65 });
+              s.totalDamage += res.actualDamage;
+              gun.totalDamageDealt += res.actualDamage;
+              if (res.killed) recordKill(en, gun.id);
+            }
+          } else if (gun.type === 'map07_cyclone_rotary') {
+            s.overheatEffects.push({ kind: 'cyclone', x: origin.x, y: origin.y, radius: 58, angle: 0, life: 0.65, maxLife: 0.65, color: '#38BDF8' });
+            for (let k = 0; k < 10; k++) {
+              const a = gun.aimAngle + (k - 4.5) * 0.085;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'bullet',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 22,
+                y: origin.y + Math.sin(a) * 22,
+                vx: Math.cos(a) * 700,
+                vy: Math.sin(a) * 700,
+                targetId: target?.id ?? -1,
+                damage: Math.round(shotDmg * 0.88),
+                armorPierce: 0.85,
+                shieldMult: 1.2,
+                splashRadius: 30,
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0,
+                pierceLeft: 1,
+                hitIds: [],
+                life: 0.9,
+                maxLife: 0.9,
+                age: 0,
+                speed: 700,
+                color: '#38BDF8',
+                visualTier: 4,
+              });
+            }
+          } else if (gun.type === 'map08_titan_flak') {
+            s.overheatEffects.push({ kind: 'meteor_shower', x: origin.x, y: origin.y, radius: 54, angle: gun.aimAngle, life: 0.65, maxLife: 0.65, color: '#F59E0B' });
+            for (let f = 0; f < 5; f++) {
+              const a = gun.aimAngle + (f - 2) * 0.16;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'flak_shell',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 22,
+                y: origin.y + Math.sin(a) * 22,
+                vx: Math.cos(a) * 440,
+                vy: Math.sin(a) * 440,
+                targetId: target?.id ?? -1,
+                damage: Math.round(shotDmg * 0.92),
+                armorPierce: 0.88,
+                shieldMult: 1.3,
+                splashRadius: Math.max(88, profile.splashRadius),
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0.35,
+                pierceLeft: 0,
+                life: 1.3,
+                maxLife: 1.3,
+                age: 0,
+                speed: 440,
+                color: '#F59E0B',
+                visualTier: 4,
+              });
+            }
+          } else if (gun.type === 'map09_venom_hydra') {
+            const cx = target?.x ?? origin.x + Math.cos(gun.aimAngle) * 110;
+            const cy = target?.y ?? origin.y + Math.sin(gun.aimAngle) * 110;
+            s.overheatEffects.push({ kind: 'hydra_burst', x: cx, y: cy, radius: 86, angle: 0, life: 0.85, maxLife: 0.85, color: '#84CC16' });
+            if (s.acidPools.length < 18) {
+              s.acidPools.push({ x: cx, y: cy, radius: 74, life: 4.5, maxLife: 4.5, dps: Math.max(24, profile.burnDps * 1.5), shred: 0.5, slowPct: 0.28, tickAccum: 0.2, sourceGunId: gun.id, visualTier: 4 });
+            }
+            for (let h = 0; h < 5; h++) {
+              const a = gun.aimAngle + (h - 2) * 0.25;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'hydra_fang',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 18,
+                y: origin.y + Math.sin(a) * 18,
+                vx: Math.cos(a) * 390,
+                vy: Math.sin(a) * 390,
+                targetId: target?.id ?? -1,
+                damage: Math.round(shotDmg * 0.95),
+                armorPierce: 0.85,
+                shieldMult: 1.2,
+                splashRadius: Math.max(66, profile.splashRadius),
+                pullForce: 0,
+                burnDps: Math.max(18, profile.burnDps),
+                burnDuration: 2.6,
+                slowAmount: 0.26,
+                pierceLeft: 0,
+                life: 1.8,
+                maxLife: 1.8,
+                age: 0,
+                speed: 390,
+                color: '#A3E635',
+                visualTier: 4,
+              });
+            }
+          } else if (gun.type === 'map10_meteor_rail') {
+            for (let b = -1; b <= 1; b++) {
+              if (b === 0) continue;
+              const ba = gun.aimAngle + b * 0.06;
+              const ex = origin.x + Math.cos(ba) * 680;
+              const ey = origin.y + Math.sin(ba) * 680;
+              s.railBeams.push({ x1: origin.x, y1: origin.y, x2: ex, y2: ey, alpha: 1.15, color: '#FB923C', visualTier: 4, variant: 'railgun' });
+            }
+            const cx = target?.x ?? origin.x + Math.cos(gun.aimAngle) * 150;
+            const cy = target?.y ?? origin.y + Math.sin(gun.aimAngle) * 150;
+            s.overheatEffects.push({ kind: 'meteor_shower', x: cx, y: cy, radius: 102, angle: gun.aimAngle, life: 0.95, maxLife: 0.95, color: '#FB923C' });
+            spawnCrater(cx, cy, 56, 'scorch');
+            for (const en of liveEnemies) {
+              if (Math.hypot(en.x - cx, en.y - cy) <= 105 + en.radius) {
+                const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.9), { armorPierce: 1, shieldMult: 1.8 });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+          } else if (gun.type === 'map11_cryo_shatter') {
+            s.overheatEffects.push({ kind: 'hex_lattice', x: origin.x, y: origin.y, radius: 74, angle: 0, life: 0.8, maxLife: 0.8, color: '#BAE6FD' });
+            for (let k = 0; k < 8; k++) {
+              const a = gun.aimAngle + (k - 3.5) * 0.2;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'cryo_spike',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 18,
+                y: origin.y + Math.sin(a) * 18,
+                vx: Math.cos(a) * 480,
+                vy: Math.sin(a) * 480,
+                targetId: target?.id ?? -1,
+                damage: Math.round(shotDmg * 0.9),
+                armorPierce: 0.9,
+                shieldMult: 1.35,
+                splashRadius: 58,
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0.32,
+                pierceLeft: 1,
+                hitIds: [],
+                life: 1.2,
+                maxLife: 1.2,
+                age: 0,
+                speed: 480,
+                color: '#BAE6FD',
+                visualTier: 4,
+              });
+            }
+          } else if (gun.type === 'map12_hellfire_organ') {
+            s.overheatEffects.push({ kind: 'phoenix', x: origin.x, y: origin.y, radius: 66, angle: gun.aimAngle, life: 0.78, maxLife: 0.78, color: '#FB7185' });
+            const cands = liveEnemies.length > 0 ? liveEnemies : [];
+            for (let r = 0; r < 8; r++) {
+              const lock = cands[r % Math.max(1, cands.length)] ?? target;
+              const a = gun.aimAngle + (r - 3.5) * 0.22;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'hell_rocket',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 18,
+                y: origin.y + Math.sin(a) * 18,
+                vx: Math.cos(a) * 355,
+                vy: Math.sin(a) * 355,
+                targetId: lock?.id ?? -1,
+                damage: Math.round(shotDmg * 0.72),
+                armorPierce: 0.72,
+                shieldMult: 1.3,
+                splashRadius: Math.max(82, profile.splashRadius),
+                pullForce: 0,
+                burnDps: Math.max(18, profile.burnDps * 1.4),
+                burnDuration: 2.6,
+                slowAmount: 0,
+                pierceLeft: 0,
+                life: 2.4,
+                maxLife: 2.4,
+                age: 0,
+                speed: 355,
+                color: '#FB7185',
+                visualTier: 4,
+              });
+            }
+          } else if (gun.type === 'map13_shadow_hive') {
+            s.overheatEffects.push({ kind: 'vortex', x: origin.x, y: origin.y, radius: 52, angle: 0, life: 0.68, maxLife: 0.68, color: '#C084FC' });
+            const targets = [...liveEnemies].sort((a, b) => b.hp + b.shield - (a.hp + a.shield));
+            for (let d = 0; d < 6; d++) {
+              const lock = targets[d % Math.max(1, targets.length)] ?? target;
+              const a = gun.aimAngle + (d - 2.5) * 0.34;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'shadow_drone',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 18,
+                y: origin.y + Math.sin(a) * 18,
+                vx: Math.cos(a) * 440,
+                vy: Math.sin(a) * 440,
+                targetId: lock?.id ?? -1,
+                damage: Math.round(shotDmg * 0.95),
+                armorPierce: 0.85,
+                shieldMult: 1.55,
+                splashRadius: 36,
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0.2,
+                pierceLeft: 0,
+                life: 2.4,
+                maxLife: 2.4,
+                age: 0,
+                speed: 440,
+                color: '#C084FC',
+                visualTier: 4,
+              });
+            }
+          } else if (gun.type === 'map14_omega_disruptor') {
+            s.overheatEffects.push({ kind: 'cyclone', x: origin.x, y: origin.y, radius: profile.rangePx * 1.15, angle: 0, life: 0.78, maxLife: 0.78, color: '#60A5FA' });
+            const picked = liveEnemies.filter((e) => Math.hypot(e.x - origin.x, e.y - origin.y) <= profile.rangePx * 1.3).slice(0, 7);
+            for (const en of picked) {
+              s.railBeams.push({ x1: origin.x, y1: origin.y, x2: en.x, y2: en.y, alpha: 1.0, color: '#60A5FA', visualTier: 4, variant: 'omega_beam' });
+              en.stunTimer = Math.max(en.stunTimer, 0.28);
+              en.slowTimer = Math.max(en.slowTimer, 2.0);
+              en.slowFactor = Math.min(en.slowFactor || 1, 0.7);
+              const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.5), { armorPierce: 0.9, shieldMult: 2.4 });
+              s.totalDamage += res.actualDamage;
+              gun.totalDamageDealt += res.actualDamage;
+              if (res.killed) recordKill(en, gun.id);
+            }
+          } else if (gun.type === 'map15_emerald_reaper') {
+            s.overheatEffects.push({ kind: 'emerald_storm', x: origin.x, y: origin.y, radius: 66, angle: 0, life: 0.75, maxLife: 0.75, color: '#34D399' });
+            for (let gIdx = 0; gIdx < 4; gIdx++) {
+              const a = gun.aimAngle + (gIdx - 1.5) * 0.4;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'reaper_disc',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 18,
+                y: origin.y + Math.sin(a) * 18,
+                vx: Math.cos(a) * 530,
+                vy: Math.sin(a) * 530,
+                targetId: target?.id ?? -1,
+                damage: Math.round(shotDmg * 0.95),
+                armorPierce: 0.88,
+                shieldMult: 1.35,
+                splashRadius: 0,
+                pullForce: 0,
+                burnDps: Math.max(18, profile.burnDps),
+                burnDuration: 2.2,
+                slowAmount: 0,
+                pierceLeft: 0,
+                bounceLeft: Math.max(7, profile.chainCount),
+                hitIds: [],
+                life: 3.1,
+                maxLife: 3.1,
+                age: 0,
+                speed: 530,
+                color: '#34D399',
+                visualTier: 4,
+              });
+            }
+          } else if (gun.type === 'map16_void_sovereign') {
+            const cx = target?.x ?? origin.x + Math.cos(gun.aimAngle) * 140;
+            const cy = target?.y ?? origin.y + Math.sin(gun.aimAngle) * 140;
+            s.overheatEffects.push({ kind: 'sovereign_eclipse', x: cx, y: cy, radius: 108, angle: 0, life: 1.05, maxLife: 1.05, color: '#E879F9' });
+            s.railBeams.push({ x1: origin.x, y1: origin.y, x2: cx, y2: cy, alpha: 1.1, color: '#FDE047', visualTier: 4, variant: 'sovereign_beam' });
+            for (const en of liveEnemies) {
+              if (Math.hypot(en.x - cx, en.y - cy) <= 116 + en.radius) {
+                pullEnemyAlongTrack(en, s.map, cx, cy, 18);
+                en.burnTimer = Math.max(en.burnTimer, 2.8);
+                en.burnDps = Math.max(en.burnDps, Math.max(22, profile.burnDps));
+                const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.85), { armorPierce: 1, shieldMult: 1.8 });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+          }
+        };
+
         for (const gun of s.guns) {
           if (gun.recoil > 0) gun.recoil = Math.max(0, gun.recoil - simDt * 5);
-          const profile = getGunCombatProfile(gun.type, gun.level);
+          if ((gun.overheatTimer ?? 0) > 0) {
+            gun.overheatTimer = Math.max(0, (gun.overheatTimer ?? 0) - simDt);
+          }
+          const profile = getGunCombatProfile(gun.type, gun.level, gun.variant ?? 'alpha');
           const origin = gridToWorldCenter(gun.col, gun.row);
           const rangeSq = profile.rangePx * profile.rangePx;
 
@@ -2278,15 +2343,40 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
 
           if (target) {
             gun.aimAngle = Math.atan2(target.y - origin.y, target.x - origin.x);
+          } else if ((gun.heat ?? 0) > 0 && (gun.overheatTimer ?? 0) <= 0) {
+            gun.heat = Math.max(0, (gun.heat ?? 0) - simDt * 12);
           }
 
           const beaconBuff = computeBeaconBuffAtTile(s.guns, gun.col, gun.row);
           gun.chargeTimer += simDt * overdriveSpeedMult * beaconBuff.speedMult;
+
+          // Allow manual/overdrive triggered Overheat skill to unleash immediately when heat >= 100
+          if ((gun.heat ?? 0) >= 100 && (gun.overheatTimer ?? 0) <= 0 && target) {
+            gun.heat = 0;
+            gun.overheatTimer = 3.5;
+            const ohDmg = Math.round(profile.damage * overdriveDmgMult * beaconBuff.damageMult);
+            triggerGunOverheatSkill(gun, origin, profile, ohDmg, target);
+          }
+
           if (!target || gun.chargeTimer < profile.cooldownSec) continue;
 
           gun.chargeTimer = 0;
           gun.recoil = 1;
           const shotDmg = Math.round(profile.damage * overdriveDmgMult * beaconBuff.damageMult);
+
+          if ((gun.overheatTimer ?? 0) <= 0) {
+            const heatGain = profile.overheatSkill.heatPerShot * (GAME_MODE_CONFIGS[s.gameMode].heatMult ?? 1);
+            gun.heat = Math.min(100, (gun.heat ?? 0) + heatGain);
+            if ((gun.heat ?? 0) >= 100) {
+              gun.heat = 0;
+              gun.overheatTimer = 3.5;
+              triggerGunOverheatSkill(gun, origin, profile, shotDmg, target);
+            }
+          }
+
+          if (gun.type === 'gatling' || gun.type === 'cannon' || gun.type === 'sniper' || gun.type === 'shotgun') {
+            spawnCasing(origin.x, origin.y, gun.aimAngle);
+          }
 
           if (gun.type === 'gatling') {
             const count = profile.projectilesPerShot;
@@ -3096,6 +3186,456 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               });
             }
             playSynthFx('hunter', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'prism_laser') {
+            const chainTotal = Math.max(1, profile.chainCount);
+            const hitIds = new Set<number>([target.id]);
+            let prevX = origin.x + Math.cos(gun.aimAngle) * 20;
+            let prevY = origin.y + Math.sin(gun.aimAngle) * 20;
+            let cur: TdEnemy | null = target;
+
+            s.muzzleFlashes.push({
+              x: prevX,
+              y: prevY,
+              angle: gun.aimAngle,
+              radius: 20 + profile.visualTier * 2,
+              alpha: 0.95,
+              color: '#E879F9',
+            });
+
+            for (let b = 0; b < chainTotal && cur; b++) {
+              s.railBeams.push({
+                x1: prevX,
+                y1: prevY,
+                x2: cur.x,
+                y2: cur.y,
+                alpha: 0.95,
+                color: profile.visualTier === 4 ? '#FDE047' : '#E879F9',
+                visualTier: profile.visualTier,
+                variant: 'prism_laser',
+              });
+              const falloff = Math.max(0.55, 1 - b * 0.11);
+              if (profile.burnDps > 0) {
+                cur.burnTimer = Math.max(cur.burnTimer, 1.8);
+                cur.burnDps = Math.max(cur.burnDps, profile.burnDps);
+              }
+              const res = applyDamageToEnemy(cur, Math.round(shotDmg * falloff), {
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+              });
+              s.totalDamage += res.actualDamage;
+              gun.totalDamageDealt += res.actualDamage;
+              emitParticles(cur.x, cur.y, '#F472B6', 7, 110, 0.95);
+              if (s.overdriveTimer <= 0) {
+                s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.045);
+              }
+              if (res.killed) recordKill(cur, gun.id);
+
+              prevX = cur.x;
+              prevY = cur.y;
+              let nextHop: TdEnemy | null = null;
+              let bestHopSq = (155 + gun.level * 8) ** 2;
+              for (const cand of liveEnemies) {
+                if (hitIds.has(cand.id) || cand.hp <= 0) continue;
+                const dSq = (cand.x - prevX) ** 2 + (cand.y - prevY) ** 2;
+                if (dSq <= bestHopSq) {
+                  bestHopSq = dSq;
+                  nextHop = cand;
+                }
+              }
+              if (nextHop) hitIds.add(nextHop.id);
+              cur = nextHop;
+            }
+            playSynthFx('prism_laser', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'tempest') {
+            const orbCount = profile.projectilesPerShot;
+            for (let tIdx = 0; tIdx < orbCount; tIdx++) {
+              const offset = orbCount === 1 ? 0 : (tIdx - (orbCount - 1) / 2) * 0.22;
+              const shotAngle = gun.aimAngle + offset;
+              const muzzleX = origin.x + Math.cos(shotAngle) * 20;
+              const muzzleY = origin.y + Math.sin(shotAngle) * 20;
+              const spd = 335 + gun.level * 9;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'tempest_orb',
+                sourceGunId: gun.id,
+                x: muzzleX,
+                y: muzzleY,
+                vx: Math.cos(shotAngle) * spd,
+                vy: Math.sin(shotAngle) * spd,
+                targetId: target.id,
+                damage: orbCount >= 3 ? Math.round(shotDmg * 0.5) : orbCount === 2 ? Math.round(shotDmg * 0.68) : shotDmg,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: profile.splashRadius,
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: profile.slowPct,
+                pierceLeft: 0,
+                life: 1.65,
+                maxLife: 1.65,
+                age: 0,
+                speed: spd,
+                color: profile.visualTier === 4 ? '#38BDF8' : '#818CF8',
+                visualTier: profile.visualTier,
+              });
+              s.muzzleFlashes.push({
+                x: muzzleX,
+                y: muzzleY,
+                angle: shotAngle,
+                radius: 17 + profile.visualTier * 2,
+                alpha: 0.92,
+                color: '#818CF8',
+              });
+            }
+            playSynthFx('tempest', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'sonic') {
+            const waveCount = profile.projectilesPerShot;
+            s.shockwaves.push({
+              x: origin.x,
+              y: origin.y,
+              radius: 16,
+              maxRadius: profile.rangePx,
+              alpha: 0.72,
+              color: '#2DD4BF',
+              lineWidth: 2.8,
+            });
+            for (let w = 0; w < waveCount; w++) {
+              const offset = waveCount === 1 ? 0 : (w - (waveCount - 1) / 2) * 0.24;
+              const a = gun.aimAngle + offset;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'sonic_wave',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(a) * 18,
+                y: origin.y + Math.sin(a) * 18,
+                vx: Math.cos(a) * 430,
+                vy: Math.sin(a) * 430,
+                targetId: target.id,
+                damage: waveCount >= 3 ? Math.round(shotDmg * 0.56) : waveCount === 2 ? Math.round(shotDmg * 0.72) : shotDmg,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: Math.max(48, Math.round(profile.splashRadius * 0.48)),
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: profile.slowPct,
+                acidShred: gun.level >= 10 ? 0.42 : gun.level >= 3 ? 0.22 : 0.1,
+                pierceLeft: 3 + profile.visualTier,
+                hitIds: [],
+                life: 0.85,
+                maxLife: 0.85,
+                age: 0,
+                speed: 430,
+                color: '#2DD4BF',
+                visualTier: profile.visualTier,
+              });
+            }
+            playSynthFx('sonic', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'gravity_lance') {
+            const beams = profile.projectilesPerShot;
+            for (let b = 0; b < beams; b++) {
+              const offset = beams === 1 ? 0 : (b - (beams - 1) / 2) * 0.08;
+              const a = gun.aimAngle + offset;
+              const mx = origin.x + Math.cos(a) * 24;
+              const my = origin.y + Math.sin(a) * 24;
+              const ex = origin.x + Math.cos(a) * (profile.rangePx + 95);
+              const ey = origin.y + Math.sin(a) * (profile.rangePx + 95);
+              s.railBeams.push({ x1: mx, y1: my, x2: ex, y2: ey, alpha: 0.98, color: '#A855F7', visualTier: profile.visualTier, variant: 'gravity_lance' });
+              const segLenSq = (ex - origin.x) ** 2 + (ey - origin.y) ** 2;
+              const perBeamDmg = Math.round(shotDmg * (beams >= 3 ? 0.52 : beams === 2 ? 0.68 : 1));
+              for (const en of liveEnemies) {
+                const tProj = Math.max(0, Math.min(1, ((en.x - origin.x) * (ex - origin.x) + (en.y - origin.y) * (ey - origin.y)) / segLenSq));
+                const px = origin.x + tProj * (ex - origin.x);
+                const py = origin.y + tProj * (ey - origin.y);
+                if ((en.x - px) ** 2 + (en.y - py) ** 2 <= (en.radius + 17) ** 2) {
+                  if (profile.pullForce > 0) {
+                    pullEnemyAlongTrack(en, s.map, origin.x, origin.y, profile.pullForce * 0.65);
+                  }
+                  const res = applyDamageToEnemy(en, perBeamDmg, { armorPierce: profile.armorPierce, shieldMult: profile.shieldMult });
+                  s.totalDamage += res.actualDamage;
+                  gun.totalDamageDealt += res.actualDamage;
+                  if (s.overdriveTimer <= 0) s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.045);
+                  if (res.killed) recordKill(en, gun.id);
+                }
+              }
+            }
+            playSynthFx('railgun', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'map01_cyber_smg' || gun.type === 'map07_cyclone_rotary' || gun.type === 'map05_dune_needler') {
+            const count = profile.projectilesPerShot;
+            const kind: ProjectileItem['kind'] =
+              gun.type === 'map01_cyber_smg'
+                ? 'cyber_bolt'
+                : gun.type === 'map05_dune_needler'
+                  ? 'dune_needle'
+                  : 'bullet';
+            const factor = count >= 5 ? 0.4 : count === 4 ? 0.45 : count === 3 ? 0.56 : count === 2 ? 0.72 : 1;
+            for (let b = 0; b < count; b++) {
+              const offsetAngle = count === 1 ? 0 : (b - (count - 1) / 2) * (gun.type === 'map05_dune_needler' ? 0.14 : 0.08);
+              const shotAngle = gun.aimAngle + offsetAngle;
+              const mx = origin.x + Math.cos(shotAngle) * 20;
+              const my = origin.y + Math.sin(shotAngle) * 20;
+              const spd = gun.type === 'map05_dune_needler' ? 540 : 620;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind,
+                sourceGunId: gun.id,
+                x: mx,
+                y: my,
+                vx: Math.cos(shotAngle) * spd,
+                vy: Math.sin(shotAngle) * spd,
+                targetId: target.id,
+                damage: Math.round(shotDmg * factor),
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: profile.splashRadius,
+                pullForce: 0,
+                burnDps: profile.burnDps,
+                burnDuration: profile.burnDps > 0 ? 1.8 : 0,
+                slowAmount: profile.slowPct,
+                pierceLeft: gun.level >= 5 ? 1 : 0,
+                hitIds: [],
+                life: 0.95,
+                maxLife: 0.95,
+                age: 0,
+                speed: spd,
+                color: profile.accentColor,
+                visualTier: profile.visualTier,
+              });
+              s.muzzleFlashes.push({ x: mx, y: my, angle: shotAngle, radius: 14 + profile.visualTier * 2, alpha: 0.92, color: profile.accentColor });
+            }
+            playSynthFx('gatling', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'map02_matrix_spire' || gun.type === 'map06_aurora_beam') {
+            const chainTotal = Math.max(1, profile.chainCount);
+            const hitIds = new Set<number>([target.id]);
+            let prevX = origin.x + Math.cos(gun.aimAngle) * 20;
+            let prevY = origin.y + Math.sin(gun.aimAngle) * 20;
+            let cur: TdEnemy | null = target;
+            for (let b = 0; b < chainTotal && cur; b++) {
+              s.railBeams.push({ x1: prevX, y1: prevY, x2: cur.x, y2: cur.y, alpha: 0.96, color: profile.accentColor, visualTier: profile.visualTier, variant: 'aurora_beam' });
+              const falloff = Math.max(0.55, 1 - b * 0.1);
+              if (profile.slowPct > 0) {
+                cur.slowTimer = Math.max(cur.slowTimer, 1.8);
+                cur.slowFactor = Math.min(cur.slowFactor || 1, 1 - profile.slowPct);
+                cur.brittleBonus = Math.max(cur.brittleBonus, profile.brittleBonus);
+              }
+              if (profile.burnDps > 0) {
+                cur.burnTimer = Math.max(cur.burnTimer, 1.8);
+                cur.burnDps = Math.max(cur.burnDps, profile.burnDps);
+              }
+              const res = applyDamageToEnemy(cur, Math.round(shotDmg * falloff), { armorPierce: profile.armorPierce, shieldMult: profile.shieldMult });
+              s.totalDamage += res.actualDamage;
+              gun.totalDamageDealt += res.actualDamage;
+              if (s.overdriveTimer <= 0) s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.045);
+              if (res.killed) recordKill(cur, gun.id);
+              prevX = cur.x;
+              prevY = cur.y;
+              let nextHop: TdEnemy | null = null;
+              let bestHopSq = (165 + gun.level * 8) ** 2;
+              for (const cand of liveEnemies) {
+                if (hitIds.has(cand.id) || cand.hp <= 0) continue;
+                const dSq = (cand.x - prevX) ** 2 + (cand.y - prevY) ** 2;
+                if (dSq <= bestHopSq) {
+                  bestHopSq = dSq;
+                  nextHop = cand;
+                }
+              }
+              if (nextHop) hitIds.add(nextHop.id);
+              cur = nextHop;
+            }
+            playSynthFx('prism_laser', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'map03_forge_magma' || gun.type === 'map08_titan_flak' || gun.type === 'map11_cryo_shatter' || gun.type === 'map14_omega_disruptor') {
+            const count = profile.projectilesPerShot;
+            const kind: ProjectileItem['kind'] =
+              gun.type === 'map03_forge_magma'
+                ? 'magma_glob'
+                : gun.type === 'map08_titan_flak'
+                  ? 'flak_shell'
+                  : gun.type === 'map11_cryo_shatter'
+                    ? 'cryo_spike'
+                    : 'omega_pulse';
+            const spd = kind === 'magma_glob' ? 275 : kind === 'omega_pulse' ? 390 : 440;
+            const factor = count >= 4 ? 0.46 : count === 3 ? 0.55 : count === 2 ? 0.72 : 1;
+            for (let k = 0; k < count; k++) {
+              const offset = count === 1 ? 0 : (k - (count - 1) / 2) * 0.16;
+              const a = gun.aimAngle + offset;
+              const mx = origin.x + Math.cos(a) * 20;
+              const my = origin.y + Math.sin(a) * 20;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind,
+                sourceGunId: gun.id,
+                x: mx,
+                y: my,
+                vx: Math.cos(a) * spd,
+                vy: Math.sin(a) * spd,
+                targetId: target.id,
+                damage: Math.round(shotDmg * factor),
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: profile.splashRadius,
+                pullForce: 0,
+                burnDps: profile.burnDps,
+                burnDuration: profile.burnDps > 0 ? 2.2 : 0,
+                slowAmount: profile.slowPct,
+                pierceLeft: kind === 'cryo_spike' && gun.level >= 7 ? 1 : 0,
+                hitIds: [],
+                life: 1.5,
+                maxLife: 1.5,
+                age: 0,
+                speed: spd,
+                color: profile.accentColor,
+                visualTier: profile.visualTier,
+              });
+              s.muzzleFlashes.push({ x: mx, y: my, angle: a, radius: 18 + profile.visualTier * 2, alpha: 0.94, color: profile.accentColor });
+            }
+            playSynthFx(kind === 'cryo_spike' ? 'cryo' : kind === 'omega_pulse' ? 'plasma' : 'cannon', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'map04_void_katana') {
+            const count = profile.projectilesPerShot;
+            for (let k = 0; k < count; k++) {
+              const a = gun.aimAngle + (count === 1 ? 0 : (k - (count - 1) / 2) * 0.22);
+              const mx = origin.x + Math.cos(a) * 18;
+              const my = origin.y + Math.sin(a) * 18;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'katana_blade',
+                sourceGunId: gun.id,
+                x: mx,
+                y: my,
+                vx: Math.cos(a) * 510,
+                vy: Math.sin(a) * 510,
+                targetId: target.id,
+                damage: Math.round(shotDmg * (count === 3 ? 0.5 : count === 2 ? 0.68 : 1)),
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: 20,
+                pullForce: 0,
+                burnDps: profile.burnDps,
+                burnDuration: profile.burnDps > 0 ? 1.8 : 0,
+                slowAmount: 0,
+                pierceLeft: 2 + profile.visualTier,
+                hitIds: [],
+                life: 0.95,
+                maxLife: 0.95,
+                age: 0,
+                speed: 510,
+                color: '#FB7185',
+                visualTier: profile.visualTier,
+              });
+              s.muzzleFlashes.push({ x: mx, y: my, angle: a, radius: 18, alpha: 0.95, color: '#FB7185' });
+            }
+            playSynthFx('saw', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'map09_venom_hydra' || gun.type === 'map12_hellfire_organ' || gun.type === 'map13_shadow_hive' || gun.type === 'map16_void_sovereign') {
+            const count = profile.projectilesPerShot;
+            const kind: ProjectileItem['kind'] =
+              gun.type === 'map09_venom_hydra'
+                ? 'hydra_fang'
+                : gun.type === 'map12_hellfire_organ'
+                  ? 'hell_rocket'
+                  : gun.type === 'map13_shadow_hive'
+                    ? 'shadow_drone'
+                    : 'sovereign_orb';
+            const spd = kind === 'sovereign_orb' ? 320 : kind === 'shadow_drone' ? 430 : 350;
+            const factor = count >= 5 ? 0.36 : count === 4 ? 0.44 : count === 3 ? 0.56 : count === 2 ? 0.7 : 1;
+            for (let k = 0; k < count; k++) {
+              const a = gun.aimAngle + (count === 1 ? 0 : (k - (count - 1) / 2) * 0.22);
+              const mx = origin.x + Math.cos(a) * 20;
+              const my = origin.y + Math.sin(a) * 20;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind,
+                sourceGunId: gun.id,
+                x: mx,
+                y: my,
+                vx: Math.cos(a) * spd,
+                vy: Math.sin(a) * spd,
+                targetId: target.id,
+                damage: Math.round(shotDmg * factor),
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: profile.splashRadius,
+                pullForce: profile.pullForce,
+                burnDps: profile.burnDps,
+                burnDuration: profile.burnDps > 0 ? 2.2 : 0,
+                slowAmount: profile.slowPct,
+                acidShred: gun.type === 'map09_venom_hydra' ? 0.34 : 0,
+                pierceLeft: 0,
+                life: 2.2,
+                maxLife: 2.2,
+                age: 0,
+                speed: spd,
+                color: profile.accentColor,
+                visualTier: profile.visualTier,
+              });
+              s.muzzleFlashes.push({ x: mx, y: my, angle: a, radius: 18 + profile.visualTier * 2, alpha: 0.94, color: profile.accentColor });
+            }
+            if (gun.type === 'map16_void_sovereign') {
+              s.railBeams.push({ x1: origin.x, y1: origin.y, x2: target.x, y2: target.y, alpha: 0.85, color: '#FDE047', visualTier: profile.visualTier, variant: 'sovereign_beam' });
+            }
+            playSynthFx(kind === 'hydra_fang' ? 'acid' : kind === 'shadow_drone' ? 'hunter' : 'missile', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'map10_meteor_rail') {
+            const beams = profile.projectilesPerShot;
+            for (let b = 0; b < beams; b++) {
+              const a = gun.aimAngle + (beams === 1 ? 0 : (b - (beams - 1) / 2) * 0.08);
+              const mx = origin.x + Math.cos(a) * 24;
+              const my = origin.y + Math.sin(a) * 24;
+              const ex = origin.x + Math.cos(a) * (profile.rangePx + 140);
+              const ey = origin.y + Math.sin(a) * (profile.rangePx + 140);
+              s.railBeams.push({ x1: mx, y1: my, x2: ex, y2: ey, alpha: 1.0, color: '#FB923C', visualTier: profile.visualTier, variant: 'railgun' });
+              const segLenSq = (ex - origin.x) ** 2 + (ey - origin.y) ** 2;
+              const perBeamDmg = Math.round(shotDmg * (beams >= 3 ? 0.5 : beams === 2 ? 0.66 : 1));
+              for (const en of liveEnemies) {
+                const tProj = Math.max(0, Math.min(1, ((en.x - origin.x) * (ex - origin.x) + (en.y - origin.y) * (ey - origin.y)) / segLenSq));
+                const px = origin.x + tProj * (ex - origin.x);
+                const py = origin.y + tProj * (ey - origin.y);
+                if ((en.x - px) ** 2 + (en.y - py) ** 2 <= (en.radius + 17) ** 2) {
+                  if (profile.splashRadius > 0) spawnCrater(en.x, en.y, 26, 'scorch');
+                  const res = applyDamageToEnemy(en, perBeamDmg, { armorPierce: profile.armorPierce, shieldMult: profile.shieldMult });
+                  s.totalDamage += res.actualDamage;
+                  gun.totalDamageDealt += res.actualDamage;
+                  if (s.overdriveTimer <= 0) s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.045);
+                  if (res.killed) recordKill(en, gun.id);
+                }
+              }
+            }
+            playSynthFx('railgun', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'map15_emerald_reaper') {
+            const count = profile.projectilesPerShot;
+            for (let sw = 0; sw < count; sw++) {
+              const a = gun.aimAngle + (count === 1 ? 0 : (sw - (count - 1) / 2) * 0.22);
+              const mx = origin.x + Math.cos(a) * 20;
+              const my = origin.y + Math.sin(a) * 20;
+              const spd = 445 + gun.level * 12;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'reaper_disc',
+                sourceGunId: gun.id,
+                x: mx,
+                y: my,
+                vx: Math.cos(a) * spd,
+                vy: Math.sin(a) * spd,
+                targetId: target.id,
+                damage: Math.round(shotDmg * (count >= 3 ? 0.5 : count === 2 ? 0.68 : 1)),
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: 0,
+                pullForce: 0,
+                burnDps: profile.burnDps,
+                burnDuration: profile.burnDps > 0 ? 1.8 : 0,
+                slowAmount: 0,
+                pierceLeft: 0,
+                bounceLeft: profile.chainCount,
+                hitIds: [],
+                life: 2.9,
+                maxLife: 2.9,
+                age: 0,
+                speed: spd,
+                color: '#34D399',
+                visualTier: profile.visualTier,
+              });
+              s.muzzleFlashes.push({ x: mx, y: my, angle: a, radius: 16 + profile.visualTier * 2, alpha: 0.94, color: '#34D399' });
+            }
+            playSynthFx('saw', soundEnabled, audioCtxRef);
           }
         }
 
@@ -3106,8 +3646,20 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           pr.age = (pr.age ?? 0) + simDt;
           if (pr.life <= 0) continue;
 
+          if (!pr.trail) pr.trail = [];
+          pr.trail.push({ x: pr.x, y: pr.y });
+          if (pr.trail.length > 6) pr.trail.shift();
+
           const isHoming =
-            pr.kind === 'missile' || pr.kind === 'mortar' || pr.kind === 'cluster' || pr.kind === 'hunter';
+            pr.kind === 'missile' ||
+            pr.kind === 'mortar' ||
+            pr.kind === 'cluster' ||
+            pr.kind === 'hunter' ||
+            pr.kind === 'tempest_orb' ||
+            pr.kind === 'hydra_fang' ||
+            pr.kind === 'hell_rocket' ||
+            pr.kind === 'shadow_drone' ||
+            pr.kind === 'sovereign_orb';
           if (isHoming) {
             let tgt = s.enemies.find((e) => e.id === pr.targetId && e.hp > 0 && e.koTimer <= 0);
             if (!tgt) {
@@ -3167,6 +3719,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           if (hitEnemy) {
             const sourceGun = s.guns.find((g) => g.id === pr.sourceGunId);
             if (pr.kind === 'mortar') {
+              spawnCrater(pr.x, pr.y, Math.min(48, pr.splashRadius * 0.6), 'scorch');
               s.impactFlashes.push({
                 x: pr.x,
                 y: pr.y,
@@ -3348,6 +3901,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 pr.vy = Math.sin(curAngle) * pr.speed;
               }
             } else if (pr.kind === 'cannon') {
+              spawnCrater(pr.x, pr.y, Math.min(34, pr.splashRadius * 0.45), 'scorch');
               s.impactFlashes.push({
                 x: pr.x,
                 y: pr.y,
@@ -3380,6 +3934,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               playSynthFx('explosion', soundEnabled, audioCtxRef);
               continue;
             } else if (pr.kind === 'plasma') {
+              spawnCrater(pr.x, pr.y, Math.min(32, pr.splashRadius * 0.45), 'plasma');
               s.impactFlashes.push({
                 x: pr.x,
                 y: pr.y,
@@ -3417,6 +3972,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               }
               continue;
             } else if (pr.kind === 'cluster') {
+              spawnCrater(pr.x, pr.y, Math.min(42, pr.splashRadius * 0.5), 'scorch');
               s.impactFlashes.push({
                 x: pr.x,
                 y: pr.y,
@@ -3522,29 +4078,151 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 if (res.killed) recordKill(en, pr.sourceGunId);
               }
               continue;
+            } else if (pr.kind === 'tempest_orb') {
+              s.impactFlashes.push({
+                x: pr.x,
+                y: pr.y,
+                radius: Math.min(54, Math.max(26, pr.splashRadius * 0.56)),
+                alpha: 0.95,
+                color: '#818CF8',
+                spikes: 7,
+                rot: s.animTime * 3,
+              });
+              emitParticles(pr.x, pr.y, '#A5B4FC', 14, 140, 1.15);
+              for (const en of s.enemies) {
+                if (en.hp <= 0 || en.koTimer > 0) continue;
+                const dist = Math.hypot(en.x - pr.x, en.y - pr.y);
+                if (dist <= pr.splashRadius + en.radius) {
+                  en.slowTimer = Math.max(en.slowTimer, 1.6);
+                  en.slowFactor = Math.min(en.slowFactor || 1, 1 - Math.min(0.34, pr.slowAmount));
+                  if (pr.visualTier >= 3 && dist < 34) {
+                    en.stunTimer = Math.max(en.stunTimer, 0.2);
+                  }
+                  const res = applyDamageToEnemy(en, Math.round(pr.damage * (dist < 28 ? 1 : 0.72)), {
+                    armorPierce: pr.armorPierce,
+                    shieldMult: pr.shieldMult,
+                  });
+                  s.totalDamage += res.actualDamage;
+                  if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
+                  if (s.overdriveTimer <= 0) {
+                    s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.045);
+                  }
+                  if (res.killed) recordKill(en, pr.sourceGunId);
+                }
+              }
+              // Arc secondary EMP bolt at Lv7+
+              if (pr.visualTier >= 3) {
+                const arcTarget = s.enemies.find(
+                  (e) => e.id !== hitEnemy.id && e.hp > 0 && e.koTimer <= 0 && Math.hypot(e.x - pr.x, e.y - pr.y) <= 135
+                );
+                if (arcTarget) {
+                  s.lightningArcs.push({
+                    points: [{ x: pr.x, y: pr.y }, { x: (pr.x + arcTarget.x) / 2 + (Math.random() * 16 - 8), y: (pr.y + arcTarget.y) / 2 + (Math.random() * 16 - 8) }, { x: arcTarget.x, y: arcTarget.y }],
+                    alpha: 0.9,
+                    color: '#38BDF8',
+                    width: 2.8,
+                  });
+                  const arcRes = applyDamageToEnemy(arcTarget, Math.round(pr.damage * 0.55), {
+                    armorPierce: pr.armorPierce,
+                    shieldMult: pr.shieldMult,
+                  });
+                  s.totalDamage += arcRes.actualDamage;
+                  if (sourceGun) sourceGun.totalDamageDealt += arcRes.actualDamage;
+                  if (arcRes.killed) recordKill(arcTarget, pr.sourceGunId);
+                }
+              }
+              playSynthFx('tesla', soundEnabled, audioCtxRef);
+              continue;
+            } else if (pr.kind === 'reaper_disc') {
+              const res = applyDamageToEnemy(hitEnemy, pr.damage, {
+                armorPierce: pr.armorPierce,
+                shieldMult: pr.shieldMult,
+              });
+              if (pr.burnDps > 0) {
+                hitEnemy.burnTimer = Math.max(hitEnemy.burnTimer, pr.burnDuration);
+                hitEnemy.burnDps = Math.max(hitEnemy.burnDps, pr.burnDps);
+              }
+              s.totalDamage += res.actualDamage;
+              if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
+              if (s.overdriveTimer <= 0) {
+                s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.045);
+              }
+              emitParticles(pr.x, pr.y, '#34D399', 8, 120, 0.95);
+              if (res.killed) recordKill(hitEnemy, pr.sourceGunId);
+
+              pr.bounceLeft = (pr.bounceLeft ?? 1) - 1;
+              if (!pr.hitIds) pr.hitIds = [];
+              pr.hitIds.push(hitEnemy.id);
+              if (pr.bounceLeft <= 0) continue;
+
+              let nextRicochet: TdEnemy | null = null;
+              let bestDistSq = 225 * 225;
+              for (const cand of s.enemies) {
+                if (cand.hp <= 0 || cand.koTimer > 0) continue;
+                if (pr.hitIds.includes(cand.id)) continue;
+                const dSq = (cand.x - pr.x) ** 2 + (cand.y - pr.y) ** 2;
+                if (dSq <= bestDistSq) {
+                  bestDistSq = dSq;
+                  nextRicochet = cand;
+                }
+              }
+              if (nextRicochet) {
+                const a = Math.atan2(nextRicochet.y - pr.y, nextRicochet.x - pr.x);
+                pr.vx = Math.cos(a) * pr.speed;
+                pr.vy = Math.sin(a) * pr.speed;
+              } else {
+                const curAngle = Math.atan2(pr.vy, pr.vx) + Math.PI * 0.72;
+                pr.vx = Math.cos(curAngle) * pr.speed;
+                pr.vy = Math.sin(curAngle) * pr.speed;
+              }
             } else {
-              // Bullet / Pellet
+              // Bullet / Pellet / New Gun Projectiles (AoE, Slow, Burn, Pull, Acid Pool, Pierce)
               if (pr.burnDps > 0) {
                 hitEnemy.burnTimer = Math.max(hitEnemy.burnTimer, pr.burnDuration);
                 hitEnemy.burnDps = Math.max(hitEnemy.burnDps, pr.burnDps);
                 hitEnemy.armorShred = Math.max(hitEnemy.armorShred, 0.18);
               }
+              if ((pr.acidShred ?? 0) > 0) {
+                hitEnemy.armorShred = Math.max(hitEnemy.armorShred, pr.acidShred ?? 0);
+              }
+              if (pr.slowAmount > 0) {
+                hitEnemy.slowTimer = Math.max(hitEnemy.slowTimer, 1.4);
+                hitEnemy.slowFactor = Math.min(hitEnemy.slowFactor || 1, 1 - Math.min(0.32, pr.slowAmount));
+              }
+              if (pr.kind === 'hydra_fang' && s.acidPools.length < 18) {
+                s.acidPools.push({
+                  x: pr.x,
+                  y: pr.y,
+                  radius: Math.max(42, pr.splashRadius * 0.78),
+                  life: 2.8,
+                  maxLife: 2.8,
+                  dps: Math.max(12, pr.burnDps),
+                  shred: pr.acidShred ?? 0.3,
+                  slowPct: pr.slowAmount,
+                  tickAccum: 0.25,
+                  sourceGunId: pr.sourceGunId,
+                  visualTier: pr.visualTier,
+                });
+              }
               if (pr.splashRadius > 0) {
                 s.impactFlashes.push({
                   x: pr.x,
                   y: pr.y,
-                  radius: 16,
+                  radius: Math.min(46, Math.max(16, pr.splashRadius * 0.45)),
                   alpha: 0.85,
-                  color: '#FDE047',
-                  spikes: 4,
+                  color: pr.color || '#FDE047',
+                  spikes: 5,
                   rot: Math.random() * Math.PI,
                 });
-                emitParticles(pr.x, pr.y, '#FDE047', 6, 95, 0.85);
+                emitParticles(pr.x, pr.y, pr.color || '#FDE047', 7, 105, 0.9);
                 for (const en of s.enemies) {
                   if (en.hp <= 0 || en.koTimer > 0) continue;
                   const dist = Math.hypot(en.x - pr.x, en.y - pr.y);
                   if (dist <= pr.splashRadius + en.radius) {
-                    const res = applyDamageToEnemy(en, Math.round(pr.damage * (en.id === hitEnemy.id ? 1 : 0.4)), {
+                    if (pr.pullForce > 0 && dist > 6) {
+                      pullEnemyAlongTrack(en, s.map, pr.x, pr.y, pr.pullForce);
+                    }
+                    const res = applyDamageToEnemy(en, Math.round(pr.damage * (en.id === hitEnemy.id ? 1 : 0.48)), {
                       armorPierce: pr.armorPierce,
                       shieldMult: pr.shieldMult,
                     });
@@ -3580,7 +4258,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             }
           }
 
-          if (pr.kind === 'sawblade' && (pr.bounceLeft ?? 0) > 0) {
+          if ((pr.kind === 'sawblade' || pr.kind === 'reaper_disc') && (pr.bounceLeft ?? 0) > 0) {
             if (pr.x < 10 || pr.x > CANVAS_WIDTH - 10) {
               pr.vx = -pr.vx;
               pr.x = Math.max(10, Math.min(CANVAS_WIDTH - 10, pr.x));
@@ -3695,7 +4373,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               summoned.maxHp = req.baseHp;
               summoned.speed = req.speed;
               summoned.radius = 11;
-              summoned.reward = 4;
+              summoned.reward = Math.max(5, Math.round(4 * 1.1));
               clampEnemyToTrackCorridor(summoned, s.map);
               s.enemies.push(summoned);
               emitParticles(summoned.x, summoned.y, '#C084FC', 6, 80, 0.85);
@@ -3803,6 +4481,23 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           ft.y += ft.vy * fxDt;
           ft.alpha -= fxDt * 1.45;
           return ft.alpha > 0.04;
+        });
+        s.shellCasings = s.shellCasings.filter((sh) => {
+          sh.life -= fxDt;
+          sh.x += sh.vx * fxDt;
+          sh.y += sh.vy * fxDt;
+          sh.vy += 120 * fxDt;
+          sh.vx *= 0.94;
+          sh.rot += sh.vrot * fxDt;
+          return sh.life > 0;
+        });
+        s.groundCraters = s.groundCraters.filter((cr) => {
+          cr.life -= fxDt;
+          return cr.life > 0;
+        });
+        s.overheatEffects = s.overheatEffects.filter((oh) => {
+          oh.life -= fxDt;
+          return oh.life > 0;
         });
 
         // 6. Wave Clear / Victory / Defeat Check
@@ -4023,6 +4718,10 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             ctx.restore();
           }
 
+          // 5c. Ground Scorch / Frost / Plasma Craters & Overheat Signature Effects
+          drawGroundCraters(ctx, s.groundCraters);
+          drawOverheatSpecialFx(ctx, s.overheatEffects, s.animTime);
+
           // 6. Shockwaves (ultra-faint hairline pulse for non-combat UI/status cues only)
           for (const sw of s.shockwaves) {
             ctx.save();
@@ -4066,69 +4765,9 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             ctx.restore();
           }
 
-          // 7. Railgun Mach-Ring Hyper-Beams, Sniper Razor Tracers, Volumetric Flame Cones & Healer Tethers
+          // 7. Railgun Mach-Ring Hyper-Beams, Prism Rainbow Beams & Sniper Razor Tracers
           for (const rb of s.railBeams) {
-            ctx.save();
-            const rTier = rb.visualTier;
-            ctx.globalAlpha = rb.alpha;
-            ctx.lineCap = 'round';
-
-            if (rb.variant === 'sniper') {
-              ctx.strokeStyle = rb.color;
-              ctx.lineWidth = (3.2 + rTier * 0.6) * rb.alpha;
-              ctx.beginPath();
-              ctx.moveTo(rb.x1, rb.y1);
-              ctx.lineTo(rb.x2, rb.y2);
-              ctx.stroke();
-
-              ctx.strokeStyle = '#FFFFFF';
-              ctx.lineWidth = 1.3 * rb.alpha;
-              ctx.beginPath();
-              ctx.moveTo(rb.x1, rb.y1);
-              ctx.lineTo(rb.x2, rb.y2);
-              ctx.stroke();
-              ctx.restore();
-              continue;
-            }
-
-            ctx.strokeStyle = rb.color;
-            ctx.lineWidth = (16 + rTier * 4) * rb.alpha;
-            ctx.beginPath();
-            ctx.moveTo(rb.x1, rb.y1);
-            ctx.lineTo(rb.x2, rb.y2);
-            ctx.stroke();
-
-            ctx.strokeStyle = rTier >= 3 ? '#FDE047' : '#E879F9';
-            ctx.lineWidth = (7 + rTier * 2) * rb.alpha;
-            ctx.beginPath();
-            ctx.moveTo(rb.x1, rb.y1);
-            ctx.lineTo(rb.x2, rb.y2);
-            ctx.stroke();
-
-            ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = (2.8 + rTier * 0.9) * rb.alpha;
-            ctx.beginPath();
-            ctx.moveTo(rb.x1, rb.y1);
-            ctx.lineTo(rb.x2, rb.y2);
-            ctx.stroke();
-
-            const beamAngle = Math.atan2(rb.y2 - rb.y1, rb.x2 - rb.x1);
-            const ringCount = 2 + rTier;
-            for (let m = 1; m <= ringCount; m++) {
-              const frac = 0.07 + m * 0.12;
-              const rx = rb.x1 + (rb.x2 - rb.x1) * frac;
-              const ry = rb.y1 + (rb.y2 - rb.y1) * frac;
-              ctx.save();
-              ctx.translate(rx, ry);
-              ctx.rotate(beamAngle);
-              ctx.strokeStyle = rTier >= 3 ? '#38BDF8' : '#FEF08A';
-              ctx.lineWidth = 2;
-              ctx.beginPath();
-              ctx.ellipse(0, 0, 5, (15 + rTier * 3 - m * 2) * (1.25 - rb.alpha * 0.4), 0, 0, Math.PI * 2);
-              ctx.stroke();
-              ctx.restore();
-            }
-            ctx.restore();
+            drawRailBeamEnhanced(ctx, rb, s.animTime);
           }
 
           for (const fc of s.flameCones) {
@@ -4231,7 +4870,8 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
           for (const gun of s.guns) {
             const pt = gridToWorldCenter(gun.col, gun.row);
             const isSelected = gun.id === s.selectedGunId;
-            const profile = getGunCombatProfile(gun.type, gun.level);
+            const variant = gun.variant ?? 'alpha';
+            const profile = getGunCombatProfile(gun.type, gun.level, variant);
             const hasBeaconBuff = computeBeaconBuffAtTile(s.guns, gun.col, gun.row).speedMult > 1;
 
             ctx.save();
@@ -4267,189 +4907,30 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               ctx.stroke();
             }
 
-            drawGunTurretSprite(ctx, gun.type, gun.level, gun.aimAngle, gun.recoil, s.animTime);
+            drawGunTurretSprite(
+              ctx,
+              gun.type,
+              gun.level,
+              gun.aimAngle,
+              gun.recoil,
+              s.animTime,
+              variant,
+              gun.heat ?? 0,
+              (gun.overheatTimer ?? 0) > 0
+            );
             ctx.restore();
           }
 
-          // 9. Upgraded High-Detail Enemies
+          drawShellCasings(ctx, s.shellCasings);
+
+          // 9. Upgraded High-Detail Enemies (Dreadnought Boss, Armored Units)
           for (const en of s.enemies) {
             drawEnemySprite(ctx, en, s.animTime);
           }
 
-          // 10. Projectiles (Tracer Bolts, Flechettes, Missiles, Mortars, Acid Globs, Sawblades, Plasma, Cluster, Hunter Drones)
+          // 10. Enhanced Projectiles with Motion Trails & Layered Cores
           for (const pr of s.projectiles) {
-            ctx.save();
-            ctx.translate(pr.x, pr.y);
-            if (pr.kind === 'sawblade') {
-              ctx.rotate(s.animTime * 18);
-              ctx.fillStyle = pr.color;
-              ctx.strokeStyle = pr.visualTier === 4 ? '#FDE047' : '#FEF08A';
-              ctx.lineWidth = pr.visualTier === 4 ? 1.9 : 1.4;
-              ctx.beginPath();
-              for (let t = 0; t < 12; t++) {
-                const a = (t * Math.PI * 2) / 12;
-                const r = t % 2 === 0 ? (pr.visualTier === 4 ? 12 : 10.5) : 5.5;
-                const sx = Math.cos(a) * r;
-                const sy = Math.sin(a) * r;
-                if (t === 0) ctx.moveTo(sx, sy);
-                else ctx.lineTo(sx, sy);
-              }
-              ctx.closePath();
-              ctx.fill();
-              ctx.stroke();
-              ctx.fillStyle = '#FFFFFF';
-              ctx.beginPath();
-              ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.restore();
-              continue;
-            }
-            ctx.rotate(Math.atan2(pr.vy, pr.vx));
-            if (pr.kind === 'acid') {
-              ctx.fillStyle = '#84CC16';
-              ctx.strokeStyle = '#ECFCCB';
-              ctx.lineWidth = 1.6;
-              ctx.beginPath();
-              ctx.ellipse(0, 0, 7.5 + pr.visualTier * 0.5, 5.2, 0, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.stroke();
-            } else if (pr.kind === 'mortar') {
-              ctx.save();
-              ctx.rotate(s.animTime * 12);
-              ctx.strokeStyle = '#FDE047';
-              ctx.lineWidth = 2.2;
-              ctx.beginPath();
-              ctx.ellipse(0, 0, 12 + pr.visualTier, 5.5, 0, 0, Math.PI * 2);
-              ctx.stroke();
-              if (pr.visualTier >= 3) {
-                ctx.strokeStyle = '#C084FC';
-                ctx.beginPath();
-                ctx.ellipse(0, 0, 5.5, 13, 0, 0, Math.PI * 2);
-                ctx.stroke();
-              }
-              ctx.restore();
-              ctx.fillStyle = '#070312';
-              ctx.strokeStyle = '#C084FC';
-              ctx.lineWidth = 2.6;
-              ctx.beginPath();
-              ctx.arc(0, 0, 7, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.stroke();
-            } else if (pr.kind === 'bomblet' && pr.isClusterBomblet) {
-              ctx.fillStyle = '#10B981';
-              ctx.strokeStyle = '#FDE047';
-              ctx.lineWidth = 1.5;
-              ctx.beginPath();
-              ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.stroke();
-              ctx.fillStyle = '#ECFDF5';
-              ctx.beginPath();
-              ctx.arc(1, 0, 1.8, 0, Math.PI * 2);
-              ctx.fill();
-            } else if (pr.kind === 'missile' || pr.kind === 'bomblet') {
-              const sc = pr.kind === 'bomblet' ? 0.72 : pr.visualTier === 4 ? 1.15 : 1;
-              ctx.scale(sc, sc);
-              ctx.fillStyle = pr.visualTier >= 3 ? '#FDE047' : '#F97316';
-              ctx.beginPath();
-              ctx.moveTo(-6, -3);
-              ctx.lineTo(-17 - Math.random() * 5, 0);
-              ctx.lineTo(-6, 3);
-              ctx.closePath();
-              ctx.fill();
-
-              ctx.fillStyle = pr.visualTier === 4 ? '#E11D48' : '#FB7185';
-              ctx.strokeStyle = '#FDE047';
-              ctx.lineWidth = 1.6;
-              ctx.beginPath();
-              ctx.moveTo(10, 0);
-              ctx.lineTo(-7, -4.5);
-              ctx.lineTo(-4, 0);
-              ctx.lineTo(-7, 4.5);
-              ctx.closePath();
-              ctx.fill();
-              ctx.stroke();
-            } else if (pr.kind === 'pellet') {
-              ctx.fillStyle = pr.color;
-              ctx.beginPath();
-              ctx.moveTo(6 + pr.visualTier * 0.8, 0);
-              ctx.lineTo(-5, -2.5);
-              ctx.lineTo(-3, 0);
-              ctx.lineTo(-5, 2.5);
-              ctx.closePath();
-              ctx.fill();
-              ctx.fillStyle = '#FFFFFF';
-              ctx.beginPath();
-              ctx.arc(1.5, 0, 1.4, 0, Math.PI * 2);
-              ctx.fill();
-            } else if (pr.kind === 'cannon') {
-              ctx.fillStyle = pr.color;
-              ctx.strokeStyle = '#FEF08A';
-              ctx.lineWidth = 1.8;
-              ctx.beginPath();
-              ctx.ellipse(2, 0, 8.5 + pr.visualTier * 0.6, 4.4, 0, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.stroke();
-              ctx.fillStyle = '#FFFFFF';
-              ctx.beginPath();
-              ctx.arc(5, 0, 2, 0, Math.PI * 2);
-              ctx.fill();
-            } else if (pr.kind === 'plasma') {
-              const orbitA = s.animTime * 16 + pr.id;
-              ctx.fillStyle = pr.color;
-              ctx.beginPath();
-              ctx.arc(0, 0, 6 + pr.visualTier * 0.6, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.fillStyle = '#FFFFFF';
-              ctx.beginPath();
-              ctx.arc(0, 0, 2.8, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.fillStyle = '#F9A8D4';
-              ctx.beginPath();
-              ctx.arc(Math.cos(orbitA) * 7.5, Math.sin(orbitA) * 7.5, 2.1, 0, Math.PI * 2);
-              ctx.arc(Math.cos(orbitA + Math.PI) * 7.5, Math.sin(orbitA + Math.PI) * 7.5, 2.1, 0, Math.PI * 2);
-              ctx.fill();
-            } else if (pr.kind === 'cluster') {
-              ctx.fillStyle = '#059669';
-              ctx.strokeStyle = pr.visualTier === 4 ? '#FDE047' : '#A7F3D0';
-              ctx.lineWidth = 1.8;
-              ctx.beginPath();
-              ctx.arc(0, 0, 6.8 + pr.visualTier * 0.4, 0, Math.PI * 2);
-              ctx.fill();
-              ctx.stroke();
-              ctx.fillStyle = '#FDE047';
-              ctx.fillRect(-2, -4, 4, 8);
-            } else if (pr.kind === 'hunter') {
-              ctx.fillStyle = '#38BDF8';
-              ctx.beginPath();
-              ctx.moveTo(-4, -2);
-              ctx.lineTo(-12, 0);
-              ctx.lineTo(-4, 2);
-              ctx.closePath();
-              ctx.fill();
-
-              ctx.fillStyle = pr.color;
-              ctx.strokeStyle = '#ECFEFF';
-              ctx.lineWidth = 1.2;
-              ctx.beginPath();
-              ctx.moveTo(9, 0);
-              ctx.lineTo(-5, -4.5);
-              ctx.lineTo(-2.5, 0);
-              ctx.lineTo(-5, 4.5);
-              ctx.closePath();
-              ctx.fill();
-              ctx.stroke();
-            } else {
-              // Vulcan / Gatling tracer
-              ctx.fillStyle = pr.color;
-              ctx.globalAlpha = 0.45;
-              ctx.fillRect(-17, -2.5, 17, 5);
-              ctx.globalAlpha = 1;
-              ctx.fillRect(-6, -2.2, 13 + pr.visualTier, 4.4);
-              ctx.fillStyle = '#FFFFFF';
-              ctx.fillRect(0, -1.1, 8 + pr.visualTier * 0.6, 2.2);
-            }
-            ctx.restore();
+            drawProjectileEnhanced(ctx, pr, s.animTime);
           }
 
           // 11. Muzzle Flashes & Starburst Impact Blooms (zero hard concentric ring clutter)
@@ -4571,7 +5052,14 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
     return simRef.current.guns.find((g) => g.id === selectedGunId) ?? null;
   }, [selectedGunId, hud.selectedGunVersion, hud.energy, hud.wave]);
 
-  const selectedProfile = selectedGun ? getGunCombatProfile(selectedGun.type, selectedGun.level) : null;
+  const inspectedVariant: GunVariant = selectedGun?.variant ?? 'alpha';
+  const selectedProfile = selectedGun
+    ? getGunCombatProfile(selectedGun.type, selectedGun.level, inspectedVariant)
+    : null;
+  const selectedNextProfile =
+    selectedGun && selectedGun.level < MAX_GUN_LEVEL
+      ? getGunCombatProfile(selectedGun.type, selectedGun.level + 1, inspectedVariant)
+      : null;
   const selectedSpec = selectedGun ? getGunCatalogItem(selectedGun.type) : null;
   const selectedUpgradeCost = selectedGun ? getGunUpgradeCost(selectedGun.type, selectedGun.level) : null;
   const selectedSellRefund = selectedGun ? getGunSellRefund(selectedGun) : 0;
@@ -4581,11 +5069,15 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
       id="prism-td-section"
       aria-label="Thủ Thành Pháo Đài — Thuần Súng Nâng Cấp Lv10"
       data-theme={theme}
-      className="relative rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-[#070B14] text-[#F1F5F9] shadow-[0_20px_50px_-24px_rgba(56,189,248,0.22)] overflow-hidden"
+      className={`relative bg-[#070B14] text-[#F1F5F9] overflow-hidden ${
+        isFullscreen
+          ? 'rounded-xl border border-slate-800/80 min-h-full flex flex-col justify-between'
+          : 'rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] shadow-[0_20px_50px_-24px_rgba(56,189,248,0.22)]'
+      }`}
     >
       {/* TITLE SCREEN */}
       {gameState === 'title' && (
-        <div className="p-4 sm:p-6 lg:p-7 space-y-5">
+        <div className="p-3.5 sm:p-5 lg:p-6 space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-7 items-center">
             <div className="lg:col-span-7 space-y-4">
               <div className="flex items-center gap-3.5">
@@ -4597,7 +5089,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                     Thủ Thành Pháo Đài Lv10
                   </h1>
                   <p className="text-xs sm:text-sm text-sky-300/90 font-mono">
-                    4 Cấp (+20%) · 4 Chế Độ · 16 Màn · 16 Súng Thuần Lv10 &amp; 12 Quái
+                    4 Cấp · 8 Chế Độ · 16 Màn 16×10 (x2 Thời Lượng) · 36 Súng (20 Chung + 16 Đặc Quyền)
                     {hud.bestScore > 0 ? ` · Kỷ lục: ${hud.bestScore}đ` : ''}
                   </p>
                 </div>
@@ -4606,7 +5098,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               {/* 4 Difficulty Tiers Selector */}
               <div className="space-y-2">
                 <p className="text-xs font-mono uppercase tracking-[0.12em] text-slate-400">
-                  Chọn Cấp Độ Thử Thách (+20% · Dễ → Địa Ngục)
+                  Chọn Cấp Độ Thử Thách (Cân Bằng Dễ → Địa Ngục)
                 </p>
                 <div
                   role="radiogroup"
@@ -4624,7 +5116,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                         aria-checked={selected}
                         data-testid={`td-diff-${diffId}`}
                         onClick={() => setDifficulty(diffId)}
-                        className={`p-2.5 rounded-xl border text-left transition-colors cursor-pointer ${
+                        className={`min-h-[48px] p-2.5 rounded-xl border text-left transition-colors cursor-pointer ${
                           selected
                             ? 'bg-slate-900 text-white'
                             : 'border-slate-700/80 bg-[#0F172A] text-slate-300 hover:border-slate-500'
@@ -4666,10 +5158,10 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 </p>
               </div>
 
-              {/* 4 Game Modes Selector */}
+              {/* 8 Game Modes Selector */}
               <div className="space-y-1.5">
                 <p className="text-xs font-mono uppercase tracking-[0.12em] text-slate-400">
-                  Chọn Chế Độ Chơi (4 Chế Độ Phong Phú)
+                  Chọn Chế Độ Chơi (8 Chế Độ Chiến Thuật)
                 </p>
                 <div
                   role="radiogroup"
@@ -4687,7 +5179,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                         aria-checked={selected}
                         data-testid={`td-mode-${mId}`}
                         onClick={() => setGameMode(mId)}
-                        className={`p-2 rounded-xl border text-left transition-colors cursor-pointer ${
+                        className={`min-h-[46px] p-2 rounded-xl border text-left transition-colors cursor-pointer ${
                           selected
                             ? 'bg-slate-900 text-white'
                             : 'border-slate-700/80 bg-[#0F172A] text-slate-300 hover:border-slate-500'
@@ -4713,22 +5205,24 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 </p>
               </div>
 
-              {/* Map Selection (16 Biome Maps across 4 Tiers) */}
+              {/* Map Selection (16 Biome Maps 16x10 + Bespoke Map-Exclusive Gun Preview) */}
               <div className="space-y-2">
                 <p className="text-xs font-mono uppercase tracking-[0.12em] text-slate-400">
-                  Chọn Chiến Trường ({PRISM_MAPS.length} Màn · Dễ 1–4 · Trung Bình 5–8 · Khó 9–12 · Địa Ngục 13–16)
+                  Chọn Chiến Trường 16×10 ({PRISM_MAPS.length} Màn · Mỗi Màn 1 Súng Đặc Quyền Riêng)
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   {PRISM_MAPS.map((m, idx) => {
                     const active = idx === selectedMapIndex;
                     const accent = BIOME_PALETTES[m.biome].accent;
                     const mapDiffCfg = DIFFICULTY_CONFIGS[m.recommendedDifficulty];
+                    const mapExGun = getExclusiveGunForMap(m.id);
                     return (
                       <button
                         key={m.id}
                         type="button"
+                        data-testid={`td-map-${m.id}`}
                         onClick={() => setSelectedMapIndex(idx)}
-                        className={`p-2 rounded-xl border text-left transition-colors cursor-pointer ${
+                        className={`min-h-[54px] p-2 rounded-xl border text-left transition-colors cursor-pointer ${
                           active
                             ? 'border-amber-400 bg-amber-950/35 text-white'
                             : 'border-slate-700/80 bg-[#0F172A] text-slate-300 hover:border-slate-500'
@@ -4748,13 +5242,25 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                           />
                         </div>
                         <div className="text-[11px] font-bold mt-0.5 truncate">{m.name}</div>
+                        {mapExGun && (
+                          <div className="text-[9px] font-mono text-amber-300/90 truncate mt-0.5">
+                            ★ {mapExGun.shortName}
+                          </div>
+                        )}
                       </button>
                     );
                   })}
                 </div>
-                <p className="text-[11px] text-slate-400 leading-snug">
-                  <strong className="text-slate-200">{activeMap.name}:</strong> {activeMap.subtitle}
-                </p>
+                <div className="rounded-lg border border-amber-400/25 bg-[#0B1222] px-2.5 py-1.5 space-y-0.5">
+                  <p className="text-[11px] text-slate-300 leading-snug">
+                    <strong className="text-white">{activeMap.name}:</strong> {activeMap.subtitle}
+                  </p>
+                  {exclusiveGun && (
+                    <p className="text-[11px] font-mono text-amber-300 leading-snug">
+                      ★ Súng Đặc Quyền Màn Này: <strong>{exclusiveGun.name}</strong> ({exclusiveGun.cost}⚡) — {exclusiveGun.roleClue}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -4762,7 +5268,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                   type="button"
                   data-start="true"
                   onClick={() => startNewRun(selectedMapIndex, difficulty, gameMode)}
-                  className="inline-flex items-center justify-center gap-2 min-h-[48px] px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#070B14] font-bold text-sm sm:text-base transition-colors cursor-pointer"
+                  className="inline-flex items-center justify-center gap-2 min-h-[48px] w-full sm:w-auto px-6 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#070B14] font-bold text-sm sm:text-base transition-colors cursor-pointer"
                 >
                   <Play className="w-4 h-4 shrink-0" aria-hidden="true" />
                   <span>
@@ -4780,24 +5286,28 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                   className="w-full h-auto rounded-lg block border border-slate-800"
                 />
                 <p className="text-xs text-slate-400 text-center">
-                  Mỗi khẩu súng trong <strong className="text-amber-300">16 loại súng</strong> đều tiến hóa hình dạng &amp; kỹ năng từ <strong className="text-amber-300">Lv1 → Lv10</strong>
+                  Kho <strong className="text-amber-300">{GUN_CATALOG.length} loại súng</strong> (20 Chung + 16 Súng Đặc Quyền riêng theo từng màn) · Biến thể <strong className="text-cyan-300">α / ω</strong> · Kỹ năng <strong className="text-rose-300">Quá Nhiệt</strong>
                 </p>
               </div>
             </div>
           </div>
 
           <p className="text-[11px] font-mono text-slate-400 border-t border-slate-800/80 pt-3 text-center">
-            Phím 1-9, 0, Q, E, Z, X, C, V chọn Súng · Nhấp ô trống để đặt · Bấm U nâng cấp tới Lv10 · T đổi mục tiêu · Space Quá Tải Hỏa Lực
+            Phím Y chọn Súng Đặc Quyền · 1-9, 0, Q, E, Z, X, C, V, B, N, F, G chọn Súng Chung · U nâng cấp · R α/ω · T mục tiêu · Space Quá Tải
           </p>
         </div>
       )}
 
       {/* PLAYING / PAUSED SHELL */}
       {(gameState === 'playing' || gameState === 'paused') && (
-        <div className="relative">
-          {/* Top Unified HUD Strip */}
-          <div className="border-b border-slate-800 bg-[#0B1222] px-3 sm:px-5 py-2 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex flex-wrap items-center gap-3 sm:gap-4 tabular-nums">
+        <div className={`relative ${isFullscreen ? 'flex-1 flex flex-col justify-between' : ''}`}>
+          {/* Top Unified HUD Strip (reserves top-right gap in Fullscreen so Exit Button never overlaps) */}
+          <div
+            className={`border-b border-slate-800 bg-[#0B1222] px-2.5 sm:px-4 py-1.5 flex flex-wrap items-center justify-between gap-2 ${
+              isFullscreen ? 'pr-16 sm:pr-52' : ''
+            }`}
+          >
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-4 tabular-nums">
               <div
                 data-testid="td-hud-difficulty"
                 className="px-2 py-0.5 rounded-md border text-[10px] font-mono font-bold tracking-wider uppercase"
@@ -4814,7 +5324,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 <Shield className="w-4 h-4 text-emerald-400" aria-hidden="true" />
                 <div>
                   <div className="text-[10px] font-mono text-slate-400 leading-none">LÕI</div>
-                  <div className="text-sm sm:text-base font-bold text-white leading-tight">
+                  <div className="text-xs sm:text-base font-bold text-white leading-tight">
                     {hud.coreHp}/{hud.maxCoreHp}
                   </div>
                 </div>
@@ -4824,7 +5334,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 <Zap className="w-4 h-4 text-amber-400" aria-hidden="true" />
                 <div>
                   <div className="text-[10px] font-mono text-slate-400 leading-none">NĂNG LƯỢNG</div>
-                  <div className="text-sm sm:text-base font-bold text-amber-300 leading-tight">
+                  <div className="text-xs sm:text-base font-bold text-amber-300 leading-tight">
                     {hud.energy}⚡
                   </div>
                 </div>
@@ -4832,7 +5342,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
 
               <div>
                 <div className="text-[10px] font-mono text-slate-400 leading-none">ĐỢT</div>
-                <div className="text-sm sm:text-base font-bold text-cyan-300 leading-tight">
+                <div className="text-xs sm:text-base font-bold text-cyan-300 leading-tight">
                   {hud.wave}/{hud.gameMode === 'endless' ? '∞' : hud.totalWaves}
                 </div>
               </div>
@@ -4852,13 +5362,14 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               <button
                 type="button"
+                data-testid="td-overdrive-btn"
                 onClick={activateOverdrive}
                 disabled={hud.overdrivePct < 100 || hud.overdriveActive}
-                title="Kích hoạt Hội Tụ Hỏa Lực ×1.75 (Space)"
-                className={`h-8 sm:h-9 px-2.5 sm:px-3 rounded-lg border text-xs font-mono font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                title="Kích hoạt Hội Tụ Hỏa Lực & bùng nổ Quá Nhiệt toàn đội hình (Space)"
+                className={`min-h-[38px] sm:h-9 px-2.5 sm:px-3 rounded-lg border text-xs font-mono font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
                   hud.overdriveActive
                     ? 'bg-rose-600 border-rose-400 text-white'
                     : hud.overdrivePct >= 100
@@ -4868,7 +5379,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
               >
                 <Flame className="w-3.5 h-3.5" aria-hidden="true" />
                 <span>
-                  {hud.overdriveActive ? 'ĐANG QUÁ TẢI!' : `Hỏa Lực ${hud.overdrivePct}%`}
+                  {hud.overdriveActive ? 'QUÁ TẢI!' : `Hỏa Lực ${hud.overdrivePct}%`}
                 </span>
               </button>
 
@@ -4883,7 +5394,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                   syncHudFromSim();
                 }}
                 aria-label="Đổi tốc độ mô phỏng (1x, 2x, 3x)"
-                className={`h-8 sm:h-9 px-2.5 rounded-lg border text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer touch-manipulation select-none ${
+                className={`min-h-[38px] sm:h-9 px-2.5 rounded-lg border text-xs font-mono font-bold inline-flex items-center gap-1 cursor-pointer touch-manipulation select-none ${
                   hud.speedMult === 3
                     ? 'bg-amber-400 text-[#070B14] border-amber-300'
                     : hud.speedMult === 2
@@ -4903,7 +5414,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                   setSoundEnabled((p) => !p);
                 }}
                 aria-label={soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
-                className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 flex items-center justify-center hover:border-cyan-400 cursor-pointer"
+                className="min-w-[40px] min-h-[40px] sm:w-9 sm:h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 flex items-center justify-center hover:border-cyan-400 cursor-pointer"
               >
                 {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
               </button>
@@ -4916,7 +5427,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                   setGameState((prev) => (prev === 'paused' ? 'playing' : 'paused'));
                 }}
                 aria-label={gameState === 'paused' ? 'Đóng tạm dừng' : 'Tạm dừng'}
-                className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 flex items-center justify-center hover:border-cyan-400 cursor-pointer"
+                className="min-w-[40px] min-h-[40px] sm:w-9 sm:h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 flex items-center justify-center hover:border-cyan-400 cursor-pointer"
               >
                 <Pause className="w-4 h-4" />
               </button>
@@ -4926,163 +5437,344 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 tabIndex={-1}
                 onClick={(e) => {
                   e.currentTarget.blur();
-                  startNewRun(selectedMapIndex, difficulty);
+                  startNewRun(selectedMapIndex, difficulty, gameMode);
                 }}
                 aria-label="Chơi lại ván này"
-                className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 flex items-center justify-center hover:border-cyan-400 cursor-pointer"
+                className="min-w-[40px] min-h-[40px] sm:w-9 sm:h-9 rounded-lg border border-slate-700 bg-slate-900 text-slate-200 flex items-center justify-center hover:border-cyan-400 cursor-pointer"
               >
                 <RotateCcw className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* Arena Canvas */}
-          <div className="p-1.5 sm:p-2 bg-[#050811]">
-            <div className="max-w-[590px] mx-auto">
+          {/* Arena Canvas (Responsive 16:10 — fills viewport height/width cleanly in F11) */}
+          <div className={`p-1 sm:p-1.5 bg-[#050811] ${isFullscreen ? 'flex-1 flex items-center justify-center' : ''}`}>
+            <div
+              className={
+                isFullscreen
+                  ? 'w-full mx-auto max-w-[min(100%,calc((100dvh-230px)*1.6))]'
+                  : 'max-w-[940px] mx-auto'
+              }
+            >
               <canvas
                 ref={canvasRef}
                 width={CANVAS_WIDTH}
                 height={CANVAS_HEIGHT}
                 data-testid="prism-td-canvas"
-                aria-label="Bản đồ Thủ Thành Pháo Đài 12x8"
+                aria-label="Bản đồ Thủ Thành Pháo Đài 16x10"
                 onPointerMove={handleCanvasPointerMove}
                 onPointerLeave={handleCanvasPointerLeave}
                 onClick={handleCanvasClick}
                 onContextMenu={handleCanvasContextMenu}
-                className="w-full h-auto aspect-[3/2] rounded-xl border border-slate-800 block cursor-crosshair select-none touch-manipulation"
+                className="w-full h-auto aspect-[16/10] rounded-xl border border-slate-800 block cursor-crosshair select-none touch-manipulation"
               />
             </div>
           </div>
 
-          {/* 16 Pure Gun Arsenal Dock + Lv1..10 Inspector */}
-          <div className="border-t border-slate-800 bg-[#0B1222] px-3 sm:px-4 py-2 space-y-1.5">
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5">
-              {GUN_CATALOG.map((item) => {
+          {/* 21-Gun Arsenal Dock (1 Map-Exclusive + 20 Global Guns) */}
+          <div className="border-t border-slate-800 bg-[#0B1222] px-2.5 sm:px-4 py-2 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] font-mono uppercase tracking-[0.08em] text-slate-400">
+                Kho {availableGuns.length} Súng (★ Đặc Quyền {exclusiveGun?.shortName ?? ''} + 20 Chung)
+              </span>
+              <div className="flex items-center gap-1.5" role="group" aria-label="Biến thể mặc định khi đặt súng">
+                <button
+                  type="button"
+                  onClick={() => setSelectedVariant('alpha')}
+                  className={`min-h-[34px] px-2.5 rounded-lg border text-[11px] font-mono font-bold transition-colors cursor-pointer ${
+                    selectedVariant === 'alpha'
+                      ? 'bg-sky-500/20 border-sky-400 text-sky-200'
+                      : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  α Alpha · Tốc/Đa Tia
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedVariant('omega')}
+                  className={`min-h-[34px] px-2.5 rounded-lg border text-[11px] font-mono font-bold transition-colors cursor-pointer ${
+                    selectedVariant === 'omega'
+                      ? 'bg-amber-500/20 border-amber-400 text-amber-200'
+                      : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  ω Omega · Sát Thương
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-nowrap overflow-x-auto gap-1.5 pb-1 md:grid md:grid-cols-7 md:overflow-visible md:pb-0">
+              {availableGuns.map((item) => {
                 const isActive = selectedTool === item.type;
                 const canAfford = hud.energy >= item.cost;
+                const isExclusive = Boolean(item.exclusiveMapId);
                 return (
                   <button
                     key={item.type}
                     type="button"
+                    data-testid={`td-gun-${item.type}`}
                     onClick={(e) => {
                       e.currentTarget.blur();
                       setSelectedTool(item.type);
                     }}
-                    className={`px-2 py-1 rounded-xl border text-left transition-colors cursor-pointer ${
+                    className={`min-w-[122px] md:min-w-0 min-h-[46px] shrink-0 px-2 py-1 rounded-xl border text-left transition-colors cursor-pointer ${
                       isActive
-                        ? 'bg-amber-950/50 border-amber-400 text-white'
-                        : 'bg-slate-900/90 border-slate-700/80 text-slate-200 hover:border-slate-500'
+                        ? 'bg-amber-950/65 border-amber-400 text-white shadow-[0_0_0_1px_rgba(251,191,36,0.45)]'
+                        : isExclusive
+                          ? 'bg-amber-950/25 border-amber-500/50 text-amber-100 hover:border-amber-400'
+                          : 'bg-slate-900/90 border-slate-700/80 text-slate-200 hover:border-slate-500'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1 text-[11px] font-bold">
                       <span className="truncate">
-                        [{item.hotkey}] {item.shortName}
+                        <span className="hidden lg:inline">[{item.hotkey.toUpperCase()}] </span>
+                        {item.shortName}
                       </span>
                       <span className={`font-mono shrink-0 ${canAfford ? 'text-amber-300' : 'text-rose-400'}`}>
                         {item.cost}⚡
                       </span>
                     </div>
-                    <p className="text-[10px] text-slate-400 truncate">{item.roleClue}</p>
+                    <p className={`text-[10px] truncate mt-0.5 ${isExclusive ? 'text-amber-300/90 font-semibold' : 'text-slate-400'}`}>
+                      {isExclusive ? '★ Súng Đặc Quyền Màn' : item.roleClue}
+                    </p>
                   </button>
                 );
               })}
             </div>
 
-            {/* Selected Gun Lv1..10 Upgrade & Skill Panel */}
+            {/* Redesigned Selected Gun Inspector: Lv1..10 Timeline, Stat Deltas, Heat/Overheat & α/ω Variant Cards */}
             {selectedGun && selectedProfile && selectedSpec && (
-              <div className="rounded-xl border border-slate-700 bg-slate-900/95 p-2.5 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
-                <div className="space-y-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs sm:text-sm font-bold text-white">{selectedSpec.name}</span>
-                    <span
-                      data-testid="td-gun-level-badge"
-                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
-                        selectedGun.level === MAX_GUN_LEVEL
-                          ? 'bg-amber-400 text-[#070B14]'
-                          : selectedGun.level >= 7
-                            ? 'bg-rose-500/20 border border-rose-400/50 text-rose-200'
-                            : selectedGun.level >= 4
-                              ? 'bg-sky-500/20 border border-sky-400/50 text-sky-200'
-                              : 'bg-slate-800 text-slate-300'
+              <div
+                data-testid="td-gun-inspector"
+                className="rounded-xl border bg-gradient-to-br from-slate-900/95 via-[#0E1729] to-slate-950 p-3 space-y-2.5 transition-all"
+                style={{ borderColor: `${selectedProfile.accentColor}66` }}
+              >
+                {/* Header + Live Stats + Next-Level Deltas */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+                  <div className="space-y-1.5 min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-bold text-white">{selectedSpec.name}</span>
+                      <span
+                        data-testid="td-gun-level-badge"
+                        className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md ${
+                          selectedGun.level === MAX_GUN_LEVEL
+                            ? 'bg-amber-400 text-[#070B14]'
+                            : selectedGun.level >= 7
+                              ? 'bg-rose-500/20 border border-rose-400/50 text-rose-200'
+                              : selectedGun.level >= 4
+                                ? 'bg-sky-500/20 border border-sky-400/50 text-sky-200'
+                                : 'bg-slate-800 text-slate-300'
+                        }`}
+                      >
+                        Lv.{selectedGun.level}/{MAX_GUN_LEVEL} · {selectedProfile.tierLabel}
+                      </span>
+                      <span
+                        className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md border"
+                        style={{
+                          color: selectedProfile.variantSpec.accentColor,
+                          borderColor: `${selectedProfile.variantSpec.accentColor}66`,
+                          backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                        }}
+                      >
+                        {selectedProfile.variantSpec.shortTag}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-300 tabular-nums">
+                      <span>
+                        DMG <strong className="text-white">{selectedProfile.damage}</strong>
+                        {selectedNextProfile && selectedNextProfile.damage > selectedProfile.damage && (
+                          <span className="text-emerald-400 ml-0.5">
+                            (+{selectedNextProfile.damage - selectedProfile.damage})
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-slate-600">·</span>
+                      <span>
+                        DPS <strong className="text-sky-300">{selectedProfile.dpsEstimate}</strong>
+                        {selectedNextProfile && selectedNextProfile.dpsEstimate > selectedProfile.dpsEstimate && (
+                          <span className="text-emerald-400 ml-0.5">
+                            (+{selectedNextProfile.dpsEstimate - selectedProfile.dpsEstimate})
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-slate-600">·</span>
+                      <span>
+                        Tầm <strong className="text-cyan-300">{selectedProfile.rangeTiles}ô</strong>
+                        {selectedNextProfile && selectedNextProfile.rangeTiles > selectedProfile.rangeTiles && (
+                          <span className="text-emerald-400 ml-0.5">
+                            (+{Number((selectedNextProfile.rangeTiles - selectedProfile.rangeTiles).toFixed(2))})
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-slate-600">·</span>
+                      <span>Hạ <strong className="text-amber-300">{selectedGun.kills}</strong></span>
+                    </div>
+
+                    {/* 10-Step Level Progression Bar */}
+                    <div className="flex items-center gap-1 pt-0.5" aria-label="Tiến trình nâng cấp Lv1 đến Lv10">
+                      {Array.from({ length: MAX_GUN_LEVEL }, (_, i) => {
+                        const lv = i + 1;
+                        const active = selectedGun.level >= lv;
+                        const isBreakthrough = lv === 3 || lv === 5 || lv === 7 || lv === 10;
+                        return (
+                          <div
+                            key={lv}
+                            className={`h-1.5 flex-1 rounded-full transition-colors ${
+                              active
+                                ? lv === 10
+                                  ? 'bg-amber-400'
+                                  : isBreakthrough
+                                    ? 'bg-cyan-400'
+                                    : 'bg-emerald-400'
+                                : isBreakthrough
+                                  ? 'bg-slate-700 ring-1 ring-amber-400/40'
+                                  : 'bg-slate-800'
+                            }`}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Primary Action Buttons (Touch >= 44px) */}
+                  <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.currentTarget.blur();
+                        cycleSelectedPriority();
+                      }}
+                      title="Đổi ưu tiên mục tiêu [T]"
+                      className="min-h-[44px] px-3 rounded-xl border border-slate-700 bg-slate-800 hover:border-cyan-400 text-cyan-200 text-xs font-mono cursor-pointer"
+                    >
+                      [T] {PRIORITY_LABELS[selectedGun.priority]}
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="td-upgrade-btn"
+                      onClick={(e) => {
+                        e.currentTarget.blur();
+                        upgradeSelectedGun();
+                      }}
+                      disabled={selectedUpgradeCost === null || hud.energy < selectedUpgradeCost}
+                      className={`min-h-[44px] px-3.5 rounded-xl text-xs font-mono font-bold cursor-pointer transition-colors ${
+                        selectedUpgradeCost === null
+                          ? 'bg-amber-400/20 border border-amber-400 text-amber-300 cursor-default'
+                          : hud.energy >= selectedUpgradeCost
+                            ? 'bg-amber-400 text-[#070B14] hover:bg-amber-300'
+                            : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                       }`}
                     >
-                      Lv.{selectedGun.level}/{MAX_GUN_LEVEL} · {selectedProfile.tierLabel}
-                    </span>
-                    <span className="text-[11px] font-mono text-slate-300 tabular-nums">
-                      DMG {selectedProfile.damage} · DPS {selectedProfile.dpsEstimate} · Tầm {selectedProfile.rangeTiles} · Hạ {selectedGun.kills}
-                    </span>
+                      {selectedUpgradeCost === null
+                        ? 'MAX LV 10'
+                        : `[U] Nâng Lv${selectedGun.level + 1} (${selectedUpgradeCost}⚡)`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.currentTarget.blur();
+                        sellSelectedGun();
+                      }}
+                      aria-label="Thu hồi trụ súng"
+                      className="min-h-[44px] px-3 rounded-xl bg-slate-800 hover:bg-rose-900/60 text-rose-300 text-xs font-mono inline-flex items-center gap-1 cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>+{selectedSellRefund}⚡</span>
+                    </button>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-                    {selectedSpec.milestones.map((ms) => {
-                      const unlocked = selectedGun.level >= ms.level;
+                </div>
+
+                {/* Live Heat / Overheat Skill + α/ω Variant Switcher Row */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 pt-1 border-t border-slate-800/90">
+                  {/* Live Heat & Unique Overheat Skill Box */}
+                  <div className="lg:col-span-6 rounded-lg border border-slate-800 bg-[#080E1C] p-2 space-y-1">
+                    <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
+                      <span className="font-bold flex items-center gap-1" style={{ color: selectedProfile.overheatSkill.color }}>
+                        <Flame className="w-3.5 h-3.5 shrink-0" />
+                        Quá Nhiệt: {selectedProfile.overheatSkill.name}
+                      </span>
+                      <span className="tabular-nums text-slate-300">
+                        {(selectedGun.overheatTimer ?? 0) > 0
+                          ? 'ĐANG BÙNG NỔ!'
+                          : `${Math.round(selectedGun.heat ?? 0)}%`}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        className="h-full transition-all duration-150"
+                        style={{
+                          width: `${(selectedGun.overheatTimer ?? 0) > 0 ? 100 : Math.min(100, selectedGun.heat ?? 0)}%`,
+                          backgroundColor: (selectedGun.overheatTimer ?? 0) > 0 ? '#FB7185' : selectedProfile.overheatSkill.color,
+                        }}
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-snug">
+                      {selectedProfile.overheatSkill.summary}
+                    </p>
+                  </div>
+
+                  {/* α / ω Variant Switcher Cards */}
+                  <div className="lg:col-span-6 grid grid-cols-2 gap-1.5">
+                    {(['alpha', 'omega'] as const).map((vId) => {
+                      const vSpec = selectedSpec.variants[vId];
+                      const active = inspectedVariant === vId;
                       return (
-                        <span
-                          key={ms.level}
-                          title={ms.summary}
-                          className={`px-1.5 py-0.5 rounded border font-mono ${
-                            unlocked
-                              ? 'border-emerald-500/50 bg-emerald-950/50 text-emerald-300'
-                              : 'border-slate-700 bg-slate-950/60 text-slate-500'
+                        <button
+                          key={vId}
+                          type="button"
+                          data-testid={`td-variant-${vId}`}
+                          onClick={(e) => {
+                            e.currentTarget.blur();
+                            switchSelectedGunVariant(vId);
+                          }}
+                          className={`min-h-[44px] px-2.5 py-1.5 rounded-lg border text-left transition-colors cursor-pointer ${
+                            active
+                              ? 'bg-slate-800/95 text-white'
+                              : 'border-slate-800 bg-slate-950/70 text-slate-400 hover:border-slate-600'
                           }`}
+                          style={
+                            active
+                              ? { borderColor: vSpec.accentColor, boxShadow: `0 0 0 1px ${vSpec.accentColor}55` }
+                              : undefined
+                          }
                         >
-                          Lv{ms.level}: {ms.name}
-                        </span>
+                          <div className="flex items-center justify-between gap-1 text-[11px] font-bold">
+                            <span style={{ color: active ? vSpec.accentColor : undefined }}>{vSpec.shortTag}</span>
+                            {active && <span className="text-[9px] font-mono text-emerald-400">ĐANG DÙNG</span>}
+                          </div>
+                          <p className="text-[10px] text-slate-400 truncate mt-0.5">{vSpec.summary}</p>
+                        </button>
                       );
                     })}
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-1.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.currentTarget.blur();
-                      cycleSelectedPriority();
-                    }}
-                    title="Đổi ưu tiên mục tiêu [T]"
-                    className="h-8 px-2.5 rounded-lg border border-slate-700 bg-slate-800 hover:border-cyan-400 text-cyan-200 text-xs font-mono cursor-pointer"
-                  >
-                    [T] {PRIORITY_LABELS[selectedGun.priority]}
-                  </button>
-                  <button
-                    type="button"
-                    data-testid="td-upgrade-btn"
-                    onClick={(e) => {
-                      e.currentTarget.blur();
-                      upgradeSelectedGun();
-                    }}
-                    disabled={selectedUpgradeCost === null || hud.energy < selectedUpgradeCost}
-                    className={`h-8 px-3 rounded-lg text-xs font-mono font-bold cursor-pointer ${
-                      selectedUpgradeCost === null
-                        ? 'bg-amber-400/20 border border-amber-400 text-amber-300 cursor-default'
-                        : hud.energy >= selectedUpgradeCost
-                          ? 'bg-amber-400 text-[#070B14] hover:bg-amber-300'
-                          : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                    }`}
-                  >
-                    {selectedUpgradeCost === null
-                      ? 'MAX LV 10'
-                      : `[U] Nâng Lv${selectedGun.level + 1} (${selectedUpgradeCost}⚡)`}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.currentTarget.blur();
-                      sellSelectedGun();
-                    }}
-                    aria-label="Thu hồi trụ súng"
-                    className="h-8 px-2.5 rounded-lg bg-slate-800 hover:bg-rose-900/60 text-rose-300 text-xs font-mono inline-flex items-center gap-1 cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>+{selectedSellRefund}⚡</span>
-                  </button>
+                {/* Milestones Pills */}
+                <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                  {selectedSpec.milestones.map((ms) => {
+                    const unlocked = selectedGun.level >= ms.level;
+                    return (
+                      <span
+                        key={ms.level}
+                        title={ms.summary}
+                        className={`px-2 py-0.5 rounded-md border font-mono ${
+                          unlocked
+                            ? 'border-emerald-500/50 bg-emerald-950/50 text-emerald-300'
+                            : 'border-slate-700 bg-slate-950/60 text-slate-500'
+                        }`}
+                      >
+                        {unlocked ? '✓ ' : ''}Lv{ms.level}: {ms.name}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[11px] font-mono text-slate-400 truncate max-w-lg">
-                {statusNotice || `${activeMap.name} · Bấm vào ô trống đặt súng hoặc bấm vào súng để nâng Lv1→Lv10.`}
+              <p className="text-[11px] font-mono text-slate-400 line-clamp-2 sm:truncate max-w-lg">
+                {statusNotice || `${activeMap.name} · Chạm ô trống đặt súng hoặc chạm súng để nâng Lv1→Lv10 & đổi α/ω.`}
               </p>
 
               <button
@@ -5090,7 +5782,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                 data-testid="prism-wave-btn"
                 onClick={launchNextWave}
                 disabled={hud.waveActive || (hud.gameMode !== 'endless' && hud.wave >= hud.totalWaves)}
-                className={`min-h-[40px] px-4 py-1.5 rounded-xl font-bold text-xs sm:text-sm inline-flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer ${
+                className={`min-h-[44px] w-full sm:w-auto px-4 py-1.5 rounded-xl font-bold text-xs sm:text-sm inline-flex items-center justify-center gap-1.5 transition-colors shrink-0 cursor-pointer ${
                   hud.waveActive
                     ? 'bg-slate-800 text-slate-300 border border-slate-700 cursor-not-allowed'
                     : 'bg-emerald-500 hover:bg-emerald-400 text-[#070B14]'
@@ -5124,7 +5816,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => startNewRun(selectedMapIndex, difficulty)}
+                    onClick={() => startNewRun(selectedMapIndex, difficulty, gameMode)}
                     className="min-h-[44px] w-full px-4 py-2 rounded-xl border border-slate-700 text-slate-200 text-sm font-medium hover:border-amber-400 cursor-pointer"
                   >
                     Chơi Lại Màn Này
@@ -5196,7 +5888,7 @@ export function PrismTdGameSection({ theme }: PrismTdGameSectionProps) {
             <button
               type="button"
               data-start="true"
-              onClick={() => startNewRun(selectedMapIndex, difficulty)}
+              onClick={() => startNewRun(selectedMapIndex, difficulty, gameMode)}
               className="min-h-[48px] px-6 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-[#070B14] font-bold text-sm inline-flex items-center gap-2 cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />

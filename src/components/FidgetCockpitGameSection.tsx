@@ -1516,20 +1516,20 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         ) : (
           <div
             data-testid="fidget-active-command"
-            className={`rounded-xl border px-4 py-2.5 space-y-2 ${
+            className={`sticky top-1 z-20 md:static shadow-lg md:shadow-none rounded-xl border px-3 sm:px-4 py-2 sm:py-2.5 space-y-1.5 sm:space-y-2 ${
               activeTask.isCrisis
                 ? 'border-rose-400 bg-[#24111B]'
                 : 'border-amber-400/70 bg-[#121B2B]'
             }`}
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex items-start sm:items-center gap-2 min-w-0 flex-1">
                 {activeTask.isCrisis ? (
-                  <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
+                  <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5 sm:mt-0" />
                 ) : (
-                  <Zap className="w-5 h-5 text-amber-300 shrink-0" />
+                  <Zap className="w-5 h-5 text-amber-300 shrink-0 mt-0.5 sm:mt-0" />
                 )}
-                <p className="text-sm sm:text-lg font-bold text-white truncate">
+                <p className="text-sm sm:text-lg font-bold text-white line-clamp-2 sm:truncate">
                   {activeTask.title}
                 </p>
                 <span
@@ -1540,7 +1540,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                   · {activeTask.badgeLabel}
                 </span>
               </div>
-              <div className="flex items-center gap-3 font-mono tabular-nums text-xs">
+              <div className="flex items-center gap-3 font-mono tabular-nums text-xs shrink-0">
                 <span className="text-slate-300 hidden sm:inline">
                   {MODULE_ORDER_HOTKEY_TEXT[activeTask.module]}
                 </span>
@@ -1554,8 +1554,8 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex-1 h-2 rounded-full bg-slate-900 overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3">
+              <div className="w-full sm:flex-1 h-2 rounded-full bg-slate-900 overflow-hidden">
                 <div
                   className={`h-full transition-transform duration-75 origin-left ${
                     taskRemainSec <= 1.2
@@ -1567,7 +1567,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                   style={{ transform: `scaleX(${taskTimeRatio})` }}
                 />
               </div>
-              <span className="text-[11px] font-mono text-slate-400 hidden md:inline shrink-0">
+              <span className="text-[11px] font-mono text-slate-300 leading-snug sm:shrink-0">
                 {activeTask.hint}
               </span>
             </div>
@@ -1609,11 +1609,11 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
       </div>
 
       {/* 6-MODULE ELECTROMECHANICAL COCKPIT GRID (2x3) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3.5">
         {/* MODULE 1: 3x TACTILE TOGGLE SWITCHES */}
         <div
           data-testid="module-switches"
-          className={`rounded-xl border p-4 bg-[#111824] flex flex-col justify-between gap-3 transition-all ${
+          className={`rounded-xl border p-3 sm:p-4 bg-[#111824] flex flex-col justify-between gap-3 transition-all ${
             isModuleTargeted('switches')
               ? 'border-emerald-400 ring-2 ring-emerald-400/40 bg-[#13202B]'
               : 'border-slate-800'
@@ -1698,7 +1698,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         {/* MODULE 2: BIG RED EMERGENCY SMASH BUTTON */}
         <div
           data-testid="module-red_button"
-          className={`rounded-xl border p-4 bg-[#111824] flex flex-col justify-between gap-3 transition-all ${
+          className={`rounded-xl border p-3 sm:p-4 bg-[#111824] flex flex-col justify-between gap-3 transition-all ${
             isModuleTargeted('red_button')
               ? 'border-rose-400 ring-2 ring-rose-400/45 bg-[#1F131B]'
               : 'border-slate-800'
@@ -1749,7 +1749,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         {/* MODULE 3: PRECISION ROTARY ENCODER DIAL */}
         <div
           data-testid="module-rotary_dial"
-          className={`rounded-xl border p-4 bg-[#111824] flex flex-col justify-between gap-2 transition-all ${
+          className={`rounded-xl border p-3 sm:p-4 bg-[#111824] flex flex-col justify-between gap-2 transition-all ${
             isModuleTargeted('rotary_dial')
               ? 'border-sky-400 ring-2 ring-sky-400/45 bg-[#101D2D]'
               : 'border-slate-800'
@@ -1856,7 +1856,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         {/* MODULE 4: PRECISION WAVE FADER + LIVE OSCILLOSCOPE */}
         <div
           data-testid="module-wave_fader"
-          className={`rounded-xl border p-4 bg-[#111824] flex flex-col justify-between gap-3 transition-all ${
+          className={`rounded-xl border p-3 sm:p-4 bg-[#111824] flex flex-col justify-between gap-3 transition-all ${
             isModuleTargeted('wave_fader')
               ? 'border-cyan-400 ring-2 ring-cyan-400/45 bg-[#0F202C]'
               : 'border-slate-800'
@@ -1905,7 +1905,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
               type="button"
               onClick={() => setFaderValue(hw.faderValue - 10)}
               aria-label="Giảm thanh trượt"
-              className="min-h-[40px] min-w-[40px] rounded-lg border border-slate-700 bg-[#0A0E16] hover:border-cyan-400 text-slate-200 font-mono text-xs cursor-pointer"
+              className="min-h-[44px] min-w-[44px] rounded-lg border border-slate-700 bg-[#0A0E16] hover:border-cyan-400 text-slate-200 font-mono text-xs cursor-pointer"
             >
               -10
             </button>
@@ -1929,14 +1929,14 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                 data-testid="cockpit-wave-slider"
                 aria-label="Thanh trượt đồng bộ sóng"
                 onChange={(e) => setFaderValue(Number(e.target.value))}
-                className="relative z-10 w-full h-3 accent-cyan-400 cursor-pointer"
+                className="relative z-10 w-full h-4 accent-cyan-400 cursor-pointer"
               />
             </div>
             <button
               type="button"
               onClick={() => setFaderValue(hw.faderValue + 10)}
               aria-label="Tăng thanh trượt"
-              className="min-h-[40px] min-w-[40px] rounded-lg border border-slate-700 bg-[#0A0E16] hover:border-cyan-400 text-slate-200 font-mono text-xs cursor-pointer"
+              className="min-h-[44px] min-w-[44px] rounded-lg border border-slate-700 bg-[#0A0E16] hover:border-cyan-400 text-slate-200 font-mono text-xs cursor-pointer"
             >
               +10
             </button>
@@ -1946,7 +1946,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         {/* MODULE 5: COLOR + SYMBOL CODED PATCH BAY */}
         <div
           data-testid="module-patch_bay"
-          className={`rounded-xl border p-4 bg-[#111824] flex flex-col justify-between gap-2.5 transition-all ${
+          className={`rounded-xl border p-3 sm:p-4 bg-[#111824] flex flex-col justify-between gap-2.5 transition-all ${
             isModuleTargeted('patch_bay')
               ? 'border-fuchsia-400 ring-2 ring-fuchsia-400/45 bg-[#1C1429]'
               : 'border-slate-800'
@@ -1962,7 +1962,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                   onClick={clearPatchConnections}
                   title="Rút toàn bộ dây"
                   aria-label="Rút toàn bộ dây"
-                  className="px-2 py-0.5 rounded border border-slate-700 bg-[#0A0E16] hover:border-rose-400 text-[10px] font-mono text-slate-300 inline-flex items-center gap-1 cursor-pointer"
+                  className="min-h-[34px] px-2.5 py-1 rounded border border-slate-700 bg-[#0A0E16] hover:border-rose-400 text-[11px] font-mono text-slate-300 inline-flex items-center gap-1 cursor-pointer"
                 >
                   <Unplug className="w-3 h-3" />
                   <span>{wrongPatchCount > 0 ? 'Rút dây nhiễu' : 'Rút'}</span>
@@ -1989,7 +1989,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                     data-testid={`patch-left-${idx}`}
                     onClick={() => clickLeftPatchPort(idx)}
                     aria-label={`Cổng nguồn trái ${meta.symbol} ${meta.label}`}
-                    className={`min-h-[38px] px-2.5 rounded-lg border font-mono text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-transform ${
+                    className={`min-h-[42px] px-2.5 rounded-lg border font-mono text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-transform ${
                       isSelected ? 'scale-105 ring-2 ring-white' : ''
                     }`}
                     style={{
@@ -2042,7 +2042,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
                     data-testid={`patch-right-${idx}`}
                     onClick={() => clickRightPatchPort(idx)}
                     aria-label={`Cổng đích phải ${meta.symbol} ${meta.label}`}
-                    className={`min-h-[38px] px-2.5 rounded-lg border font-mono text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-transform ${
+                    className={`min-h-[42px] px-2.5 rounded-lg border font-mono text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-transform ${
                       matchesSelected ? 'scale-105 ring-2 ring-white' : ''
                     }`}
                     style={{
@@ -2063,7 +2063,7 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
         {/* MODULE 6: YELLOW HOLD PAD + SWEEPING LIGHTNING HAZARD */}
         <div
           data-testid="module-hazard_hold"
-          className={`rounded-xl border p-4 bg-[#111824] flex flex-col justify-between gap-2.5 transition-all ${
+          className={`rounded-xl border p-3 sm:p-4 bg-[#111824] flex flex-col justify-between gap-2.5 transition-all ${
             hazardCycle.active
               ? 'border-rose-500 ring-2 ring-rose-500/70 bg-[#271019]'
               : isModuleTargeted('hazard_hold')

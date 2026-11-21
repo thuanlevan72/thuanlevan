@@ -993,7 +993,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
               type="button"
               data-testid="blindbox-tab-merge"
               onClick={() => setSubTab('merge')}
-              className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+              className={`min-h-[42px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 subTab === 'merge'
                   ? 'bg-[#E57399] text-white'
                   : 'hover:bg-[#FCEEF3] dark:hover:bg-[#3A2E35]'
@@ -1006,7 +1006,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
               type="button"
               data-testid="blindbox-tab-gacha"
               onClick={() => setSubTab('gacha')}
-              className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+              className={`min-h-[42px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 subTab === 'gacha'
                   ? 'bg-[#E57399] text-white'
                   : 'hover:bg-[#FCEEF3] dark:hover:bg-[#3A2E35]'
@@ -1019,7 +1019,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
               type="button"
               data-testid="blindbox-tab-room"
               onClick={() => setSubTab('room')}
-              className={`flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+              className={`min-h-[42px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 subTab === 'room'
                   ? 'bg-[#E57399] text-white'
                   : 'hover:bg-[#FCEEF3] dark:hover:bg-[#3A2E35]'
@@ -1034,7 +1034,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
             type="button"
             onClick={() => setMuted((m) => !m)}
             aria-label={muted ? 'Bật âm thanh ASMR' : 'Tắt âm thanh ASMR'}
-            className={`p-2 rounded-xl border cursor-pointer ${cardClass}`}
+            className={`min-w-[40px] min-h-[40px] p-2 rounded-xl border flex items-center justify-center cursor-pointer ${cardClass}`}
           >
             {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-[#E57399]" />}
           </button>
@@ -1060,9 +1060,9 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
                   type="button"
                   onClick={resetJar}
                   aria-label="Chơi lại hũ mới"
-                  className={`p-1.5 rounded-lg border cursor-pointer ${cardClass}`}
+                  className={`min-w-[40px] min-h-[40px] p-2 rounded-lg border flex items-center justify-center cursor-pointer ${cardClass}`}
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
+                  <RotateCcw className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -1100,14 +1100,14 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
                       <button
                         type="button"
                         onClick={resetJar}
-                        className="px-4 py-2 rounded-xl bg-[#E57399] hover:bg-[#D55E87] text-white text-xs font-semibold cursor-pointer"
+                        className="min-h-[44px] px-4 py-2 rounded-xl bg-[#E57399] hover:bg-[#D55E87] text-white text-xs sm:text-sm font-semibold cursor-pointer"
                       >
                         Thả Lại Hũ Mới
                       </button>
                       <button
                         type="button"
                         onClick={() => setSubTab('gacha')}
-                        className="px-4 py-2 rounded-xl border border-[#E57399] text-[#D16B8F] dark:text-[#F4A8C3] text-xs font-semibold cursor-pointer"
+                        className="min-h-[44px] px-4 py-2 rounded-xl border border-[#E57399] text-[#D16B8F] dark:text-[#F4A8C3] text-xs sm:text-sm font-semibold cursor-pointer"
                       >
                         Đi Xé Túi Mù →
                       </button>
@@ -1163,7 +1163,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
               <button
                 type="button"
                 onClick={() => setSubTab('gacha')}
-                className="w-full py-2.5 rounded-xl bg-[#E57399] hover:bg-[#D55E87] text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+                className="min-h-[44px] w-full py-2.5 rounded-xl bg-[#E57399] hover:bg-[#D55E87] text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
               >
                 Mở Kệ Xé Túi Mù ({profile.coins} Xu) →
               </button>
@@ -1205,7 +1205,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
                     data-testid={`buy-${pack.id}`}
                     disabled={!canAfford || activePack !== null}
                     onClick={() => handleBuyPack(pack)}
-                    className="w-full py-2 rounded-xl bg-[#E57399] hover:bg-[#D55E87] disabled:opacity-45 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+                    className="min-h-[44px] w-full py-2.5 rounded-xl bg-[#E57399] hover:bg-[#D55E87] disabled:opacity-45 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
                   >
                     {activePack
                       ? 'Đang có túi chờ xé...'
@@ -1309,7 +1309,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
                     type="button"
                     data-testid="blindbox-quick-tear-btn"
                     onClick={() => completeTearOpen(activePack)}
-                    className="px-4 py-2 rounded-xl border border-[#E57399] text-[#D16B8F] dark:text-[#F4A8C3] text-xs font-semibold cursor-pointer hover:bg-[#FCEEF3] dark:hover:bg-[#3A2E35]"
+                    className="min-h-[44px] px-4 py-2.5 rounded-xl border border-[#E57399] text-[#D16B8F] dark:text-[#F4A8C3] text-xs sm:text-sm font-semibold cursor-pointer hover:bg-[#FCEEF3] dark:hover:bg-[#3A2E35]"
                   >
                     Xé Toạc Ngay (hoặc vuốt ngang vỏ túi)
                   </button>
@@ -1352,14 +1352,14 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
                     <button
                       type="button"
                       onClick={() => setRevealedDrop(null)}
-                      className="px-4 py-2 rounded-xl border border-[#F0DCE3] dark:border-[#3E3239] text-xs font-semibold cursor-pointer"
+                      className="min-h-[44px] px-4 py-2 rounded-xl border border-[#F0DCE3] dark:border-[#3E3239] text-xs sm:text-sm font-semibold cursor-pointer"
                     >
                       Chọn Túi Khác
                     </button>
                     <button
                       type="button"
                       onClick={() => setSubTab('room')}
-                      className="px-4 py-2 rounded-xl bg-[#E57399] hover:bg-[#D55E87] text-white text-xs font-semibold cursor-pointer"
+                      className="min-h-[44px] px-4 py-2 rounded-xl bg-[#E57399] hover:bg-[#D55E87] text-white text-xs sm:text-sm font-semibold cursor-pointer"
                     >
                       Bài Trí Phòng Mini →
                     </button>
@@ -1394,7 +1394,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
                 type="button"
                 data-testid="room-save-png-btn"
                 onClick={handleSaveRoomSnapshot}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#E57399] hover:bg-[#D55E87] text-white text-xs font-semibold cursor-pointer"
+                className="min-h-[42px] inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#E57399] hover:bg-[#D55E87] text-white text-xs font-semibold cursor-pointer"
               >
                 <Camera className="w-3.5 h-3.5" />
                 <span>Lưu Ảnh Kỷ Niệm (.PNG)</span>
@@ -1494,7 +1494,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
             </svg>
 
             {selectedRoomId && (
-              <div className="flex items-center gap-2">
+              <div className="sticky bottom-2 z-10 sm:static flex items-center gap-2 p-2 sm:p-0 rounded-xl sm:rounded-none border sm:border-0 border-[#F0DCE3] dark:border-[#3E3239] bg-white/95 dark:bg-[#2A2227]/95 sm:bg-transparent sm:dark:bg-transparent shadow-lg sm:shadow-none">
                 <button
                   type="button"
                   onClick={() =>
@@ -1505,7 +1505,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
                       ),
                     }))
                   }
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer ${cardClass}`}
+                  className={`min-h-[42px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold cursor-pointer ${cardClass}`}
                 >
                   <FlipHorizontal className="w-3.5 h-3.5" />
                   <span>Lật Hướng</span>
@@ -1519,7 +1519,7 @@ export function BlindBoxMergeGameSection({ theme }: BlindBoxMergeGameSectionProp
                     }));
                     setSelectedRoomId(null);
                   }}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold text-rose-500 cursor-pointer ${cardClass}`}
+                  className={`min-h-[42px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold text-rose-500 cursor-pointer ${cardClass}`}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>Cất Vào Kho</span>

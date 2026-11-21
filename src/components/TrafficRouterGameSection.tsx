@@ -883,7 +883,11 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     if (phase !== 'PLAYING') return;
     const s = simRef.current;
     const pt = canvasCoords(e);
-    const clickedNode = s.nodes.find((n) => Math.hypot(pt.x - n.x, pt.y - n.y) <= 32);
+    const isTouch = e.pointerType === 'touch';
+    const nodeHitRadius = isTouch ? 46 : 32;
+    const edgeHitRadius = isTouch ? 26 : 14;
+    const slotHitRadius = isTouch ? 46 : 34;
+    const clickedNode = s.nodes.find((n) => Math.hypot(pt.x - n.x, pt.y - n.y) <= nodeHitRadius);
 
     if (s.simStage === 'SIMULATING') {
       if (clickedNode) {
@@ -938,7 +942,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
 
     if (tool === 'cut') {
       let hitEdge: InfraEdge | null = null;
-      let bestDist = 14;
+      let bestDist = edgeHitRadius;
       for (const edge of s.edges) {
         const a = s.nodes.find((n) => n.id === edge.fromId);
         const b = s.nodes.find((n) => n.id === edge.toId);
@@ -968,7 +972,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
     }
 
     const clickedSlot: RackSlot | undefined = RACK_SLOTS.find(
-      (sl) => Math.hypot(pt.x - sl.x, pt.y - sl.y) <= 34
+      (sl) => Math.hypot(pt.x - sl.x, pt.y - sl.y) <= slotHitRadius
     );
 
     if (!clickedSlot) {
@@ -1785,7 +1789,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
             onClick={() => setPaused((p) => !p)}
             disabled={hud.simStage !== 'SIMULATING'}
             aria-label={paused ? 'Tiếp tục giả lập' : 'Tạm dừng giả lập'}
-            className="p-1.5 rounded-lg border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 disabled:opacity-40 cursor-pointer"
+            className="min-w-[40px] min-h-[40px] sm:p-1.5 rounded-lg border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 disabled:opacity-40 flex items-center justify-center cursor-pointer"
           >
             {paused ? <Play className="w-4 h-4 text-emerald-400" /> : <Pause className="w-4 h-4" />}
           </button>
@@ -1793,7 +1797,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
             type="button"
             onClick={() => startScenario(levelIdx)}
             aria-label="Làm lại từ đầu"
-            className="p-1.5 rounded-lg border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 cursor-pointer"
+            className="min-w-[40px] min-h-[40px] sm:p-1.5 rounded-lg border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 flex items-center justify-center cursor-pointer"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
@@ -1801,8 +1805,8 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
       </div>
 
       {/* Mode Switcher Bar (Active during Designing Phase) */}
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-xs">
-        <span className="text-[11px] font-mono text-slate-400 mr-1">CHẾ ĐỘ MÀN NÀY:</span>
+      <div className="mt-2.5 flex flex-nowrap overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0 items-center gap-1.5 text-xs">
+        <span className="text-[11px] font-mono text-slate-400 mr-1 shrink-0">CHẾ ĐỘ:</span>
         {ARCH_MODES.map((m) => {
           const active = m.id === modeId;
           return (
@@ -1812,7 +1816,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
               disabled={hud.simStage === 'SIMULATING'}
               onClick={() => switchDesignMode(m.id)}
               title={m.ruleSummary}
-              className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap ${
+              className={`min-h-[38px] shrink-0 px-2.5 py-1 rounded-lg border text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap ${
                 active
                   ? 'bg-sky-500/25 border-sky-400 text-white'
                   : 'bg-[#111C33] border-[#1E2E4A] hover:border-sky-400/60 text-slate-300'
@@ -1951,7 +1955,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
           </div>
 
           {/* 10 Architecture Components + Wire / Cut Tools */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-1.5">
+          <div className="flex flex-nowrap overflow-x-auto pb-1.5 sm:grid sm:grid-cols-4 lg:grid-cols-6 sm:overflow-visible sm:pb-0 gap-1.5">
             {INFRA_NODE_CATALOG.map((item) => {
               const active = tool === item.type;
               return (
@@ -1963,7 +1967,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                     simRef.current.wireSourceId = null;
                   }}
                   title={`${item.name}: ${item.roleSummary}`}
-                  className={`px-2 py-1.5 rounded-xl border text-left transition-colors cursor-pointer ${
+                  className={`shrink-0 min-w-[126px] sm:min-w-0 min-h-[44px] px-2.5 py-1.5 rounded-xl border text-left transition-colors cursor-pointer ${
                     active
                       ? 'bg-sky-500/20 border-sky-400 text-white'
                       : 'bg-[#111C33] border-[#1E2E4A] hover:border-sky-500/60 text-slate-200'
@@ -1985,7 +1989,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                 setTool('wire');
                 simRef.current.wireSourceId = null;
               }}
-              className={`px-2 py-1.5 rounded-xl border text-left transition-colors cursor-pointer ${
+              className={`shrink-0 min-w-[120px] sm:min-w-0 min-h-[44px] px-2.5 py-1.5 rounded-xl border text-left transition-colors cursor-pointer ${
                 tool === 'wire'
                   ? 'bg-cyan-500/20 border-cyan-400 text-white'
                   : 'bg-[#111C33] border-[#1E2E4A] hover:border-cyan-400 text-slate-200'
@@ -1995,7 +1999,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                 <Cable className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
                 <span>[W] Nối Dây</span>
               </div>
-              <p className="text-[10px] text-slate-400 truncate mt-0.5">Nhấp Nguồn → Đích</p>
+              <p className="text-[10px] text-slate-400 truncate mt-0.5">Chạm Nguồn → Đích</p>
             </button>
 
             <button
@@ -2005,7 +2009,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                 setTool('cut');
                 simRef.current.wireSourceId = null;
               }}
-              className={`px-2 py-1.5 rounded-xl border text-left transition-colors cursor-pointer ${
+              className={`shrink-0 min-w-[120px] sm:min-w-0 min-h-[44px] px-2.5 py-1.5 rounded-xl border text-left transition-colors cursor-pointer ${
                 tool === 'cut'
                   ? 'bg-rose-500/20 border-rose-400 text-white'
                   : 'bg-[#111C33] border-[#1E2E4A] hover:border-rose-400 text-slate-200'
@@ -2015,7 +2019,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                 <Scissors className="w-3.5 h-3.5 text-rose-400 shrink-0" />
                 <span>[X] Tháo Dây</span>
               </div>
-              <p className="text-[10px] text-slate-400 truncate mt-0.5">Nhấp vào đường nối</p>
+              <p className="text-[10px] text-slate-400 truncate mt-0.5">Chạm vào đường nối</p>
             </button>
           </div>
 
@@ -2061,7 +2065,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                     data-testid="traffic-upgrade-btn"
                     disabled={hud.selectedNode.level >= 2 || hud.budget < selectedEntry.upgradeCost}
                     onClick={upgradeSelectedNode}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-45 text-slate-950 font-semibold text-xs cursor-pointer whitespace-nowrap"
+                    className="min-h-[42px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-45 text-slate-950 font-semibold text-xs cursor-pointer whitespace-nowrap"
                   >
                     <ArrowUpCircle className="w-3.5 h-3.5" />
                     <span>
@@ -2073,7 +2077,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                   <button
                     type="button"
                     onClick={sellSelectedNode}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#1E2E4A] bg-[#111C33] hover:border-rose-400 text-rose-300 text-xs font-medium cursor-pointer whitespace-nowrap"
+                    className="min-h-[42px] inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-[#1E2E4A] bg-[#111C33] hover:border-rose-400 text-rose-300 text-xs font-medium cursor-pointer whitespace-nowrap"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Tháo (+${getSellRefund(hud.selectedNode, true)})</span>
@@ -2085,14 +2089,14 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
 
           {/* Notice Bar + Action Triggers */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pt-2 border-t border-[#1E2E4A]">
-            <p className="text-xs text-slate-300 truncate min-w-0">{hud.notice}</p>
+            <p className="text-xs text-slate-300 line-clamp-2 sm:truncate min-w-0">{hud.notice}</p>
 
             {hud.simStage === 'DESIGNING' ? (
               <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={resetDesignToStarter}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 text-slate-200 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
+                  className="min-h-[44px] inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 text-slate-200 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                   <span>Làm Sạch</span>
@@ -2101,14 +2105,14 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                   type="button"
                   data-testid="traffic-ready-sim-btn"
                   onClick={startSimulationRun}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs sm:text-sm transition-colors cursor-pointer whitespace-nowrap shadow-sm"
+                  className="min-h-[44px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 font-bold text-xs sm:text-sm transition-colors cursor-pointer whitespace-nowrap shadow-sm"
                 >
                   <Zap className="w-4 h-4" />
                   <span>Sẵn Sàng — Chạy Giả Lập ({effectiveConfig.waves.length} Đợt)</span>
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <span className="px-3 py-2 rounded-xl bg-[#111C33] border border-amber-400/50 text-amber-300 font-mono text-xs font-semibold whitespace-nowrap">
                   Đang test Đợt {Math.min(hud.waveIndex + 1, effectiveConfig.waves.length)}/{effectiveConfig.waves.length} ({hud.waveTimeLeft}s)
                 </span>
@@ -2116,7 +2120,7 @@ export function TrafficRouterGameSection({ theme }: TrafficRouterGameSectionProp
                   type="button"
                   data-testid="traffic-stop-edit-btn"
                   onClick={stopAndEditDesign}
-                  className="px-3 py-2 rounded-xl border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 text-sky-300 text-xs font-semibold cursor-pointer whitespace-nowrap"
+                  className="min-h-[44px] px-3 py-2 rounded-xl border border-[#1E2E4A] bg-[#111C33] hover:border-sky-400 text-sky-300 text-xs font-semibold cursor-pointer whitespace-nowrap"
                 >
                   Dừng &amp; Sửa Thiết Kế
                 </button>

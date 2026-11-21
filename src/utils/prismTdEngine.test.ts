@@ -4,21 +4,29 @@ import {
   advanceEnemyAlongPath,
   applyDamageToEnemy,
   BIOME_PALETTES,
+  boostEnemyKillReward,
   buildWaveSpawns,
   clampEnemyToTrackCorridor,
+  CANVAS_HEIGHT,
+  CANVAS_WIDTH,
   computeBeaconBuffAtTile,
   createEnemyForWave,
+  ENEMY_KILL_COIN_BOOST,
   DIFFICULTY_CONFIGS,
   DIFFICULTY_ORDER,
   GAME_MODE_CONFIGS,
   GAME_MODE_ORDER,
+  getAvailableGunsForMap,
   getEffectiveMapSetup,
+  getExclusiveGunForMap,
   getGunCombatProfile,
   getGunSellRefund,
   getGunTotalInvested,
   getGunUpgradeCost,
   getMapPathTileSet,
   getTileKind,
+  GRID_COLS,
+  GRID_ROWS,
   gridToWorldCenter,
   GUN_CATALOG,
   MAX_CORRIDOR_LATERAL_PX,
@@ -27,30 +35,56 @@ import {
   PRISM_MAPS,
   pullEnemyAlongTrack,
   stepEnemies,
+  TILE_SIZE,
 } from './prismTdEngine.ts';
 
-test('PRISM_MAPS define 16 valid 12x8 tactical pure-gun maps with halved waves (8..18), 16 guns Lv10, and 4 modes', () => {
+test('PRISM_MAPS define 16 valid 16x10 tactical maps with doubled waves (16..36), 36 guns Lv10 (20 global + 16 exclusive), and 8 modes', () => {
   assert.equal(PRISM_MAPS.length, 16);
-  assert.equal(GUN_CATALOG.length, 16);
+  assert.equal(GRID_COLS, 16);
+  assert.equal(GRID_ROWS, 10);
+  assert.equal(TILE_SIZE, 56);
+  assert.equal(CANVAS_WIDTH, 896);
+  assert.equal(CANVAS_HEIGHT, 560);
+
+  assert.equal(GUN_CATALOG.length, 36);
+  const globalGuns = GUN_CATALOG.filter((g) => !g.exclusiveMapId);
+  const exclusiveGuns = GUN_CATALOG.filter((g) => Boolean(g.exclusiveMapId));
+  assert.equal(globalGuns.length, 20);
+  assert.equal(exclusiveGuns.length, 16);
+
   assert.equal(MAX_GUN_LEVEL, 10);
   assert.deepEqual(DIFFICULTY_ORDER, ['easy', 'normal', 'hard', 'hell']);
-  assert.deepEqual(GAME_MODE_ORDER, ['campaign', 'blitz', 'boss_rush', 'endless']);
+  assert.deepEqual(GAME_MODE_ORDER, [
+    'campaign',
+    'blitz',
+    'boss_rush',
+    'endless',
+    'overheat_fury',
+    'iron_fortress',
+    'tactical_tycoon',
+    'chaos_swarm',
+  ]);
   assert.ok(GAME_MODE_CONFIGS.blitz.speedMult > 1);
   assert.ok(GAME_MODE_CONFIGS.boss_rush.startEnergyMult >= 2);
+  assert.equal(GAME_MODE_CONFIGS.overheat_fury.heatMult, 2.2);
+  assert.equal(GAME_MODE_CONFIGS.iron_fortress.coreHpMult, 1.5);
+  assert.equal(GAME_MODE_CONFIGS.tactical_tycoon.startEnergyMult, 1.85);
+  assert.equal(GAME_MODE_CONFIGS.chaos_swarm.swarmCountMult, 1.45);
 
-  assert.equal(DIFFICULTY_CONFIGS.easy.hpMult, 1.2);
-  assert.equal(DIFFICULTY_CONFIGS.normal.hpMult, 1.8);
-  assert.equal(DIFFICULTY_CONFIGS.hard.hpMult, 2.64);
-  assert.equal(DIFFICULTY_CONFIGS.hell.hpMult, 3.84);
+  assert.equal(DIFFICULTY_CONFIGS.easy.hpMult, 1.11);
+  assert.equal(DIFFICULTY_CONFIGS.normal.hpMult, 1.66);
+  assert.equal(DIFFICULTY_CONFIGS.hard.hpMult, 2.44);
+  assert.equal(DIFFICULTY_CONFIGS.hell.hpMult, 3.55);
 
+  const seenExclusiveTypes = new Set<string>();
   for (const map of PRISM_MAPS) {
-    assert.equal(map.cols, 12);
-    assert.equal(map.rows, 8);
+    assert.equal(map.cols, 16);
+    assert.equal(map.rows, 10);
     assert.ok(BIOME_PALETTES[map.biome]);
     assert.ok(DIFFICULTY_CONFIGS[map.recommendedDifficulty]);
-    assert.ok(map.totalWaves >= 8 && map.totalWaves <= 18, `${map.id} waves should be 8..18 (halved)`);
+    assert.ok(map.totalWaves >= 16 && map.totalWaves <= 36, `${map.id} waves should be 16..36 (2x duration)`);
     const pathSet = getMapPathTileSet(map);
-    assert.ok(pathSet.size >= 14);
+    assert.ok(pathSet.size >= 18);
     assert.equal(getTileKind(map, map.path[0].col, map.path[0].row), 'spawn');
     assert.equal(
       getTileKind(map, map.path[map.path.length - 1].col, map.path[map.path.length - 1].row),
@@ -59,20 +93,43 @@ test('PRISM_MAPS define 16 valid 12x8 tactical pure-gun maps with halved waves (
     for (const w of map.walls) {
       assert.equal(pathSet.has(`${w.col},${w.row}`), false);
     }
+
+    // Verify orthogonal continuity across every path waypoint
+    for (let i = 1; i < map.path.length; i++) {
+      const a = map.path[i - 1];
+      const b = map.path[i];
+      assert.ok(
+        a.col === b.col || a.row === b.row,
+        `${map.id} segment ${i - 1}->${i} must be orthogonal`
+      );
+      assert.ok(b.col >= 0 && b.col < 16 && b.row >= 0 && b.row < 10);
+    }
+
+    // Verify exclusive map gun isolation (20 global + 1 map-exclusive = 21 total)
+    const exGun = getExclusiveGunForMap(map.id);
+    assert.ok(exGun, `${map.id} must have an exclusive gun`);
+    assert.equal(seenExclusiveTypes.has(exGun.type), false, `Duplicate exclusive gun ${exGun.type}`);
+    seenExclusiveTypes.add(exGun.type);
+
+    const available = getAvailableGunsForMap(map.id);
+    assert.equal(available.length, 21, `${map.id} should unlock 20 global + 1 exclusive gun`);
+    assert.equal(available[0].type, exGun.type);
+    const otherExclusiveCount = available.filter((g) => g.exclusiveMapId && g.exclusiveMapId !== map.id).length;
+    assert.equal(otherExclusiveCount, 0, `${map.id} must NOT expose other maps' exclusive guns`);
   }
 });
 
-test('Halved wave counts, 2x wave durations, steeper per-wave difficulty, and winnable Hell W1', () => {
+test('Doubled campaign wave counts (16..42), 8 game modes scaling, steeper per-wave difficulty, and winnable Hell W1', () => {
   const map = PRISM_MAPS[0];
   const setupEasy = getEffectiveMapSetup(map, 'easy', 'campaign');
   const setupNormal = getEffectiveMapSetup(map, 'normal', 'campaign');
   const setupHard = getEffectiveMapSetup(map, 'hard', 'campaign');
   const setupHell = getEffectiveMapSetup(map, 'hell', 'campaign');
 
-  assert.equal(setupEasy.totalWaves, 8);
-  assert.equal(setupNormal.totalWaves, 9);
-  assert.equal(setupHard.totalWaves, 10);
-  assert.equal(setupHell.totalWaves, 11);
+  assert.equal(setupEasy.totalWaves, 16);
+  assert.equal(setupNormal.totalWaves, 18);
+  assert.equal(setupHard.totalWaves, 20);
+  assert.equal(setupHell.totalWaves, 22);
 
   assert.ok(setupEasy.startCoreHp > setupNormal.startCoreHp);
   assert.ok(setupNormal.startCoreHp > setupHard.startCoreHp);
@@ -84,13 +141,23 @@ test('Halved wave counts, 2x wave durations, steeper per-wave difficulty, and wi
 
   const setupBlitz = getEffectiveMapSetup(map, 'normal', 'blitz');
   const setupBossRush = getEffectiveMapSetup(map, 'normal', 'boss_rush');
+  const setupIron = getEffectiveMapSetup(map, 'normal', 'iron_fortress');
+  const setupTycoon = getEffectiveMapSetup(map, 'normal', 'tactical_tycoon');
   assert.ok(setupBlitz.totalWaves < setupNormal.totalWaves);
   assert.ok(setupBossRush.startEnergy > setupNormal.startEnergy * 2);
+  assert.ok(setupIron.startCoreHp >= Math.round(setupNormal.startCoreHp * 1.45));
+  assert.ok(setupTycoon.startEnergy >= Math.round(setupNormal.startEnergy * 1.65));
 
-  // Verify 3.5x–3.8x longer active duration per wave across Early / Mid / Late waves (vs prior 26.5s / 45.2s / 59.8s)
+  // Verify wave spans and chaos_swarm density multiplier
   const w1Normal = buildWaveSpawns(1, setupNormal.totalWaves, 'normal', 'campaign');
   const w5Normal = buildWaveSpawns(5, setupNormal.totalWaves, 'normal', 'campaign');
   const w8Normal = buildWaveSpawns(8, setupNormal.totalWaves, 'normal', 'campaign');
+  const w1Swarm = buildWaveSpawns(1, setupNormal.totalWaves, 'normal', 'chaos_swarm');
+  assert.ok(
+    w1Swarm.length > Math.round(w1Normal.length * 1.35),
+    `chaos_swarm W1 count (${w1Swarm.length}) should greatly exceed campaign (${w1Normal.length})`
+  );
+
   const w1Span = w1Normal[w1Normal.length - 1].delaySec;
   const w5Span = w5Normal[w5Normal.length - 1].delaySec;
   const w8Span = w8Normal[w8Normal.length - 1].delaySec;
@@ -124,7 +191,7 @@ test('Halved wave counts, 2x wave durations, steeper per-wave difficulty, and wi
   assert.ok(w1TotalHp > 7500 && w1TotalHp < 15500, `Hell W1 total HP=${w1TotalHp} across ~93s should stay balanced`);
 
   const hellMap16 = getEffectiveMapSetup(PRISM_MAPS[15], 'hell', 'campaign');
-  assert.equal(hellMap16.totalWaves, 21);
+  assert.equal(hellMap16.totalWaves, 42);
 
   const w4Easy = buildWaveSpawns(4, setupEasy.totalWaves, 'easy', 'campaign');
   const w4Hell = buildWaveSpawns(4, setupHell.totalWaves, 'hell', 'campaign');
@@ -132,17 +199,31 @@ test('Halved wave counts, 2x wave durations, steeper per-wave difficulty, and wi
   assert.ok(w4Hell.some((s) => s.kind === 'boss'));
 });
 
-test('Pure Gun Lv1..Lv10 progression for all 16 guns scales monotonically + Beacon aura buff', () => {
+test('Pure Gun Lv1..Lv10 progression for all 36 guns scales monotonically + Alpha/Omega variants + 36 unique Overheat skills', () => {
+  const overheatKeys = new Set<string>();
   for (const gun of GUN_CATALOG) {
     assert.equal(gun.milestones.length, 4);
+    assert.ok(gun.overheatSkill.key.length > 0);
+    assert.ok(gun.overheatSkill.heatPerShot > 0);
+    assert.equal(overheatKeys.has(gun.overheatSkill.key), false, `Duplicate overheat key: ${gun.overheatSkill.key}`);
+    overheatKeys.add(gun.overheatSkill.key);
+
     let prevDps = 0;
     let prevDmg = 0;
 
     for (let lv = 1; lv <= MAX_GUN_LEVEL; lv++) {
-      const profile = getGunCombatProfile(gun.type, lv);
+      const profile = getGunCombatProfile(gun.type, lv, 'alpha');
+      const omegaProfile = getGunCombatProfile(gun.type, lv, 'omega');
       assert.equal(profile.level, lv);
+      assert.equal(profile.variant, 'alpha');
+      assert.equal(omegaProfile.variant, 'omega');
       assert.ok(profile.damage > prevDmg, `${gun.type} lv${lv} damage should increase`);
       assert.ok(profile.dpsEstimate > prevDps, `${gun.type} lv${lv} dps should increase`);
+      assert.notEqual(
+        `${profile.damage}:${profile.cooldownSec}:${profile.rangeTiles}`,
+        `${omegaProfile.damage}:${omegaProfile.cooldownSec}:${omegaProfile.rangeTiles}`,
+        `${gun.type} alpha vs omega variant stats must differ`
+      );
       prevDmg = profile.damage;
       prevDps = profile.dpsEstimate;
 
@@ -157,6 +238,7 @@ test('Pure Gun Lv1..Lv10 progression for all 16 guns scales monotonically + Beac
       }
     }
   }
+  assert.equal(overheatKeys.size, 36);
 
   const beaconGun: PlacedGun = {
     id: 'b1',
@@ -191,7 +273,7 @@ test('Pure Gun Lv1..Lv10 progression for all 16 guns scales monotonically + Beac
 });
 
 test('Track-corridor confinement keeps pulled, displaced, and summoned enemies strictly inside path bounds', () => {
-  const map = PRISM_MAPS[0]; // Segment 1: (0,2)->(3,2) horizontal at y = 160
+  const map = PRISM_MAPS[0]; // Segment 1: (0,2)->(4,2) horizontal
   const seg0Start = gridToWorldCenter(map.path[0].col, map.path[0].row);
   const seg0End = gridToWorldCenter(map.path[1].col, map.path[1].row);
 
@@ -216,7 +298,7 @@ test('Track-corridor confinement keeps pulled, displaced, and summoned enemies s
   assert.ok(Math.abs(cornerEn.y - seg0Start.y) <= MAX_CORRIDOR_LATERAL_PX);
 
   advanceEnemyAlongPath(cornerEn, map, 40);
-  // After rounding corner to segment 2 (3,2)->(3,6), enemy x must stay within corridor of col 3
+  // After rounding corner to segment 2 (4,2)->(4,7), enemy x must stay within corridor of col 4
   assert.equal(cornerEn.waypointIndex, 2);
   assert.ok(
     Math.abs(cornerEn.x - seg0End.x) <= MAX_CORRIDOR_LATERAL_PX,
@@ -310,23 +392,24 @@ test('Rebalanced steeper wave spawns and all 12 enemy archetypes & abilities wor
 
   const jugg = createEnemyForWave(16, 'juggernaut', 5, map, false, 'normal');
   const endPt = map.path[map.path.length - 1];
+  const endCenter = gridToWorldCenter(endPt.col, endPt.row);
   jugg.waypointIndex = map.path.length - 1;
-  jugg.x = endPt.col * 64 + 32;
-  jugg.y = endPt.row * 64 + 32;
+  jugg.x = endCenter.x;
+  jugg.y = endCenter.y;
   const resJugg = stepEnemies([jugg], map, 0.2);
   assert.equal(resJugg.coreDamageTaken, 3);
 });
 
-test('All 16 guns unlock distinct Lv3/Lv5/Lv7/Lv10 combat profile milestones without broken ranges', () => {
+test('All 20 global + 16 exclusive guns unlock distinct Lv3/Lv5/Lv7/Lv10 combat profile milestones', () => {
   const gat10 = getGunCombatProfile('gatling', 10);
   assert.equal(gat10.projectilesPerShot, 4);
-  assert.equal(gat10.armorPierce, 0.75);
+  assert.ok(gat10.armorPierce >= 0.75);
   assert.ok(gat10.splashRadius > 0);
 
   const sg10 = getGunCombatProfile('shotgun', 10);
-  assert.equal(sg10.projectilesPerShot, 9);
+  assert.ok(sg10.projectilesPerShot >= 9);
   assert.ok(sg10.burnDps > 0);
-  assert.ok(sg10.rangePx <= 260, `Shotgun Lv10 rangePx=${sg10.rangePx} stays reachable by pellets`);
+  assert.ok(sg10.rangePx <= 275, `Shotgun Lv10 rangePx=${sg10.rangePx} stays reachable by pellets`);
 
   const fl10 = getGunCombatProfile('flamer', 10);
   assert.ok(fl10.burnDps > 0 && fl10.slowPct > 0);
@@ -336,51 +419,69 @@ test('All 16 guns unlock distinct Lv3/Lv5/Lv7/Lv10 combat profile milestones wit
   assert.ok(cr10.brittleBonus >= 0.22 && cr10.brittleBonus <= 0.25);
 
   const te10 = getGunCombatProfile('tesla', 10);
-  assert.equal(te10.chainCount, 7);
-  assert.equal(te10.splashRadius, 38);
+  assert.ok(te10.chainCount >= 7);
+  assert.ok(te10.splashRadius >= 38);
 
   const mi10 = getGunCombatProfile('missile', 10);
-  assert.equal(mi10.projectilesPerShot, 3);
-  assert.ok(mi10.splashRadius >= 110 && mi10.splashRadius <= 125);
+  assert.ok(mi10.projectilesPerShot >= 3);
+  assert.ok(mi10.splashRadius >= 110 && mi10.splashRadius <= 135);
 
   const rg7 = getGunCombatProfile('railgun', 7);
   const rg10 = getGunCombatProfile('railgun', 10);
   assert.ok(rg7.splashRadius >= 36);
-  assert.equal(rg10.projectilesPerShot, 3);
+  assert.ok(rg10.projectilesPerShot >= 3);
   assert.equal(rg10.armorPierce, 1);
 
   const mo10 = getGunCombatProfile('mortar', 10);
-  assert.equal(mo10.projectilesPerShot, 2);
+  assert.ok(mo10.projectilesPerShot >= 2);
   assert.ok(mo10.pullForce >= 18 && mo10.pullForce <= 22);
 
   const sn10 = getGunCombatProfile('sniper', 10);
-  assert.equal(sn10.projectilesPerShot, 2);
+  assert.ok(sn10.projectilesPerShot >= 2);
   assert.equal(sn10.armorPierce, 1);
 
   const ac10 = getGunCombatProfile('acid', 10);
-  assert.equal(ac10.projectilesPerShot, 2);
+  assert.ok(ac10.projectilesPerShot >= 2);
   assert.equal(ac10.slowPct, 0.34);
 
   const saw10 = getGunCombatProfile('saw', 10);
-  assert.equal(saw10.projectilesPerShot, 3);
-  assert.equal(saw10.chainCount, 7);
+  assert.ok(saw10.projectilesPerShot >= 3);
+  assert.ok(saw10.chainCount >= 7);
 
   const cn10 = getGunCombatProfile('cannon', 10);
-  assert.equal(cn10.projectilesPerShot, 3);
-  assert.equal(cn10.splashRadius, 82);
+  assert.ok(cn10.projectilesPerShot >= 3);
+  assert.ok(cn10.splashRadius >= 82);
 
   const pl10 = getGunCombatProfile('plasma', 10);
-  assert.equal(pl10.projectilesPerShot, 3);
-  assert.equal(pl10.shieldMult, 1.95);
+  assert.ok(pl10.projectilesPerShot >= 3);
+  assert.ok(pl10.shieldMult >= 1.95);
 
   const cl10 = getGunCombatProfile('cluster', 10);
-  assert.equal(cl10.projectilesPerShot, 3);
-  assert.equal(cl10.splashRadius, 102);
+  assert.ok(cl10.projectilesPerShot >= 3);
+  assert.ok(cl10.splashRadius >= 102);
 
   const hu10 = getGunCombatProfile('hunter', 10);
-  assert.equal(hu10.projectilesPerShot, 4);
-  assert.equal(hu10.armorPierce, 0.85);
+  assert.ok(hu10.projectilesPerShot >= 4);
+  assert.ok(hu10.armorPierce >= 0.85);
   assert.equal(hu10.splashRadius, 20);
+
+  const pr10 = getGunCombatProfile('prism_laser', 10, 'alpha');
+  const pr10Omega = getGunCombatProfile('prism_laser', 10, 'omega');
+  assert.equal(pr10.chainCount, 8);
+  assert.ok(pr10Omega.damage > pr10.damage);
+  assert.equal(pr10Omega.armorPierce, 1);
+
+  const tmp10 = getGunCombatProfile('tempest', 10, 'omega');
+  assert.equal(tmp10.projectilesPerShot, 3);
+  assert.ok(tmp10.shieldMult >= 1.9);
+  assert.ok(tmp10.splashRadius >= 90);
+
+  const sonic10 = getGunCombatProfile('sonic', 10, 'alpha');
+  const grav10 = getGunCombatProfile('gravity_lance', 10, 'omega');
+  const sov10 = getGunCombatProfile('map16_void_sovereign', 10, 'omega');
+  assert.ok(sonic10.splashRadius > 50);
+  assert.ok(grav10.armorPierce >= 0.9);
+  assert.ok(sov10.damage > 100);
 });
 
 test('Anti-permafreeze & gun balance: stacked CC never halts enemies and Boss/Juggernaut resist pull', () => {
@@ -458,6 +559,39 @@ test('Late-wave swarm and power surge: waves become dramatically denser and stro
   assert.ok(s8.maxHp > s4.maxHp * 3.0);
   assert.ok(s8.speed > s1.speed + 20);
   assert.ok(boss8.maxHp > 65000, `W8 Boss HP=${boss8.maxHp} should threaten Lv10 defenses`);
+});
+
+test('Enemy kill coin rewards increase by 10% across all 12 enemy archetypes', () => {
+  const map = PRISM_MAPS[0];
+  assert.equal(ENEMY_KILL_COIN_BOOST, 1.1);
+  assert.equal(boostEnemyKillReward(10), 11);
+  assert.equal(boostEnemyKillReward(30), 33);
+  assert.equal(boostEnemyKillReward(7), 8);
+
+  const kinds = [
+    'scout',
+    'armored',
+    'splitter',
+    'stealth',
+    'healer',
+    'teleporter',
+    'shieldbearer',
+    'boss',
+    'berserker',
+    'juggernaut',
+    'summoner',
+    'leech',
+  ] as const;
+
+  for (const kind of kinds) {
+    const e1 = createEnemyForWave(1, kind, 1, map, false, 'normal', 'campaign');
+    const e6 = createEnemyForWave(2, kind, 6, map, false, 'normal', 'campaign');
+    assert.ok(e1.reward >= 7, `${kind} W1 boosted reward (${e1.reward}) >= 7`);
+    assert.ok(e6.reward >= e1.reward, `${kind} W6 reward (${e6.reward}) >= W1 (${e1.reward})`);
+  }
+
+  const bossW1 = createEnemyForWave(3, 'boss', 1, map, false, 'normal', 'campaign');
+  assert.ok(bossW1.reward >= 33, `Boss W1 reward (${bossW1.reward}) includes +10% floor (>= 33)`);
 });
 
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -11,6 +11,8 @@ import {
   Grid3X3,
   Layers,
   LayoutGrid,
+  Maximize2,
+  Minimize2,
   Network,
   Sparkles,
   Swords,
@@ -103,8 +105,8 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     category: 'strategy',
     title: 'Thủ Thành Pháo Đài',
     shortTitle: 'Pháo Đài',
-    subtitle: 'Pure Gun TD · 16 Màn · 4 Cấp (+20%) · 4 Chế Độ · 16 Súng Thuần Lv10 & 12 Quái',
-    badge: '16 Súng · 4 Chế Độ',
+    subtitle: 'Pure Gun TD · 16 Màn 16×10 · x2 Thời Lượng · 8 Chế Độ · 36 Súng (20 Chung + 16 Đặc Quyền)',
+    badge: '36 Súng · 8 Chế Độ',
     playable: true,
     gameKey: 'prism_td',
   },
@@ -354,219 +356,351 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
   });
 
   const [selectedCategory, setSelectedCategory] = useState<GameHubCategoryId>('all');
-  const [hubExpanded, setHubExpanded] = useState<boolean>(true);
+  const [hubExpanded, setHubExpanded] = useState<boolean>(false);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const gameViewportRef = useRef<HTMLDivElement | null>(null);
 
   const visibleCategories =
     selectedCategory === 'all'
       ? GAME_CATEGORIES
       : GAME_CATEGORIES.filter((cat) => cat.id === selectedCategory);
 
+  const playableGames = GAME_CATALOG.filter((g) => g.playable && g.gameKey);
   const activeGameMeta = GAME_CATALOG.find((g) => g.gameKey === activeGame);
 
+  const exitFullscreen = useCallback(() => {
+    setIsFullscreen(false);
+    if (typeof document !== 'undefined' && document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => {});
+    }
+  }, []);
+
+  const enterFullscreen = useCallback(() => {
+    setIsFullscreen(true);
+    const target = gameViewportRef.current;
+    if (target && typeof target.requestFullscreen === 'function') {
+      try {
+        const res = target.requestFullscreen();
+        if (res && typeof res.catch === 'function') {
+          void res.catch(() => {});
+        }
+      } catch {
+        // Fallback smoothly to fixed viewport overlay
+      }
+    }
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    if (isFullscreen) {
+      exitFullscreen();
+    } else {
+      enterFullscreen();
+    }
+  }, [isFullscreen, enterFullscreen, exitFullscreen]);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setIsFullscreen((prev) => (prev ? false : prev));
+      }
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    const onKeyCapture = (e: KeyboardEvent) => {
+      if (e.key === 'F11') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        toggleFullscreen();
+        return;
+      }
+      if (e.key === 'Escape' && isFullscreen) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        exitFullscreen();
+      }
+    };
+    window.addEventListener('keydown', onKeyCapture, { capture: true });
+    return () => window.removeEventListener('keydown', onKeyCapture, { capture: true });
+  }, [isFullscreen, toggleFullscreen, exitFullscreen]);
+
   return (
-    <div id="game-hub" className="pt-3 sm:pt-4 pb-8 space-y-2.5 sm:space-y-3">
-      {/* Categorized Multi-Game Hub Switcher inside the unified "Game" tab */}
+    <div id="game-hub" className="pt-2 sm:pt-3 pb-6 space-y-2">
+      {/* Compact Multi-Game Hub Switcher Bar */}
       <div
         role="region"
         aria-label="Kho Trò Chơi 2D Theo Danh Mục"
-        className="rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white/95 dark:bg-[#0B1222]/95 px-3 py-2.5 sm:px-4 sm:py-3 shadow-[0_8px_24px_-16px_rgba(10,25,47,0.12)] space-y-2.5"
+        className="rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white/95 dark:bg-[#0B1222]/95 px-2.5 py-2 sm:px-3.5 shadow-[0_8px_20px_-14px_rgba(10,25,47,0.14)] space-y-2"
       >
-        {/* Top Row: Hub Title + Category Filter Tabs + Collapse Toggle */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
-          <div className="flex items-center justify-between gap-2 min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
-              <div
-                aria-hidden="true"
-                className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#0A192F] dark:bg-[#0284C7] text-white flex items-center justify-center shrink-0"
-              >
-                <Gamepad2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#0284C7] dark:text-[#38BDF8] leading-tight">
-                  Tab Game · Danh Mục Trò Chơi
-                </p>
-                <p className="text-[11px] sm:text-xs text-[#475569] dark:text-[#94A3B8] leading-tight truncate">
-                  {activeGameMeta
-                    ? `Đang mở: ${activeGameMeta.title} (${activeGameMeta.badge})`
-                    : 'Nền tảng tích hợp nhiều thể loại game giải trí'}
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setHubExpanded((v) => !v)}
-              aria-expanded={hubExpanded}
-              className="lg:hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-[#DCE6F2] dark:border-[#1E2E4A] bg-[#F8FAFC] dark:bg-[#111C33] text-[11px] font-medium text-[#334155] dark:text-[#CBD5E1] cursor-pointer shrink-0"
+        {/* Ultra-compact Single Row Bar */}
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2 shrink-0">
+            <div
+              aria-hidden="true"
+              className="w-8 h-8 rounded-lg bg-[#0A192F] dark:bg-[#0284C7] text-white flex items-center justify-center shrink-0"
             >
-              <span>{hubExpanded ? 'Thu gọn' : 'Mở danh mục'}</span>
-              {hubExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-            </button>
+              <Gamepad2 className="w-4 h-4" />
+            </div>
+            <div className="hidden sm:block min-w-0 max-w-[175px]">
+              <p className="text-[10px] font-mono uppercase tracking-[0.1em] text-[#0284C7] dark:text-[#38BDF8] leading-tight">
+                Game Hub · 10 Trò
+              </p>
+              <p className="text-xs font-semibold text-[#0A192F] dark:text-[#E2E8F0] leading-tight truncate">
+                {activeGameMeta?.shortTitle ?? 'Kho Game'}
+              </p>
+            </div>
           </div>
 
-          {/* Category Filter Buttons */}
+          {/* 1-Row Horizontal Scrollable Quick Switcher */}
           <div
-            role="group"
-            aria-label="Lọc theo danh mục game"
-            className="flex flex-wrap items-center gap-1.5"
+            role="tablist"
+            aria-label="Chuyển nhanh trò chơi"
+            className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5"
           >
-            <button
-              type="button"
-              data-testid="hub-cat-all"
-              onClick={() => {
-                setSelectedCategory('all');
-                setHubExpanded(true);
-              }}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer ${
-                selectedCategory === 'all'
-                  ? 'bg-[#0A192F] dark:bg-[#0284C7] text-white border-[#0A192F] dark:border-[#38BDF8]'
-                  : 'bg-[#F8FAFC] dark:bg-[#111C33] text-[#475569] dark:text-[#CBD5E1] border-[#DCE6F2] dark:border-[#1E2E4A] hover:border-[#0284C7]'
-              }`}
-            >
-              Tất Cả ({GAME_CATALOG.filter((g) => g.playable).length})
-            </button>
-            {GAME_CATEGORIES.map((cat) => {
-              const count = GAME_CATALOG.filter((g) => g.category === cat.id && g.playable).length;
-              const active = selectedCategory === cat.id;
+            {playableGames.map((item) => {
+              const isSelected = activeGame === item.gameKey;
               return (
                 <button
-                  key={cat.id}
+                  key={item.id}
                   type="button"
-                  data-testid={`hub-cat-${cat.id}`}
-                  onClick={() => {
-                    setSelectedCategory(cat.id);
-                    setHubExpanded(true);
-                  }}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer ${
-                    active
-                      ? 'bg-[#0A192F] dark:bg-[#0284C7] text-white border-[#0A192F] dark:border-[#38BDF8]'
-                      : 'bg-[#F8FAFC] dark:bg-[#111C33] text-[#475569] dark:text-[#CBD5E1] border-[#DCE6F2] dark:border-[#1E2E4A] hover:border-[#0284C7]'
+                  role="tab"
+                  aria-selected={isSelected}
+                  data-testid={`hub-quick-${item.id}`}
+                  title={item.subtitle}
+                  onClick={() => setActiveGame(item.gameKey!)}
+                  className={`inline-flex items-center gap-1.5 min-h-[38px] px-2.5 py-1 rounded-lg border text-xs font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+                    isSelected
+                      ? 'bg-[#0A192F] dark:bg-[#0284C7] text-white border-[#0A192F] dark:border-[#38BDF8] shadow-sm'
+                      : 'bg-[#F8FAFC] dark:bg-[#111C33] text-[#334155] dark:text-[#CBD5E1] border-[#DCE6F2] dark:border-[#1E2E4A] hover:border-[#0284C7]'
                   }`}
                 >
-                  <span className="sm:hidden">{cat.shortLabel}</span>
-                  <span className="hidden sm:inline">{cat.label}</span>
-                  <span className="ml-1 opacity-75 font-mono">({count})</span>
+                  {renderGameIcon(item.gameKey, isSelected)}
+                  <span>{item.shortTitle}</span>
                 </button>
               );
             })}
           </div>
+
+          {/* Right Action Controls: Catalog Drawer Toggle + Fullscreen F11 */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              type="button"
+              data-testid="hub-catalog-toggle"
+              onClick={() => setHubExpanded((v) => !v)}
+              aria-expanded={hubExpanded}
+              title="Mở / Thu gọn danh mục phân loại"
+              className="min-h-[38px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-[#DCE6F2] dark:border-[#1E2E4A] bg-[#F8FAFC] dark:bg-[#111C33] text-[11px] font-semibold text-[#334155] dark:text-[#CBD5E1] hover:border-[#0284C7] cursor-pointer whitespace-nowrap"
+            >
+              <span className="hidden md:inline">{hubExpanded ? 'Thu gọn' : 'Danh mục'}</span>
+              <span className="md:hidden">{hubExpanded ? 'Đóng' : 'Menu'}</span>
+              {hubExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+            </button>
+
+            <button
+              type="button"
+              data-testid="hub-fullscreen-btn"
+              onClick={toggleFullscreen}
+              aria-label={isFullscreen ? 'Thoát toàn màn hình (Esc)' : 'Toàn màn hình (F11)'}
+              title={isFullscreen ? 'Thoát toàn màn hình (Esc)' : 'Toàn màn hình (F11)'}
+              className="min-h-[38px] inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-sky-500/40 bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 text-[11px] font-mono font-bold hover:border-sky-400 cursor-pointer whitespace-nowrap"
+            >
+              {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{isFullscreen ? 'Esc' : 'F11'}</span>
+            </button>
+          </div>
         </div>
 
-        {/* Categorized Game Sections */}
+        {/* Collapsible Categorized Game Drawer */}
         {hubExpanded && (
-          <div
-            role="tablist"
-            aria-label="Danh sách trò chơi phân theo danh mục"
-            className={`pt-2 border-t border-[#E2E8F0] dark:border-[#1E2E4A] grid gap-2.5 ${
-              selectedCategory === 'all' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'
-            }`}
-          >
-            {visibleCategories.map((cat) => {
-              const items = GAME_CATALOG.filter((g) => g.category === cat.id);
-              return (
-                <div
-                  key={cat.id}
-                  data-testid={`hub-group-${cat.id}`}
-                  className="rounded-xl border border-[#E2E8F0] dark:border-[#1E2E4A] bg-[#F8FAFC]/80 dark:bg-[#080F1D]/80 p-2.5 space-y-2"
-                >
-                  <div className="flex items-center justify-between gap-2 px-0.5">
-                    <span
-                      className={`text-[11px] font-mono font-bold uppercase tracking-[0.08em] ${cat.accentClass}`}
-                    >
-                      {cat.label}
-                    </span>
-                    <span className="text-[10px] font-mono text-[#64748B] dark:text-[#94A3B8]">
-                      {items.filter((i) => i.playable).length} game
-                    </span>
-                  </div>
+          <div className="pt-2 border-t border-[#E2E8F0] dark:border-[#1E2E4A] space-y-2.5">
+            <div
+              role="group"
+              aria-label="Lọc theo danh mục game"
+              className="flex flex-wrap items-center gap-1.5"
+            >
+              <button
+                type="button"
+                data-testid="hub-cat-all"
+                onClick={() => setSelectedCategory('all')}
+                className={`min-h-[36px] px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer ${
+                  selectedCategory === 'all'
+                    ? 'bg-[#0A192F] dark:bg-[#0284C7] text-white border-[#0A192F] dark:border-[#38BDF8]'
+                    : 'bg-[#F8FAFC] dark:bg-[#111C33] text-[#475569] dark:text-[#CBD5E1] border-[#DCE6F2] dark:border-[#1E2E4A] hover:border-[#0284C7]'
+                }`}
+              >
+                Tất Cả ({playableGames.length})
+              </button>
+              {GAME_CATEGORIES.map((cat) => {
+                const count = GAME_CATALOG.filter((g) => g.category === cat.id && g.playable).length;
+                const active = selectedCategory === cat.id;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    data-testid={`hub-cat-${cat.id}`}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`min-h-[36px] px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-colors cursor-pointer ${
+                      active
+                        ? 'bg-[#0A192F] dark:bg-[#0284C7] text-white border-[#0A192F] dark:border-[#38BDF8]'
+                        : 'bg-[#F8FAFC] dark:bg-[#111C33] text-[#475569] dark:text-[#CBD5E1] border-[#DCE6F2] dark:border-[#1E2E4A] hover:border-[#0284C7]'
+                    }`}
+                  >
+                    <span className="sm:hidden">{cat.shortLabel}</span>
+                    <span className="hidden sm:inline">{cat.label}</span>
+                    <span className="ml-1 opacity-75 font-mono">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
 
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {items.map((item) => {
-                      if (item.playable && item.gameKey) {
-                        const isSelected = activeGame === item.gameKey;
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            role="tab"
-                            aria-selected={isSelected}
-                            title={item.subtitle}
-                            onClick={() => setActiveGame(item.gameKey!)}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-left transition-all cursor-pointer ${
-                              isSelected
-                                ? 'bg-[#0A192F] dark:bg-[#0284C7] text-white border-[#0A192F] dark:border-[#38BDF8] shadow-sm'
-                                : 'bg-white dark:bg-[#111C33] text-[#070B14] dark:text-[#E2E8F0] border-[#DCE6F2] dark:border-[#1E2E4A] hover:border-[#0284C7]'
-                            }`}
-                          >
-                            {renderGameIcon(item.gameKey, isSelected)}
-                            <span className="text-xs font-semibold whitespace-nowrap">{item.title}</span>
-                            <span
-                              className={`text-[10px] font-mono px-1.5 py-0.5 rounded whitespace-nowrap ${
+            <div
+              aria-label="Danh sách trò chơi phân theo danh mục"
+              className={`grid gap-2.5 ${
+                selectedCategory === 'all' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'
+              }`}
+            >
+              {visibleCategories.map((cat) => {
+                const items = GAME_CATALOG.filter((g) => g.category === cat.id);
+                return (
+                  <div
+                    key={cat.id}
+                    data-testid={`hub-group-${cat.id}`}
+                    className="rounded-xl border border-[#E2E8F0] dark:border-[#1E2E4A] bg-[#F8FAFC]/80 dark:bg-[#080F1D]/80 p-2.5 space-y-2"
+                  >
+                    <div className="flex items-center justify-between gap-2 px-0.5">
+                      <span
+                        className={`text-[11px] font-mono font-bold uppercase tracking-[0.08em] ${cat.accentClass}`}
+                      >
+                        {cat.label}
+                      </span>
+                      <span className="text-[10px] font-mono text-[#64748B] dark:text-[#94A3B8]">
+                        {items.filter((i) => i.playable).length} game
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {items.map((item) => {
+                        if (item.playable && item.gameKey) {
+                          const isSelected = activeGame === item.gameKey;
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              title={item.subtitle}
+                              onClick={() => {
+                                setActiveGame(item.gameKey!);
+                                setHubExpanded(false);
+                              }}
+                              className={`inline-flex items-center gap-1.5 min-h-[38px] px-2.5 py-1.5 rounded-xl border text-left transition-all cursor-pointer ${
                                 isSelected
-                                  ? 'bg-white/15 text-amber-200'
-                                  : 'bg-[#E2E8F0] dark:bg-[#1E2E4A] text-[#334155] dark:text-[#CBD5E1]'
+                                  ? 'bg-[#0A192F] dark:bg-[#0284C7] text-white border-[#0A192F] dark:border-[#38BDF8] shadow-sm'
+                                  : 'bg-white dark:bg-[#111C33] text-[#070B14] dark:text-[#E2E8F0] border-[#DCE6F2] dark:border-[#1E2E4A] hover:border-[#0284C7]'
                               }`}
                             >
-                              {item.badge}
-                            </span>
-                          </button>
-                        );
-                      }
+                              {renderGameIcon(item.gameKey, isSelected)}
+                              <span className="text-xs font-semibold whitespace-nowrap">{item.title}</span>
+                              <span
+                                className={`text-[10px] font-mono px-1.5 py-0.5 rounded whitespace-nowrap ${
+                                  isSelected
+                                    ? 'bg-white/15 text-amber-200'
+                                    : 'bg-[#E2E8F0] dark:bg-[#1E2E4A] text-[#334155] dark:text-[#CBD5E1]'
+                                }`}
+                              >
+                                {item.badge}
+                              </span>
+                            </button>
+                          );
+                        }
 
-                      return (
-                        <div
-                          key={item.id}
-                          title={item.subtitle}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-dashed border-[#CBD8E6] dark:border-[#1E2E4A] bg-white/60 dark:bg-[#080F1D] text-[#64748B] dark:text-[#94A3B8]"
-                        >
-                          {item.id.includes('gomoku') ? (
-                            <Grid3X3 className="w-3 h-3 opacity-70 shrink-0" aria-hidden="true" />
-                          ) : (
-                            <Layers className="w-3 h-3 opacity-70 shrink-0" aria-hidden="true" />
-                          )}
-                          <span className="text-[11px] font-medium whitespace-nowrap">
-                            <span className="sm:hidden">{item.shortTitle}</span>
-                            <span className="hidden sm:inline">{item.title}</span>
-                          </span>
-                          <span className="text-[10px] font-mono opacity-75 whitespace-nowrap">
-                            ({item.badge})
-                          </span>
-                        </div>
-                      );
-                    })}
+                        return (
+                          <div
+                            key={item.id}
+                            title={item.subtitle}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-dashed border-[#CBD8E6] dark:border-[#1E2E4A] bg-white/60 dark:bg-[#080F1D] text-[#64748B] dark:text-[#94A3B8]"
+                          >
+                            {item.id.includes('gomoku') ? (
+                              <Grid3X3 className="w-3 h-3 opacity-70 shrink-0" aria-hidden="true" />
+                            ) : (
+                              <Layers className="w-3 h-3 opacity-70 shrink-0" aria-hidden="true" />
+                            )}
+                            <span className="text-[11px] font-medium whitespace-nowrap">
+                              <span className="sm:hidden">{item.shortTitle}</span>
+                              <span className="hidden sm:inline">{item.title}</span>
+                            </span>
+                            <span className="text-[10px] font-mono opacity-75 whitespace-nowrap">
+                              ({item.badge})
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Active Game Viewport */}
-      {activeGame === 'xiangqi' && <XiangqiGameSection theme={theme} onToggleTheme={onToggleTheme} />}
-      {activeGame === 'anomaly' && <AnomalyGameSection theme={theme} onToggleTheme={onToggleTheme} />}
-      {activeGame === 'asmr_organizer' && (
-        <AsmrOrganizerGameSection theme={theme} onToggleTheme={onToggleTheme} />
-      )}
-      {activeGame === 'blind_box' && (
-        <BlindBoxMergeGameSection theme={theme} onToggleTheme={onToggleTheme} />
-      )}
-      {activeGame === 'prism_td' && <PrismTdGameSection theme={theme} onToggleTheme={onToggleTheme} />}
-      {activeGame === 'linux_hacker' && (
-        <LinuxHackerGameSection theme={theme} onToggleTheme={onToggleTheme} />
-      )}
-      {activeGame === 'traffic_router' && (
-        <TrafficRouterGameSection theme={theme} onToggleTheme={onToggleTheme} />
-      )}
-      {activeGame === 'gear_arena' && (
-        <GearArenaGameSection theme={theme} onToggleTheme={onToggleTheme} />
-      )}
-      {activeGame === 'fidget_cockpit' && (
-        <FidgetCockpitGameSection theme={theme} onToggleTheme={onToggleTheme} />
-      )}
-      {activeGame === 'fe_academy' && (
-        <FeAcademyGameSection theme={theme} onToggleTheme={onToggleTheme} />
-      )}
+      {/* Active Game Viewport (supports native + CSS fallback Fullscreen via F11 / Esc) */}
+      <div
+        ref={gameViewportRef}
+        data-testid="game-viewport"
+        data-fullscreen={isFullscreen ? 'true' : 'false'}
+        className={
+          isFullscreen
+            ? 'fixed inset-0 z-50 w-screen h-[100dvh] bg-[#050811] overflow-y-auto p-1 sm:p-2 flex flex-col'
+            : 'relative'
+        }
+      >
+        {isFullscreen && (
+          <button
+            type="button"
+            data-testid="hub-exit-fullscreen-btn"
+            onClick={exitFullscreen}
+            className="fixed top-2 right-2.5 z-[60] min-h-[34px] px-2.5 py-1 rounded-lg bg-slate-900/95 hover:bg-slate-800 border border-sky-400/60 text-sky-200 text-[11px] font-mono font-bold inline-flex items-center gap-1.5 shadow-lg cursor-pointer"
+          >
+            <Minimize2 className="w-3.5 h-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">Esc · Thoát Toàn Màn Hình</span>
+            <span className="sm:hidden">Esc</span>
+          </button>
+        )}
+
+        <div className={isFullscreen ? 'game-fs-inner w-full flex-1 flex flex-col' : undefined}>
+          {activeGame === 'xiangqi' && <XiangqiGameSection theme={theme} onToggleTheme={onToggleTheme} />}
+          {activeGame === 'anomaly' && <AnomalyGameSection theme={theme} onToggleTheme={onToggleTheme} />}
+          {activeGame === 'asmr_organizer' && (
+            <AsmrOrganizerGameSection theme={theme} onToggleTheme={onToggleTheme} />
+          )}
+          {activeGame === 'blind_box' && (
+            <BlindBoxMergeGameSection theme={theme} onToggleTheme={onToggleTheme} />
+          )}
+          {activeGame === 'prism_td' && (
+            <PrismTdGameSection
+              theme={theme}
+              onToggleTheme={onToggleTheme}
+              isFullscreen={isFullscreen}
+            />
+          )}
+          {activeGame === 'linux_hacker' && (
+            <LinuxHackerGameSection theme={theme} onToggleTheme={onToggleTheme} />
+          )}
+          {activeGame === 'traffic_router' && (
+            <TrafficRouterGameSection theme={theme} onToggleTheme={onToggleTheme} />
+          )}
+          {activeGame === 'gear_arena' && (
+            <GearArenaGameSection theme={theme} onToggleTheme={onToggleTheme} />
+          )}
+          {activeGame === 'fidget_cockpit' && (
+            <FidgetCockpitGameSection theme={theme} onToggleTheme={onToggleTheme} />
+          )}
+          {activeGame === 'fe_academy' && (
+            <FeAcademyGameSection theme={theme} onToggleTheme={onToggleTheme} />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

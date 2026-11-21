@@ -688,7 +688,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                         type="button"
                         disabled={!isUnlocked}
                         onClick={() => setSelectedStartDay(dayItem.day)}
-                        className={`px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-xl border text-left transition-all ${
+                        className={`min-h-[44px] px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-xl border text-left transition-all ${
                           !isUnlocked
                             ? 'opacity-50 cursor-not-allowed bg-[#EDE6D8] dark:bg-[#0F172A] border-[#D6CCBA] dark:border-[#1E293B]'
                             : isSelected
@@ -910,13 +910,13 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                 <strong className="text-[#0F172A] dark:text-white">{progress.reputation}</strong>
               </div>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <button
                   type="button"
                   onClick={() => setSoundEnabled((prev) => !prev)}
                   aria-label={soundEnabled ? 'Tắt âm thanh' : 'Bật âm thanh'}
                   title={soundEnabled ? 'Tắt âm thanh (M)' : 'Bật âm thanh (M)'}
-                  className="w-9 h-9 rounded-lg border border-[#CBD5E1] dark:border-[#243454] bg-white/80 dark:bg-[#111C33] flex items-center justify-center text-[#334155] dark:text-[#CBD5E1] hover:border-[#0284C7] cursor-pointer"
+                  className="w-10 h-10 rounded-lg border border-[#CBD5E1] dark:border-[#243454] bg-white/80 dark:bg-[#111C33] flex items-center justify-center text-[#334155] dark:text-[#CBD5E1] hover:border-[#0284C7] cursor-pointer"
                 >
                   {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
                 </button>
@@ -925,7 +925,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                   onClick={() => setScreenState((prev) => (prev === 'paused' ? 'playing' : 'paused'))}
                   aria-label={screenState === 'paused' ? 'Tiếp tục ca trực' : 'Tạm dừng'}
                   title="Tạm dừng (P)"
-                  className="w-9 h-9 rounded-lg border border-[#CBD5E1] dark:border-[#243454] bg-white/80 dark:bg-[#111C33] flex items-center justify-center text-[#334155] dark:text-[#CBD5E1] hover:border-[#0284C7] cursor-pointer"
+                  className="w-10 h-10 rounded-lg border border-[#CBD5E1] dark:border-[#243454] bg-white/80 dark:bg-[#111C33] flex items-center justify-center text-[#334155] dark:text-[#CBD5E1] hover:border-[#0284C7] cursor-pointer"
                 >
                   <Pause className="w-4 h-4" />
                 </button>
@@ -1035,7 +1035,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                                         handleRunCrossCheck(field.key, compareDbKey);
                                       }
                                     }}
-                                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer ${
+                                    className={`min-h-[36px] text-xs font-mono px-2.5 py-1 rounded border cursor-pointer ${
                                       isCompareSelected
                                         ? 'border-sky-600 bg-sky-600 text-white'
                                         : 'border-[#CBD5E1] dark:border-[#243454] text-[#475569] dark:text-[#94A3B8] hover:border-sky-500'
@@ -1120,7 +1120,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                                         handleRunCrossCheck(compareDocKey, field.key);
                                       }
                                     }}
-                                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded border cursor-pointer ${
+                                    className={`min-h-[36px] text-xs font-mono px-2.5 py-1 rounded border cursor-pointer ${
                                       isCompareSelected
                                         ? 'border-sky-600 bg-sky-600 text-white'
                                         : 'border-[#CBD5E1] dark:border-[#243454] text-[#475569] dark:text-[#94A3B8] hover:border-sky-500'
@@ -1160,7 +1160,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                           data-testid="anomaly-uv-scan-btn"
                           disabled={isUvScanned || progress.investigationTokens <= 0 || lastEvaluation !== null}
                           onClick={handleRunUvScan}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-700 hover:bg-violet-800 disabled:opacity-45 disabled:cursor-not-allowed text-white font-mono text-[11px] font-bold cursor-pointer"
+                          className="min-h-[42px] inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-violet-700 hover:bg-violet-800 disabled:opacity-45 disabled:cursor-not-allowed text-white font-mono text-xs font-bold cursor-pointer"
                         >
                           <Eye className="w-3.5 h-3.5" aria-hidden="true" />
                           <span>
@@ -1410,50 +1410,50 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                 </div>
 
                 {/* Action Stamp Panel */}
-                <div className="rounded-xl border border-[#D8CEBC] dark:border-[#1E2E4A] bg-[#F3ECDC] dark:bg-[#0F172A] p-3.5 sm:p-4 space-y-2.5">
-                  <div className="flex items-center justify-between gap-2 text-xs font-mono text-[#475569] dark:text-[#94A3B8]">
+                <div className="sticky bottom-2 z-20 lg:static shadow-xl lg:shadow-none rounded-xl border border-[#D8CEBC] dark:border-[#1E2E4A] bg-[#F3ECDC] dark:bg-[#0F172A] p-2.5 sm:p-4 space-y-2 sm:space-y-2.5">
+                  <div className="flex items-center justify-between gap-2 text-[11px] sm:text-xs font-mono text-[#475569] dark:text-[#94A3B8]">
                     <span>BÀN ĐÓNG DẤU PHÁN QUYẾT</span>
-                    <span>Phím 1 · 2 · 3</span>
+                    <span className="hidden sm:inline">Phím 1 · 2 · 3</span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-2">
+                  <div className="grid grid-cols-3 lg:grid-cols-1 gap-1.5 sm:gap-2">
                     <button
                       type="button"
                       disabled={lastEvaluation !== null || screenState !== 'playing'}
                       onClick={() => handleSubmitVerdict('approve')}
-                      className="min-h-[48px] px-4 py-2.5 rounded-xl border-2 border-emerald-700 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-sm flex items-center justify-between gap-2 transition-colors cursor-pointer"
+                      className="min-h-[48px] px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl border-2 border-emerald-700 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-xs sm:text-sm flex items-center justify-center lg:justify-between gap-1.5 sm:gap-2 transition-colors cursor-pointer"
                     >
-                      <span className="inline-flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 sm:gap-2">
                         <ShieldCheck className="w-4 h-4 shrink-0" aria-hidden="true" />
                         <span>Duyệt Hồ Sơ</span>
                       </span>
-                      <kbd className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-black/20">1</kbd>
+                      <kbd className="hidden sm:inline text-[11px] font-mono px-1.5 py-0.5 rounded bg-black/20">1</kbd>
                     </button>
 
                     <button
                       type="button"
                       disabled={lastEvaluation !== null || screenState !== 'playing'}
                       onClick={() => handleSubmitVerdict('reject')}
-                      className="min-h-[48px] px-4 py-2.5 rounded-xl border-2 border-amber-700 bg-amber-600 hover:bg-amber-700 disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-sm flex items-center justify-between gap-2 transition-colors cursor-pointer"
+                      className="min-h-[48px] px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl border-2 border-amber-700 bg-amber-600 hover:bg-amber-700 disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-xs sm:text-sm flex items-center justify-center lg:justify-between gap-1.5 sm:gap-2 transition-colors cursor-pointer"
                     >
-                      <span className="inline-flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 sm:gap-2">
                         <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
                         <span>Từ Chối</span>
                       </span>
-                      <kbd className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-black/20">2</kbd>
+                      <kbd className="hidden sm:inline text-[11px] font-mono px-1.5 py-0.5 rounded bg-black/20">2</kbd>
                     </button>
 
                     <button
                       type="button"
                       disabled={lastEvaluation !== null || screenState !== 'playing'}
                       onClick={() => handleSubmitVerdict('alarm')}
-                      className="min-h-[48px] px-4 py-2.5 rounded-xl border-2 border-rose-800 bg-rose-700 hover:bg-rose-800 disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-sm flex items-center justify-between gap-2 transition-colors cursor-pointer"
+                      className="min-h-[48px] px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl border-2 border-rose-800 bg-rose-700 hover:bg-rose-800 disabled:opacity-45 disabled:cursor-not-allowed text-white font-bold text-xs sm:text-sm flex items-center justify-center lg:justify-between gap-1.5 sm:gap-2 transition-colors cursor-pointer"
                     >
-                      <span className="inline-flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 sm:gap-2">
                         <ShieldAlert className="w-4 h-4 shrink-0" aria-hidden="true" />
                         <span>Báo Động Khẩn</span>
                       </span>
-                      <kbd className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-black/20">3</kbd>
+                      <kbd className="hidden sm:inline text-[11px] font-mono px-1.5 py-0.5 rounded bg-black/20">3</kbd>
                     </button>
                   </div>
                 </div>
@@ -1494,7 +1494,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
           {/* PAUSED OVERLAY */}
           {screenState === 'paused' && (
             <div className="absolute inset-0 z-20 bg-[#0A192F]/80 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="w-full max-w-sm rounded-2xl border border-[#243454] bg-white dark:bg-[#0F172A] p-6 text-center space-y-4 shadow-2xl">
+              <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-2xl border border-[#243454] bg-white dark:bg-[#0F172A] p-6 text-center space-y-4 shadow-2xl">
                 <h2 className="font-serif text-xl font-bold text-[#0A192F] dark:text-white">
                   Ca Trực Đang Tạm Dừng
                 </h2>
@@ -1525,7 +1525,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
           {/* DAY COMPLETE OVERLAY */}
           {screenState === 'day_complete' && (
             <div className="absolute inset-0 z-20 bg-[#0A192F]/85 backdrop-blur-sm flex items-center justify-center p-4">
-              <div className="w-full max-w-md rounded-2xl border border-emerald-500/40 bg-white dark:bg-[#0F172A] p-6 text-center space-y-4 shadow-2xl">
+              <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-emerald-500/40 bg-white dark:bg-[#0F172A] p-6 text-center space-y-4 shadow-2xl">
                 <div className="w-12 h-12 mx-auto rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
                   <Sparkles className="w-6 h-6" />
                 </div>

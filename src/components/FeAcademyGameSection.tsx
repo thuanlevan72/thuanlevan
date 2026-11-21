@@ -862,7 +862,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
         <div
           role="tablist"
           aria-label="5 Trạm Chiến Dịch Frontend"
-          className="flex flex-wrap items-center gap-1.5 rounded-xl bg-[#060911] border border-slate-800 p-1.5"
+          className="flex flex-nowrap overflow-x-auto lg:flex-wrap lg:overflow-visible items-center gap-1.5 rounded-xl bg-[#060911] border border-slate-800 p-1.5"
         >
           {FE_STATIONS.map((st) => {
             const selected = activeStation === st.id;
@@ -886,7 +886,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                 data-testid={`fe-station-${st.id}`}
                 aria-selected={selected}
                 onClick={() => selectMission(st.id, 0)}
-                className={`min-h-[36px] px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                className={`min-h-[40px] px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
                   selected
                     ? 'bg-emerald-400 text-slate-950 font-bold'
                     : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
@@ -900,7 +900,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
         </div>
 
         {/* 3 Progressive Sub-Levels for Active Station */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <span className="text-xs text-slate-400 font-mono">Màn trạm này:</span>
           <div role="group" aria-label="Chọn cấp màn" className="inline-flex rounded-lg bg-[#060911] border border-slate-800 p-1 gap-1">
             {[0, 1, 2].map((idx) => {
@@ -912,7 +912,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                   type="button"
                   data-testid={`fe-level-${idx}`}
                   onClick={() => selectMission(activeStation, idx)}
-                  className={`min-h-[32px] px-2.5 py-1 rounded-md text-xs font-mono font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                  className={`min-h-[38px] px-2.5 py-1 rounded-md text-xs font-mono font-bold whitespace-nowrap cursor-pointer transition-colors ${
                     active
                       ? 'bg-sky-400 text-slate-950'
                       : cleared
@@ -991,7 +991,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                 <button
                   type="button"
                   onClick={() => setShowBeginnerGuide((v) => !v)}
-                  className="px-2.5 py-1 rounded-lg border border-slate-700 bg-slate-900 hover:border-emerald-400 text-[11px] font-medium text-emerald-300 inline-flex items-center gap-1 cursor-pointer"
+                  className="min-h-[38px] px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:border-emerald-400 text-xs font-medium text-emerald-300 inline-flex items-center gap-1 cursor-pointer"
                 >
                   <HelpCircle className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>{showBeginnerGuide ? 'Thu gọn giải thích dễ hiểu' : 'Xem giải thích cho người mới'}</span>
@@ -1140,13 +1140,13 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                         if (e.key === 'Enter') fireDomLaser();
                       }}
                       placeholder={assistMode === 'visual_guide' ? activeSniperMission.solutionExample : 'Nhập CSS selector...'}
-                      className="flex-1 min-w-0 rounded-lg border border-slate-700 bg-[#060911] px-3 py-2 font-mono text-xs sm:text-sm text-emerald-300 placeholder:text-slate-600 focus:outline-none focus:border-emerald-400"
+                      className="flex-1 min-w-0 min-h-[44px] rounded-lg border border-slate-700 bg-[#060911] px-3 py-2 font-mono text-base sm:text-sm text-emerald-300 placeholder:text-slate-600 focus:outline-none focus:border-emerald-400"
                     />
                     <button
                       type="button"
                       data-testid="sniper-fire-btn"
                       onClick={fireDomLaser}
-                      className="min-h-[40px] px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-400 text-white font-bold text-xs whitespace-nowrap shrink-0 cursor-pointer"
+                      className="min-h-[44px] px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-400 text-white font-bold text-xs whitespace-nowrap shrink-0 cursor-pointer"
                     >
                       Bắn Laser
                     </button>
@@ -1172,7 +1172,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                               return `${trimmed} ${chip}`;
                             })
                           }
-                          className="px-2.5 py-1 rounded border border-slate-700 bg-slate-900 hover:border-sky-400 font-mono text-[11px] text-slate-200 cursor-pointer"
+                          className="min-h-[38px] px-2.5 py-1.5 rounded border border-slate-700 bg-slate-900 hover:border-sky-400 font-mono text-xs text-slate-200 cursor-pointer"
                         >
                           + {chip}
                         </button>
@@ -1182,7 +1182,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                           type="button"
                           data-testid="sniper-hint-btn"
                           onClick={() => setSniperInput(activeSniperMission.solutionExample)}
-                          className="px-2.5 py-1 rounded border border-emerald-500/60 bg-emerald-950/50 hover:bg-emerald-900/60 text-[11px] font-semibold text-emerald-200 cursor-pointer inline-flex items-center gap-1"
+                          className="min-h-[38px] px-2.5 py-1.5 rounded border border-emerald-500/60 bg-emerald-950/50 hover:bg-emerald-900/60 text-xs font-semibold text-emerald-200 cursor-pointer inline-flex items-center gap-1"
                         >
                           <Sparkles className="w-3 h-3" aria-hidden="true" />
                           <span>Nạp Mẫu Chuẩn</span>
@@ -1484,7 +1484,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                               key={btn.val}
                               type="button"
                               onClick={() => applySteeringProperty('justify-content', btn.val)}
-                              className={`px-2 py-1 rounded border cursor-pointer ${
+                              className={`min-h-[38px] px-2.5 py-1.5 rounded border cursor-pointer ${
                                 appliedHeistStyles.justifyContent === btn.val
                                   ? 'border-amber-400 bg-amber-400/20 text-amber-200 font-bold'
                                   : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-amber-400'
@@ -1505,7 +1505,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                               key={btn.val}
                               type="button"
                               onClick={() => applySteeringProperty('align-items', btn.val)}
-                              className={`px-2 py-1 rounded border cursor-pointer ${
+                              className={`min-h-[38px] px-2.5 py-1.5 rounded border cursor-pointer ${
                                 appliedHeistStyles.alignItems === btn.val
                                   ? 'border-sky-400 bg-sky-400/20 text-sky-200 font-bold'
                                   : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-sky-400'
@@ -1526,7 +1526,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                               key={btn.val}
                               type="button"
                               onClick={() => applySteeringProperty('flex-direction', btn.val)}
-                              className={`px-2 py-1 rounded border cursor-pointer ${
+                              className={`min-h-[38px] px-2.5 py-1.5 rounded border cursor-pointer ${
                                 appliedHeistStyles.flexDirection === btn.val
                                   ? 'border-emerald-400 bg-emerald-400/20 text-emerald-200 font-bold'
                                   : 'border-slate-700 bg-slate-900 text-slate-300 hover:border-emerald-400'
@@ -1542,14 +1542,14 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                         <button
                           type="button"
                           onClick={() => applySteeringProperty('grid-template-columns', 'repeat(2, 1fr)')}
-                          className="px-2.5 py-1 rounded border border-slate-700 bg-slate-900 hover:border-sky-400 text-slate-200 cursor-pointer"
+                          className="min-h-[38px] px-2.5 py-1.5 rounded border border-slate-700 bg-slate-900 hover:border-sky-400 text-slate-200 cursor-pointer"
                         >
                           Chia Lưới 2 Cột Đều (repeat(2, 1fr))
                         </button>
                         <button
                           type="button"
                           onClick={() => applySteeringProperty('place-items', 'center')}
-                          className="px-2.5 py-1 rounded border border-slate-700 bg-slate-900 hover:border-emerald-400 text-slate-200 cursor-pointer"
+                          className="min-h-[38px] px-2.5 py-1.5 rounded border border-slate-700 bg-slate-900 hover:border-emerald-400 text-slate-200 cursor-pointer"
                         >
                           Căn Giữa Từng Ô (place-items: center)
                         </button>
@@ -1584,7 +1584,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                     value={heistCssInput}
                     onChange={(e) => setHeistCssInput(e.target.value)}
                     placeholder={activeHeistLevel.solutionExample}
-                    className="w-full rounded-lg border border-slate-700 bg-[#060911] p-2.5 font-mono text-xs text-sky-300 placeholder:text-slate-600 focus:outline-none focus:border-sky-400"
+                    className="w-full rounded-lg border border-slate-700 bg-[#060911] p-2.5 font-mono text-base sm:text-xs text-sky-300 placeholder:text-slate-600 focus:outline-none focus:border-sky-400"
                   />
                   <div className="flex flex-wrap gap-1.5">
                     {activeHeistLevel.quickSnippets.map((snip) => (
@@ -1594,7 +1594,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                         onClick={() =>
                           setHeistCssInput((prev) => (prev.trim() ? `${prev.trim()}\n${snip}` : snip))
                         }
-                        className="px-2 py-1 rounded border border-slate-700 bg-slate-900 hover:border-sky-400 font-mono text-[11px] text-slate-200 cursor-pointer"
+                        className="min-h-[38px] px-2.5 py-1.5 rounded border border-slate-700 bg-slate-900 hover:border-sky-400 font-mono text-xs text-slate-200 cursor-pointer"
                       >
                         + {snip}
                       </button>
@@ -1604,7 +1604,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                     type="button"
                     data-testid="heist-run-btn"
                     onClick={runHeistCss}
-                    className="w-full min-h-[42px] px-4 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs cursor-pointer"
+                    className="w-full min-h-[44px] px-4 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-xs cursor-pointer"
                   >
                     Chạy CSS & Kiểm Tra Khớp Kim Cương
                   </button>
@@ -1726,7 +1726,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                         type="button"
                         data-testid="loop-hint-btn"
                         onClick={showNextLoopHint}
-                        className="px-3 py-1.5 rounded-lg border border-emerald-500/60 bg-emerald-950/40 hover:bg-emerald-900/50 text-xs font-semibold text-emerald-200 inline-flex items-center gap-1.5 cursor-pointer"
+                        className="min-h-[40px] px-3 py-1.5 rounded-lg border border-emerald-500/60 bg-emerald-950/40 hover:bg-emerald-900/50 text-xs font-semibold text-emerald-200 inline-flex items-center gap-1.5 cursor-pointer"
                       >
                         <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
                         <span>Gợi Ý Bước Tiếp Theo</span>
@@ -1874,7 +1874,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                       type="button"
                       data-testid={`devtools-preset-${preset.val}`}
                       onClick={() => setPreviewWidthPx(preset.val)}
-                      className={`min-h-[34px] px-2.5 py-1 rounded-md text-xs font-mono cursor-pointer border ${
+                      className={`min-h-[40px] px-2.5 py-1.5 rounded-md text-xs font-mono cursor-pointer border ${
                         Math.abs(previewWidthPx - preset.val) <= 30
                           ? 'border-sky-400 bg-sky-500/20 text-sky-200 font-bold'
                           : 'border-slate-700 bg-slate-900 text-slate-300 hover:text-white'
@@ -1887,7 +1887,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                     type="button"
                     onClick={() => setInspectMode((v) => !v)}
                     aria-pressed={inspectMode}
-                    className={`min-h-[34px] px-3 py-1 rounded-md text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer border ${
+                    className={`min-h-[40px] px-3 py-1.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer border ${
                       inspectMode
                         ? 'border-amber-400 bg-amber-400 text-slate-950 font-bold'
                         : 'border-slate-700 bg-slate-900 text-slate-300'
@@ -2043,7 +2043,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                       type="button"
                       data-testid="devtools-flag-bug-btn"
                       onClick={handleFlagResponsiveBug}
-                      className="min-h-[36px] px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs whitespace-nowrap cursor-pointer"
+                      className="min-h-[40px] px-3.5 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs whitespace-nowrap cursor-pointer"
                     >
                       Bắt Lỗi Tại {previewWidthPx}px
                     </button>
@@ -2064,7 +2064,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                           type="button"
                           data-testid={`bug-patch-${opt.id}`}
                           onClick={() => handleApplyBugPatch(opt.id)}
-                          className={`w-full rounded-lg border p-3 text-left font-mono text-xs transition-colors cursor-pointer ${
+                          className={`min-h-[44px] w-full rounded-lg border p-3 text-left font-mono text-xs transition-colors cursor-pointer ${
                             picked && opt.isCorrect
                               ? 'border-emerald-400 bg-emerald-950/60 text-emerald-200'
                               : picked && !opt.isCorrect
@@ -2145,7 +2145,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                       triggerTreePulse(activeTreeLevel.typingIntensity);
                     }}
                     placeholder="Gõ liên tục để quan sát re-render..."
-                    className="w-full rounded-lg border border-slate-700 bg-[#060911] px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-400"
+                    className="w-full min-h-[44px] rounded-lg border border-slate-700 bg-[#060911] px-3 py-2 text-base sm:text-xs text-white focus:outline-none focus:border-sky-400"
                   />
                 </div>
 
@@ -2162,7 +2162,7 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
                         type="button"
                         data-testid={`tree-shield-${sh.id}`}
                         onClick={() => toggleTreeShield(sh.id)}
-                        className={`w-full rounded-lg border p-2.5 text-left transition-colors cursor-pointer flex items-center justify-between gap-2 ${
+                        className={`min-h-[44px] w-full rounded-lg border p-2.5 text-left transition-colors cursor-pointer flex items-center justify-between gap-2 ${
                           equipped
                             ? 'border-emerald-400 bg-emerald-950/50 text-emerald-100'
                             : 'border-slate-700 bg-[#080D18] text-slate-200 hover:border-sky-400'

@@ -1781,7 +1781,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                 data-start="true"
                 data-testid="gear-start-btn"
                 onClick={() => startNewRun()}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-sm transition-colors cursor-pointer"
+                className="min-h-[44px] w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-sm transition-colors cursor-pointer"
               >
                 <Play className="w-4 h-4" aria-hidden="true" />
                 <span>Vào Chế Độ: {activeMode.name}</span>
@@ -1854,7 +1854,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
           <button
             type="button"
             onClick={() => setPhase('TITLE')}
-            className="px-2.5 py-1.5 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 text-xs font-medium cursor-pointer"
+            className="min-h-[40px] px-3 py-1.5 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 text-xs font-medium cursor-pointer"
           >
             Menu
           </button>
@@ -1916,7 +1916,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
               setCopiedNotice(false);
               setShowGhostModal(true);
             }}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 text-xs font-mono text-slate-200 cursor-pointer whitespace-nowrap"
+            className="min-h-[40px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 text-xs font-mono text-slate-200 cursor-pointer whitespace-nowrap"
           >
             <Code2 className="w-3.5 h-3.5 text-rose-400" />
             <span>Ghost JSON</span>
@@ -1925,7 +1925,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
             type="button"
             onClick={() => setMuted((m) => !m)}
             aria-label={muted ? 'Bật âm thanh' : 'Tắt âm thanh'}
-            className="p-1.5 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 cursor-pointer"
+            className="min-w-[40px] min-h-[40px] p-2 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 flex items-center justify-center cursor-pointer"
           >
             {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4 text-cyan-400" />}
           </button>
@@ -1933,7 +1933,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
             type="button"
             onClick={() => startNewRun()}
             aria-label="Chơi lại từ Vòng 1"
-            className="p-1.5 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 cursor-pointer"
+            className="min-w-[40px] min-h-[40px] p-2 rounded-lg border border-[#1E2E4A] bg-[#0D1526] hover:border-cyan-400 flex items-center justify-center cursor-pointer"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
@@ -1958,7 +1958,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                 </p>
               </div>
               {holding && (
-                <div className="flex items-center gap-1.5">
+                <div className="sticky top-1 z-20 lg:static bg-[#070B14]/95 py-1.5 px-2 rounded-xl border border-cyan-500/30 lg:border-0 lg:p-0 flex items-center gap-2 w-full sm:w-auto justify-end">
                   <button
                     type="button"
                     data-testid="gear-rotate-btn"
@@ -1967,7 +1967,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                         prev ? { ...prev, rotation: prev.rotation === 0 ? 90 : 0 } : prev
                       )
                     }
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-400/60 text-cyan-200 text-xs font-semibold cursor-pointer"
+                    className="min-h-[42px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-400/60 text-cyan-200 text-xs font-semibold cursor-pointer"
                   >
                     <RotateCw className="w-3.5 h-3.5" />
                     <span>Xoay [R]</span>
@@ -1976,7 +1976,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                     type="button"
                     data-testid="gear-sell-btn"
                     onClick={() => handleCancelOrRefundHolding(holding.fromGrid ? 'sell' : 'cancel')}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-500/15 border border-rose-400/50 text-rose-300 text-xs font-semibold cursor-pointer"
+                    className="min-h-[42px] flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/15 border border-rose-400/50 text-rose-300 text-xs font-semibold cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>
@@ -1991,7 +1991,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
 
             {holding && (
               <div className="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-400/50 flex items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="px-2 py-0.5 rounded bg-cyan-400 text-slate-950 font-bold font-mono">
                     ĐANG CẦM
                   </span>
@@ -2214,7 +2214,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                   <button
                     type="button"
                     onClick={() => setShopLocked((l) => !l)}
-                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer ${
+                    className={`min-h-[38px] inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold cursor-pointer ${
                       shopLocked
                         ? 'bg-amber-500/20 border-amber-400/60 text-amber-300'
                         : 'bg-[#070B14] border-[#1E2E4A] text-slate-300'
@@ -2227,7 +2227,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                     type="button"
                     data-testid="gear-refresh-shop-btn"
                     onClick={() => handleRefreshShop()}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#111C33] border border-[#1E2E4A] hover:border-cyan-400 text-[11px] font-semibold text-cyan-300 cursor-pointer"
+                    className="min-h-[38px] inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#111C33] border border-[#1E2E4A] hover:border-cyan-400 text-[11px] font-semibold text-cyan-300 cursor-pointer"
                   >
                     <RefreshCw className="w-3 h-3" />
                     <span>Làm Mới (2G)</span>
@@ -2236,7 +2236,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
               </div>
 
               {/* Shop Category Filter Tabs */}
-              <div role="group" aria-label="Lọc loại trang bị trong cửa hàng" className="flex flex-wrap gap-1">
+              <div role="group" aria-label="Lọc loại trang bị trong cửa hàng" className="flex flex-wrap gap-1.5">
                 {[
                   { id: 'all', label: 'Tất Cả' },
                   { id: 'weapon', label: 'Súng (12)' },
@@ -2252,7 +2252,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                       setShopFilter(next);
                       handleRefreshShop(next);
                     }}
-                    className={`px-2 py-1 rounded-md text-[10px] font-semibold border cursor-pointer ${
+                    className={`min-h-[36px] px-2.5 py-1 rounded-md text-[11px] font-semibold border cursor-pointer ${
                       shopFilter === tab.id
                         ? 'bg-cyan-400 text-slate-950 border-cyan-400'
                         : 'bg-[#070B14] text-slate-300 border-[#1E2E4A] hover:border-cyan-500/60'
@@ -2263,7 +2263,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                 ))}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-1.5 sm:gap-2">
                 {shopOffers.map((itemId, idx) => {
                   const entry = getGearCatalogEntry(itemId);
                   const canAfford = gold >= entry.cost;
@@ -2399,7 +2399,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                 type="button"
                 data-testid="gear-speed-btn"
                 onClick={() => setBattleSpeed((s) => (s === 1 ? 2 : 1))}
-                className={`px-2 py-1 rounded-lg border text-[11px] font-bold transition-colors cursor-pointer ${
+                className={`min-h-[38px] min-w-[44px] px-2.5 py-1 rounded-lg border text-xs font-bold transition-colors cursor-pointer ${
                   battleSpeed === 2
                     ? 'bg-amber-500/20 border-amber-400 text-amber-200'
                     : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-cyan-400'
@@ -2546,7 +2546,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
           aria-label="Quản lý Ghost Build JSON"
           className="fixed inset-0 z-50 bg-slate-950/80 flex items-center justify-center p-4"
         >
-          <div className="w-full max-w-lg rounded-2xl border border-[#1E2E4A] bg-[#0D1526] p-5 space-y-3.5 shadow-2xl">
+          <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-[#1E2E4A] bg-[#0D1526] p-4 sm:p-5 space-y-3.5 shadow-2xl">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
                 <Code2 className="w-4 h-4 text-cyan-400" />
@@ -2556,7 +2556,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                 type="button"
                 aria-label="Đóng"
                 onClick={() => setShowGhostModal(false)}
-                className="p-1 rounded-lg hover:bg-slate-800 text-slate-300 cursor-pointer"
+                className="min-w-[40px] min-h-[40px] p-2 rounded-lg hover:bg-slate-800 text-slate-300 flex items-center justify-center cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -2572,7 +2572,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                     void navigator.clipboard?.writeText(txt);
                     setCopiedNotice(true);
                   }}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded bg-cyan-500/20 text-cyan-300 cursor-pointer"
+                  className="min-h-[36px] inline-flex items-center gap-1 px-2.5 py-1 rounded bg-cyan-500/20 text-cyan-300 cursor-pointer"
                 >
                   <Copy className="w-3 h-3" />
                   <span>{copiedNotice ? 'Đã Copy!' : 'Copy JSON'}</span>
@@ -2596,7 +2596,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                   setGhostImportError('');
                 }}
                 placeholder='{"version":1,"name":"Cao Thủ","round":1,"grid":[{"itemId":"pulse_laser","col":1,"row":1,"rotation":0}]}'
-                className="w-full p-2.5 rounded-xl bg-[#070B14] border border-[#1E2E4A] text-slate-200 font-mono text-[11px]"
+                className="w-full p-2.5 rounded-xl bg-[#070B14] border border-[#1E2E4A] text-slate-200 font-mono text-base sm:text-xs"
               />
               {ghostImportError && <p className="text-rose-400">{ghostImportError}</p>}
             </div>
@@ -2605,7 +2605,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
               <button
                 type="button"
                 onClick={() => setShowGhostModal(false)}
-                className="px-3.5 py-1.5 rounded-lg border border-[#1E2E4A] text-slate-300 text-xs font-semibold cursor-pointer"
+                className="min-h-[42px] px-4 py-1.5 rounded-lg border border-[#1E2E4A] text-slate-300 text-xs font-semibold cursor-pointer"
               >
                 Đóng
               </button>
@@ -2621,7 +2621,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                   setShowGhostModal(false);
                   setStatusNotice(`Đã nạp Bóng Ma PvP "${parsed.name}" cho Vòng ${round}!`);
                 }}
-                className="px-4 py-1.5 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold cursor-pointer"
+                className="min-h-[42px] px-4 py-1.5 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-slate-950 text-xs font-bold cursor-pointer"
               >
                 Nạp Đối Thủ Ghost
               </button>

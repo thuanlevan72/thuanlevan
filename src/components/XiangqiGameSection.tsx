@@ -1303,7 +1303,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                 key={tid}
                 type="button"
                 onClick={() => setBoardTheme(tid)}
-                className={`px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                className={`min-h-[38px] px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                   boardTheme === tid
                     ? 'bg-[#0A192F] text-white dark:bg-[#0284C7]'
                     : 'text-[#475569] dark:text-[#94A3B8] hover:text-[#070B14] dark:hover:text-white'
@@ -1318,7 +1318,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
             type="button"
             onClick={() => setSoundEnabled((prev) => !prev)}
             aria-label={soundEnabled ? 'Tắt âm thanh bàn cờ' : 'Bật âm thanh bàn cờ'}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white dark:bg-[#0B1222] text-[#070B14] dark:text-[#F1F5F9] hover:border-[#0284C7] transition-colors cursor-pointer"
+            className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white dark:bg-[#0B1222] text-[#070B14] dark:text-[#F1F5F9] hover:border-[#0284C7] transition-colors cursor-pointer"
           >
             {soundEnabled ? <Volume2 className="w-4 h-4 text-[#0284C7]" /> : <VolumeX className="w-4 h-4 text-[#64748B]" />}
             <span className="hidden sm:inline">{soundEnabled ? 'Âm Bật' : 'Tắt Tiếng'}</span>
@@ -1327,7 +1327,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
           <button
             type="button"
             onClick={onToggleTheme}
-            className="px-3 py-2 text-xs font-semibold rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white dark:bg-[#0B1222] text-[#070B14] dark:text-[#F1F5F9] hover:border-[#0284C7] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            className="min-h-[40px] px-3 py-2 text-xs font-semibold rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white dark:bg-[#0B1222] text-[#070B14] dark:text-[#F1F5F9] hover:border-[#0284C7] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
             {theme === 'dark' ? 'Nền Tối' : 'Nền Sáng'}
           </button>
@@ -1398,7 +1398,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
               <div
                 role="region"
                 aria-label="Màn hình bắt đầu Cờ Tướng"
-                className="absolute inset-0 flex flex-col items-center justify-center p-3.5 sm:p-7 text-center overflow-y-auto"
+                className="absolute inset-0 flex flex-col items-center justify-start sm:justify-center p-3 sm:p-7 text-center overflow-y-auto"
                 style={{ backgroundColor: 'rgba(10, 15, 28, 0.85)' }}
               >
                 <div className="w-full max-w-md space-y-2.5 sm:space-y-4 text-white">
@@ -1461,7 +1461,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                           type="button"
                           aria-label={`Chọn ${cfg.badge} ${cfg.name}`}
                           onClick={() => setDifficulty(cfg.level)}
-                          className={`py-1.5 sm:py-2 rounded-lg border text-center transition-all cursor-pointer ${
+                          className={`min-h-[38px] py-1.5 sm:py-2 rounded-lg border text-center transition-all cursor-pointer ${
                             difficulty === cfg.level
                               ? 'bg-amber-500 text-slate-950 border-amber-300 font-bold shadow-sm'
                               : 'bg-slate-900/90 text-slate-200 border-slate-700 hover:border-slate-500'
@@ -1488,7 +1488,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                       <button
                         type="button"
                         onClick={() => setPlayerSide('red')}
-                        className={`px-2 py-2 sm:px-3 sm:py-2.5 rounded-xl border text-[11px] sm:text-sm font-semibold transition-all cursor-pointer ${
+                        className={`min-h-[42px] px-2 py-2 sm:px-3 sm:py-2.5 rounded-xl border text-[11px] sm:text-sm font-semibold transition-all cursor-pointer ${
                           playerIsRed
                             ? 'bg-red-700 text-white border-red-400'
                             : 'bg-slate-900/90 text-slate-300 border-slate-700 hover:border-slate-500'
@@ -1499,7 +1499,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                       <button
                         type="button"
                         onClick={() => setPlayerSide('black')}
-                        className={`px-2 py-2 sm:px-3 sm:py-2.5 rounded-xl border text-[11px] sm:text-sm font-semibold transition-all cursor-pointer ${
+                        className={`min-h-[42px] px-2 py-2 sm:px-3 sm:py-2.5 rounded-xl border text-[11px] sm:text-sm font-semibold transition-all cursor-pointer ${
                           !playerIsRed
                             ? 'bg-slate-100 text-slate-950 border-white'
                             : 'bg-slate-900/90 text-slate-300 border-slate-700 hover:border-slate-500'
@@ -1797,7 +1797,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                     title={`${cfg.badge} · ${cfg.name}`}
                     aria-label={`Đổi độ khó ${cfg.badge} ${cfg.name}`}
                     onClick={() => setDifficulty(cfg.level)}
-                    className={`py-1.5 rounded-lg text-xs font-mono font-semibold transition-colors cursor-pointer ${
+                    className={`min-h-[40px] py-1.5 rounded-lg text-xs font-mono font-semibold transition-colors cursor-pointer ${
                       difficulty === cfg.level
                         ? 'bg-[#0284C7] text-white shadow-sm'
                         : 'bg-[#F1F5F9] dark:bg-[#13203A] text-[#475569] dark:text-[#94A3B8] hover:text-[#070B14] dark:hover:text-white'

@@ -190,3 +190,11 @@
     page-break-inside: avoid;
   }
 }
+
+/* Edge-to-edge expansion only when Game Hub enters F11 Fullscreen */
+[data-fullscreen="true"] > .game-fs-inner > section {
+  width: 100%;
+  max-width: 100% !important;
+  flex: 1 1 auto;
+}
+

@@ -961,7 +961,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
             }}
             aria-label={soundEnabled ? 'Tắt âm thanh [M]' : 'Bật âm thanh [M]'}
             title="Âm thanh [M]"
-            className="w-9 h-9 rounded-lg border border-emerald-800 bg-[#0A1812] hover:border-emerald-400 text-emerald-300 flex items-center justify-center cursor-pointer"
+            className="w-10 h-10 sm:w-9 sm:h-9 rounded-lg border border-emerald-800 bg-[#0A1812] hover:border-emerald-400 text-emerald-300 flex items-center justify-center cursor-pointer"
           >
             {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4 text-rose-400" />}
           </button>
@@ -975,7 +975,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
             }}
             aria-label={screenState === 'paused' ? 'Tiếp tục [P]' : 'Tạm dừng [P]'}
             title="Tạm dừng [P]"
-            className="w-9 h-9 rounded-lg border border-emerald-800 bg-[#0A1812] hover:border-emerald-400 text-emerald-300 flex items-center justify-center cursor-pointer"
+            className="w-10 h-10 sm:w-9 sm:h-9 rounded-lg border border-emerald-800 bg-[#0A1812] hover:border-emerald-400 text-emerald-300 flex items-center justify-center cursor-pointer"
           >
             {screenState === 'paused' ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
           </button>
@@ -989,7 +989,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
             }}
             aria-label="Chơi lại màn [R]"
             title="Chơi lại [R]"
-            className="w-9 h-9 rounded-lg border border-emerald-800 bg-[#0A1812] hover:border-amber-400 text-emerald-300 flex items-center justify-center cursor-pointer"
+            className="w-10 h-10 sm:w-9 sm:h-9 rounded-lg border border-emerald-800 bg-[#0A1812] hover:border-amber-400 text-emerald-300 flex items-center justify-center cursor-pointer"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
@@ -1101,7 +1101,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 disabled={runtime.exploitPoints < 30}
                 onClick={() => triggerPowerup('freeze')}
                 title="Gia hạn & đóng băng SLA 6 giây (gõ 'freeze')"
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border transition-colors ${
+                className={`min-h-[36px] inline-flex items-center gap-1 px-2.5 py-1 rounded border transition-colors ${
                   runtime.exploitPoints >= 30
                     ? 'border-cyan-500/60 bg-cyan-950/50 text-cyan-200 hover:bg-cyan-500/20 cursor-pointer'
                     : 'border-emerald-950 bg-black/30 text-emerald-800 cursor-not-allowed'
@@ -1116,7 +1116,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 disabled={runtime.exploitPoints < 40}
                 onClick={() => triggerPowerup('cloak')}
                 title="Chuyển tải dự phòng giảm -22% SLA Alert (gõ 'cloak')"
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border transition-colors ${
+                className={`min-h-[36px] inline-flex items-center gap-1 px-2.5 py-1 rounded border transition-colors ${
                   runtime.exploitPoints >= 40
                     ? 'border-violet-500/60 bg-violet-950/50 text-violet-200 hover:bg-violet-500/20 cursor-pointer'
                     : 'border-emerald-950 bg-black/30 text-emerald-800 cursor-not-allowed'
@@ -1130,7 +1130,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 tabIndex={-1}
                 onClick={() => triggerPowerup('hint')}
                 title="Xem hướng xử lý tiếp theo (gõ 'hint' hoặc 'man')"
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-amber-500/60 bg-amber-950/40 text-amber-200 hover:bg-amber-500/20 cursor-pointer"
+                className="min-h-[36px] inline-flex items-center gap-1 px-2.5 py-1 rounded border border-amber-500/60 bg-amber-950/40 text-amber-200 hover:bg-amber-500/20 cursor-pointer"
               >
                 <Lightbulb className="w-3 h-3" aria-hidden="true" />
                 <span>Gợi ý {hackerMode === 'practice' ? '(Free)' : '(15EP)'}</span>
@@ -1143,7 +1143,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                   inputRef.current?.focus();
                 }}
                 title="Dọn terminal (Ctrl+L)"
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-800 bg-[#0A1812] text-emerald-300 hover:border-emerald-400 cursor-pointer"
+                className="min-h-[36px] inline-flex items-center gap-1 px-2.5 py-1 rounded border border-emerald-800 bg-[#0A1812] text-emerald-300 hover:border-emerald-400 cursor-pointer"
               >
                 <Eraser className="w-3 h-3" aria-hidden="true" />
                 <span className="hidden sm:inline">Dọn</span>
@@ -1153,11 +1153,11 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
 
           {/* Smart Live Step Mentor Bar */}
           <div className="px-3 py-2 bg-[#06130E] border-b border-emerald-900/60 flex flex-wrap items-center justify-between gap-2 font-mono text-[11px]">
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-start sm:items-center gap-2 min-w-0 flex-1">
               <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold shrink-0">
                 {hackerMode === 'practice' ? 'BƯỚC TIẾP' : 'THỰC CHIẾN'}
               </span>
-              <span className="text-sky-200 truncate">
+              <span className="text-sky-200 line-clamp-2 sm:truncate">
                 {hackerMode === 'practice' ? (
                   <>
                     Gõ <strong className="text-amber-300">{smartNextHint.command}</strong> — {smartNextHint.reason}
@@ -1184,7 +1184,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                     runCommandString(smartNextHint.command);
                     inputRef.current?.focus();
                   }}
-                  className="px-2 py-0.5 rounded bg-amber-400 hover:bg-amber-300 text-[#03120B] font-bold cursor-pointer"
+                  className="min-h-[34px] px-2.5 py-1 rounded bg-amber-400 hover:bg-amber-300 text-[#03120B] font-bold cursor-pointer"
                 >
                   Chạy ngay →
                 </button>
@@ -1249,7 +1249,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 </button>
               )}
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-nowrap overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0 gap-1.5">
               {(hackerMode === 'practice'
                 ? currentMission.quickCommands
                 : ['ls -la', 'ps aux', 'df -h', 'ss -tulpn', 'man', 'history', 'clear']
@@ -1268,7 +1268,7 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                       }
                       inputRef.current?.focus();
                     }}
-                    className={`px-2.5 py-1 rounded-md border font-mono text-xs transition-colors cursor-pointer ${
+                    className={`min-h-[40px] shrink-0 px-3 py-1.5 rounded-md border font-mono text-xs transition-colors cursor-pointer ${
                       isSuggested
                         ? 'border-amber-400 bg-amber-400/20 text-amber-200 font-bold ring-1 ring-amber-400/50'
                         : 'border-emerald-800/80 bg-[#0A1912] hover:bg-emerald-500/20 hover:border-emerald-400 text-emerald-200'
@@ -1278,25 +1278,41 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                   </button>
                 );
               })}
+              {['-la', '| grep ', '--help', 'verify '].map((frag) => (
+                <button
+                  key={frag}
+                  type="button"
+                  tabIndex={-1}
+                  onClick={() => {
+                    setCommandInput((prev) => `${prev.trimEnd()} ${frag}`.trimStart());
+                    inputRef.current?.focus();
+                  }}
+                  className="sm:hidden min-h-[40px] shrink-0 px-2.5 py-1.5 rounded-md border border-cyan-800/70 bg-[#071516] font-mono text-xs text-cyan-200 cursor-pointer"
+                >
+                  {frag.trim()}
+                </button>
+              ))}
             </div>
           </div>
 
           {/* Active Command Line Input with Ghost Tab Autocomplete */}
           <form
             onSubmit={handleSubmitForm}
-            className="flex items-center gap-2 px-3 py-2.5 bg-[#020504] border-t border-emerald-700/60"
+            className="flex items-center gap-2 px-3 py-2 bg-[#020504] border-t border-emerald-700/60"
           >
             <label
               htmlFor="linux-hacker-cli-input"
               className="font-mono text-xs sm:text-sm font-bold text-emerald-400 whitespace-nowrap shrink-0"
             >
-              ubuntu@prod-node:{runtime.cwd}$
+              <span className="hidden sm:inline">ubuntu@prod-node</span>
+              <span className="sm:hidden">cli</span>
+              :{runtime.cwd}$
             </label>
             <div className="relative flex-1 min-w-0 flex items-center">
               {ghostSuffix && (
                 <div
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-0 flex items-center font-mono text-xs sm:text-sm whitespace-pre overflow-hidden"
+                  className="pointer-events-none absolute inset-0 flex items-center font-mono text-base sm:text-sm whitespace-pre overflow-hidden"
                 >
                   <span className="invisible">{commandInput}</span>
                   <span className="text-emerald-600/80">{ghostSuffix}</span>
@@ -1313,13 +1329,13 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                 autoCorrect="off"
                 autoCapitalize="none"
                 spellCheck={false}
-                placeholder="Gõ lệnh Ubuntu (ls -la, grep, ps aux, ufw, verify...) · Tab · Ctrl+L"
-                className="relative z-10 w-full bg-transparent text-emerald-100 placeholder:text-emerald-700 font-mono text-xs sm:text-sm focus:outline-none"
+                placeholder="Gõ lệnh Ubuntu (ls -la, grep, ps aux...)"
+                className="relative z-10 w-full bg-transparent text-emerald-100 placeholder:text-emerald-700 font-mono text-base sm:text-sm focus:outline-none min-h-[40px]"
               />
             </div>
             <button
               type="submit"
-              className="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-[#03120B] font-mono font-bold text-xs whitespace-nowrap shrink-0 cursor-pointer"
+              className="min-h-[44px] px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-[#03120B] font-mono font-bold text-xs whitespace-nowrap shrink-0 cursor-pointer"
             >
               Thực thi
             </button>
