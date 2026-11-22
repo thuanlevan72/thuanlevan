@@ -8,15 +8,21 @@ import {
   computeBezierPointAndTangent,
   computeBlueprintCost,
   createInitialNodes,
+  detectArchitectureCombos,
   diagnoseArchitectureTelemetry,
+  diagnoseWavePerformance,
   distToCubicBezier,
   evaluatePacketAtNode,
   evaluateSolutionOptimization,
+  getDatabaseSinkNodes,
   getEffectiveScenarioConfig,
   getNodeCapabilityDetails,
+  getNodeOperationalTelemetry,
+  getPreSimChecklist,
   getSellRefund,
   hasPathToDatabase,
   INFRA_NODE_CATALOG,
+  isDatabaseSinkType,
   pickWeightedPacketKind,
   RACK_SLOTS,
   selectOutgoingEdge,
@@ -27,8 +33,8 @@ import {
 
 test('TRAFFIC_LEVELS defines 24 valid scenarios across 6 chapters with 4 escalating waves & 3+ approaches', () => {
   assert.equal(TRAFFIC_LEVELS.length, 24);
-  assert.equal(INFRA_NODE_CATALOG.length, 10);
-  assert.equal(RACK_SLOTS.length, 12);
+  assert.equal(INFRA_NODE_CATALOG.length, 20);
+  assert.equal(RACK_SLOTS.length, 14);
 
   const chapterCounts = new Map<number, number>();
   for (const lvl of TRAFFIC_LEVELS) {
@@ -424,11 +430,13 @@ test('Bezier geometry, Lv1/Lv2 node capability specs, and live bottleneck teleme
   assert.ok(distToCubicBezier(mid.x, mid.y, 100, 150, 400, 350) < 3);
   assert.ok(distToCubicBezier(100, 350, 100, 150, 400, 350) > 60);
 
-  // Every catalog node provides Lv1/Lv2 capability specs with faster Lv2 latency
+  // Every catalog node provides Lv1/Lv2/Lv3 capability specs with faster latencies on upgrades
   for (const item of INFRA_NODE_CATALOG) {
     const spec = getNodeCapabilityDetails(item.type);
     assert.ok(spec.lv2Value.length > 0);
+    assert.ok(spec.lv3Value.length > 0);
     assert.ok(spec.latencyLv2Ms < spec.latencyLv1Ms, `${item.type} Lv2 must be faster than Lv1`);
+    assert.ok(spec.latencyLv3Ms < spec.latencyLv2Ms, `${item.type} Lv3 must be faster than Lv2`);
   }
 
   // Live telemetry detects hottest bottleneck and unused disconnected nodes
@@ -455,4 +463,170 @@ test('Bezier geometry, Lv1/Lv2 node capability specs, and live bottleneck teleme
   assert.equal(diag.hottestNode?.heatPct, 84);
   assert.deepEqual(diag.unusedNodeIds, ['redis-orphan']);
 });
+
+test('Smart edge routing (CQRS routeRule), Queue buffer capacity, SRE ops, and wave incidents behave accurately', async () => {
+  const engine = await import('./trafficRouterEngine.ts');
+  const lb: InfraNode = {
+    id: 'lb-cqrs',
+    type: 'load_balancer',
+    x: 385,
+    y: 250,
+    level: 2,
+    rrCursor: 0,
+    processedCount: 0,
+    blockedCount: 0,
+    cacheHitCount: 0,
+    heat: 0,
+  };
+  const cqrsEdges: InfraEdge[] = [
+    { id: 'e-read', fromId: 'lb-cqrs', toId: 'redis-node', routeRule: 'read' },
+    { id: 'e-write', fromId: 'lb-cqrs', toId: 'kafka-node', routeRule: 'write' },
+    { id: 'e-media', fromId: 'lb-cqrs', toId: 's3-node', routeRule: 'media' },
+    { id: 'e-fallback', fromId: 'lb-cqrs', toId: 'app-node', routeRule: 'all' },
+  ];
+
+  // Content-based routing sends GET->Redis, POST->Kafka, MEDIA->S3, DDoS->all fallback
+  assert.equal(engine.selectOutgoingEdgeForPacket(lb, cqrsEdges, 'read').edge?.toId, 'redis-node');
+  assert.equal(engine.selectOutgoingEdgeForPacket(lb, cqrsEdges, 'write').edge?.toId, 'kafka-node');
+  assert.equal(engine.selectOutgoingEdgeForPacket(lb, cqrsEdges, 'media').edge?.toId, 's3-node');
+  assert.equal(engine.selectOutgoingEdgeForPacket(lb, cqrsEdges, 'ddos').edge?.toId, 'app-node');
+
+  // Cycle route rule order: all -> read -> write -> media -> all
+  assert.equal(engine.cycleEdgeRouteRule(undefined), 'read');
+  assert.equal(engine.cycleEdgeRouteRule('read'), 'write');
+  assert.equal(engine.cycleEdgeRouteRule('write'), 'media');
+  assert.equal(engine.cycleEdgeRouteRule('media'), 'all');
+
+  // Kafka Lv2 has larger buffer and faster drain interval than Lv1
+  assert.ok(engine.getQueueMaxBuffer(2) > engine.getQueueMaxBuffer(1));
+  assert.ok(engine.getQueueDrainIntervalSec(2) < engine.getQueueDrainIntervalSec(1));
+
+  // SRE actions & Wave incident events are defined cleanly
+  assert.equal(engine.SRE_ACTIONS.length, 3);
+  assert.equal(engine.getWaveIncidentEvent(TRAFFIC_LEVELS[0], 0, 'standard'), null);
+  const incFlash = engine.getWaveIncidentEvent(TRAFFIC_LEVELS[3], 1, 'flash_surge');
+  assert.ok(incFlash !== null && incFlash.spawnRateMult > 1);
+
+  // Specialized edges earn CQRS recognition in evaluation
+  const lvl = TRAFFIC_LEVELS[1];
+  const bp = buildBlueprintGraph(lvl, lvl.approaches[0]);
+  const specializedEdges = bp.edges.map((e, i) => (i === 1 ? { ...e, routeRule: 'read' as const } : e));
+  const evalCqrs = evaluateSolutionOptimization({
+    level: lvl,
+    nodes: bp.nodes,
+    edges: specializedEdges,
+    avgLatencyMs: 32,
+    peakDbCpu: 48,
+    breachedAttacks: 0,
+    remainingBudget: 120,
+  });
+  assert.ok(evalCqrs.strengths.some((st) => st.includes('CQRS')));
+});
+
+test('Pure System Design v3: Multi-DB sinks, Lv3 scaling, Quick-Tune, Combos, Pre-Sim Checklist, Telemetry & Wave Diagnosis', () => {
+  assert.equal(isDatabaseSinkType('database'), true);
+  assert.equal(isDatabaseSinkType('primary_db'), true);
+  assert.equal(isDatabaseSinkType('nosql_db'), true);
+  assert.equal(isDatabaseSinkType('timeseries_db'), true);
+  assert.equal(isDatabaseSinkType('read_replica'), false);
+
+  const multiDbNodes: InfraNode[] = [
+    { id: 'ingress', type: 'ingress', x: 76, y: 250, fixed: true, level: 1, rrCursor: 0, processedCount: 50, blockedCount: 0, cacheHitCount: 0, heat: 0.1 },
+    { id: 'cdn-1', type: 'cdn', x: 225, y: 112, slotId: 'rack-0-0', level: 2, cacheTtl: 'long', rrCursor: 0, processedCount: 40, blockedCount: 4, cacheHitCount: 18, heat: 0.2 },
+    { id: 'redis-1', type: 'redis', x: 385, y: 112, slotId: 'rack-1-0', level: 3, cacheTtl: 'long', rrCursor: 0, processedCount: 35, blockedCount: 0, cacheHitCount: 28, heat: 0.3 },
+    { id: 'app-1', type: 'app', x: 545, y: 112, slotId: 'rack-2-0', level: 3, rrCursor: 0, processedCount: 30, blockedCount: 0, cacheHitCount: 0, droppedCount: 2, heat: 0.89, avgNodeLatencyMs: 24 },
+    { id: 'mq-1', type: 'queue', x: 545, y: 388, slotId: 'rack-2-2', level: 2, queueCapacityMode: 'large', queueBuffer: 20, rrCursor: 0, processedCount: 24, blockedCount: 0, cacheHitCount: 0, heat: 0.45, avgNodeLatencyMs: 12 },
+    { id: 'wk-1', type: 'worker', x: 705, y: 388, slotId: 'rack-3-2', level: 2, rrCursor: 0, processedCount: 22, blockedCount: 0, cacheHitCount: 0, heat: 0.25 },
+    { id: 's3-1', type: 'object_storage', x: 705, y: 112, slotId: 'rack-3-0', level: 2, rrCursor: 0, processedCount: 15, blockedCount: 0, cacheHitCount: 14, heat: 0.1 },
+    { id: 'database', type: 'database', x: 844, y: 250, fixed: true, level: 2, dbPoolMode: 'high_pool', localDbCpu: 44, rrCursor: 0, processedCount: 18, blockedCount: 0, cacheHitCount: 0, heat: 0.44, avgNodeLatencyMs: 14 },
+    { id: 'nosql-1', type: 'nosql_db', x: 844, y: 388, slotId: 'rack-4-2', level: 1, localDbCpu: 92, rrCursor: 0, processedCount: 25, blockedCount: 0, cacheHitCount: 0, droppedCount: 3, heat: 0.92, avgNodeLatencyMs: 38 },
+  ];
+  const multiDbEdges: InfraEdge[] = [
+    { id: 'e1', fromId: 'ingress', toId: 'cdn-1' },
+    { id: 'e2', fromId: 'cdn-1', toId: 'redis-1' },
+    { id: 'e3', fromId: 'redis-1', toId: 'app-1' },
+    { id: 'e4', fromId: 'app-1', toId: 's3-1', routeRule: 'media' },
+    { id: 'e5', fromId: 'app-1', toId: 'database', routeRule: 'read' },
+    { id: 'e6', fromId: 'ingress', toId: 'mq-1', routeRule: 'write' },
+    { id: 'e7', fromId: 'mq-1', toId: 'wk-1' },
+    { id: 'e8', fromId: 'wk-1', toId: 'nosql-1' },
+    { id: 'e9', fromId: 's3-1', toId: 'database' },
+  ];
+
+  // Multi-DB sink detection & DAG validation
+  assert.equal(getDatabaseSinkNodes(multiDbNodes).length, 2);
+  assert.equal(hasPathToDatabase(multiDbNodes, multiDbEdges), true);
+  assert.equal(canAddEdge(multiDbNodes, multiDbEdges, 'nosql-1', 'app-1').valid, false);
+  assert.equal(canAddEdge(multiDbNodes, multiDbEdges, 'app-1', 'nosql-1').valid, true);
+
+  // All 4 architecture combos activate cleanly on this Multi-DB hybrid graph
+  const combos = detectArchitectureCombos(multiDbNodes, multiDbEdges);
+  assert.equal(combos.length, 4);
+  assert.equal(combos.every((c) => c.active), true);
+
+  // Quick-Tune & Lv3 checks
+  const nosqlWrite = evaluatePacketAtNode(multiDbNodes[8], 'write', 0.1, 0, 1);
+  const stdDbWrite = evaluatePacketAtNode(multiDbNodes[7], 'write', 0.1, 0, 1);
+  assert.equal(nosqlWrite.outcome, 'delivered');
+  assert.ok(nosqlWrite.dbCpuDelta < 5.4);
+  assert.ok(stdDbWrite.dbCpuDelta < 5.4);
+
+  // Overload saturation drop when heat >= 0.9
+  const overloadedApp: InfraNode = { ...multiDbNodes[3], heat: 0.94 };
+  const overflow = evaluatePacketAtNode(overloadedApp, 'read', 0.95, 1);
+  assert.equal(overflow.outcome, 'dropped_overload');
+
+  // Strict Rate Limiter blocks minor legit POST under high burst heat
+  const strictLimiter: InfraNode = {
+    id: 'rl-strict',
+    type: 'rate_limiter',
+    x: 225,
+    y: 250,
+    slotId: 'rack-0-1',
+    level: 2,
+    limiterMode: 'strict',
+    rrCursor: 0,
+    processedCount: 10,
+    blockedCount: 5,
+    cacheHitCount: 0,
+    heat: 0.82,
+  };
+  assert.equal(evaluatePacketAtNode(strictLimiter, 'write', 0.02, 1).outcome, 'blocked');
+
+  // Pre-Sim Checklist includes Multi-DB ok item
+  const checklist = getPreSimChecklist(TRAFFIC_LEVELS[0], multiDbNodes, multiDbEdges);
+  assert.ok(checklist.some((item) => item.ok && item.label.includes('Đa Database')));
+
+  // Operational telemetry standby vs active/warning/degraded states
+  const idleTel = getNodeOperationalTelemetry(multiDbNodes[2], 'DESIGNING');
+  assert.equal(idleTel.status, 'idle');
+  assert.ok(idleTel.line1.includes('STANDBY'));
+
+  const redisActiveTel = getNodeOperationalTelemetry(multiDbNodes[2], 'SIMULATING', { elapsedSec: 10 });
+  assert.equal(redisActiveTel.status, 'active');
+  assert.ok(redisActiveTel.line1.includes('hit '));
+
+  const overloadedDbTel = getNodeOperationalTelemetry(multiDbNodes[8], 'SIMULATING', { elapsedSec: 10 });
+  assert.equal(overloadedDbTel.status, 'degraded');
+  assert.equal(overloadedDbTel.badgeLevel, 'danger');
+
+  // Wave diagnosis reports specific root cause
+  const diag = diagnoseWavePerformance({
+    waveNumber: 1,
+    waveLabel: 'Đợt 1',
+    deliveredOk: 42,
+    droppedPackets: 4,
+    breachedAttacks: 0,
+    uptimePct: 98,
+    peakLatencyMs: 48,
+    targetSlaMs: 56,
+    peakDbCpu: 86,
+    nodes: multiDbNodes,
+    edges: multiDbEdges,
+  });
+  assert.equal(diag.activeDbCount, 2);
+  assert.ok(diag.diagnosisLine.includes('DB'));
+});
+
+
 

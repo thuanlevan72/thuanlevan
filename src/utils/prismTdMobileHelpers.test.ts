@@ -1,10 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getAvailableGunsForMap, PRISM_MAPS } from './prismTdEngine.ts';
+import { getAvailableGunsForMap, GUN_CATALOG, PRISM_MAPS } from './prismTdEngine.ts';
 import {
+  clampMapZoomAndPan,
   computeCombatVisualDamping,
   computeMobileLandscapeSidebarPx,
+  computeTouchGhostTile,
+  computeVfxClutterBudget,
   filterArsenalGuns,
+  getGunMobileShortName,
+  resolveTouchCanvasTapAction,
+  TACTILE_VIBRATION_PATTERNS,
 } from './prismTdMobileHelpers.ts';
 
 test('computeCombatVisualDamping stays crisp in calm combat and damps glare + minor popups in dense combat', () => {
@@ -35,18 +41,43 @@ test('computeCombatVisualDamping stays crisp in calm combat and damps glare + mi
   assert.ok(heavyMobile3x.maxFloatingTexts <= 8);
 });
 
-test('filterArsenalGuns cleanly partitions all, attack, electric, and support guns across the 17-gun roster', () => {
+test('computeVfxClutterBudget caps stacked ultimates and reduces area wash alpha under heavy Overdrive pressure', () => {
+  const calmBudget = computeVfxClutterBudget({
+    activeEffectsCount: 2,
+    activeBeams: 1,
+    speedMult: 1,
+    isCompactViewport: false,
+    overdriveActive: false,
+  });
+  assert.equal(calmBudget.areaWashAlphaScale, 1);
+  assert.equal(calmBudget.maxOrbitalBeams, 8);
+  assert.equal(calmBudget.maxVoidRifts, 7);
+
+  const saturatedBudget = computeVfxClutterBudget({
+    activeEffectsCount: 16,
+    activeBeams: 12,
+    speedMult: 3,
+    isCompactViewport: true,
+    overdriveActive: true,
+  });
+  assert.ok(saturatedBudget.areaWashAlphaScale >= 0.28 && saturatedBudget.areaWashAlphaScale <= 0.4);
+  assert.ok(saturatedBudget.maxOrbitalBeams <= 5);
+  assert.ok(saturatedBudget.maxChronoFields <= 4);
+  assert.ok(saturatedBudget.maxOverheatEffects <= 9);
+});
+
+test('filterArsenalGuns cleanly partitions all, attack, electric, and support guns across the 19-gun roster', () => {
   const guns = getAvailableGunsForMap(PRISM_MAPS[0].id);
   const all = filterArsenalGuns(guns, 'all');
   const attack = filterArsenalGuns(guns, 'attack');
   const electric = filterArsenalGuns(guns, 'electric');
   const support = filterArsenalGuns(guns, 'support');
 
-  assert.equal(all.length, 17);
-  assert.equal(guns.length, 17);
-  assert.equal(attack.length, 12);
+  assert.equal(all.length, 19);
+  assert.equal(guns.length, 19);
+  assert.equal(attack.length, 13);
   assert.equal(electric.length, 2);
-  assert.equal(support.length, 3);
+  assert.equal(support.length, 4);
   assert.equal(attack.length + electric.length + support.length, all.length);
 });
 
@@ -63,4 +94,91 @@ test('computeMobileLandscapeSidebarPx preserves 70%–75%+ map width across iPho
     const collapsedMapRatio = (vw - collapsedSidebar) / vw;
     assert.ok(collapsedMapRatio >= 0.92, `Collapsed map ratio should exceed 92%`);
   }
+});
+
+test('getGunMobileShortName provides concise unclipped names for all 19 guns', () => {
+  for (const gun of GUN_CATALOG) {
+    const short = getGunMobileShortName(gun.type);
+    assert.ok(short.length >= 4 && short.length <= 12, `${gun.type} short name "${short}" should stay concise`);
+  }
+});
+
+test('computeTouchGhostTile offsets Y upward during touch drag so preview stays visible above fingertip', () => {
+  const rect = { left: 0, top: 0, width: 480, height: 300 };
+  const exact = computeTouchGhostTile({
+    clientX: 255,
+    clientY: 165,
+    rect,
+    cols: 16,
+    rows: 10,
+    applyFingerOffset: false,
+  });
+  assert.deepEqual(exact, { col: 8, row: 5 });
+
+  const shifted = computeTouchGhostTile({
+    clientX: 255,
+    clientY: 165,
+    rect,
+    cols: 16,
+    rows: 10,
+    applyFingerOffset: true,
+    fingerOffsetCssPx: 34,
+  });
+  assert.deepEqual(shifted, { col: 8, row: 4 });
+});
+
+test('resolveTouchCanvasTapAction requires preview-then-confirm on touch and allows instant click on mouse', () => {
+  const firstTouchTap = resolveTouchCanvasTapAction({
+    tile: { col: 5, row: 4 },
+    tileKind: 'empty',
+    existingGunId: null,
+    pendingTile: null,
+    isTouchPointer: true,
+  });
+  assert.deepEqual(firstTouchTap, { action: 'set_preview', col: 5, row: 4 });
+
+  const secondSameTileTap = resolveTouchCanvasTapAction({
+    tile: { col: 5, row: 4 },
+    tileKind: 'empty',
+    existingGunId: null,
+    pendingTile: { col: 5, row: 4 },
+    isTouchPointer: true,
+  });
+  assert.deepEqual(secondSameTileTap, { action: 'confirm_place', col: 5, row: 4 });
+
+  const mouseTap = resolveTouchCanvasTapAction({
+    tile: { col: 5, row: 4 },
+    tileKind: 'empty',
+    existingGunId: null,
+    pendingTile: null,
+    isTouchPointer: false,
+  });
+  assert.deepEqual(mouseTap, { action: 'confirm_place', col: 5, row: 4 });
+
+  const blockedTap = resolveTouchCanvasTapAction({
+    tile: { col: 2, row: 2 },
+    tileKind: 'path',
+    existingGunId: null,
+    pendingTile: null,
+    isTouchPointer: true,
+  });
+  assert.deepEqual(blockedTap, { action: 'invalid_tile', col: 2, row: 2 });
+});
+
+test('clampMapZoomAndPan clamps zoom and pan cleanly inside container bounds and tactile patterns exist', () => {
+  assert.deepEqual(
+    clampMapZoomAndPan({ zoom: 0.8, panX: 120, panY: -90, viewportW: 600, viewportH: 340 }),
+    { zoom: 1, panX: 0, panY: 0 }
+  );
+  const zoomed = clampMapZoomAndPan({
+    zoom: 1.8,
+    panX: 999,
+    panY: -999,
+    viewportW: 600,
+    viewportH: 340,
+  });
+  assert.equal(zoomed.zoom, 1.8);
+  assert.equal(zoomed.panX, 240);
+  assert.equal(zoomed.panY, -136);
+  assert.ok(Array.isArray(TACTILE_VIBRATION_PATTERNS.error));
 });

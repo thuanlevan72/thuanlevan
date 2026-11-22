@@ -1,17 +1,29 @@
 export type PacketKind = 'read' | 'write' | 'media' | 'ddos' | 'sqli';
 
+export type InfraNodeCategory = 'edge' | 'routing_cache' | 'compute_async' | 'data_db';
+
 export type InfraNodeType =
   | 'ingress'
   | 'waf'
   | 'rate_limiter'
+  | 'ddos_scrubber'
   | 'cdn'
+  | 'api_gateway'
   | 'load_balancer'
+  | 'varnish'
   | 'redis'
   | 'app'
+  | 'microservice_auth'
+  | 'search_engine'
   | 'queue'
+  | 'stream_processor'
   | 'worker'
+  | 'batch_etl'
   | 'read_replica'
   | 'object_storage'
+  | 'primary_db'
+  | 'nosql_db'
+  | 'timeseries_db'
   | 'database';
 
 export type PlaceableNodeType = Exclude<InfraNodeType, 'ingress' | 'database'>;
@@ -21,11 +33,19 @@ export interface InfraNodeCatalogEntry {
   hotkey: string;
   name: string;
   shortName: string;
+  category: InfraNodeCategory;
   layerHint: string;
+  recommendedCols: readonly number[];
+  isDbSink?: boolean;
   cost: number;
   upgradeCost: number;
   color: string;
   roleSummary: string;
+  shortMetricTag: string;
+  pros: string;
+  cons: string;
+  comboHint: string;
+  strengthsByPacket: Record<PacketKind, 'strong' | 'neutral' | 'weak'>;
 }
 
 export interface RackSlot {
@@ -36,6 +56,12 @@ export interface RackSlot {
   y: number;
 }
 
+export type EdgeRouteRule = 'all' | 'read' | 'write' | 'media';
+export type LimiterTuneMode = 'lenient' | 'standard' | 'strict';
+export type CacheTtlMode = 'short' | 'long';
+export type QueueCapacityMode = 'small' | 'large';
+export type DbPoolMode = 'balanced' | 'high_pool';
+
 export interface InfraNode {
   id: string;
   type: InfraNodeType;
@@ -43,25 +69,34 @@ export interface InfraNode {
   y: number;
   slotId?: string;
   fixed?: boolean;
-  level: 1 | 2;
+  level: 1 | 2 | 3;
   rrCursor: number;
   processedCount: number;
   blockedCount: number;
   cacheHitCount: number;
+  droppedCount?: number;
   heat: number; // 0..1 visual load pulse
+  localDbCpu?: number; // per-DB CPU % for multi-DB sinks
+  avgNodeLatencyMs?: number;
+  queueBuffer?: number; // buffered POST requests inside Queue/Stream during simulation
+  limiterMode?: LimiterTuneMode;
+  cacheTtl?: CacheTtlMode;
+  queueCapacityMode?: QueueCapacityMode;
+  dbPoolMode?: DbPoolMode;
 }
 
 export interface InfraEdge {
   id: string;
   fromId: string;
   toId: string;
+  routeRule?: EdgeRouteRule;
 }
 
 export interface BlueprintNodeSpec {
   id: string;
   type: PlaceableNodeType;
   slotId: string;
-  level?: 1 | 2;
+  level?: 1 | 2 | 3;
 }
 
 export interface ArchitectureApproach {
@@ -125,118 +160,394 @@ export const RACK_SLOTS: readonly RackSlot[] = [
   { id: 'rack-3-0', col: 3, row: 0, x: 705, y: 112 },
   { id: 'rack-3-1', col: 3, row: 1, x: 705, y: 250 },
   { id: 'rack-3-2', col: 3, row: 2, x: 705, y: 388 },
+  // Column 4: Multi-Database Shards / Polyglot Sinks (x = 844, alongside central DB CLUSTER at y=250)
+  { id: 'rack-4-0', col: 4, row: 0, x: 844, y: 112 },
+  { id: 'rack-4-2', col: 4, row: 2, x: 844, y: 388 },
 ];
 
+export function isDatabaseSinkType(type: InfraNodeType): boolean {
+  return (
+    type === 'database' ||
+    type === 'primary_db' ||
+    type === 'nosql_db' ||
+    type === 'timeseries_db'
+  );
+}
+
+export function getDatabaseSinkNodes(nodes: readonly InfraNode[]): InfraNode[] {
+  return nodes.filter((n) => isDatabaseSinkType(n.type));
+}
+
 export const INFRA_NODE_CATALOG: readonly InfraNodeCatalogEntry[] = [
+  // 1. EDGE & SECURITY
   {
     type: 'waf',
     hotkey: '1',
     name: 'WAF Firewall',
     shortName: 'WAF',
-    layerHint: 'Bảo vệ',
+    category: 'edge',
+    layerHint: 'Edge · Bảo vệ',
+    recommendedCols: [0],
     cost: 80,
     upgradeCost: 90,
     color: '#A855F7',
-    roleSummary: 'Chặn 100% SQLi & payload độc hại',
+    roleSummary: 'Chặn 100% SQLi, lọc DDoS',
+    shortMetricTag: '100% SQLi · L7',
+    pros: 'Triệt tiêu 100% payload SQL Injection & XSS ngay ở lớp ứng dụng.',
+    cons: 'Tăng nhẹ 2–6ms kiểm tra gói và chỉ lọc được một phần bão DDoS L4.',
+    comboHint: 'Đặt trước Rate Limiter / Scrubber để dựng khiên Zero-Trust.',
+    strengthsByPacket: { read: 'neutral', write: 'neutral', media: 'neutral', ddos: 'neutral', sqli: 'strong' },
   },
   {
     type: 'rate_limiter',
     hotkey: '2',
     name: 'Rate Limiter',
     shortName: 'Limiter',
-    layerHint: 'Bảo vệ',
+    category: 'edge',
+    layerHint: 'Edge · Bảo vệ',
+    recommendedCols: [0],
     cost: 70,
     upgradeCost: 85,
     color: '#F43F5E',
-    roleSummary: 'Chặn 92–99% bão Bot DDoS tràn cổng',
+    roleSummary: 'Cắt 95% bão DDoS burst',
+    shortMetricTag: '95% DDoS · Burst',
+    pros: 'Cắt 91–99% bot spam & brute-force theo ngưỡng Token Bucket.',
+    cons: 'Chế độ Siết Chặt có thể drop nhầm 5% POST thật khi spike nóng.',
+    comboHint: 'Ghép với WAF + Redis Token Store cho API Auth/Flash Sale.',
+    strengthsByPacket: { read: 'neutral', write: 'neutral', media: 'neutral', ddos: 'strong', sqli: 'weak' },
+  },
+  {
+    type: 'ddos_scrubber',
+    hotkey: 'Q',
+    name: 'DDoS Scrubber L4/L7',
+    shortName: 'Scrubber',
+    category: 'edge',
+    layerHint: 'Edge · Bảo vệ',
+    recommendedCols: [0],
+    cost: 90,
+    upgradeCost: 100,
+    color: '#E11D48',
+    roleSummary: 'Hấp thụ Botnet 99% L4/L7',
+    shortMetricTag: '99% Botnet · BGP',
+    pros: 'Làm sạch bão Botnet quy mô cực lớn trước khi chạm vào Gateway/LB.',
+    cons: 'Độ trễ kiểm tra sâu hơn Limiter thường khi chưa lên Lv.2/Lv.3.',
+    comboHint: 'Kết hợp CDN + Scrubber trong các đợt Cyber Siege / Chaos.',
+    strengthsByPacket: { read: 'neutral', write: 'neutral', media: 'neutral', ddos: 'strong', sqli: 'neutral' },
   },
   {
     type: 'cdn',
     hotkey: '3',
     name: 'Edge CDN',
     shortName: 'CDN',
+    category: 'edge',
     layerHint: 'Biên mạng',
+    recommendedCols: [0, 1],
     cost: 85,
     upgradeCost: 95,
     color: '#EC4899',
-    roleSummary: 'Phục vụ 90–96% Media/Static & chặn bớt DDoS',
+    roleSummary: 'Offload 92% Media & tĩnh',
+    shortMetricTag: '92% Media · Edge',
+    pros: 'Phân phối 87–98% ảnh/video ở biên gần user và cản bớt DDoS.',
+    cons: 'Không cache được truy vấn ghi POST động.',
+    comboHint: 'Combo CDN + S3/MinIO: tăng thêm hiệu suất offload Media & giảm tải gốc.',
+    strengthsByPacket: { read: 'neutral', write: 'weak', media: 'strong', ddos: 'neutral', sqli: 'weak' },
+  },
+
+  // 2. GATEWAY, ROUTING & CACHE
+  {
+    type: 'api_gateway',
+    hotkey: 'E',
+    name: 'API Gateway',
+    shortName: 'API GW',
+    category: 'routing_cache',
+    layerHint: 'Gateway · Định tuyến',
+    recommendedCols: [0, 1],
+    cost: 75,
+    upgradeCost: 85,
+    color: '#6366F1',
+    roleSummary: 'Gom API, chặn SQLi/Bot nhẹ',
+    shortMetricTag: 'Router · Auth/L7',
+    pros: 'Định tuyến thông minh, xác thực JWT và lọc một phần payload xấu.',
+    cons: 'Nếu không chia tải hoặc cache phía sau dễ thành điểm nghẽn đơn.',
+    comboHint: 'Nối ra các nhánh chuyên biệt GET / POST / MEDIA bằng [R] Luật Dây.',
+    strengthsByPacket: { read: 'strong', write: 'neutral', media: 'neutral', ddos: 'neutral', sqli: 'neutral' },
   },
   {
     type: 'load_balancer',
     hotkey: '4',
-    name: 'Load Balancer',
-    shortName: 'LB (RR)',
+    name: 'Load Balancer L7',
+    shortName: 'LB (L7)',
+    category: 'routing_cache',
     layerHint: 'Điều phối',
+    recommendedCols: [1],
     cost: 65,
     upgradeCost: 75,
     color: '#3B82F6',
-    roleSummary: 'Chia tải Round-Robin sang nhiều nhánh server',
+    roleSummary: 'Chia tải đều đa nhánh',
+    shortMetricTag: 'Round-Robin · 2ms',
+    pros: 'Cân bằng tải Round-Robin sang nhiều App API hoặc nhiều DB Shard.',
+    cons: 'Vô tác dụng nếu chỉ nối ra 1 nhánh duy nhất (SPOF).',
+    comboHint: 'Combo Multi-DB: Nối LB/App tới 2+ Database Shard để chia đôi CPU DB.',
+    strengthsByPacket: { read: 'strong', write: 'strong', media: 'strong', ddos: 'weak', sqli: 'weak' },
+  },
+  {
+    type: 'varnish',
+    hotkey: 'V',
+    name: 'Varnish HTTP Cache',
+    shortName: 'Varnish',
+    category: 'routing_cache',
+    layerHint: 'Bộ đệm HTTP',
+    recommendedCols: [1],
+    cost: 75,
+    upgradeCost: 85,
+    color: '#0EA5E9',
+    roleSummary: 'Page Cache 80% GET tĩnh',
+    shortMetricTag: 'HTTP Cache · 4ms',
+    pros: 'Trả nguyên trang HTML/JSON GET cực nhanh trong RAM trước App API.',
+    cons: 'Không phục vụ được dữ liệu cá nhân hóa theo user hoặc POST ghi.',
+    comboHint: 'Combo Cache→Compute: đặt trước App API giảm mạnh tải xử lý đọc.',
+    strengthsByPacket: { read: 'strong', write: 'weak', media: 'neutral', ddos: 'neutral', sqli: 'weak' },
   },
   {
     type: 'redis',
     hotkey: '5',
-    name: 'Redis Cache',
+    name: 'Redis In-Memory',
     shortName: 'Redis',
-    layerHint: 'Bộ đệm',
+    category: 'routing_cache',
+    layerHint: 'Bộ đệm RAM',
+    recommendedCols: [1, 2],
     cost: 85,
     upgradeCost: 95,
     color: '#06B6D4',
-    roleSummary: 'Trả lời 76–90% gói GET (0% CPU DB)',
+    roleSummary: 'Cache GET ~85% hit',
+    shortMetricTag: 'RAM Hit 85% · 5ms',
+    pros: 'Đáp ứng 75–94% GET lặp lại ngay trong RAM với 0% tải Database.',
+    cons: 'Cần chỉnh TTL hợp lý; cache miss diện rộng (Stampede) sẽ dội về DB.',
+    comboHint: 'Combo Redis → App API (hoặc Elastic) giúp giảm trễ đọc toàn tuyến.',
+    strengthsByPacket: { read: 'strong', write: 'weak', media: 'weak', ddos: 'weak', sqli: 'weak' },
   },
+
+  // 3. COMPUTE, SEARCH & ASYNC PIPELINE
   {
     type: 'app',
     hotkey: '6',
     name: 'App API Server',
     shortName: 'App API',
-    layerHint: 'Xử lý',
+    category: 'compute_async',
+    layerHint: 'Xử lý nghiệp vụ',
+    recommendedCols: [2],
     cost: 75,
     upgradeCost: 85,
     color: '#10B981',
-    roleSummary: 'Xử lý nghiệp vụ API, chạy song song đa node',
+    roleSummary: 'Xử lý logic API đa luồng',
+    shortMetricTag: 'Compute · REST',
+    pros: 'Xử lý nghiệp vụ linh hoạt, scale ngang song song qua Load Balancer.',
+    cons: 'Dễ nóng & nghẽn độ trễ (+44ms) nếu dồn tải không có Cache/Queue.',
+    comboHint: 'Ghép sau Redis/Varnish và đẩy POST nặng sang Kafka/MQ.',
+    strengthsByPacket: { read: 'neutral', write: 'neutral', media: 'weak', ddos: 'weak', sqli: 'weak' },
+  },
+  {
+    type: 'microservice_auth',
+    hotkey: 'U',
+    name: 'Auth Microservice',
+    shortName: 'Auth Svc',
+    category: 'compute_async',
+    layerHint: 'Tách dịch vụ Auth',
+    recommendedCols: [2],
+    cost: 80,
+    upgradeCost: 90,
+    color: '#34D399',
+    roleSummary: 'Xác thực JWT & chặn SQLi nhẹ',
+    shortMetricTag: 'JWT/OAuth · 9ms',
+    pros: 'Tách luồng xác thực khỏi App chính, tự lọc 65% SQLi bất thường.',
+    cons: 'Không thay thế được WAF chuyên dụng với chiến dịch Zero-Day.',
+    comboHint: 'Đi cùng Redis Session Store để xác thực token dưới 10ms.',
+    strengthsByPacket: { read: 'strong', write: 'neutral', media: 'weak', ddos: 'neutral', sqli: 'neutral' },
+  },
+  {
+    type: 'search_engine',
+    hotkey: 'F',
+    name: 'Elasticsearch Index',
+    shortName: 'Elastic',
+    category: 'compute_async',
+    layerHint: 'Tìm kiếm & Lọc',
+    recommendedCols: [2, 3],
+    cost: 90,
+    upgradeCost: 100,
+    color: '#2DD4BF',
+    roleSummary: 'Gánh 82% GET tìm kiếm nặng',
+    shortMetricTag: 'Full-Text · 8ms',
+    pros: 'Xử lý truy vấn lọc, tìm kiếm, gợi ý phức tạp thay SQL LIKE chậm chạp.',
+    cons: 'Chiếm bộ nhớ heap khi index write lớn.',
+    comboHint: 'Đặt sau Redis hoặc LB cho luồng GET tìm kiếm sản phẩm/bài viết.',
+    strengthsByPacket: { read: 'strong', write: 'weak', media: 'weak', ddos: 'weak', sqli: 'weak' },
   },
   {
     type: 'queue',
     hotkey: '7',
-    name: 'Message Queue',
+    name: 'Kafka / Message Queue',
     shortName: 'Kafka/MQ',
-    layerHint: 'Bất đồng bộ',
+    category: 'compute_async',
+    layerHint: 'Hàng đợi Async',
+    recommendedCols: [2, 3],
     cost: 90,
     upgradeCost: 100,
     color: '#F97316',
-    roleSummary: 'Hấp thụ & làm phẳng xung ghi POST (giảm 55–70% tải DB)',
+    roleSummary: 'Đệm & làm mượt POST',
+    shortMetricTag: 'Async Buffer · -60% DB',
+    pros: 'Hấp thụ xung ghi POST vào buffer và xả đều giảm 52–72% tải DB.',
+    cons: 'Hàng đợi nhỏ dễ tràn khi burst kéo dài nếu thiếu Worker xả nhanh.',
+    comboHint: 'Combo Kafka → Worker: tăng tốc độ xả hàng đợi & giảm tải ghi DB.',
+    strengthsByPacket: { read: 'weak', write: 'strong', media: 'neutral', ddos: 'weak', sqli: 'weak' },
+  },
+  {
+    type: 'stream_processor',
+    hotkey: 'T',
+    name: 'Flink Stream Engine',
+    shortName: 'Flink',
+    category: 'compute_async',
+    layerHint: 'Xử lý Stream',
+    recommendedCols: [2, 3],
+    cost: 95,
+    upgradeCost: 105,
+    color: '#FB923C',
+    roleSummary: 'Gom lô stream, giảm 65% ghi',
+    shortMetricTag: 'Batch Stream · -65%',
+    pros: 'Gom hàng nghìn sự kiện IoT/Clickstream thành batch ghi DB siêu nhẹ.',
+    cons: 'Thêm độ trễ gom cửa sổ (windowing) khoảng 6–10ms.',
+    comboHint: 'Ghép với Timescale DB hoặc Worker cho bài toán IoT / Telemetry.',
+    strengthsByPacket: { read: 'weak', write: 'strong', media: 'neutral', ddos: 'weak', sqli: 'weak' },
   },
   {
     type: 'worker',
     hotkey: '8',
-    name: 'Async Worker',
+    name: 'Async Worker Pool',
     shortName: 'Worker',
-    layerHint: 'Hậu cảnh',
+    category: 'compute_async',
+    layerHint: 'Xử lý nền',
+    recommendedCols: [3],
     cost: 75,
     upgradeCost: 85,
     color: '#84CC16',
-    roleSummary: 'Xử lý tác vụ nền từ Queue/Media mà không nghẽn API',
+    roleSummary: 'Xử lý tác vụ nền từ Queue',
+    shortMetricTag: 'Consumer · Async',
+    pros: 'Rút việc từ Kafka/Flink để ghi DB ổn định, không làm nghẽn API chính.',
+    cons: 'Chạy đơn lẻ không có Queue phía trước ít phát huy tác dụng.',
+    comboHint: 'Combo Kafka/MQ → Worker: mở khóa cộng hưởng Async Pipeline.',
+    strengthsByPacket: { read: 'weak', write: 'strong', media: 'strong', ddos: 'weak', sqli: 'weak' },
   },
+  {
+    type: 'batch_etl',
+    hotkey: 'B',
+    name: 'Batch ETL Aggregator',
+    shortName: 'ETL Job',
+    category: 'compute_async',
+    layerHint: 'Tổng hợp lô',
+    recommendedCols: [3],
+    cost: 80,
+    upgradeCost: 90,
+    color: '#A3E635',
+    roleSummary: 'Nén & tổng hợp log ghi DB',
+    shortMetricTag: 'ETL Compress · -45%',
+    pros: 'Nén ghi chép lịch sử, giảm dung lượng & lock ghi lên Database lõi.',
+    cons: 'Không phù hợp cho request đọc GET thời gian thực.',
+    comboHint: 'Đặt trước Timescale DB hoặc DB Cluster cho báo cáo/analytics.',
+    strengthsByPacket: { read: 'weak', write: 'strong', media: 'neutral', ddos: 'weak', sqli: 'weak' },
+  },
+
+  // 4. STORAGE, REPLICA & MULTI-DATABASE SHARDS
   {
     type: 'read_replica',
     hotkey: '9',
     name: 'Read Replica DB',
     shortName: 'Replica',
-    layerHint: 'Dữ liệu',
+    category: 'data_db',
+    layerHint: 'Bản sao Đọc',
+    recommendedCols: [3],
     cost: 95,
     upgradeCost: 110,
     color: '#14B8A6',
-    roleSummary: 'Gánh 78–92% truy vấn Đọc GET thay Database chính',
+    roleSummary: 'Gánh 85% truy vấn GET đọc',
+    shortMetricTag: 'Read Offload · 85%',
+    pros: 'Gánh 77–95% truy vấn GET đọc nặng, bảo vệ DB chính khỏi lock.',
+    cons: 'Có độ trễ đồng bộ (Replication Lag) nhỏ nếu ghi tăng đột biến.',
+    comboHint: 'Nối nhánh GET qua Replica, nhánh POST đi thẳng DB Shard.',
+    strengthsByPacket: { read: 'strong', write: 'weak', media: 'weak', ddos: 'weak', sqli: 'weak' },
   },
   {
     type: 'object_storage',
     hotkey: '0',
     name: 'Object Storage S3',
     shortName: 'S3/MinIO',
-    layerHint: 'Lưu trữ',
+    category: 'data_db',
+    layerHint: 'Lưu trữ Media',
+    recommendedCols: [3],
     cost: 80,
     upgradeCost: 90,
     color: '#EAB308',
-    roleSummary: 'Lưu 92–98% file Media/Ảnh/Video tách khỏi DB chính',
+    roleSummary: 'Lưu 95% ảnh/video ngoài DB',
+    shortMetricTag: 'Blob S3 · 95% Media',
+    pros: 'Cách ly 90–99% file ảnh/video/clip khỏi cơ sở dữ liệu quan hệ.',
+    cons: 'Không tối ưu cho truy vấn quan hệ hoặc ghi giao dịch SQL.',
+    comboHint: 'Combo CDN + S3/MinIO: triệt để giải phóng DB khỏi tải Media.',
+    strengthsByPacket: { read: 'weak', write: 'weak', media: 'strong', ddos: 'weak', sqli: 'weak' },
+  },
+  {
+    type: 'primary_db',
+    hotkey: 'M',
+    name: 'SQL Shard Database',
+    shortName: 'Shard SQL',
+    category: 'data_db',
+    layerHint: 'Database · Shard',
+    recommendedCols: [4],
+    isDbSink: true,
+    cost: 110,
+    upgradeCost: 120,
+    color: '#F59E0B',
+    roleSummary: 'DB Shard phụ chia tải SQL',
+    shortMetricTag: 'SQL Shard · ACID',
+    pros: 'Tăng thêm 1 nút Database độc lập để chia đôi CPU & lock SQL.',
+    cons: 'Cần LB hoặc luật dây phân bổ đều lưu lượng sang Shard này.',
+    comboHint: 'Combo Multi-DB (2+ Database): chia tải CPU cụm DB toàn hệ thống!',
+    strengthsByPacket: { read: 'strong', write: 'strong', media: 'weak', ddos: 'weak', sqli: 'weak' },
+  },
+  {
+    type: 'nosql_db',
+    hotkey: 'N',
+    name: 'NoSQL Document DB',
+    shortName: 'NoSQL DB',
+    category: 'data_db',
+    layerHint: 'Database · NoSQL',
+    recommendedCols: [4],
+    isDbSink: true,
+    cost: 105,
+    upgradeCost: 115,
+    color: '#D97706',
+    roleSummary: 'Chịu ghi POST/JSON cực cao',
+    shortMetricTag: 'NoSQL · High Write',
+    pros: 'Hấp thụ ghi POST/Session/Catalog nhẹ CPU hơn SQL truyền thống -38%.',
+    cons: 'Không mạnh về join phức tạp; dùng kết hợp Polyglot với DB chính.',
+    comboHint: 'Dùng [R] Luật Dây tách POST sang NoSQL DB để giữ DB SQL luôn mát.',
+    strengthsByPacket: { read: 'strong', write: 'strong', media: 'neutral', ddos: 'weak', sqli: 'weak' },
+  },
+  {
+    type: 'timeseries_db',
+    hotkey: 'I',
+    name: 'Timescale / Log DB',
+    shortName: 'Timescale',
+    category: 'data_db',
+    layerHint: 'Database · Chuỗi thời gian',
+    recommendedCols: [4],
+    isDbSink: true,
+    cost: 105,
+    upgradeCost: 115,
+    color: '#CA8A04',
+    roleSummary: 'Tối ưu ghi Telemetry & Log',
+    shortMetricTag: 'TimeSeries · IoT',
+    pros: 'Chịu ghi chuỗi thời gian, metric IoT & metadata Media nhẹ hơn -42% CPU.',
+    cons: 'Không thay thế được OLTP giao dịch tài chính.',
+    comboHint: 'Đích cuối lý tưởng cho Flink / ETL / Kafka trong bài toán IoT & Log.',
+    strengthsByPacket: { read: 'neutral', write: 'strong', media: 'strong', ddos: 'weak', sqli: 'weak' },
   },
 ];
 
@@ -319,7 +630,9 @@ export function buildBlueprintGraph(
       processedCount: 0,
       blockedCount: 0,
       cacheHitCount: 0,
+      droppedCount: 0,
       heat: 0,
+      avgNodeLatencyMs: 5,
     },
     ...approach.blueprintNodes.map((spec) => {
       const pos = slotCoords(spec.slotId);
@@ -334,7 +647,10 @@ export function buildBlueprintGraph(
         processedCount: 0,
         blockedCount: 0,
         cacheHitCount: 0,
+        droppedCount: 0,
         heat: 0,
+        localDbCpu: isDatabaseSinkType(spec.type) ? 10 : undefined,
+        avgNodeLatencyMs: 0,
       };
     }),
     {
@@ -348,7 +664,10 @@ export function buildBlueprintGraph(
       processedCount: 0,
       blockedCount: 0,
       cacheHitCount: 0,
+      droppedCount: 0,
       heat: 0,
+      localDbCpu: 10,
+      avgNodeLatencyMs: 15,
     },
   ];
   const edges: InfraEdge[] = approach.blueprintEdges.map((e, i) => ({
@@ -1939,7 +2258,10 @@ export function createInitialNodes(level: TrafficLevelDef): InfraNode[] {
     processedCount: 0,
     blockedCount: 0,
     cacheHitCount: 0,
+    droppedCount: 0,
     heat: 0,
+    localDbCpu: isDatabaseSinkType(n.type) ? 10 : undefined,
+    avgNodeLatencyMs: isDatabaseSinkType(n.type) ? 15 : 0,
   }));
 }
 
@@ -1950,7 +2272,8 @@ export function getNodeCatalogEntry(type: PlaceableNodeType): InfraNodeCatalogEn
 export function getSellRefund(node: InfraNode, fullRefund = false): number {
   if (node.fixed || node.type === 'ingress' || node.type === 'database') return 0;
   const entry = getNodeCatalogEntry(node.type);
-  const invested = entry.cost + (node.level === 2 ? entry.upgradeCost : 0);
+  const upgrades = Math.max(0, node.level - 1);
+  const invested = entry.cost + upgrades * entry.upgradeCost;
   if (fullRefund) return invested;
   return Math.round(invested * 0.7);
 }
@@ -1970,8 +2293,8 @@ export function canAddEdge(
   if (!fromNode || !toNode) {
     return { valid: false, reason: 'Node nguồn hoặc đích không tồn tại.' };
   }
-  if (fromNode.type === 'database') {
-    return { valid: false, reason: 'Database là đích cuối, không thể nối dây đi tiếp.' };
+  if (isDatabaseSinkType(fromNode.type)) {
+    return { valid: false, reason: 'Database là đích lưu trữ cuối, không thể nối dây đi tiếp.' };
   }
   if (toNode.type === 'ingress') {
     return { valid: false, reason: 'Không thể nối dây quay ngược vào cổng Người dùng.' };
@@ -2000,6 +2323,31 @@ export function canAddEdge(
   return { valid: true };
 }
 
+export function cycleEdgeRouteRule(current?: EdgeRouteRule): EdgeRouteRule {
+  const order: readonly EdgeRouteRule[] = ['all', 'read', 'write', 'media'];
+  const idx = order.indexOf(current ?? 'all');
+  return order[(idx + 1) % order.length];
+}
+
+export function getEdgeRouteMeta(rule?: EdgeRouteRule): {
+  rule: EdgeRouteRule;
+  shortLabel: string;
+  label: string;
+  color: string;
+} {
+  const effective = rule ?? 'all';
+  switch (effective) {
+    case 'read':
+      return { rule: 'read', shortLabel: 'GET', label: 'Chỉ GET (Đọc)', color: '#38BDF8' };
+    case 'write':
+      return { rule: 'write', shortLabel: 'POST', label: 'Chỉ POST (Ghi)', color: '#F59E0B' };
+    case 'media':
+      return { rule: 'media', shortLabel: 'MEDIA', label: 'Chỉ MEDIA', color: '#F472B6' };
+    default:
+      return { rule: 'all', shortLabel: 'ALL', label: 'Tất cả lưu lượng', color: '#94A3B8' };
+  }
+}
+
 export function selectOutgoingEdge(
   node: InfraNode,
   edges: readonly InfraEdge[]
@@ -2015,16 +2363,177 @@ export function selectOutgoingEdge(
   };
 }
 
+/**
+ * Content-aware edge selection supporting specialized CQRS/Media wires.
+ * Falls back cleanly to 'all' wires, and lets threats traverse any available branch if only specialized routes exist.
+ */
+export function selectOutgoingEdgeForPacket(
+  node: InfraNode,
+  edges: readonly InfraEdge[],
+  kind: PacketKind
+): { edge: InfraEdge | null; nextCursor: number } {
+  const outgoing = edges.filter((e) => e.fromId === node.id);
+  if (outgoing.length === 0) {
+    return { edge: null, nextCursor: node.rrCursor };
+  }
+
+  let pool = outgoing;
+  if (kind === 'read' || kind === 'write' || kind === 'media') {
+    const exact = outgoing.filter((e) => e.routeRule === kind);
+    if (exact.length > 0) {
+      pool = exact;
+    } else {
+      const generic = outgoing.filter((e) => !e.routeRule || e.routeRule === 'all');
+      if (generic.length > 0) {
+        pool = generic;
+      }
+    }
+  } else {
+    const generic = outgoing.filter((e) => !e.routeRule || e.routeRule === 'all');
+    if (generic.length > 0) {
+      pool = generic;
+    }
+  }
+
+  const idx = node.rrCursor % pool.length;
+  return {
+    edge: pool[idx],
+    nextCursor: (node.rrCursor + 1) % outgoing.length,
+  };
+}
+
+export function getQueueMaxBuffer(level: 1 | 2 | 3, capacityMode: QueueCapacityMode = 'small'): number {
+  const base = level === 3 ? 34 : level === 2 ? 22 : 12;
+  return capacityMode === 'large' ? Math.round(base * 1.6) : base;
+}
+
+export function getQueueDrainIntervalSec(level: 1 | 2 | 3): number {
+  return level === 3 ? 0.14 : level === 2 ? 0.22 : 0.36;
+}
+
+export type SreActionId = 'autoscale' | 'lockdown' | 'cache_warm';
+
+export interface SreActionDef {
+  id: SreActionId;
+  hotkey: 'A' | 'S' | 'D';
+  name: string;
+  shortName: string;
+  cooldownSec: number;
+  durationSec: number;
+  color: string;
+  description: string;
+}
+
+export const SRE_ACTIONS: readonly SreActionDef[] = [
+  {
+    id: 'autoscale',
+    hotkey: 'A',
+    name: 'Auto-Scale Burst',
+    shortName: 'Auto-Scale',
+    cooldownSec: 12,
+    durationSec: 5,
+    color: '#10B981',
+    description: 'Hạ nhiệt App/Worker tức thì (-45%) & giảm 35% độ trễ xử lý trong 5s.',
+  },
+  {
+    id: 'lockdown',
+    hotkey: 'S',
+    name: 'Edge Lockdown',
+    shortName: 'Lockdown',
+    cooldownSec: 14,
+    durationSec: 5,
+    color: '#FB7185',
+    description: 'Bật màng lọc khẩn cấp: +28% chặn DDoS tại biên & giảm 25% nhịp spawn bot trong 5s.',
+  },
+  {
+    id: 'cache_warm',
+    hotkey: 'D',
+    name: 'Cache Warm & DB Cool',
+    shortName: 'Cache Warm',
+    cooldownSec: 15,
+    durationSec: 5,
+    color: '#22D3EE',
+    description: 'Làm ấm Redis/CDN (+14% Hit Rate trong 5s) & xả kết nối giảm -16% CPU Database.',
+  },
+];
+
+export interface WaveIncidentEvent {
+  id: string;
+  title: string;
+  detail: string;
+  kind: 'traffic_spike' | 'botnet_surge' | 'cache_stampede' | 'slow_query';
+  spawnRateMult: number;
+  extraCpuDrainPenalty: number;
+  recommendedAction: SreActionId;
+}
+
+export function getWaveIncidentEvent(
+  level: TrafficLevelDef,
+  waveIndex: number,
+  modeId: string
+): WaveIncidentEvent | null {
+  if (waveIndex < 1) return null;
+  const w = level.waves[waveIndex];
+  if (!w) return null;
+
+  const isCyber = modeId === 'cyber_siege' || w.weights.ddos + w.weights.sqli >= 0.25;
+  const isSpike = modeId === 'flash_surge' || modeId === 'chaos_hell' || w.weights.write >= 0.35;
+
+  if (waveIndex === 1 && (isSpike || level.chapter >= 2)) {
+    return {
+      id: `inc-${level.id}-w${waveIndex}-spike`,
+      title: 'Xung Flash Traffic Bất Ngờ',
+      detail: 'Lưu lượng tăng +32% trong 4.5s — dùng [A] Auto-Scale nếu node Compute bị nóng!',
+      kind: 'traffic_spike',
+      spawnRateMult: 1.32,
+      extraCpuDrainPenalty: 0,
+      recommendedAction: 'autoscale',
+    };
+  }
+  if (waveIndex === 2 && isCyber) {
+    return {
+      id: `inc-${level.id}-w${waveIndex}-botnet`,
+      title: 'Bão Botnet Phối Hợp',
+      detail: 'Tần suất tấn công tăng mạnh — bật [S] Edge Lockdown để hỗ trợ WAF & Limiter!',
+      kind: 'botnet_surge',
+      spawnRateMult: 1.28,
+      extraCpuDrainPenalty: 0,
+      recommendedAction: 'lockdown',
+    };
+  }
+  if (waveIndex >= 2) {
+    return {
+      id: `inc-${level.id}-w${waveIndex}-stampede`,
+      title: waveIndex % 2 === 0 ? 'Cache Stampede' : 'Truy Vấn DB Chậm',
+      detail: 'Áp lực I/O lên Database tăng nhẹ — bật [D] Cache Warm để hạ nhiệt CPU ngay!',
+      kind: waveIndex % 2 === 0 ? 'cache_stampede' : 'slow_query',
+      spawnRateMult: 1.15,
+      extraCpuDrainPenalty: modeId === 'chaos_hell' ? 3.2 : 1.8,
+      recommendedAction: 'cache_warm',
+    };
+  }
+  return null;
+}
+
 export interface NodePacketDecision {
-  outcome: 'forward' | 'blocked' | 'cache_hit' | 'delivered' | 'dropped_no_route';
+  outcome: 'forward' | 'blocked' | 'cache_hit' | 'delivered' | 'dropped_no_route' | 'dropped_overload';
   addedLatencyMs: number;
   dbCpuDelta: number;
   integrityDelta: number;
-  writeDampingFactor?: number; // < 1 reduces downstream POST DB load (e.g. Kafka Queue / Worker)
+  writeDampingFactor?: number; // < 1 reduces downstream POST DB load (e.g. Kafka Queue / Worker / Flink)
+}
+
+function getSlotPlacementLatencyPenalty(node: InfraNode): number {
+  if (!node.slotId || node.type === 'ingress' || node.type === 'database') return 0;
+  const slot = RACK_SLOTS.find((s) => s.id === node.slotId);
+  if (!slot) return 0;
+  const entry = getNodeCatalogEntry(node.type);
+  if (entry.recommendedCols.includes(slot.col)) return 0;
+  return 4; // subtle latency overhead when placed outside recommended architectural tier
 }
 
 /**
- * Pure per-node packet inspection & routing outcome.
+ * Pure per-node packet inspection & routing outcome across all 20 placeable nodes + Lv1..Lv3 + Quick-Tune.
  * `roll` is a deterministic/random float in [0, 1).
  */
 export function evaluatePacketAtNode(
@@ -2037,6 +2546,24 @@ export function evaluatePacketAtNode(
 ): NodePacketDecision {
   const lv = node.level;
   const h = node.heat * heatPenaltyMult;
+  const tierPenalty = getSlotPlacementLatencyPenalty(node);
+
+  // Overload saturation drop check (queues/compute saturated >= 90% drop overflow traffic)
+  if (
+    !isDatabaseSinkType(node.type) &&
+    node.type !== 'ingress' &&
+    kind !== 'ddos' &&
+    kind !== 'sqli' &&
+    node.heat >= 0.9 &&
+    roll > 0.72 - (lv - 1) * 0.08
+  ) {
+    return {
+      outcome: 'dropped_overload',
+      addedLatencyMs: 36 + Math.round(h * 20),
+      dbCpuDelta: 0,
+      integrityDelta: 0,
+    };
+  }
 
   if (node.type === 'ingress') {
     return outgoingCount > 0
@@ -2045,12 +2572,13 @@ export function evaluatePacketAtNode(
   }
 
   if (node.type === 'waf') {
-    const latency = (lv === 2 ? 3 : 6) + Math.round(h * 6);
+    const modeShift = node.limiterMode === 'strict' ? 2 : node.limiterMode === 'lenient' ? -1 : 0;
+    const latency = Math.max(1, (lv === 3 ? 2 : lv === 2 ? 3 : 6) + modeShift + tierPenalty + Math.round(h * 5));
     if (kind === 'sqli') {
       return { outcome: 'blocked', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
     }
     if (kind === 'ddos') {
-      const ddosBlockChance = lv === 2 ? 0.45 : 0.25;
+      const ddosBlockChance = Math.min(0.75, (lv === 3 ? 0.58 : lv === 2 ? 0.45 : 0.25) + (node.limiterMode === 'strict' ? 0.1 : 0));
       if (roll < ddosBlockChance) {
         return { outcome: 'blocked', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
       }
@@ -2061,12 +2589,36 @@ export function evaluatePacketAtNode(
   }
 
   if (node.type === 'rate_limiter') {
-    const latency = (lv === 2 ? 2 : 5) + Math.round(h * 5);
+    const mode = node.limiterMode ?? 'standard';
+    const modeLat = mode === 'strict' ? 2 : mode === 'lenient' ? -1 : 0;
+    const latency = Math.max(1, (lv === 3 ? 1 : lv === 2 ? 2 : 5) + modeLat + tierPenalty + Math.round(h * 4));
     if (kind === 'ddos') {
-      const blockRate = lv === 2 ? 0.99 : 0.91;
-      if (roll < blockRate) {
+      const baseBlock = lv === 3 ? 0.995 : lv === 2 ? 0.985 : 0.91;
+      const modeDelta = mode === 'strict' ? 0.04 : mode === 'lenient' ? -0.07 : 0;
+      if (roll < Math.min(0.995, baseBlock + modeDelta)) {
         return { outcome: 'blocked', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
       }
+    }
+    // Strict mode trade-off: small false-positive rate during heavy burst heat on legitimate POST writes
+    if (mode === 'strict' && kind === 'write' && node.heat >= 0.72 && roll < 0.06) {
+      return { outcome: 'blocked', addedLatencyMs: latency + 4, dbCpuDelta: 0, integrityDelta: 0 };
+    }
+    return outgoingCount > 0
+      ? { outcome: 'forward', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 }
+      : { outcome: 'dropped_no_route', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
+  }
+
+  if (node.type === 'ddos_scrubber') {
+    const mode = node.limiterMode ?? 'standard';
+    const latency = Math.max(2, (lv === 3 ? 2 : lv === 2 ? 4 : 7) + tierPenalty + Math.round(h * 4));
+    if (kind === 'ddos') {
+      const rate = Math.min(0.998, (lv === 3 ? 0.998 : lv === 2 ? 0.99 : 0.95) + (mode === 'strict' ? 0.02 : mode === 'lenient' ? -0.04 : 0));
+      if (roll < rate) {
+        return { outcome: 'blocked', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
+      }
+    }
+    if (kind === 'sqli' && roll < (lv === 3 ? 0.55 : lv === 2 ? 0.4 : 0.25)) {
+      return { outcome: 'blocked', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
     }
     return outgoingCount > 0
       ? { outcome: 'forward', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 }
@@ -2074,21 +2626,22 @@ export function evaluatePacketAtNode(
   }
 
   if (node.type === 'cdn') {
-    const latency = (lv === 2 ? 3 : 6) + Math.round(h * 6);
+    const ttlBonus = node.cacheTtl === 'long' ? 0.04 : node.cacheTtl === 'short' ? -0.04 : 0;
+    const latency = (lv === 3 ? 2 : lv === 2 ? 3 : 6) + tierPenalty + Math.round(h * 5);
     if (kind === 'media') {
-      const hitChance = lv === 2 ? 0.96 : 0.87;
+      const hitChance = Math.min(0.99, (lv === 3 ? 0.985 : lv === 2 ? 0.96 : 0.87) + ttlBonus);
       if (roll < hitChance) {
         return { outcome: 'cache_hit', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
       }
     }
     if (kind === 'read') {
-      const staticReadHit = lv === 2 ? 0.42 : 0.27;
+      const staticReadHit = Math.min(0.65, (lv === 3 ? 0.52 : lv === 2 ? 0.42 : 0.27) + ttlBonus);
       if (roll < staticReadHit) {
         return { outcome: 'cache_hit', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
       }
     }
     if (kind === 'ddos') {
-      const edgeDrop = lv === 2 ? 0.42 : 0.26;
+      const edgeDrop = lv === 3 ? 0.54 : lv === 2 ? 0.42 : 0.26;
       if (roll < edgeDrop) {
         return { outcome: 'blocked', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
       }
@@ -2098,10 +2651,42 @@ export function evaluatePacketAtNode(
       : { outcome: 'dropped_no_route', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
   }
 
-  if (node.type === 'redis') {
-    const latency = (lv === 2 ? 5 : 9) + Math.round(h * (lv === 2 ? 6 : 12));
+  if (node.type === 'api_gateway') {
+    const latency = (lv === 3 ? 2 : lv === 2 ? 3 : 6) + tierPenalty + Math.round(h * 5);
+    if (kind === 'sqli' && roll < (lv === 3 ? 0.72 : lv === 2 ? 0.56 : 0.38)) {
+      return { outcome: 'blocked', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
+    }
+    if (kind === 'ddos' && roll < (lv === 3 ? 0.45 : lv === 2 ? 0.34 : 0.2)) {
+      return { outcome: 'blocked', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
+    }
+    return outgoingCount > 0
+      ? { outcome: 'forward', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 }
+      : { outcome: 'dropped_no_route', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
+  }
+
+  if (node.type === 'varnish') {
+    const ttlBonus = node.cacheTtl === 'long' ? 0.06 : node.cacheTtl === 'short' ? -0.05 : 0;
+    const latency = (lv === 3 ? 2 : lv === 2 ? 4 : 7) + tierPenalty + Math.round(h * 6);
     if (kind === 'read') {
-      const hitChance = lv === 2 ? 0.9 : 0.75;
+      const hitChance = Math.min(0.93, (lv === 3 ? 0.89 : lv === 2 ? 0.83 : 0.72) + ttlBonus);
+      if (roll < hitChance) {
+        return { outcome: 'cache_hit', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
+      }
+    }
+    if (kind === 'media' && roll < 0.42) {
+      return { outcome: 'cache_hit', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
+    }
+    return outgoingCount > 0
+      ? { outcome: 'forward', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 }
+      : { outcome: 'dropped_no_route', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
+  }
+
+  if (node.type === 'redis') {
+    const ttlBonus = node.cacheTtl === 'long' ? 0.05 : node.cacheTtl === 'short' ? -0.05 : 0;
+    const staleLat = node.cacheTtl === 'long' ? 1 : 0;
+    const latency = (lv === 3 ? 3 : lv === 2 ? 5 : 9) + staleLat + tierPenalty + Math.round(h * (lv === 3 ? 4 : lv === 2 ? 6 : 12));
+    if (kind === 'read') {
+      const hitChance = Math.min(0.96, (lv === 3 ? 0.94 : lv === 2 ? 0.9 : 0.75) + ttlBonus);
       if (roll < hitChance) {
         return { outcome: 'cache_hit', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
       }
@@ -2112,23 +2697,65 @@ export function evaluatePacketAtNode(
   }
 
   if (node.type === 'load_balancer') {
-    const latency = lv === 2 ? 2 : 4;
+    const latency = (lv === 3 ? 1 : lv === 2 ? 2 : 4) + tierPenalty;
     return outgoingCount > 0
       ? { outcome: 'forward', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 }
       : { outcome: 'dropped_no_route', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
   }
 
   if (node.type === 'app') {
-    const heatPenalty = Math.round(h * (lv === 2 ? 24 : 44));
-    const latency = (lv === 2 ? 10 : 15) + heatPenalty;
+    const heatPenalty = Math.round(h * (lv === 3 ? 14 : lv === 2 ? 24 : 44));
+    const latency = (lv === 3 ? 7 : lv === 2 ? 10 : 15) + tierPenalty + heatPenalty;
+    return outgoingCount > 0
+      ? { outcome: 'forward', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 }
+      : { outcome: 'dropped_no_route', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
+  }
+
+  if (node.type === 'microservice_auth') {
+    const latency = (lv === 3 ? 5 : lv === 2 ? 8 : 12) + tierPenalty + Math.round(h * (lv === 3 ? 10 : lv === 2 ? 16 : 24));
+    if (kind === 'sqli' && roll < (lv === 3 ? 0.85 : lv === 2 ? 0.75 : 0.62)) {
+      return { outcome: 'blocked', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
+    }
+    if (kind === 'read' && roll < (lv === 3 ? 0.56 : lv === 2 ? 0.45 : 0.32)) {
+      return { outcome: 'cache_hit', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
+    }
+    return outgoingCount > 0
+      ? { outcome: 'forward', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 }
+      : { outcome: 'dropped_no_route', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
+  }
+
+  if (node.type === 'search_engine') {
+    const latency = (lv === 3 ? 4 : lv === 2 ? 7 : 11) + tierPenalty + Math.round(h * (lv === 3 ? 7 : lv === 2 ? 10 : 16));
+    if (kind === 'read') {
+      const hitChance = lv === 3 ? 0.91 : lv === 2 ? 0.86 : 0.78;
+      if (roll < hitChance) {
+        return { outcome: 'cache_hit', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
+      }
+    }
     return outgoingCount > 0
       ? { outcome: 'forward', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 }
       : { outcome: 'dropped_no_route', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
   }
 
   if (node.type === 'queue') {
-    const latency = (lv === 2 ? 5 : 9) + Math.round(h * (lv === 2 ? 8 : 16));
-    const damping = lv === 2 ? 0.34 : 0.48;
+    const capLat = node.queueCapacityMode === 'large' ? 3 : -1;
+    const latency = Math.max(2, (lv === 3 ? 4 : lv === 2 ? 5 : 9) + capLat + tierPenalty + Math.round(h * (lv === 3 ? 5 : lv === 2 ? 8 : 16)));
+    const damping = lv === 3 ? 0.26 : lv === 2 ? 0.34 : 0.48;
+    return outgoingCount > 0
+      ? {
+          outcome: 'forward',
+          addedLatencyMs: latency,
+          dbCpuDelta: 0,
+          integrityDelta: 0,
+          writeDampingFactor: damping,
+        }
+      : { outcome: 'dropped_no_route', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
+  }
+
+  if (node.type === 'stream_processor') {
+    const capLat = node.queueCapacityMode === 'large' ? 3 : 0;
+    const latency = (lv === 3 ? 5 : lv === 2 ? 7 : 11) + capLat + tierPenalty + Math.round(h * (lv === 3 ? 6 : lv === 2 ? 9 : 14));
+    const damping = lv === 3 ? 0.24 : lv === 2 ? 0.32 : 0.42;
     return outgoingCount > 0
       ? {
           outcome: 'forward',
@@ -2141,8 +2768,22 @@ export function evaluatePacketAtNode(
   }
 
   if (node.type === 'worker') {
-    const latency = (lv === 2 ? 6 : 11) + Math.round(h * (lv === 2 ? 9 : 18));
-    const damping = lv === 2 ? 0.64 : 0.78;
+    const latency = (lv === 3 ? 4 : lv === 2 ? 6 : 11) + tierPenalty + Math.round(h * (lv === 3 ? 6 : lv === 2 ? 9 : 18));
+    const damping = lv === 3 ? 0.54 : lv === 2 ? 0.64 : 0.78;
+    return outgoingCount > 0
+      ? {
+          outcome: 'forward',
+          addedLatencyMs: latency,
+          dbCpuDelta: 0,
+          integrityDelta: 0,
+          writeDampingFactor: damping,
+        }
+      : { outcome: 'dropped_no_route', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
+  }
+
+  if (node.type === 'batch_etl') {
+    const latency = (lv === 3 ? 5 : lv === 2 ? 8 : 12) + tierPenalty + Math.round(h * 10);
+    const damping = lv === 3 ? 0.46 : lv === 2 ? 0.55 : 0.68;
     return outgoingCount > 0
       ? {
           outcome: 'forward',
@@ -2155,9 +2796,10 @@ export function evaluatePacketAtNode(
   }
 
   if (node.type === 'read_replica') {
-    const latency = (lv === 2 ? 7 : 12) + Math.round(h * (lv === 2 ? 10 : 18));
+    const poolBonus = node.dbPoolMode === 'high_pool' ? 0.04 : 0;
+    const latency = (lv === 3 ? 5 : lv === 2 ? 7 : 12) + tierPenalty + Math.round(h * (lv === 3 ? 6 : lv === 2 ? 10 : 18));
     if (kind === 'read') {
-      const offloadChance = lv === 2 ? 0.92 : 0.77;
+      const offloadChance = Math.min(0.97, (lv === 3 ? 0.95 : lv === 2 ? 0.92 : 0.77) + poolBonus);
       if (roll < offloadChance) {
         return { outcome: 'cache_hit', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
       }
@@ -2168,9 +2810,9 @@ export function evaluatePacketAtNode(
   }
 
   if (node.type === 'object_storage') {
-    const latency = (lv === 2 ? 6 : 10) + Math.round(h * (lv === 2 ? 7 : 14));
+    const latency = (lv === 3 ? 4 : lv === 2 ? 6 : 10) + tierPenalty + Math.round(h * (lv === 3 ? 5 : lv === 2 ? 7 : 14));
     if (kind === 'media') {
-      const offloadChance = lv === 2 ? 0.97 : 0.9;
+      const offloadChance = lv === 3 ? 0.99 : lv === 2 ? 0.97 : 0.9;
       if (roll < offloadChance) {
         return { outcome: 'cache_hit', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
       }
@@ -2180,15 +2822,40 @@ export function evaluatePacketAtNode(
       : { outcome: 'dropped_no_route', addedLatencyMs: latency, dbCpuDelta: 0, integrityDelta: 0 };
   }
 
-  // Database terminal node
+  // Database terminal nodes: 'database' | 'primary_db' | 'nosql_db' | 'timeseries_db'
   const meta = PACKET_META[kind];
-  const effectiveCpu =
+  const dbLocalCpu = node.localDbCpu ?? 10;
+  if (dbLocalCpu >= 94 && kind !== 'ddos' && kind !== 'sqli' && roll > 0.75) {
+    return {
+      outcome: 'dropped_overload',
+      addedLatencyMs: 42 + Math.round(h * 18),
+      dbCpuDelta: 0,
+      integrityDelta: 0,
+    };
+  }
+
+  let dbAffinityMult = 1;
+  if (node.type === 'nosql_db') {
+    dbAffinityMult = kind === 'write' ? 0.62 : kind === 'read' ? 0.85 : 0.95;
+  } else if (node.type === 'timeseries_db') {
+    dbAffinityMult = kind === 'write' || kind === 'media' ? 0.58 : 0.9;
+  } else if (node.type === 'primary_db') {
+    dbAffinityMult = kind === 'read' || kind === 'write' ? 0.88 : 1;
+  }
+
+  const levelCoolingFactor = lv === 3 ? 0.76 : lv === 2 ? 0.88 : 1;
+  const poolFactor = node.dbPoolMode === 'high_pool' ? 0.88 : 1;
+  const baseCpu =
     kind === 'write'
-      ? Math.max(2.4, meta.dbCpuLoad * packetWriteDamping)
+      ? Math.max(1.8, meta.dbCpuLoad * packetWriteDamping)
       : meta.dbCpuLoad;
+  const effectiveCpu = Number((baseCpu * dbAffinityMult * levelCoolingFactor * poolFactor).toFixed(2));
+  const baseLat = kind === 'write' ? 24 : kind === 'media' ? 22 : 15;
+  const lvLatDiscount = lv === 3 ? 6 : lv === 2 ? 3 : 0;
+
   return {
     outcome: 'delivered',
-    addedLatencyMs: (kind === 'write' ? 24 : kind === 'media' ? 22 : 15) + Math.round(h * 12),
+    addedLatencyMs: Math.max(5, baseLat - lvLatDiscount + tierPenalty + Math.round(h * 12)),
     dbCpuDelta: effectiveCpu,
     integrityDelta: -meta.integrityPenalty,
   };
@@ -2211,11 +2878,13 @@ export function hasPathToDatabase(
   nodes: readonly InfraNode[],
   edges: readonly InfraEdge[]
 ): boolean {
+  const dbIds = new Set(getDatabaseSinkNodes(nodes).map((n) => n.id));
+  if (dbIds.size === 0) return false;
   const queue = ['ingress'];
   const visited = new Set<string>();
   while (queue.length > 0) {
     const cur = queue.shift()!;
-    if (cur === 'database') return true;
+    if (dbIds.has(cur)) return true;
     if (visited.has(cur)) continue;
     visited.add(cur);
     for (const e of edges) {
@@ -2240,6 +2909,168 @@ export interface ArchitectureAnalysis {
  * Computes which nodes are actually wired on any valid path from ingress -> database,
  * detects which architectural approaches the player achieved, and generates live feedback.
  */
+export interface ArchitectureCombo {
+  id: 'cdn_s3' | 'cache_compute' | 'kafka_worker' | 'multi_db_cluster';
+  name: string;
+  bonusText: string;
+  active: boolean;
+}
+
+export function detectArchitectureCombos(
+  nodes: readonly InfraNode[],
+  edges: readonly InfraEdge[]
+): ArchitectureCombo[] {
+  const forwardReachable = new Set<string>();
+  const q1 = ['ingress'];
+  while (q1.length > 0) {
+    const cur = q1.shift()!;
+    if (forwardReachable.has(cur)) continue;
+    forwardReachable.add(cur);
+    for (const e of edges) {
+      if (e.fromId === cur) q1.push(e.toId);
+    }
+  }
+  const backwardReachable = new Set<string>();
+  const q2 = getDatabaseSinkNodes(nodes).map((n) => n.id);
+  while (q2.length > 0) {
+    const cur = q2.shift()!;
+    if (backwardReachable.has(cur)) continue;
+    backwardReachable.add(cur);
+    for (const e of edges) {
+      if (e.toId === cur) q2.push(e.fromId);
+    }
+  }
+
+  const activeNodes = nodes.filter(
+    (n) => forwardReachable.has(n.id) && backwardReachable.has(n.id)
+  );
+  const activeTypes = new Set(activeNodes.map((n) => n.type));
+  const activeDbSinks = activeNodes.filter((n) => isDatabaseSinkType(n.type));
+
+  const hasCdnS3 = activeTypes.has('cdn') && activeTypes.has('object_storage');
+  const hasCacheCompute =
+    (activeTypes.has('redis') || activeTypes.has('varnish')) &&
+    (activeTypes.has('app') || activeTypes.has('microservice_auth') || activeTypes.has('search_engine'));
+  const hasKafkaWorker =
+    (activeTypes.has('queue') || activeTypes.has('stream_processor')) &&
+    (activeTypes.has('worker') || activeTypes.has('batch_etl'));
+  const hasMultiDb = activeDbSinks.length >= 2;
+
+  return [
+    {
+      id: 'cdn_s3',
+      name: 'CDN + S3/MinIO',
+      bonusText: '-20% tải Media & +6% Hit biên',
+      active: hasCdnS3,
+    },
+    {
+      id: 'cache_compute',
+      name: 'Redis/Varnish → Compute',
+      bonusText: '-4ms trễ xử lý API đọc',
+      active: hasCacheCompute,
+    },
+    {
+      id: 'kafka_worker',
+      name: 'Kafka/Flink → Worker',
+      bonusText: '+20% tốc độ xả hàng đợi Async',
+      active: hasKafkaWorker,
+    },
+    {
+      id: 'multi_db_cluster',
+      name: 'Đa Database Shard',
+      bonusText: '+18% tản nhiệt DB & chống sập đơn điểm',
+      active: hasMultiDb,
+    },
+  ];
+}
+
+export interface PreSimCheckItem {
+  ok: boolean;
+  label: string;
+}
+
+export function getPreSimChecklist(
+  level: TrafficLevelDef,
+  nodes: readonly InfraNode[],
+  edges: readonly InfraEdge[]
+): PreSimCheckItem[] {
+  const analysis = analyzeArchitectureDesign(level, nodes, edges);
+  const activeDbCount = getDatabaseSinkNodes(nodes).filter((db) =>
+    edges.some((e) => e.toId === db.id)
+  ).length;
+
+  let avgSqli = 0;
+  let avgDdos = 0;
+  let avgWrite = 0;
+  let avgRead = 0;
+  for (const w of level.waves) {
+    avgSqli += w.weights.sqli;
+    avgDdos += w.weights.ddos;
+    avgWrite += w.weights.write;
+    avgRead += w.weights.read;
+  }
+  const nW = Math.max(1, level.waves.length);
+  avgSqli /= nW;
+  avgDdos /= nW;
+  avgWrite /= nW;
+  avgRead /= nW;
+
+  const activeSet = new Set(analysis.connectedNodeTypes);
+  const items: PreSimCheckItem[] = [
+    {
+      ok: analysis.hasValidPath,
+      label: analysis.hasValidPath
+        ? 'Có luồng nối thông từ Users tới cụm Database'
+        : 'Chưa nối dây thông từ Users tới Database',
+    },
+    {
+      ok: activeDbCount >= 2,
+      label:
+        activeDbCount >= 2
+          ? `Đa Database Shard hoạt động (${activeDbCount} DB đang nối dây)`
+          : 'Đang dùng 1 DB Cluster đơn (có thể thêm Shard SQL / NoSQL / Timescale)',
+    },
+  ];
+
+  if (avgDdos >= 0.08 || avgSqli >= 0.05) {
+    const hasEdgeShield =
+      activeSet.has('waf') || activeSet.has('rate_limiter') || activeSet.has('ddos_scrubber');
+    items.push({
+      ok: hasEdgeShield,
+      label: hasEdgeShield
+        ? 'Đã có lớp lọc DDoS/WAF bảo vệ trước tầng compute'
+        : 'Chưa có lớp chống DDoS/Rate Limit hoặc WAF',
+    });
+  }
+
+  if (avgRead >= 0.35) {
+    const hasCache =
+      activeSet.has('redis') ||
+      activeSet.has('varnish') ||
+      activeSet.has('read_replica') ||
+      activeSet.has('search_engine');
+    items.push({
+      ok: hasCache,
+      label: hasCache
+        ? 'Đã có lớp Cache / Replica giảm tải truy vấn GET'
+        : 'Thiếu Redis/Varnish hoặc Replica cho lượng GET lớn',
+    });
+  }
+
+  if (avgWrite >= 0.3) {
+    const hasAsync =
+      activeSet.has('queue') || activeSet.has('stream_processor') || activeDbCount >= 2;
+    items.push({
+      ok: hasAsync,
+      label: hasAsync
+        ? 'Đã có Queue/Stream hoặc Đa DB gánh xung POST'
+        : 'POST ghi thẳng vào DB đơn dễ gây lock tranh chấp',
+    });
+  }
+
+  return items;
+}
+
 export function analyzeArchitectureDesign(
   level: TrafficLevelDef,
   nodes: readonly InfraNode[],
@@ -2258,7 +3089,7 @@ export function analyzeArchitectureDesign(
   }
 
   const backwardReachable = new Set<string>();
-  const q2 = ['database'];
+  const q2 = getDatabaseSinkNodes(nodes).map((n) => n.id);
   while (q2.length > 0) {
     const cur = q2.shift()!;
     if (backwardReachable.has(cur)) continue;
@@ -2269,14 +3100,13 @@ export function analyzeArchitectureDesign(
   }
 
   const activeTypes = new Set<PlaceableNodeType>();
+  let activeDbCount = 0;
   for (const n of nodes) {
-    if (
-      n.type !== 'ingress' &&
-      n.type !== 'database' &&
-      forwardReachable.has(n.id) &&
-      backwardReachable.has(n.id)
-    ) {
-      activeTypes.add(n.type);
+    if (forwardReachable.has(n.id) && backwardReachable.has(n.id)) {
+      if (isDatabaseSinkType(n.type)) activeDbCount += 1;
+      if (n.type !== 'ingress' && n.type !== 'database') {
+        activeTypes.add(n.type);
+      }
     }
   }
 
@@ -2307,40 +3137,63 @@ export function analyzeArchitectureDesign(
 
   const diagnostics: string[] = [];
   if (!hasValidPath) {
-    diagnostics.push('Chưa có đường dây hoàn chỉnh nối từ Users → Database.');
+    diagnostics.push('Chưa có đường dây hoàn chỉnh nối từ Users → Cụm Database.');
   }
   if (avgSqli >= 0.08 && !activeTypes.has('waf')) {
-    diagnostics.push('Cảnh báo SQLi: Màn này có tấn công SQL Injection — cần đặt WAF [1] trên đường dây!');
+    diagnostics.push('Chưa có lớp lọc SQLi (WAF [1]) trước tầng compute — payload độc có thể xuyên thẳng xuống DB.');
   }
-  if (avgDdos >= 0.14 && !activeTypes.has('rate_limiter') && !activeTypes.has('cdn')) {
-    diagnostics.push('Cảnh báo DDoS: Bão Bot lớn — nên bổ sung Rate Limiter [2] hoặc CDN [3] ở cửa ngõ.');
+  if (avgDdos >= 0.14 && !activeTypes.has('rate_limiter') && !activeTypes.has('ddos_scrubber') && !activeTypes.has('cdn')) {
+    diagnostics.push('Chưa có lớp lọc DDoS/Rate Limit ([2] Limiter hoặc [Q] Scrubber) trước tầng compute.');
   }
   if (avgMedia >= 0.25 && !activeTypes.has('cdn') && !activeTypes.has('object_storage')) {
-    diagnostics.push('Tối ưu Media: Có nhiều file ảnh/video — nên tách qua CDN [3] hoặc Object Storage S3 [0].');
+    diagnostics.push('Tối ưu Media: Tách file ảnh/video qua CDN [3] hoặc S3/MinIO [0] thay vì đẩy vào DB chính.');
   }
-  if (avgWrite >= 0.35 && !activeTypes.has('queue')) {
-    diagnostics.push('Tối ưu Ghi: Nhiều request POST nặng — đặt Kafka/MQ [7] + Worker để giảm tải DB.');
+  if (avgWrite >= 0.35 && !activeTypes.has('queue') && !activeTypes.has('stream_processor') && activeDbCount < 2) {
+    diagnostics.push('POST ghi thẳng vào DB đơn dễ gây lock tranh chấp & cạn connection pool — nên thêm Kafka/MQ [7] hoặc tách thêm DB Shard.');
   }
-  if (avgRead >= 0.45 && !activeTypes.has('redis') && !activeTypes.has('read_replica') && !activeTypes.has('cdn')) {
-    diagnostics.push('Tối ưu Đọc: Nhiều request GET — thử thêm Redis [5] hoặc Read Replica [9].');
+  if (avgRead >= 0.45 && !activeTypes.has('redis') && !activeTypes.has('varnish') && !activeTypes.has('read_replica') && !activeTypes.has('cdn')) {
+    diagnostics.push('Thiếu lớp Cache/Replica cho luồng GET dày đặc — hãy đặt Redis [5], Varnish [V] hoặc Replica [9].');
+  } else if (
+    (activeTypes.has('redis') || activeTypes.has('varnish')) &&
+    !activeTypes.has('read_replica') &&
+    activeDbCount < 2 &&
+    avgRead >= 0.48
+  ) {
+    diagnostics.push('Gợi ý resilience: Thiếu fallback Replica [9] hoặc DB Shard phụ khi Redis miss diện rộng (Cache Stampede).');
   }
+
+  const specializedEdgeCount = edges.filter(
+    (e) =>
+      e.routeRule &&
+      e.routeRule !== 'all' &&
+      forwardReachable.has(e.fromId) &&
+      backwardReachable.has(e.toId)
+  ).length;
+
+  const combos = detectArchitectureCombos(nodes, edges).filter((c) => c.active);
 
   let detectedPatternLabel = 'Kiến trúc Đơn Tuyến Cơ Bản';
   if (!hasValidPath) {
     detectedPatternLabel = 'Mạng Chưa Kết Nối';
   } else if (matchedApproaches.length > 0) {
     detectedPatternLabel = matchedApproaches[0].name;
-  } else if (activeTypes.has('waf') && activeTypes.has('rate_limiter') && activeTypes.has('queue')) {
+  } else if (activeDbCount >= 2 && specializedEdgeCount >= 2) {
+    detectedPatternLabel = `CQRS + Đa Database Cluster (${activeDbCount} DB)`;
+  } else if (activeDbCount >= 2) {
+    detectedPatternLabel = `Cụm Đa Database Sharded (${activeDbCount} DB)`;
+  } else if (specializedEdgeCount >= 2) {
+    detectedPatternLabel = 'CQRS Định Tuyến Thông Minh Đa Luồng';
+  } else if (activeTypes.has('waf') && (activeTypes.has('rate_limiter') || activeTypes.has('ddos_scrubber')) && (activeTypes.has('queue') || activeTypes.has('stream_processor'))) {
     detectedPatternLabel = 'Phòng Thủ Đa Tầng + Event Queue';
-  } else if (activeTypes.has('redis') && activeTypes.has('queue')) {
+  } else if ((activeTypes.has('redis') || activeTypes.has('varnish')) && (activeTypes.has('queue') || activeTypes.has('stream_processor'))) {
     detectedPatternLabel = 'CQRS Cache + Async Queue';
   } else if (activeTypes.has('cdn') && activeTypes.has('object_storage')) {
     detectedPatternLabel = 'Edge CDN + Object Storage';
   } else if (activeTypes.has('load_balancer') && connectedNodeTypes.length >= 2) {
     detectedPatternLabel = 'Cân Bằng Tải Phân Tán';
-  } else if (activeTypes.has('redis')) {
+  } else if (activeTypes.has('redis') || activeTypes.has('varnish')) {
     detectedPatternLabel = 'Cache-Aside Pattern';
-  } else if (activeTypes.has('queue')) {
+  } else if (activeTypes.has('queue') || activeTypes.has('stream_processor')) {
     detectedPatternLabel = 'Queue Load Leveling';
   }
 
@@ -2349,6 +3202,8 @@ export function analyzeArchitectureDesign(
   else score += Math.min(25, connectedNodeTypes.length * 8);
   if (diagnostics.length === 0 && hasValidPath) score += 25;
   else score += Math.max(0, 15 - diagnostics.length * 5);
+  if (specializedEdgeCount > 0 && hasValidPath) score += Math.min(8, specializedEdgeCount * 4);
+  if (combos.length > 0 && hasValidPath) score += Math.min(8, combos.length * 3);
 
   return {
     hasValidPath,
@@ -2366,6 +3221,7 @@ export interface CritiqueItem {
   title: string;
   reason: string;
   suggestion: string;
+  highlightNodeIds?: string[];
 }
 
 export interface SolutionEvaluationInput {
@@ -2414,7 +3270,7 @@ export function evaluateSolutionOptimization(
     }
   }
   const backwardReachable = new Set<string>();
-  const q2 = ['database'];
+  const q2 = getDatabaseSinkNodes(nodes).map((n) => n.id);
   while (q2.length > 0) {
     const cur = q2.shift()!;
     if (backwardReachable.has(cur)) continue;
@@ -2431,6 +3287,9 @@ export function evaluateSolutionOptimization(
     (n) => !n.fixed && (!forwardReachable.has(n.id) || !backwardReachable.has(n.id))
   );
   const activeTypes = new Set(activeNodes.map((n) => n.type));
+  const activeDbCount = nodes.filter(
+    (n) => isDatabaseSinkType(n.type) && forwardReachable.has(n.id)
+  ).length;
 
   // Aggregate traffic mix
   let avgSqli = 0;
@@ -2465,14 +3324,15 @@ export function evaluateSolutionOptimization(
     });
   }
 
-  // 1. Dead / disconnected nodes wasting budget
+  // 1. Dead / disconnected nodes creating architecture clutter
   if (deadNodes.length > 0) {
     whyNotOptimal.push({
       category: 'cost',
       severity: 'warning',
-      title: `Lãng phí ${deadNodes.length} node chưa nối dây vào luồng`,
-      reason: `Bạn đã chi ngân sách đặt ${deadNodes.length} thành phần nhưng không có gói tin nào đi qua chúng.`,
-      suggestion: 'Nối dây qua các node này hoặc dùng nút "Tháo" để thu hồi 100% chi phí khi thiết kế.',
+      title: `Dư thừa ${deadNodes.length} node chưa nối dây vào luồng`,
+      reason: `Sơ đồ còn ${deadNodes.length} thành phần đặt rời rạc nhưng không có lưu lượng nào đi qua chúng.`,
+      suggestion: 'Nối dây qua các node này hoặc tháo bỏ để giữ kiến trúc tinh gọn.',
+      highlightNodeIds: deadNodes.map((n) => n.id),
     });
   }
 
@@ -2485,8 +3345,9 @@ export function evaluateSolutionOptimization(
           category: 'cost',
           severity: 'warning',
           title: 'Load Balancer chỉ nối 1 nhánh (chưa tận dụng chia tải)',
-          reason: 'Load Balancer Round-Robin chỉ phát huy tác dụng khi chia đều lưu lượng sang từ 2 nhánh song song trở lên.',
-          suggestion: 'Dùng [W] Nối Dây từ Load Balancer ra thêm 1 App Server / Cache / Replica thứ hai.',
+          reason: 'Load Balancer Round-Robin chỉ phát huy tác dụng khi chia đều lưu lượng sang từ 2 nhánh server hoặc 2 DB Shard trở lên.',
+          suggestion: 'Dùng [W] Nối Dây từ Load Balancer ra thêm 1 App API / Replica / Shard DB thứ hai.',
+          highlightNodeIds: [n.id],
         });
         break;
       }
@@ -2499,26 +3360,26 @@ export function evaluateSolutionOptimization(
       category: 'security',
       severity: 'critical',
       title: 'Lỗ hổng SQL Injection nghiêm trọng',
-      reason: 'Hoàn cảnh hoặc chế độ chơi này có mã độc SQLi xâm nhập. Thiếu WAF khiến dữ liệu bị tổn hại và DB tốn CPU xử lý truy vấn độc.',
+      reason: 'Hoàn cảnh hoặc chế độ chơi này có mã độc SQLi xâm nhập. Thiếu WAF khiến dữ liệu bị tổn hại và cụm DB tốn CPU xử lý truy vấn độc.',
       suggestion: 'Đặt WAF Firewall [1] ngay tầng Edge sau Users để chặn 100% gói SQLi.',
     });
   } else if (breachedAttacks > (strictSecurity ? 0 : 3)) {
     whyNotOptimal.push({
       category: 'security',
       severity: strictSecurity ? 'critical' : 'warning',
-      title: `Còn ${breachedAttacks} gói tấn công lọt tới Database`,
-      reason: 'Bot DDoS hoặc SQLi đã xuyên qua tầng biên do thiếu lá chắn đầu vào hoặc chưa nâng cấp Rate Limiter lên Lv2.',
-      suggestion: 'Đặt Rate Limiter [2] + WAF [1] ngay sau Users và nâng cấp lên Lv2 (chặn 99% DDoS).',
+      title: `Còn ${breachedAttacks} gói tấn công lọt tới cụm Database`,
+      reason: 'Bot DDoS hoặc SQLi đã xuyên qua tầng biên do thiếu lá chắn đầu vào hoặc chưa nâng cấp Rate Limiter / Scrubber lên Lv.2–Lv.3.',
+      suggestion: 'Đặt Rate Limiter [2] / Scrubber [Q] + WAF [1] ngay sau Users và nâng cấp lên Lv.2–Lv.3.',
     });
   }
 
-  if (avgDdos >= 0.12 && !activeTypes.has('rate_limiter') && !activeTypes.has('cdn')) {
+  if (avgDdos >= 0.12 && !activeTypes.has('rate_limiter') && !activeTypes.has('ddos_scrubber') && !activeTypes.has('cdn')) {
     whyNotOptimal.push({
       category: 'security',
       severity: 'critical',
       title: 'Thiếu lớp cắt bão Bot DDoS',
       reason: 'Bão request rác đang dội thẳng vào App/Database làm tăng đột biến CPU và độ trễ của người dùng thật.',
-      suggestion: 'Bổ sung Rate Limiter [2] (chặn 91–99% DDoS) hoặc Edge CDN [3].',
+      suggestion: 'Bổ sung Rate Limiter [2], DDoS Scrubber [Q] hoặc Edge CDN [3].',
     });
   }
 
@@ -2533,19 +3394,20 @@ export function evaluateSolutionOptimization(
     });
   }
 
-  if (avgWrite >= 0.34 && !activeTypes.has('queue')) {
+  if (avgWrite >= 0.34 && !activeTypes.has('queue') && !activeTypes.has('stream_processor') && activeDbCount < 2) {
     whyNotOptimal.push({
       category: 'architecture',
       severity: 'warning',
-      title: 'Xử lý ghi nặng đồng bộ gây áp lực đột biến lên DB',
-      reason: 'Tỷ lệ POST ghi dữ liệu cao đang đập thẳng vào DB thay vì được làm phẳng theo hàng đợi.',
-      suggestion: 'Chèn Message Queue (Kafka/MQ) [7] + Worker [8] để hấp thụ xung ghi giảm 55–70% tải DB.',
+      title: 'POST ghi thẳng vào DB đơn dễ gây lock tranh chấp',
+      reason: 'Tỷ lệ POST ghi dữ liệu cao đang đập thẳng vào một Database đơn thay vì được làm phẳng theo hàng đợi hoặc tách DB Shard.',
+      suggestion: 'Chèn Message Queue [7] + Worker [8] hoặc bổ sung Shard SQL [M] / NoSQL DB [N] để chia tải ghi.',
     });
   }
 
   if (
     avgRead >= 0.38 &&
     !activeTypes.has('redis') &&
+    !activeTypes.has('varnish') &&
     !activeTypes.has('read_replica') &&
     !activeTypes.has('cdn')
   ) {
@@ -2554,18 +3416,18 @@ export function evaluateSolutionOptimization(
       severity: 'warning',
       title: 'Chưa có cơ chế Cache hoặc Read Replica cho truy vấn Đọc',
       reason: 'Mọi request GET lặp lại đều phải truy vấn trực tiếp Database gốc gây lãng phí tài nguyên.',
-      suggestion: 'Đặt Redis Cache [5] hoặc Read Replica [9] để gánh 75–92% lượng đọc.',
+      suggestion: 'Đặt Redis [5], Varnish [V] hoặc Read Replica [9] để gánh 75–95% lượng đọc.',
     });
   }
 
-  // 5. Runtime performance & DB CPU checks (more forgiving thresholds for learning)
+  // 5. Runtime performance & DB CPU checks
   if (avgLatencyMs > level.targetSlaMs) {
     whyNotOptimal.push({
       category: 'performance',
       severity: avgLatencyMs > level.targetSlaMs * 1.3 ? 'critical' : 'warning',
       title: `Độ trễ ${avgLatencyMs}ms vượt ngưỡng SLA (${level.targetSlaMs}ms)`,
       reason: 'Đường đi qua quá nhiều bước tuần tự chậm hoặc node đơn tuyến bị nóng (heat cao) không kịp chia tải.',
-      suggestion: 'Dùng Redis/CDN để trả kết quả sớm ở biên, thêm Load Balancer chia nhánh hoặc nâng cấp node lên Lv2.',
+      suggestion: 'Dùng Redis/CDN để trả kết quả sớm ở biên, thêm Load Balancer chia nhánh hoặc nâng cấp node lên Lv.2–Lv.3.',
     });
   }
 
@@ -2573,13 +3435,30 @@ export function evaluateSolutionOptimization(
     whyNotOptimal.push({
       category: 'reliability',
       severity: peakDbCpu >= 90 ? 'critical' : 'warning',
-      title: `Đỉnh CPU Database quá cao (${Math.round(peakDbCpu)}%)`,
+      title: `Đỉnh CPU cụm Database quá cao (${Math.round(peakDbCpu)}%)`,
       reason: 'Hệ thống tuy chưa sập nhưng sát ngưỡng nghẽn 100%, rất dễ trả lỗi 502 Bad Gateway khi xung tải kéo dài.',
-      suggestion: 'Giảm tải DB bằng bộ ba: Redis/Replica (cho GET) + Kafka (cho POST) + CDN/S3 (cho MEDIA).',
+      suggestion: 'Giảm tải DB bằng Redis/Replica (GET) + Kafka (POST) + CDN/S3 (MEDIA) hoặc tách thêm Database Shard.',
     });
   }
 
   // Strengths
+  const specializedEdgesCount = edges.filter(
+    (e) =>
+      e.routeRule &&
+      e.routeRule !== 'all' &&
+      forwardReachable.has(e.fromId) &&
+      backwardReachable.has(e.toId)
+  ).length;
+  if (specializedEdgesCount > 0 && analysis.hasValidPath) {
+    strengths.push(`Định tuyến thông minh (CQRS): Phân tách luồng gói tin qua ${specializedEdgesCount} tuyến chuyên biệt.`);
+  }
+  if (activeDbCount >= 2 && analysis.hasValidPath) {
+    strengths.push(`Kiến trúc Đa Database (${activeDbCount} DB): Phân tán tải đọc/ghi và giảm thiểu rủi ro SPOF.`);
+  }
+  const activeCombos = detectArchitectureCombos(nodes, edges).filter((c) => c.active);
+  if (activeCombos.length > 0 && analysis.hasValidPath) {
+    strengths.push(`Kích hoạt Combo Kiến Trúc: ${activeCombos.map((c) => c.name).join(' · ')}.`);
+  }
   if (analysis.matchedApproaches.length > 0) {
     strengths.push(`Áp dụng chuẩn mô hình: ${analysis.matchedApproaches.map((a) => a.name).join(' · ')}`);
   }
@@ -2587,13 +3466,13 @@ export function evaluateSolutionOptimization(
     strengths.push(`Đạt SLA độ trễ (${avgLatencyMs}ms ≤ ${level.targetSlaMs}ms).`);
   }
   if (peakDbCpu < 78 && analysis.hasValidPath) {
-    strengths.push(`Database luôn mát và an toàn (Đỉnh CPU chỉ ${Math.round(peakDbCpu)}%).`);
+    strengths.push(`Cụm Database luôn mát và an toàn (Đỉnh CPU chỉ ${Math.round(peakDbCpu)}%).`);
   }
   if (breachedAttacks === 0 && (avgSqli > 0 || avgDdos > 0)) {
-    strengths.push('Phòng thủ tuyệt đối: Không để lọt gói tấn công gây hại xuống DB.');
+    strengths.push('Phòng thủ tuyệt đối: Không để lọt gói tấn công gây hại xuống cụm DB.');
   }
   if (deadNodes.length === 0 && analysis.hasValidPath) {
-    strengths.push('Không có thành phần dư thừa lãng phí ngân sách.');
+    strengths.push('Kiến trúc tinh gọn: 100% thành phần đều tham gia luồng xử lý.');
   }
 
   // Compute 4 pillars (fair & encouraging for learning)
@@ -2806,8 +3685,10 @@ export interface NodeCapabilitySpec {
   primaryMetricLabel: string;
   lv1Value: string;
   lv2Value: string;
+  lv3Value: string;
   latencyLv1Ms: number;
   latencyLv2Ms: number;
+  latencyLv3Ms: number;
   bestAgainst: string;
 }
 
@@ -2818,80 +3699,175 @@ export function getNodeCapabilityDetails(type: PlaceableNodeType): NodeCapabilit
         primaryMetricLabel: 'Chặn SQLi / Lọc DDoS',
         lv1Value: '100% SQLi · 25% DDoS',
         lv2Value: '100% SQLi · 45% DDoS',
+        lv3Value: '100% SQLi · 58% DDoS',
         latencyLv1Ms: 6,
         latencyLv2Ms: 3,
-        bestAgainst: 'SQLi & tấn công lớp ứng dụng',
+        latencyLv3Ms: 2,
+        bestAgainst: 'SQLi & tấn công lớp ứng dụng L7',
       };
     case 'rate_limiter':
       return {
         primaryMetricLabel: 'Tỷ lệ chặn bão DDoS',
         lv1Value: '91% DDoS',
-        lv2Value: '99% DDoS',
+        lv2Value: '98.5% DDoS',
+        lv3Value: '99.5% DDoS',
         latencyLv1Ms: 5,
         latencyLv2Ms: 2,
+        latencyLv3Ms: 1,
         bestAgainst: 'Botnet DDoS & Spam API',
+      };
+    case 'ddos_scrubber':
+      return {
+        primaryMetricLabel: 'Làm sạch Botnet L4/L7',
+        lv1Value: '95% DDoS · 25% SQLi',
+        lv2Value: '99% DDoS · 40% SQLi',
+        lv3Value: '99.8% DDoS · 55% SQLi',
+        latencyLv1Ms: 7,
+        latencyLv2Ms: 4,
+        latencyLv3Ms: 2,
+        bestAgainst: 'Bão Botnet quy mô cực lớn',
       };
     case 'cdn':
       return {
         primaryMetricLabel: 'Offload Media / GET tĩnh',
-        lv1Value: '87% Media · 27% GET · 26% DDoS',
-        lv2Value: '96% Media · 42% GET · 42% DDoS',
+        lv1Value: '87% Media · 27% GET',
+        lv2Value: '96% Media · 42% GET',
+        lv3Value: '98.5% Media · 52% GET',
         latencyLv1Ms: 6,
         latencyLv2Ms: 3,
+        latencyLv3Ms: 2,
         bestAgainst: 'Ảnh/Video & phân tán tải biên',
+      };
+    case 'api_gateway':
+      return {
+        primaryMetricLabel: 'Lọc Gateway & định tuyến',
+        lv1Value: '38% SQLi · 20% DDoS',
+        lv2Value: '56% SQLi · 34% DDoS',
+        lv3Value: '72% SQLi · 45% DDoS',
+        latencyLv1Ms: 6,
+        latencyLv2Ms: 3,
+        latencyLv3Ms: 2,
+        bestAgainst: 'Điều phối nhiều dịch vụ Microservice',
       };
     case 'load_balancer':
       return {
-        primaryMetricLabel: 'Chia tải Round-Robin',
+        primaryMetricLabel: 'Chia tải Round-Robin L7',
         lv1Value: 'Đa nhánh · 4ms hop',
-        lv2Value: 'Siêu nhanh · 2ms hop',
+        lv2Value: 'Nhanh · 2ms hop',
+        lv3Value: 'Siêu tốc · 1ms hop',
         latencyLv1Ms: 4,
         latencyLv2Ms: 2,
+        latencyLv3Ms: 1,
         bestAgainst: 'Chống nghẽn nóng trên 1 nhánh',
+      };
+    case 'varnish':
+      return {
+        primaryMetricLabel: 'HTTP Page Cache GET',
+        lv1Value: '72% GET Hit',
+        lv2Value: '83% GET Hit',
+        lv3Value: '89% GET Hit',
+        latencyLv1Ms: 7,
+        latencyLv2Ms: 4,
+        latencyLv3Ms: 2,
+        bestAgainst: 'Báo chí, HTML & API công khai',
       };
     case 'redis':
       return {
         primaryMetricLabel: 'Cache Hit truy vấn GET',
-        lv1Value: '75% GET Hit (0% CPU DB)',
-        lv2Value: '90% GET Hit (0% CPU DB)',
+        lv1Value: '75% GET Hit (0% DB)',
+        lv2Value: '90% GET Hit (0% DB)',
+        lv3Value: '94% GET Hit (0% DB)',
         latencyLv1Ms: 9,
         latencyLv2Ms: 5,
+        latencyLv3Ms: 3,
         bestAgainst: 'Bão đọc GET lặp lại & Flash Sale',
       };
     case 'app':
       return {
         primaryMetricLabel: 'Chịu tải xử lý nghiệp vụ',
-        lv1Value: 'Phạt nhiệt tối đa +44ms',
-        lv2Value: 'Phạt nhiệt tối đa +24ms',
+        lv1Value: 'Trễ gốc 15ms (+44ms nóng)',
+        lv2Value: 'Trễ gốc 10ms (+24ms nóng)',
+        lv3Value: 'Trễ gốc 7ms (+14ms nóng)',
         latencyLv1Ms: 15,
         latencyLv2Ms: 10,
+        latencyLv3Ms: 7,
         bestAgainst: 'Xử lý logic giữa các tầng',
+      };
+    case 'microservice_auth':
+      return {
+        primaryMetricLabel: 'Xác thực JWT & bảo vệ',
+        lv1Value: '32% Token Hit · 62% SQLi',
+        lv2Value: '45% Token Hit · 75% SQLi',
+        lv3Value: '56% Token Hit · 85% SQLi',
+        latencyLv1Ms: 12,
+        latencyLv2Ms: 8,
+        latencyLv3Ms: 5,
+        bestAgainst: 'Cổng đăng nhập & phân quyền',
+      };
+    case 'search_engine':
+      return {
+        primaryMetricLabel: 'Full-Text Index GET',
+        lv1Value: '78% Search Hit',
+        lv2Value: '86% Search Hit',
+        lv3Value: '91% Search Hit',
+        latencyLv1Ms: 11,
+        latencyLv2Ms: 7,
+        latencyLv3Ms: 4,
+        bestAgainst: 'Tìm kiếm & lọc dữ liệu nặng',
       };
     case 'queue':
       return {
         primaryMetricLabel: 'Giảm tải ghi POST xuống DB',
         lv1Value: 'Giảm 52% CPU Ghi DB',
         lv2Value: 'Giảm 66% CPU Ghi DB',
+        lv3Value: 'Giảm 74% CPU Ghi DB',
         latencyLv1Ms: 9,
         latencyLv2Ms: 5,
+        latencyLv3Ms: 4,
         bestAgainst: 'Xung đột biến POST (Đơn hàng/IoT)',
+      };
+    case 'stream_processor':
+      return {
+        primaryMetricLabel: 'Gom lô Stream Realtime',
+        lv1Value: 'Giảm 58% CPU Ghi DB',
+        lv2Value: 'Giảm 68% CPU Ghi DB',
+        lv3Value: 'Giảm 76% CPU Ghi DB',
+        latencyLv1Ms: 11,
+        latencyLv2Ms: 7,
+        latencyLv3Ms: 5,
+        bestAgainst: 'Clickstream, IoT & sự kiện liên tục',
       };
     case 'worker':
       return {
         primaryMetricLabel: 'Nén & xử lý bất đồng bộ',
         lv1Value: 'Giảm thêm 22% tải Ghi',
         lv2Value: 'Giảm thêm 36% tải Ghi',
+        lv3Value: 'Giảm thêm 46% tải Ghi',
         latencyLv1Ms: 11,
         latencyLv2Ms: 6,
-        bestAgainst: 'Kết hợp sau Kafka/MQ',
+        latencyLv3Ms: 4,
+        bestAgainst: 'Kết hợp sau Kafka/MQ hoặc Flink',
+      };
+    case 'batch_etl':
+      return {
+        primaryMetricLabel: 'Tổng hợp & nén ghi DB',
+        lv1Value: 'Giảm 32% tải ghi báo cáo',
+        lv2Value: 'Giảm 45% tải ghi báo cáo',
+        lv3Value: 'Giảm 54% tải ghi báo cáo',
+        latencyLv1Ms: 12,
+        latencyLv2Ms: 8,
+        latencyLv3Ms: 5,
+        bestAgainst: 'Log & tổng hợp báo cáo định kỳ',
       };
     case 'read_replica':
       return {
-        primaryMetricLabel: 'Gánh truy vấn GET khỏi DB chính',
+        primaryMetricLabel: 'Gánh truy vấn GET khỏi DB',
         lv1Value: '77% GET Offload',
         lv2Value: '92% GET Offload',
+        lv3Value: '95% GET Offload',
         latencyLv1Ms: 12,
         latencyLv2Ms: 7,
+        latencyLv3Ms: 5,
         bestAgainst: 'Đọc báo cáo nặng & Dashboard',
       };
     case 'object_storage':
@@ -2899,11 +3875,278 @@ export function getNodeCapabilityDetails(type: PlaceableNodeType): NodeCapabilit
         primaryMetricLabel: 'Lưu trữ Media ngoài DB',
         lv1Value: '90% Media Offload',
         lv2Value: '97% Media Offload',
+        lv3Value: '99% Media Offload',
         latencyLv1Ms: 10,
         latencyLv2Ms: 6,
+        latencyLv3Ms: 4,
         bestAgainst: 'Video/Ảnh dung lượng lớn',
       };
+    case 'primary_db':
+      return {
+        primaryMetricLabel: 'Database SQL Shard phụ',
+        lv1Value: '-12% tải SQL · Pool 120',
+        lv2Value: '-24% tải SQL · Pool 200',
+        lv3Value: '-34% tải SQL · Pool 320',
+        latencyLv1Ms: 15,
+        latencyLv2Ms: 12,
+        latencyLv3Ms: 9,
+        bestAgainst: 'Chia đôi tải cụm DB quan hệ',
+      };
+    case 'nosql_db':
+      return {
+        primaryMetricLabel: 'Document DB chịu ghi cao',
+        lv1Value: '-38% CPU ghi POST',
+        lv2Value: '-46% CPU ghi POST',
+        lv3Value: '-54% CPU ghi POST',
+        latencyLv1Ms: 14,
+        latencyLv2Ms: 11,
+        latencyLv3Ms: 8,
+        bestAgainst: 'Ghi POST, Giỏ hàng & JSON',
+      };
+    case 'timeseries_db':
+      return {
+        primaryMetricLabel: 'Time-Series / Log Sink',
+        lv1Value: '-42% CPU Telemetry/Media',
+        lv2Value: '-50% CPU Telemetry/Media',
+        lv3Value: '-58% CPU Telemetry/Media',
+        latencyLv1Ms: 14,
+        latencyLv2Ms: 11,
+        latencyLv3Ms: 8,
+        bestAgainst: 'IoT cảm biến, Metrics & Log',
+      };
   }
+}
+
+export interface NodeOperationalTelemetry {
+  status: 'idle' | 'active' | 'warning' | 'degraded';
+  line1: string;
+  line2: string;
+  badgeText: string;
+  badgeLevel: 'normal' | 'warning' | 'danger';
+  borderColor: string;
+}
+
+export function getNodeOperationalTelemetry(
+  node: InfraNode,
+  simStage: 'DESIGNING' | 'SIMULATING',
+  opts?: { elapsedSec?: number; globalDbCpu?: number }
+): NodeOperationalTelemetry {
+  const isDb = isDatabaseSinkType(node.type);
+  const elapsed = Math.max(1, opts?.elapsedSec ?? 4);
+  const dbCpuVal = isDb ? Math.round(node.localDbCpu ?? opts?.globalDbCpu ?? 10) : 0;
+  const maxConn = node.dbPoolMode === 'high_pool' ? 240 : 120 + (node.level - 1) * 40;
+  const dropCount = node.droppedCount ?? 0;
+  const totalHandled = Math.max(1, node.processedCount + node.cacheHitCount + node.blockedCount + dropCount);
+  const dropPct = Math.min(99, Math.round((dropCount / totalHandled) * 100));
+
+  if (simStage === 'DESIGNING') {
+    if (node.type === 'ingress') {
+      return {
+        status: 'idle',
+        line1: 'GATEWAY · STANDBY',
+        line2: 'Chờ phát tải giả lập',
+        badgeText: '',
+        badgeLevel: 'normal',
+        borderColor: '#475569',
+      };
+    }
+    if (isDb || node.type === 'database') {
+      return {
+        status: 'idle',
+        line1: `STANDBY · v.${node.level}`,
+        line2: `conn 0/${maxConn} · idle`,
+        badgeText: '',
+        badgeLevel: 'normal',
+        borderColor: '#64748B',
+      };
+    }
+    const entry = getNodeCatalogEntry(node.type);
+    return {
+      status: 'idle',
+      line1: `STANDBY · v.${node.level}`,
+      line2: entry.shortMetricTag,
+      badgeText: '',
+      badgeLevel: 'normal',
+      borderColor: '#475569',
+    };
+  }
+
+  // Active simulation telemetry
+  const estRps = Math.max(20, Math.round((totalHandled / elapsed) * 42));
+  const rpsStr = estRps >= 1000 ? `${(estRps / 1000).toFixed(1)}k/s` : `${estRps}/s`;
+  const latMs = Math.max(2, Math.round(node.avgNodeLatencyMs || (isDb ? 16 : 9)));
+  const heatPct = Math.round(node.heat * 100);
+  const qMax =
+    node.type === 'queue' || node.type === 'stream_processor'
+      ? getQueueMaxBuffer(node.level, node.queueCapacityMode)
+      : 0;
+  const qCount = node.queueBuffer ?? 0;
+  const qPct = qMax > 0 ? Math.round((qCount / qMax) * 100) : 0;
+
+  let status: NodeOperationalTelemetry['status'] = 'active';
+  let badgeLevel: NodeOperationalTelemetry['badgeLevel'] = 'normal';
+  let badgeText = `${latMs}ms`;
+  let borderColor = '#10B981';
+
+  if (dropCount > 0 && (heatPct >= 82 || dbCpuVal >= 88)) {
+    status = 'degraded';
+    badgeLevel = 'danger';
+    badgeText = `Drop ${Math.max(1, dropPct)}%`;
+    borderColor = '#EF4444';
+  } else if ((isDb && dbCpuVal >= 90) || (!isDb && heatPct >= 88) || qPct >= 88) {
+    status = 'degraded';
+    badgeLevel = 'danger';
+    badgeText = isDb ? `CPU ${dbCpuVal}%` : qMax > 0 ? `Queue ${qPct}%` : `Nóng ${heatPct}%`;
+    borderColor = '#EF4444';
+  } else if ((isDb && dbCpuVal >= 62) || (!isDb && heatPct >= 58) || qPct >= 62 || latMs >= 42) {
+    status = 'warning';
+    badgeLevel = 'warning';
+    badgeText = isDb ? `CPU ${dbCpuVal}%` : qMax > 0 ? `Queue ${qPct}%` : `${latMs}ms`;
+    borderColor = '#F59E0B';
+  } else {
+    if (node.blockedCount > 0) badgeText = `BLK ${node.blockedCount}`;
+    else if (node.cacheHitCount > 0) {
+      const hitPct = Math.min(99, Math.round((node.cacheHitCount / totalHandled) * 100));
+      badgeText = `Hit ${hitPct}%`;
+    } else if (isDb) {
+      badgeText = `CPU ${dbCpuVal}%`;
+    }
+  }
+
+  if (node.type === 'ingress') {
+    return {
+      status: 'active',
+      line1: `IN · ${rpsStr}`,
+      line2: 'Live Edge Stream',
+      badgeText: '',
+      badgeLevel: 'normal',
+      borderColor: '#38BDF8',
+    };
+  }
+
+  if (isDb) {
+    const lockMs = Math.max(2, Math.round((dbCpuVal / 100) * 18 + (node.dbPoolMode === 'high_pool' ? -3 : 2)));
+    const activeConn = Math.min(maxConn, Math.max(8, Math.round((dbCpuVal / 100) * maxConn * 0.92)));
+    return {
+      status,
+      line1: `CPU ${dbCpuVal}% · lock ${lockMs}ms`,
+      line2: `conn ${activeConn}/${maxConn}`,
+      badgeText,
+      badgeLevel,
+      borderColor,
+    };
+  }
+
+  if (node.type === 'redis' || node.type === 'varnish' || node.type === 'cdn') {
+    const hitPct = Math.min(99, Math.round((node.cacheHitCount / totalHandled) * 100));
+    const memMb = 180 + node.level * 120 + Math.min(480, Math.round(node.cacheHitCount * 2.4));
+    return {
+      status,
+      line1: `hit ${hitPct}% · mem ${memMb}MB`,
+      line2: `v.${node.level} · ${rpsStr} · ${latMs}ms`,
+      badgeText,
+      badgeLevel,
+      borderColor,
+    };
+  }
+
+  if (node.type === 'queue' || node.type === 'stream_processor') {
+    return {
+      status,
+      line1: `q ${qCount}/${qMax} · ${rpsStr}`,
+      line2: `v.${node.level} · lag ${latMs}ms`,
+      badgeText,
+      badgeLevel,
+      borderColor,
+    };
+  }
+
+  if (node.type === 'waf' || node.type === 'rate_limiter' || node.type === 'ddos_scrubber') {
+    const blkPct = Math.min(99, Math.round((node.blockedCount / totalHandled) * 100));
+    return {
+      status,
+      line1: `blk ${node.blockedCount} (${blkPct}%)`,
+      line2: `v.${node.level} · ${node.limiterMode ?? 'std'} · ${latMs}ms`,
+      badgeText,
+      badgeLevel,
+      borderColor,
+    };
+  }
+
+  return {
+    status,
+    line1: `v.${node.level} · ${rpsStr} · ${latMs}ms`,
+    line2: dropCount > 0 ? `drop ${dropPct}% · heat ${heatPct}%` : `heat ${heatPct}% · ok`,
+    badgeText,
+    badgeLevel,
+    borderColor,
+  };
+}
+
+export interface WaveSummarySnapshot {
+  waveNumber: number;
+  waveLabel: string;
+  successRatePct: number;
+  droppedCount: number;
+  uptimePct: number;
+  peakLatencyMs: number;
+  targetSlaMs: number;
+  activeNodeCount: number;
+  activeDbCount: number;
+  peakDbCpu: number;
+  diagnosisLine: string;
+}
+
+export function diagnoseWavePerformance(stats: {
+  waveNumber: number;
+  waveLabel: string;
+  deliveredOk: number;
+  droppedPackets: number;
+  breachedAttacks: number;
+  uptimePct: number;
+  peakLatencyMs: number;
+  targetSlaMs: number;
+  peakDbCpu: number;
+  nodes: readonly InfraNode[];
+  edges: readonly InfraEdge[];
+}): WaveSummarySnapshot {
+  const activeNodes = stats.nodes.filter((n) => n.type !== 'ingress' && !isDatabaseSinkType(n.type));
+  const activeDbCount = getDatabaseSinkNodes(stats.nodes).filter((db) =>
+    stats.edges.some((e) => e.toId === db.id)
+  ).length;
+  const totalReq = Math.max(1, stats.deliveredOk + stats.droppedPackets + stats.breachedAttacks);
+  const successRatePct = Math.max(0, Math.min(100, Number((((stats.deliveredOk) / totalReq) * 100).toFixed(1))));
+
+  const activeTypes = new Set(stats.nodes.map((n) => n.type));
+  let diagnosisLine = `Đợt ${stats.waveNumber} vận hành ổn định trong ngưỡng SLA (${stats.peakLatencyMs}ms ≤ ${stats.targetSlaMs}ms).`;
+
+  if (stats.breachedAttacks > 0) {
+    diagnosisLine = `Đợt ${stats.waveNumber} lọt ${stats.breachedAttacks} gói tấn công xuống DB — cần bổ sung WAF [1] hoặc Rate Limiter [2] / Scrubber [Q].`;
+  } else if (stats.peakDbCpu >= 82) {
+    if (activeDbCount < 2 && !activeTypes.has('queue')) {
+      diagnosisLine = `Đợt ${stats.waveNumber} nghẽn tại DB Cluster (${Math.round(stats.peakDbCpu)}%) do POST dồn trực tiếp — thêm Kafka/MQ [7] hoặc tách thêm DB Shard.`;
+    } else {
+      diagnosisLine = `Đợt ${stats.waveNumber} cụm DB nóng (${Math.round(stats.peakDbCpu)}%) — nâng cấp Redis/Replica hoặc bật Pool lớn trước đợt tiếp theo.`;
+    }
+  } else if (stats.droppedPackets > 0) {
+    diagnosisLine = `Đợt ${stats.waveNumber} rớt ${stats.droppedPackets} request do bão hòa queue/node — thử scale Lv.2–Lv.3 hoặc chia thêm nhánh qua LB [4].`;
+  } else if (stats.peakLatencyMs > stats.targetSlaMs) {
+    diagnosisLine = `Đợt ${stats.waveNumber} trễ đỉnh ${stats.peakLatencyMs}ms vượt SLA ${stats.targetSlaMs}ms — thêm Redis/Varnish ở biên hoặc tăng Pool.`;
+  }
+
+  return {
+    waveNumber: stats.waveNumber,
+    waveLabel: stats.waveLabel,
+    successRatePct,
+    droppedCount: stats.droppedPackets + stats.breachedAttacks,
+    uptimePct: Math.round(stats.uptimePct),
+    peakLatencyMs: Math.round(stats.peakLatencyMs),
+    targetSlaMs: stats.targetSlaMs,
+    activeNodeCount: activeNodes.length,
+    activeDbCount: Math.max(1, activeDbCount),
+    peakDbCpu: Math.round(stats.peakDbCpu),
+    diagnosisLine,
+  };
 }
 
 export interface LiveTelemetryDiagnosis {
@@ -2941,7 +4184,7 @@ export function diagnoseArchitectureTelemetry(
     }
   }
   const backwardReachable = new Set<string>();
-  const q2 = ['database'];
+  const q2 = getDatabaseSinkNodes(nodes).map((n) => n.id);
   while (q2.length > 0) {
     const cur = q2.shift()!;
     if (backwardReachable.has(cur)) continue;
@@ -2960,16 +4203,13 @@ export function diagnoseArchitectureTelemetry(
 
   for (const n of nodes) {
     if (n.type === 'ingress') continue;
-    const effectivePct =
-      n.type === 'database'
-        ? Math.round(stats.dbCpu)
-        : Math.round(n.heat * 100);
+    const isDb = isDatabaseSinkType(n.type);
+    const effectivePct = isDb
+      ? Math.round(n.localDbCpu ?? stats.dbCpu)
+      : Math.round(n.heat * 100);
     if (effectivePct >= 55 && effectivePct > bestScore) {
       bestScore = effectivePct;
-      const label =
-        n.type === 'database'
-          ? 'Database Cluster'
-          : getNodeCatalogEntry(n.type).shortName;
+      const label = n.type === 'database' ? 'DB CLUSTER' : getNodeCatalogEntry(n.type).shortName;
       hottest = {
         id: n.id,
         type: n.type,

@@ -9,9 +9,11 @@ import {
   OrbitalBeamFx,
   OrbitalRadiationZone,
   ProjectileItem,
+  QuantumEchoArcFx,
   RailBeamFx,
   SingularityHole,
   TdEnemy,
+  VoidRiftFx,
 } from './prismTdEngine.ts';
 
 export interface ShellCasingFx {
@@ -47,6 +49,8 @@ export interface OverheatFx {
     | 'emp_ring'
     | 'supernova_nova'
     | 'chrono_collapse'
+    | 'void_cataclysm'
+    | 'quantum_singularity'
     | 'overdrive_apex';
   x: number;
   y: number;
@@ -471,6 +475,47 @@ export function drawOverheatSpecialFx(
         ctx.lineTo(Math.cos(ra) * curR * 1.05, Math.sin(ra) * curR * 1.05);
         ctx.stroke();
       }
+    } else if (fx.kind === 'void_cataclysm') {
+      ctx.translate(fx.x, fx.y);
+      const expand = 0.25 + (1 - t) * 0.75;
+      const curR = fx.radius * expand;
+      ctx.globalAlpha = t * 0.88;
+      const vg = ctx.createRadialGradient(0, 0, 8, 0, 0, curR);
+      vg.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+      vg.addColorStop(0.28, 'rgba(240, 171, 252, 0.45)');
+      vg.addColorStop(0.68, 'rgba(168, 85, 247, 0.22)');
+      vg.addColorStop(1, 'rgba(88, 28, 135, 0)');
+      ctx.fillStyle = vg;
+      ctx.beginPath();
+      ctx.arc(0, 0, curR, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#F0ABFC';
+      ctx.lineWidth = 2.6;
+      drawPolygon(ctx, 0, 0, 6, curR * 0.92, animTime * 1.8);
+      ctx.stroke();
+      ctx.strokeStyle = '#38BDF8';
+      ctx.lineWidth = 1.6;
+      drawPolygon(ctx, 0, 0, 6, curR * 0.62, -animTime * 2.5);
+      ctx.stroke();
+    } else if (fx.kind === 'quantum_singularity') {
+      ctx.translate(fx.x, fx.y);
+      const expand = 0.3 + (1 - t) * 0.7;
+      const curR = fx.radius * expand;
+      ctx.globalAlpha = t * 0.86;
+      ctx.strokeStyle = '#34D399';
+      ctx.lineWidth = 2.4;
+      ctx.setLineDash([8, 5]);
+      ctx.lineDashOffset = -animTime * 24;
+      ctx.beginPath();
+      ctx.arc(0, 0, curR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = '#A7F3D0';
+      ctx.lineWidth = 1.8;
+      drawPolygon(ctx, 0, 0, 8, curR * 0.68, animTime * 1.4);
+      ctx.stroke();
     }
 
     ctx.restore();
@@ -490,7 +535,8 @@ export function drawRailBeamEnhanced(
   ctx.lineCap = 'round';
 
   const isSupernovaBeam = rb.variant === 'supernova';
-  const beamScale = isSupernovaBeam ? 1.48 : 1;
+  const isAstralBeam = rb.variant === 'astral_ark';
+  const beamScale = isAstralBeam ? 1.62 : isSupernovaBeam ? 1.48 : 1;
 
   ctx.strokeStyle = rb.color;
   ctx.lineWidth = (17 + rTier * 4.2) * beamScale * rb.alpha;
@@ -499,7 +545,13 @@ export function drawRailBeamEnhanced(
   ctx.lineTo(rb.x2, rb.y2);
   ctx.stroke();
 
-  ctx.strokeStyle = isSupernovaBeam ? '#FDE047' : rTier >= 3 ? '#FDE047' : '#E879F9';
+  ctx.strokeStyle = isAstralBeam
+    ? '#F0ABFC'
+    : isSupernovaBeam
+      ? '#FDE047'
+      : rTier >= 3
+        ? '#FDE047'
+        : '#E879F9';
   ctx.lineWidth = (7.5 + rTier * 2) * beamScale * rb.alpha;
   ctx.beginPath();
   ctx.moveTo(rb.x1, rb.y1);
@@ -514,7 +566,7 @@ export function drawRailBeamEnhanced(
   ctx.stroke();
 
   const beamAngle = Math.atan2(rb.y2 - rb.y1, rb.x2 - rb.x1);
-  const ringCount = (isSupernovaBeam ? 5 : 3) + rTier;
+  const ringCount = (isAstralBeam ? 6 : isSupernovaBeam ? 5 : 3) + rTier;
   for (let m = 1; m <= ringCount; m++) {
     const frac = 0.06 + m * 0.11;
     const rx = rb.x1 + (rb.x2 - rb.x1) * frac;
@@ -522,8 +574,14 @@ export function drawRailBeamEnhanced(
     ctx.save();
     ctx.translate(rx, ry);
     ctx.rotate(beamAngle);
-    ctx.strokeStyle = isSupernovaBeam ? '#FEF08A' : rTier >= 3 ? '#38BDF8' : '#FEF08A';
-    ctx.lineWidth = isSupernovaBeam ? 2.4 : 2;
+    ctx.strokeStyle = isAstralBeam
+      ? '#67E8F9'
+      : isSupernovaBeam
+        ? '#FEF08A'
+        : rTier >= 3
+          ? '#38BDF8'
+          : '#FEF08A';
+    ctx.lineWidth = isAstralBeam || isSupernovaBeam ? 2.4 : 2;
     ctx.beginPath();
     ctx.ellipse(0, 0, 5.5, (16 + rTier * 3 - m * 1.6) * (1.25 - rb.alpha * 0.4), 0, 0, Math.PI * 2);
     ctx.stroke();
@@ -752,7 +810,7 @@ export function drawGunTurretSprite(
   heatPct = 0,
   overheatActive = false
 ) {
-  const tier: 1 | 2 | 3 | 4 = level >= 10 ? 4 : level >= 7 ? 3 : level >= 4 ? 2 : 1;
+  const tier: 1 | 2 | 3 | 4 = level >= MAX_GUN_LEVEL ? 4 : level >= 5 ? 3 : level >= 3 ? 2 : 1;
   const isOmega = variant === 'omega';
   const baseRadius = 19.5 + (tier - 1) * 1.4;
 
@@ -804,8 +862,11 @@ export function drawGunTurretSprite(
   if (type === 'tesla' || type === 'tempest') {
     baseGrad.addColorStop(0, '#0C4A6E');
     baseGrad.addColorStop(1, '#090D16');
-  } else if (type === 'beacon' || type === 'cryo' || type === 'radar') {
+  } else if (type === 'beacon' || type === 'cryo' || type === 'radar' || type === 'quantum_prism') {
     baseGrad.addColorStop(0, '#064E3B');
+    baseGrad.addColorStop(1, '#090D16');
+  } else if (type === 'astral_ark') {
+    baseGrad.addColorStop(0, '#4A044E');
     baseGrad.addColorStop(1, '#090D16');
   } else if (isOmega) {
     baseGrad.addColorStop(0, tier >= 3 ? '#4C0519' : '#271222');
@@ -1219,6 +1280,44 @@ export function drawGunTurretSprite(
     ctx.beginPath();
     ctx.arc(0, 0, chronoPulse * 0.52, 0, Math.PI * 2);
     ctx.fill();
+  } else if (type === 'astral_ark') {
+    // 1000-Energy Apex Astral Void Ark: tri-prism orbital crown + twin void rail emitters + core singularity
+    ctx.save();
+    ctx.rotate(animTime * 1.9);
+    ctx.strokeStyle = isOmega ? '#FB7185' : '#F0ABFC';
+    ctx.lineWidth = 2.4;
+    drawPolygon(ctx, 0, 0, 3, baseRadius + 5, 0);
+    ctx.stroke();
+    drawPolygon(ctx, 0, 0, 3, baseRadius + 5, Math.PI / 3);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.rotate(aimAngle);
+    const kick = recoil * 5;
+    const len = 24 + tier * 2.5;
+    ctx.fillStyle = isOmega ? '#F43F5E' : '#E879F9';
+    ctx.fillRect(3 - kick, -8.5, len, 3.6);
+    ctx.fillRect(3 - kick, 4.9, len, 3.6);
+    ctx.fillStyle = '#67E8F9';
+    ctx.fillRect(6 - kick, -2.2, len - 2, 4.4);
+    ctx.fillStyle = '#1E0B36';
+    ctx.strokeStyle = '#F0ABFC';
+    ctx.lineWidth = 2.2;
+    drawPolygon(ctx, 0, 0, 6, 13 + tier * 0.6, 0);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    const voidCore = 5.4 + tier * 0.6 + Math.sin(animTime * 10) * 1.1;
+    ctx.fillStyle = isOmega ? '#FB7185' : '#E879F9';
+    ctx.beginPath();
+    ctx.arc(0, 0, voidCore, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(0, 0, voidCore * 0.48, 0, Math.PI * 2);
+    ctx.fill();
   } else if (type === 'mortar') {
     ctx.save();
     ctx.rotate(aimAngle);
@@ -1313,6 +1412,35 @@ export function drawGunTurretSprite(
     ctx.fillStyle = '#E0F2FE';
     ctx.beginPath();
     ctx.arc(0, 0, 3.5 + tier * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'quantum_prism') {
+    // 500-Energy Pure Support Quantum Prism: nested harmonic emerald gyroscope + octahedral crystal
+    ctx.save();
+    ctx.rotate(animTime * 2.1);
+    ctx.strokeStyle = isOmega ? '#2DD4BF' : '#34D399';
+    ctx.lineWidth = 2.1;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 17 + tier, 8.5, 0.35, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = '#A7F3D0';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 17 + tier, 8.5, -0.35, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.rotate(-animTime * 2.6);
+    ctx.fillStyle = 'rgba(52, 211, 153, 0.35)';
+    ctx.strokeStyle = '#6EE7B7';
+    ctx.lineWidth = 2;
+    drawPolygon(ctx, 0, 0, 4, 11.5 + tier * 0.7, 0);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.fillStyle = '#ECFDF5';
+    ctx.beginPath();
+    ctx.arc(0, 0, 4.8 + tier * 0.45 + Math.sin(animTime * 8) * 0.9, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -1452,15 +1580,53 @@ export function drawEnemySprite(
     }
   }
 
-  // Shield Dome
+  // Shield Dome with crisp hex energy facet overlay
   if (en.shield > 0 && !isKo) {
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.1)';
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)';
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.08)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(0, 0, en.radius + 5.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+
+    ctx.save();
+    ctx.rotate(animTime * 1.4);
+    ctx.strokeStyle = 'rgba(186, 230, 253, 0.38)';
+    ctx.lineWidth = 1;
+    drawPolygon(ctx, 0, 0, 6, en.radius + 5, 0);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Quantum Silence Lock Ring (when suppressed by Quantum Prism)
+  if ((en.silencedTimer ?? 0) > 0 && !isKo) {
+    ctx.save();
+    ctx.strokeStyle = '#34D399';
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.arc(0, 0, en.radius + 8.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // Quantum Damage Echo Lattice Brackets
+  if ((en.quantumLinkTimer ?? 0) > 0 && !isKo) {
+    ctx.save();
+    ctx.strokeStyle = '#2DD4BF';
+    ctx.lineWidth = 1.5;
+    const qr = en.radius + 4;
+    for (let k = 0; k < 4; k++) {
+      const a = (k * Math.PI) / 2 + Math.PI / 4;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a - 0.14) * qr, Math.sin(a - 0.14) * qr);
+      ctx.lineTo(Math.cos(a) * (qr + 3), Math.sin(a) * (qr + 3));
+      ctx.lineTo(Math.cos(a + 0.14) * qr, Math.sin(a + 0.14) * qr);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   // Electric Shock Crackle around target
@@ -1502,26 +1668,26 @@ export function drawEnemySprite(
   const pulse = 0.85 + Math.sin(animTime * 18 + en.id) * 0.18;
 
   if (en.kind === 'super_boss') {
-    // COLOSSUS SUPER BOSS: Triple plasma thrusters, gilded imperial hull wings, twin rail batteries, crown core
+    // COLOSSUS SUPER BOSS: Layered Dreadnought armor plating, exhaust glow, twin rail turrets & reactor crown
     ctx.fillStyle = '#F59E0B';
     for (const ty of [-13, 0, 13]) {
       ctx.beginPath();
       ctx.moveTo(-24, ty - 4.5);
-      ctx.lineTo(-40 - Math.sin(animTime * 30 + ty) * 5, ty);
+      ctx.lineTo(-42 - Math.sin(animTime * 30 + ty) * 6, ty);
       ctx.lineTo(-24, ty + 4.5);
       ctx.closePath();
       ctx.fill();
     }
 
     const colGrad = ctx.createLinearGradient(-28, -28, 32, 28);
-    colGrad.addColorStop(0, flash ? '#FFFFFF' : '#450A0A');
-    colGrad.addColorStop(0.45, flash ? '#FFFFFF' : '#991B1B');
+    colGrad.addColorStop(0, flash ? '#FFFFFF' : '#2A0505');
+    colGrad.addColorStop(0.5, flash ? '#FFFFFF' : '#881337');
     colGrad.addColorStop(1, flash ? '#FFFFFF' : '#1E1B4B');
     ctx.fillStyle = colGrad;
     ctx.strokeStyle = '#FDE047';
     ctx.lineWidth = 2.8;
     ctx.beginPath();
-    ctx.moveTo(33, 0);
+    ctx.moveTo(34, 0);
     ctx.lineTo(19, -18);
     ctx.lineTo(6, -28);
     ctx.lineTo(-18, -26);
@@ -1535,11 +1701,23 @@ export function drawEnemySprite(
     ctx.fill();
     ctx.stroke();
 
+    // Inner beveled armor deck & metallic spine seam
+    ctx.strokeStyle = 'rgba(253, 224, 71, 0.42)';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(-21, 0);
+    ctx.lineTo(27, 0);
+    ctx.moveTo(-14, -18);
+    ctx.lineTo(14, -12);
+    ctx.moveTo(-14, 18);
+    ctx.lineTo(14, 12);
+    ctx.stroke();
+
     // Heavy Golden Wing Blades
     ctx.fillStyle = '#FDE047';
     for (const sgn of [-1, 1]) {
       ctx.beginPath();
-      ctx.moveTo(34, sgn * 6);
+      ctx.moveTo(35, sgn * 6);
       ctx.lineTo(20, sgn * 14);
       ctx.lineTo(23, sgn * 5);
       ctx.closePath();
@@ -1554,7 +1732,7 @@ export function drawEnemySprite(
       ctx.fillStyle = '#1E293B';
       ctx.strokeStyle = '#38BDF8';
       ctx.lineWidth = 1.6;
-      ctx.fillRect(0, -3, 13, 6);
+      ctx.fillRect(0, -3, 14, 6);
       ctx.beginPath();
       ctx.arc(0, 0, 5.4, 0, Math.PI * 2);
       ctx.fill();
@@ -1576,7 +1754,7 @@ export function drawEnemySprite(
     for (const ty of [-11, 11]) {
       ctx.beginPath();
       ctx.moveTo(-20, ty - 4.5);
-      ctx.lineTo(-34 - Math.sin(animTime * 28) * 4, ty);
+      ctx.lineTo(-35 - Math.sin(animTime * 28) * 4, ty);
       ctx.lineTo(-20, ty + 4.5);
       ctx.closePath();
       ctx.fill();
@@ -1602,6 +1780,18 @@ export function drawEnemySprite(
     ctx.lineTo(15, 14);
     ctx.closePath();
     ctx.fill();
+    ctx.stroke();
+
+    // Hull reinforcement ribs
+    ctx.strokeStyle = 'rgba(254, 205, 211, 0.35)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(-16, 0);
+    ctx.lineTo(22, 0);
+    ctx.moveTo(-10, -14);
+    ctx.lineTo(11, -9);
+    ctx.moveTo(-10, 14);
+    ctx.lineTo(11, 9);
     ctx.stroke();
 
     ctx.fillStyle = '#FDE047';
@@ -1646,14 +1836,14 @@ export function drawEnemySprite(
     ctx.fillStyle = '#1C1917';
     ctx.fillRect(-19, -20, 38, 7);
     ctx.fillRect(-19, 13, 38, 7);
-    ctx.fillStyle = '#57534E';
+    ctx.fillStyle = '#78716C';
     for (let tx = -16 + treadPhase; tx < 16; tx += 8) {
       ctx.fillRect(tx, -19.5, 3.5, 6);
       ctx.fillRect(tx, 13.5, 3.5, 6);
     }
     const jg = ctx.createLinearGradient(-16, -15, 18, 15);
     jg.addColorStop(0, flash ? '#FFFFFF' : '#78350F');
-    jg.addColorStop(1, flash ? '#FFFFFF' : '#292524');
+    jg.addColorStop(1, flash ? '#FFFFFF' : '#1C1917');
     ctx.fillStyle = jg;
     ctx.strokeStyle = '#F59E0B';
     ctx.lineWidth = 2.2;
@@ -1662,6 +1852,10 @@ export function drawEnemySprite(
     ctx.fill();
     ctx.stroke();
 
+    // Inner riveted turret cupola + optical visor
+    ctx.strokeStyle = 'rgba(251, 191, 36, 0.45)';
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(-10, -10, 18, 20);
     ctx.fillStyle = '#FDE047';
     ctx.beginPath();
     ctx.moveTo(22, -16);
@@ -1672,13 +1866,19 @@ export function drawEnemySprite(
     ctx.closePath();
     ctx.fill();
   } else if (en.kind === 'armored') {
+    const treadPhase = (animTime * 18) % 6;
     ctx.fillStyle = '#0F172A';
     ctx.fillRect(-15, -16, 30, 5);
     ctx.fillRect(-15, 11, 30, 5);
+    ctx.fillStyle = '#64748B';
+    for (let tx = -12 + treadPhase; tx < 13; tx += 6) {
+      ctx.fillRect(tx, -15.5, 2.5, 4);
+      ctx.fillRect(tx, 11.5, 2.5, 4);
+    }
 
     const ag = ctx.createLinearGradient(-14, -12, 16, 12);
     ag.addColorStop(0, flash ? '#FFFFFF' : '#B45309');
-    ag.addColorStop(1, flash ? '#FFFFFF' : '#334155');
+    ag.addColorStop(1, flash ? '#FFFFFF' : '#1E293B');
     ctx.fillStyle = ag;
     ctx.strokeStyle = '#FBBF24';
     ctx.lineWidth = 2;
@@ -1686,10 +1886,14 @@ export function drawEnemySprite(
     ctx.fill();
     ctx.stroke();
 
+    ctx.strokeStyle = 'rgba(254, 240, 138, 0.45)';
+    ctx.lineWidth = 1.2;
+    drawPolygon(ctx, -1, 0, 6, 9, 0);
+    ctx.stroke();
     ctx.fillStyle = '#FEF08A';
-    ctx.fillRect(4, -5, 6, 10);
+    ctx.fillRect(5, -5, 6, 10);
   } else if (en.kind === 'shieldbearer') {
-    ctx.fillStyle = flash ? '#FFFFFF' : '#0C4A6E';
+    ctx.fillStyle = flash ? '#FFFFFF' : '#082F49';
     ctx.strokeStyle = '#38BDF8';
     ctx.lineWidth = 2.2;
     drawPolygon(ctx, 0, 0, 6, 17, 0);
@@ -1697,7 +1901,7 @@ export function drawEnemySprite(
     ctx.stroke();
 
     ctx.strokeStyle = '#E0F2FE';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 3.2;
     ctx.beginPath();
     ctx.arc(4, 0, 14, -0.95, 0.95);
     ctx.stroke();
@@ -1705,12 +1909,23 @@ export function drawEnemySprite(
     ctx.beginPath();
     ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(1, 0, 2.2, 0, Math.PI * 2);
+    ctx.fill();
   } else if (en.kind === 'berserker') {
+    ctx.fillStyle = '#F97316';
+    ctx.beginPath();
+    ctx.moveTo(-12, -4);
+    ctx.lineTo(-22 * pulse, 0);
+    ctx.lineTo(-12, 4);
+    ctx.fill();
+
     ctx.fillStyle = flash ? '#FFFFFF' : '#7C2D12';
-    ctx.strokeStyle = en.enraged ? '#EF4444' : '#F97316';
+    ctx.strokeStyle = en.enraged ? '#EF4444' : '#FB923C';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(17, 0);
+    ctx.moveTo(18, 0);
     ctx.lineTo(-4, -14);
     ctx.lineTo(-14, -6);
     ctx.lineTo(-10, 0);
@@ -1733,6 +1948,11 @@ export function drawEnemySprite(
     ctx.fill();
     ctx.stroke();
 
+    ctx.strokeStyle = 'rgba(134, 239, 172, 0.5)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 10.5, 0, Math.PI * 2);
+    ctx.stroke();
     ctx.fillStyle = '#86EFAC';
     ctx.fillRect(-7, -2.5, 14, 5);
     ctx.fillRect(-2.5, -7, 5, 14);
@@ -1752,6 +1972,10 @@ export function drawEnemySprite(
     drawPolygon(ctx, 0, 0, 4, 14, 0);
     ctx.fill();
     ctx.stroke();
+    ctx.fillStyle = '#F0ABFC';
+    ctx.beginPath();
+    ctx.arc(2, 0, 3.6, 0, Math.PI * 2);
+    ctx.fill();
   } else if (en.kind === 'summoner') {
     ctx.fillStyle = flash ? '#FFFFFF' : '#3B0764';
     ctx.strokeStyle = '#C084FC';
@@ -1759,6 +1983,9 @@ export function drawEnemySprite(
     drawPolygon(ctx, 0, 0, 5, 17, 0);
     ctx.fill();
     ctx.stroke();
+    ctx.fillStyle = '#E879F9';
+    drawPolygon(ctx, 0, 0, 5, 7, Math.PI / 5);
+    ctx.fill();
     for (let o = 0; o < 3; o++) {
       const oa = animTime * 3.5 + (o * Math.PI * 2) / 3;
       ctx.fillStyle = '#F472B6';
@@ -1801,6 +2028,10 @@ export function drawEnemySprite(
     ctx.arc(0, 0, en.radius * 0.78, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    ctx.fillStyle = '#F9A8D4';
+    ctx.beginPath();
+    ctx.arc(2.5, 0, 3, 0, Math.PI * 2);
+    ctx.fill();
   } else if (en.kind === 'stealth') {
     ctx.fillStyle = flash ? '#FFFFFF' : '#064E3B';
     ctx.strokeStyle = '#34D399';
@@ -1860,10 +2091,14 @@ export function drawEnemySprite(
       const by = -en.radius - 20;
       ctx.fillStyle = 'rgba(7, 11, 20, 0.94)';
       ctx.fillRect(-bw / 2 - 2, by - 13, bw + 4, 22);
-      ctx.fillStyle = en.windupTimer > 0 ? '#38BDF8' : '#FDE047';
+      ctx.fillStyle = (en.silencedTimer ?? 0) > 0 ? '#34D399' : en.windupTimer > 0 ? '#38BDF8' : '#FDE047';
       ctx.font = 'bold 8.5px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(en.windupTimer > 0 ? '⚡ TỤ CHIÊU! (NGẮT)' : 'SIÊU BOSS COLOSSUS', 0, by - 4.5);
+      ctx.fillText(
+        en.windupTimer > 0 ? '⚡ TỤ CHIÊU! (NGẮT)' : (en.silencedTimer ?? 0) > 0 ? '✦ CÂM LẶNG · COLOSSUS' : 'SIÊU BOSS COLOSSUS',
+        0,
+        by - 4.5
+      );
 
       const hpRatio = Math.max(0, Math.min(1, en.hp / Math.max(1, en.maxHp)));
       ctx.fillStyle = '#450A0A';
@@ -1884,10 +2119,14 @@ export function drawEnemySprite(
       const by = -en.radius - 17;
       ctx.fillStyle = 'rgba(7, 11, 20, 0.92)';
       ctx.fillRect(-bw / 2 - 2, by - 12, bw + 4, 20);
-      ctx.fillStyle = en.windupTimer > 0 ? '#38BDF8' : '#FDA4AF';
+      ctx.fillStyle = (en.silencedTimer ?? 0) > 0 ? '#34D399' : en.windupTimer > 0 ? '#38BDF8' : '#FDA4AF';
       ctx.font = 'bold 8px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(en.windupTimer > 0 ? '⚡ TỤ CHIÊU!' : 'BOSS DREADNOUGHT', 0, by - 4);
+      ctx.fillText(
+        en.windupTimer > 0 ? '⚡ TỤ CHIÊU!' : (en.silencedTimer ?? 0) > 0 ? '✦ CÂM LẶNG · BOSS' : 'BOSS DREADNOUGHT',
+        0,
+        by - 4
+      );
 
       const hpRatio = Math.max(0, Math.min(1, en.hp / Math.max(1, en.maxHp)));
       ctx.fillStyle = '#450A0A';
@@ -1911,13 +2150,13 @@ export function drawEnemySprite(
       const hpRatio = Math.max(0, Math.min(1, en.hp / Math.max(1, en.maxHp)));
       ctx.fillStyle = en.isElite ? '#FBBF24' : '#34D399';
       ctx.fillRect(-bw / 2, by, bw * hpRatio, 3);
-    if (en.maxShield > 0 && en.shield > 0) {
-      const sRatio = Math.max(0, Math.min(1, en.shield / en.maxShield));
-      ctx.fillStyle = '#38BDF8';
-      ctx.fillRect(-bw / 2, by - 3, bw * sRatio, 2);
+      if (en.maxShield > 0 && en.shield > 0) {
+        const sRatio = Math.max(0, Math.min(1, en.shield / en.maxShield));
+        ctx.fillStyle = '#38BDF8';
+        ctx.fillRect(-bw / 2, by - 3, bw * sRatio, 2);
+      }
     }
   }
-}
 
   ctx.restore();
 }
@@ -2230,3 +2469,74 @@ export function drawChronoFieldsAndSlashes(
     ctx.restore();
   }
 }
+
+/**
+ * Renders lingering Void Rifts spawned by the 1000-Energy Astral Ark cannon.
+ */
+export function drawVoidRifts(
+  ctx: CanvasRenderingContext2D,
+  rifts: readonly VoidRiftFx[],
+  animTime: number,
+  alphaScale = 1
+) {
+  const safeScale = Math.max(0.35, Math.min(1, alphaScale));
+  for (const r of rifts) {
+    const fadeIn = Math.min(1, (r.maxLife - r.life) * 5 + 0.25);
+    const fadeOut = Math.min(1, r.life * 2.2);
+    const visAlpha = Math.min(fadeIn, fadeOut) * safeScale;
+    const isOmega = r.variant === 'omega';
+
+    ctx.save();
+    ctx.translate(r.x, r.y);
+
+    // Subtle void fissure floor field so roads & enemies stay crisp
+    ctx.globalAlpha = visAlpha * 0.34;
+    const vg = ctx.createRadialGradient(0, 0, 8, 0, 0, r.radius);
+    vg.addColorStop(0, isOmega ? 'rgba(244, 63, 94, 0.42)' : 'rgba(232, 121, 249, 0.36)');
+    vg.addColorStop(0.65, 'rgba(139, 92, 246, 0.16)');
+    vg.addColorStop(1, 'rgba(88, 28, 135, 0)');
+    ctx.fillStyle = vg;
+    ctx.beginPath();
+    ctx.arc(0, 0, r.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Crisp spinning tri-prism perimeter + fracture rays
+    ctx.globalAlpha = visAlpha * 0.88;
+    ctx.strokeStyle = isOmega ? '#FB7185' : '#F0ABFC';
+    ctx.lineWidth = r.isOverdrive ? 2.4 : 1.9;
+    drawPolygon(ctx, 0, 0, 6, r.radius * 0.9, animTime * 1.3);
+    ctx.stroke();
+
+    ctx.strokeStyle = '#67E8F9';
+    ctx.lineWidth = 1.4;
+    drawPolygon(ctx, 0, 0, 3, r.radius * 0.46, -animTime * 2.6);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+}
+
+/**
+ * Renders crisp Emerald Quantum Damage Echo transfer arcs between linked targets.
+ */
+export function drawQuantumEchoArcs(
+  ctx: CanvasRenderingContext2D,
+  arcs: readonly QuantumEchoArcFx[],
+  alphaScale = 1
+) {
+  const safeScale = Math.max(0.35, Math.min(1, alphaScale));
+  for (const arc of arcs) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, arc.alpha)) * safeScale;
+    ctx.strokeStyle = arc.color;
+    ctx.lineWidth = 2.2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(arc.x1, arc.y1);
+    ctx.lineTo(arc.x2, arc.y2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+}
+

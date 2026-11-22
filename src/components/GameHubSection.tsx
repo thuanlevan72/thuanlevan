@@ -192,7 +192,7 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     category: 'tech',
     title: 'Thiết Kế Kiến Trúc',
     shortTitle: 'Kiến Trúc',
-    subtitle: 'System Architecture Designer · 24 Hoàn Cảnh · 5 Chế Độ Chơi · Đa giải pháp S/A/B/C',
+    subtitle: '24 Hoàn Cảnh · 5 Chế Độ · CQRS Luật Dây · Kafka Buffer · SRE War-Room',
     badge: '24 Màn · 5 Chế Độ',
     playable: true,
     gameKey: 'traffic_router',
@@ -739,11 +739,11 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
         data-fullscreen={isFullscreen ? 'true' : 'false'}
         className={
           isFullscreen
-            ? 'fixed inset-0 z-50 w-screen h-[100dvh] bg-[#050811] overflow-y-auto p-1 sm:p-2 flex flex-col'
-            : 'relative'
+            ? 'fixed inset-0 z-50 w-screen h-[100dvh] bg-[#050811] overflow-y-auto overscroll-none p-1 sm:p-2 flex flex-col'
+            : 'relative overscroll-none'
         }
       >
-        {isFullscreen && activeGame !== 'prism_td' && (
+        {isFullscreen && activeGame !== 'prism_td' && activeGame !== 'traffic_router' && (
           <button
             type="button"
             data-testid="hub-exit-fullscreen-btn"
@@ -788,7 +788,12 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
             <LinuxHackerGameSection theme={theme} onToggleTheme={onToggleTheme} />
           )}
           {activeGame === 'traffic_router' && (
-            <TrafficRouterGameSection theme={theme} onToggleTheme={onToggleTheme} />
+            <TrafficRouterGameSection
+              theme={theme}
+              onToggleTheme={onToggleTheme}
+              isFullscreen={isFullscreen}
+              onToggleFullscreen={toggleFullscreen}
+            />
           )}
           {activeGame === 'gear_arena' && (
             <GearArenaGameSection theme={theme} onToggleTheme={onToggleTheme} />

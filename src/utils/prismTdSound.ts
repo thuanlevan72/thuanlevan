@@ -14,6 +14,7 @@ export type PrismSfxKind =
   | 'wave'
   | 'overdrive'
   | 'hurt'
+  | 'error'
   | 'victory'
   | 'defeat';
 
@@ -49,6 +50,7 @@ const USER_GESTURE_UI_KINDS = new Set<PrismSfxKind>([
   'sell',
   'wave',
   'overdrive',
+  'error',
   'victory',
   'defeat',
 ]);
@@ -503,11 +505,13 @@ const SFX_MIN_GAP_MS: Partial<Record<PrismSfxKind, number>> = {
   mothership: 150,
   supernova: 170,
   chronos: 185,
+  astral_ark: 195,
   tesla: 110,
   tempest: 125,
   beacon: 220,
   cryo: 150,
   radar: 190,
+  quantum_prism: 190,
   explosion: 95,
   kill: 95,
   interrupt: 140,
@@ -579,6 +583,11 @@ export function playPrismSfx(
         });
         playStableTone(ctx, bus, 783.99, 0.06, 0.08, 'sine', 0);
         playStableTone(ctx, bus, 523.25, 0.1, 0.09, 'triangle', 0.045);
+        break;
+      case 'error':
+        playBoltClick(ctx, bus, 1400, 0.12, 0);
+        playStableTone(ctx, bus, 220, 0.055, 0.08, 'triangle', 0, 0.002);
+        playStableTone(ctx, bus, 164.81, 0.075, 0.085, 'triangle', 0.05, 0.002);
         break;
       case 'wave':
         playSubKick(ctx, bus, 94, 46, 0.28, 0.22);
@@ -815,6 +824,20 @@ export function playPrismSfx(
         playSubKick(ctx, bus, 86, 22, 0.34, 0.3 * mix);
         break;
 
+      case 'astral_ark':
+        // 1000-energy apex void prism cannon: crystal harmonic + hypersonic capacitor crack + sub impact
+        playStableTone(ctx, bus, 523.25, 0.16, 0.085 * mix, 'sine', 0, 0.003);
+        playStableTone(ctx, bus, 1046.5, 0.18, 0.075 * mix, 'triangle', 0.02, 0.003);
+        playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
+          filterType: 'lowpass',
+          cutoffHz: 3100,
+          rate: jitter(0.88, 0.04),
+          dur: 0.32,
+          vol: 0.34 * mix,
+        });
+        playSubKick(ctx, bus, 94, 22, 0.38, 0.32 * mix);
+        break;
+
       // ---- ELECTRIC / LIGHTNING WEAPONS (2) ----
       case 'tesla':
         playElectricArc(ctx, bus, 0.24 * mix, 0.095, 0);
@@ -860,6 +883,12 @@ export function playPrismSfx(
           dur: 0.08,
           vol: 0.11 * mix,
         });
+        break;
+
+      case 'quantum_prism':
+        playStableTone(ctx, bus, 659.25, 0.14, 0.065 * mix, 'sine', 0, 0.005);
+        playStableTone(ctx, bus, 987.77, 0.16, 0.055 * mix, 'triangle', 0.025, 0.005);
+        playBoltClick(ctx, bus, 3200, 0.06 * mix, 0);
         break;
 
       case 'overheat':
@@ -1098,6 +1127,28 @@ export function playOverheatSkillSfx(
           delay: 0.04,
         });
         playSubKick(ctx, bus, 90, 20, 0.54, 0.36 * mix, 0.02);
+        break;
+
+      case 'void_cataclysm':
+        playStableTone(ctx, bus, 659.25, 0.22, 0.1 * mix, 'sine', 0, 0.004);
+        playStableTone(ctx, bus, 987.77, 0.28, 0.1 * mix, 'triangle', 0.04, 0.004);
+        playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
+          filterType: 'lowpass',
+          cutoffHz: 1950,
+          rate: 0.78,
+          dur: 0.45,
+          vol: 0.36 * mix,
+          delay: 0.03,
+        });
+        playSubKick(ctx, bus, 96, 20, 0.52, 0.36 * mix, 0.02);
+        break;
+
+      case 'quantum_singularity_protocol':
+        playBoltClick(ctx, bus, 3800, 0.1 * mix, 0);
+        playStableTone(ctx, bus, 523.25, 0.2, 0.09 * mix, 'sine', 0, 0.004);
+        playStableTone(ctx, bus, 783.99, 0.24, 0.095 * mix, 'triangle', 0.05, 0.004);
+        playStableTone(ctx, bus, 1174.66, 0.28, 0.1 * mix, 'sine', 0.1, 0.004);
+        playSubKick(ctx, bus, 92, 40, 0.22, 0.18 * mix);
         break;
 
       default:

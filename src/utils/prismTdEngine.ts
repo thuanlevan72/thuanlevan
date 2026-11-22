@@ -11,11 +11,13 @@ export type GunType =
   | 'mothership'
   | 'supernova'
   | 'chronos'
+  | 'astral_ark'
   | 'tesla'
   | 'tempest'
   | 'beacon'
   | 'cryo'
-  | 'radar';
+  | 'radar'
+  | 'quantum_prism';
 
 export type GunCategory = 'attack' | 'electric' | 'support';
 
@@ -48,7 +50,8 @@ export type MapBiome =
   | 'amber_desert'
   | 'arctic_core'
   | 'prismatic_nexus'
-  | 'chrono_sanctum';
+  | 'chrono_sanctum'
+  | 'astral_abyss';
 
 export interface BiomePalette {
   readonly bg: string;
@@ -142,6 +145,16 @@ export const BIOME_PALETTES: Record<MapBiome, BiomePalette> = {
     wallStroke: '#38BDF8',
     accent: '#67E8F9',
   },
+  astral_abyss: {
+    bg: '#04030D',
+    gridLine: 'rgba(232, 121, 249, 0.14)',
+    pathFill: '#130D2B',
+    pathBorder: 'rgba(240, 171, 252, 0.42)',
+    trackGlow: 'rgba(232, 121, 249, 0.5)',
+    wallFill: '#1E1540',
+    wallStroke: '#E879F9',
+    accent: '#F0ABFC',
+  },
 };
 
 export interface GridPoint {
@@ -151,7 +164,7 @@ export interface GridPoint {
 
 export type TileKind = 'empty' | 'path' | 'spawn' | 'core' | 'wall';
 
-export type DifficultyId = 'easy' | 'normal' | 'hard' | 'hell';
+export type DifficultyId = 'easy' | 'normal' | 'hard' | 'hell' | 'super_hell';
 
 export interface DifficultyConfig {
   readonly id: DifficultyId;
@@ -172,7 +185,7 @@ export interface DifficultyConfig {
   readonly eliteChanceBoost: number;
 }
 
-export const DIFFICULTY_ORDER: readonly DifficultyId[] = ['easy', 'normal', 'hard', 'hell'];
+export const DIFFICULTY_ORDER: readonly DifficultyId[] = ['easy', 'normal', 'hard', 'hell', 'super_hell'];
 
 export const DIFFICULTY_CONFIGS: Record<DifficultyId, DifficultyConfig> = {
   easy: {
@@ -247,12 +260,31 @@ export const DIFFICULTY_CONFIGS: Record<DifficultyId, DifficultyConfig> = {
     waveCountBonus: 6,
     eliteChanceBoost: 0.22,
   },
+  super_hell: {
+    id: 'super_hell',
+    label: 'Siêu Địa Ngục',
+    shortLabel: 'SIÊU ĐỊA NGỤC',
+    badgeColor: '#E879F9',
+    description: 'Cấp độ ác mộng · Quái 5.2× HP, Khiên 3.3×, +24% Tốc độ & Giáp · +4 Đợt',
+    hpMult: 5.2,
+    shieldMult: 3.3,
+    speedMult: 1.24,
+    armorBonus: 0.24,
+    startEnergyMult: 0.9,
+    coreHpMult: 0.75,
+    rewardMult: 0.95,
+    scoreMult: 3.8,
+    extraWaves: 4,
+    waveCountBonus: 8,
+    eliteChanceBoost: 0.32,
+  },
 };
 
 export type GameModeId =
   | 'campaign'
   | 'blitz'
   | 'boss_rush'
+  | 'boss_apocalypse'
   | 'endless'
   | 'overheat_fury'
   | 'iron_fortress'
@@ -283,6 +315,7 @@ export const GAME_MODE_ORDER: readonly GameModeId[] = [
   'campaign',
   'blitz',
   'boss_rush',
+  'boss_apocalypse',
   'endless',
   'overheat_fury',
   'iron_fortress',
@@ -296,7 +329,7 @@ export const GAME_MODE_CONFIGS: Record<GameModeId, GameModeConfig> = {
     label: 'Chiến Dịch',
     shortLabel: 'CHIẾN DỊCH',
     badgeColor: '#38BDF8',
-    description: '16–46 đợt chuẩn chiến thuật · Phối hợp 17 súng & khắc chế Siêu Boss cuối trận',
+    description: '16–46 đợt chuẩn chiến thuật · Phối hợp 19 súng & khắc chế Siêu Boss cuối trận',
     waveCountMult: 1.0,
     spawnRateMult: 0.94,
     speedMult: 0.95,
@@ -346,6 +379,25 @@ export const GAME_MODE_CONFIGS: Record<GameModeId, GameModeConfig> = {
     heatMult: 1.15,
     rewardMult: 1.4,
     scoreMult: 1.65,
+    waveDelaySec: 9,
+  },
+  boss_apocalypse: {
+    id: 'boss_apocalypse',
+    label: 'Khủng Khiếp · Chỉ Boss',
+    shortLabel: 'CHỈ BOSS ☠',
+    badgeColor: '#E11D48',
+    description: '+180% vốn khởi đầu · CHỈ SPAWN BOSS & SIÊU BOSS dồn dập mọi đợt (0 quái thường)!',
+    waveCountMult: 0.65,
+    spawnRateMult: 0.9,
+    speedMult: 0.92,
+    startEnergyMult: 2.8,
+    coreHpMult: 1.15,
+    hpMult: 0.85,
+    shieldMult: 0.88,
+    swarmCountMult: 1.0,
+    heatMult: 1.2,
+    rewardMult: 1.55,
+    scoreMult: 2.2,
     waveDelaySec: 9,
   },
   endless: {
@@ -410,7 +462,7 @@ export const GAME_MODE_CONFIGS: Record<GameModeId, GameModeConfig> = {
     label: 'Đại Gia Vũ Khí',
     shortLabel: 'TYCOON ⚡',
     badgeColor: '#FACC15',
-    description: '+85% vốn khởi đầu & +35% xu hạ quái để nâng dàn súng Lv10 sớm · Quái đông +25%',
+    description: '+85% vốn khởi đầu & +35% xu hạ quái để nâng dàn súng Lv7 sớm · Quái đông +25%',
     waveCountMult: 1.0,
     spawnRateMult: 1.15,
     speedMult: 1.0,
@@ -485,7 +537,7 @@ export function getEffectiveMapSetup(
 }
 
 export interface GunSkillMilestone {
-  readonly level: 3 | 5 | 7 | 10;
+  readonly level: 3 | 5 | 7;
   readonly name: string;
   readonly summary: string;
 }
@@ -604,6 +656,9 @@ export interface TdEnemy {
   burnDps: number;
   armorShred: number; // 0..0.55 permanent armor stripped
   stunTimer: number;
+  silencedTimer: number; // suppresses enemy & boss special abilities
+  quantumLinkTimer?: number; // links enemy to Quantum Prism Damage Echo web
+  quantumEchoRatio?: number; // fraction of damage echoed to linked targets
   abilityCooldown: number;
   windupKind?: BossWindupKind | null;
   windupTimer: number;
@@ -669,7 +724,7 @@ export interface RailBeamFx {
   alpha: number;
   color: string;
   visualTier: 1 | 2 | 3 | 4;
-  variant?: 'railgun' | 'supernova';
+  variant?: 'railgun' | 'supernova' | 'astral_ark';
 }
 
 export interface FlameConeFx {
@@ -799,15 +854,41 @@ export interface ChronoSlashFx {
   isCrit?: boolean;
 }
 
+export interface VoidRiftFx {
+  id: number;
+  sourceGunId: string;
+  x: number;
+  y: number;
+  radius: number;
+  dps: number;
+  pctHpDps: number;
+  armorPierce: number;
+  shieldMult: number;
+  slowPct: number;
+  life: number;
+  maxLife: number;
+  variant: GunVariant;
+  isOverdrive: boolean;
+}
+
+export interface QuantumEchoArcFx {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  alpha: number;
+  color: string;
+}
+
 export const GRID_COLS = 16;
 export const GRID_ROWS = 10;
 export const TILE_SIZE = 56;
 export const CANVAS_WIDTH = GRID_COLS * TILE_SIZE; // 896
 export const CANVAS_HEIGHT = GRID_ROWS * TILE_SIZE; // 560
-export const MAX_GUN_LEVEL = 10;
+export const MAX_GUN_LEVEL = 7;
 
 export const GUN_CATALOG: readonly GunCatalogItem[] = [
-  // === NHÓM TẤN CÔNG (11 SÚNG CHUYÊN BIỆT) ===
+  // === NHÓM TẤN CÔNG (13 SÚNG CHUYÊN BIỆT) ===
   {
     type: 'gatling',
     category: 'attack',
@@ -821,10 +902,9 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     baseCooldown: 0.24,
     rangeTiles: 2.75,
     milestones: [
-      { level: 3, name: 'Đạn Xuyên Giáp AP', summary: 'Xuyên 35% giáp Thiết Giáp' },
-      { level: 5, name: 'Nòng Kép Song Song', summary: 'Bắn đồng thời 2 luồng đạn liên hoàn' },
-      { level: 7, name: 'Đầu Đạn Nổ Mảnh', summary: '3 luồng đạn + nổ lan vùng nhỏ 22px' },
-      { level: 10, name: 'Bão Đạn Huyền Thoại', summary: '4 nòng Hyper-AP + xuyên 75% giáp' },
+      { level: 3, name: 'Đạn Xuyên Giáp & Nòng Kép', summary: 'Bắn 2 luồng đạn liên hoàn + xuyên 45% giáp Thiết Giáp' },
+      { level: 5, name: '3 Nòng Đạn Nổ Mảnh', summary: 'Bắn 3 luồng đạn + nổ lan vùng nhỏ 24px & phá khiên +15%' },
+      { level: 7, name: 'Bão Đạn Huyền Thoại', summary: '4 nòng Hyper-AP + xuyên 75% giáp' },
     ],
     variants: {
       alpha: {
@@ -879,10 +959,9 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     baseCooldown: 0.85,
     rangeTiles: 2.35,
     milestones: [
-      { level: 3, name: 'Nạp Nòng 6 Viên', summary: 'Mở rộng chùm 6 viên phá đám đông' },
-      { level: 5, name: 'Đạn Cháy Nhiệt', summary: 'Gây bỏng nhiệt 45% sát thương/giây' },
-      { level: 7, name: 'Quạt Thép 7 Viên', summary: 'Tăng góc quét + 7 viên xuyên nhẹ' },
-      { level: 10, name: 'Lưới Đạn Hủy Diệt', summary: '9 viên siêu đặc + xuyên 62% giáp' },
+      { level: 3, name: 'Chùm 6 Viên Nhiệt Lửa', summary: 'Mở rộng chùm 6 viên + gây bỏng nhiệt 45% DMG/giây' },
+      { level: 5, name: 'Quạt Thép 7 Viên Xuyên', summary: 'Tăng góc quét + 7 viên xuyên giáp nhẹ' },
+      { level: 7, name: 'Lưới Đạn Hủy Diệt', summary: '9 viên siêu đặc + xuyên 62% giáp' },
     ],
     variants: {
       alpha: {
@@ -937,10 +1016,9 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     baseCooldown: 0.42,
     rangeTiles: 2.4,
     milestones: [
-      { level: 3, name: 'Nhiệt Lưu Huỳnh', summary: 'Tăng gấp rưỡi sát thương cháy DoT bỏ qua giáp' },
-      { level: 5, name: 'Nung Chảy Giáp', summary: 'Bào mòn 28% giáp Thiết Giáp & xuyên 72% giáp' },
-      { level: 7, name: 'Ngọn Lửa Lam', summary: 'Lửa plasma xanh làm chậm nhẹ 18%' },
-      { level: 10, name: 'Bão Lửa Nova 360°', summary: 'Phóng vòng lửa Plasma quét toàn bộ 360°' },
+      { level: 3, name: 'Nhiệt Lưu Huỳnh Bào Giáp', summary: 'Bào mòn 28% giáp Thiết Giáp, xuyên 72% giáp & tăng cháy DoT' },
+      { level: 5, name: 'Ngọn Lửa Lam Ngưng Tụ', summary: 'Lửa plasma xanh làm chậm 18% & phá khiên +15%' },
+      { level: 7, name: 'Bão Lửa Nova 360°', summary: 'Phóng vòng lửa Plasma quét toàn bộ 360°' },
     ],
     variants: {
       alpha: {
@@ -995,10 +1073,9 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     baseCooldown: 0.78,
     rangeTiles: 3.1,
     milestones: [
-      { level: 3, name: 'Lưỡi Titan 4 Nảy', summary: 'Đĩa cưa bật nảy qua tối đa 4 mục tiêu' },
-      { level: 5, name: 'Răng Cưa Chảy Máu', summary: 'Gây chảy máu DoT xuyên giáp trên mỗi nhát cắt' },
-      { level: 7, name: 'Cặp Đĩa Song Sinh', summary: 'Phóng đồng thời 2 đĩa cưa xoắn' },
-      { level: 10, name: 'Bão Đĩa 3 Lưỡi Vàng', summary: '3 đĩa cưa nảy 7 lượt xé toạc đội hình' },
+      { level: 3, name: 'Lưỡi Titan 4 Nảy Chảy Máu', summary: 'Đĩa cưa nảy 4 mục tiêu + gây chảy máu DoT xuyên giáp' },
+      { level: 5, name: 'Cặp Đĩa Song Sinh', summary: 'Phóng đồng thời 2 đĩa cưa xoắn nảy 5 mục tiêu' },
+      { level: 7, name: 'Bão Đĩa 3 Lưỡi Vàng', summary: '3 đĩa cưa nảy 7 lượt xé toạc đội hình' },
     ],
     variants: {
       alpha: {
@@ -1053,10 +1130,9 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     baseCooldown: 1.55,
     rangeTiles: 4.5,
     milestones: [
-      { level: 3, name: 'Lực Hút Trọng Trường', summary: 'Kéo gom quái dọc đường vào tâm nổ' },
-      { level: 5, name: 'Đạn Chùm Cháy', summary: 'Tạo hố cháy lan & làm chậm 30%' },
-      { level: 7, name: 'Đầu Đạn Phá Hủy', summary: 'Bán kính nổ lớn + xuyên 68% giáp' },
-      { level: 10, name: 'Song Pháo Thiên Thạch', summary: 'Bắn cặp đạn cối kéo xoáy + đốt diện rộng' },
+      { level: 3, name: 'Xoáy Trọng Trường & Cháy', summary: 'Kéo gom quái vào tâm nổ, làm chậm 30% & đốt hố cháy' },
+      { level: 5, name: 'Đầu Đạn Phá Hủy', summary: 'Bán kính nổ lớn + xuyên 68% giáp' },
+      { level: 7, name: 'Song Pháo Thiên Thạch', summary: 'Bắn cặp đạn cối kéo xoáy + đốt diện rộng' },
     ],
     variants: {
       alpha: {
@@ -1111,10 +1187,9 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     baseCooldown: 1.05,
     rangeTiles: 4.3,
     milestones: [
-      { level: 3, name: 'Đầu Đạn Tầm Nhiệt', summary: 'Nổ lan rộng + tự khóa Tàng Hình / Y Tá / Boss' },
-      { level: 5, name: 'Bệ Phóng Kép', summary: 'Phóng 2 tên lửa dẫn đường mỗi loạt' },
-      { level: 7, name: 'Bom Chùm Thứ Cấp', summary: 'Tách 3 bom con công phá quanh điểm rơi' },
-      { level: 10, name: 'Loạt Tên Lửa Hạt Nhân', summary: '3 tên lửa hạng nặng + nổ chùm diện rộng' },
+      { level: 3, name: 'Tầm Nhiệt & Bệ Phóng Kép', summary: 'Phóng 2 tên lửa dẫn đường, tự khóa Tàng Hình / Y Tá / Boss' },
+      { level: 5, name: 'Bom Chùm Thứ Cấp', summary: 'Tách 3 bom con công phá quanh điểm rơi' },
+      { level: 7, name: 'Loạt Tên Lửa Hạt Nhân', summary: '3 tên lửa hạng nặng + nổ chùm diện rộng' },
     ],
     variants: {
       alpha: {
@@ -1169,10 +1244,9 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     baseCooldown: 1.72,
     rangeTiles: 5.0,
     milestones: [
-      { level: 3, name: 'Tia Siêu Thanh Xuyên Giáp', summary: 'Bỏ qua 85% giáp, xuyên thẳng mọi quái trên đường bắn' },
-      { level: 5, name: 'Phá Khiên Cộng Hưởng', summary: 'Gây 175% lên Khiên & 165% chí mạng lên Boss/Siêu Boss' },
-      { level: 7, name: 'Nổ Quỹ Đạo', summary: 'Phát nổ sóng từ trường 40px dọc thân mục tiêu' },
-      { level: 10, name: 'Tia Hủy Diệt Omega', summary: 'Xuyên 100% giáp · 3 tia tụ năng quét sạch đường thẳng' },
+      { level: 3, name: 'Tia Siêu Thanh Phá Khiên', summary: 'Xuyên 85% giáp mọi quái trên đường, 175% lên Khiên & 165% chí mạng Boss' },
+      { level: 5, name: 'Nổ Quỹ Đạo Cộng Hưởng', summary: 'Phát nổ sóng từ trường 40px dọc thân mục tiêu & bắn 2 tia' },
+      { level: 7, name: 'Tia Hủy Diệt Omega', summary: 'Xuyên 100% giáp · 3 tia tụ năng quét sạch đường thẳng' },
     ],
     variants: {
       alpha: {
@@ -1222,15 +1296,14 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     shortName: 'Thiên Phạt',
     roleClue: 'Gọi tia hủy diệt toàn bản đồ',
     accentColor: '#F97316',
-    cost: 220,
-    baseDamage: 295,
+    cost: 300,
+    baseDamage: 335,
     baseCooldown: 2.35,
-    rangeTiles: 22,
+    rangeTiles: 28,
     milestones: [
-      { level: 3, name: 'Vùng Dung Nham Bức Xạ', summary: 'Vùng dung nham đốt 42% DMG/s, làm chậm 20% & nung chảy 25% giáp' },
-      { level: 5, name: 'Khóa Mục Tiêu Kép', summary: 'Gọi đồng thời 2 tia Thiên Phạt lên 2 quái nhiều máu nhất bản đồ' },
-      { level: 7, name: 'Xuyên Giáp & Thiêu Máu Tối Đa', summary: 'Xuyên 90% giáp + thiêu đốt thêm 6% Máu tối đa Boss / Thiết Giáp' },
-      { level: 10, name: 'Tam Trụ Thiên Phạt Vĩnh Hằng', summary: '3 cột sáng hủy diệt đồng loạt + vùng dung nham khổng lồ bào 35% giáp' },
+      { level: 3, name: 'Dung Nham Bức Xạ & Khóa Kép', summary: 'Gọi 2 tia Thiên Phạt, vùng dung nham đốt 42% DMG/s, chậm 20% & nung chảy 25% giáp' },
+      { level: 5, name: 'Xuyên Giáp & Thiêu Máu Tối Đa', summary: 'Xuyên 92% giáp + thiêu đốt thêm 6% Máu tối đa Boss / Thiết Giáp' },
+      { level: 7, name: 'Tam Trụ Thiên Phạt Vĩnh Hằng', summary: '3 cột sáng hủy diệt đồng loạt + vùng dung nham khổng lồ bào 35% giáp' },
     ],
     variants: {
       alpha: {
@@ -1280,15 +1353,14 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     shortName: 'Hố Đen',
     roleClue: 'Nuốt chửng & nghiền nát không gian',
     accentColor: '#A855F7',
-    cost: 250,
-    baseDamage: 148,
+    cost: 330,
+    baseDamage: 172,
     baseCooldown: 3.6,
     rangeTiles: 4.4,
     milestones: [
-      { level: 3, name: 'Chân Trời Nuốt Chửng', summary: 'Hút chặt bầy quái vào tâm, nuốt 45% máu xác & kéo dài thời gian tồn tại' },
-      { level: 5, name: 'Nghiền Sát Thương Chuẩn', summary: '100% sát thương chuẩn xuyên mọi giáp · tâm hố đen nghiền ×1.5' },
-      { level: 7, name: 'Trường Hấp Dẫn Siêu Sâu', summary: 'Bán kính hút 124px + làm chậm 42% toàn bộ quái trong xoáy' },
-      { level: 10, name: 'Vụ Nổ Sụp Đổ Vũ Trụ', summary: 'Tích 70% máu quái bị nuốt & giải phóng vụ nổ chuẩn hủy diệt cuối giờ' },
+      { level: 3, name: 'Chân Trời Sát Thương Chuẩn', summary: 'Hút chặt quái vào tâm, 100% sát thương chuẩn & nuốt 55% máu xác' },
+      { level: 5, name: 'Trường Hấp Dẫn Siêu Sâu', summary: 'Bán kính hút 124px + làm chậm 42% toàn bộ quái trong xoáy' },
+      { level: 7, name: 'Vụ Nổ Sụp Đổ Vũ Trụ', summary: 'Tích 72% máu quái bị nuốt & giải phóng vụ nổ chuẩn hủy diệt cuối giờ' },
     ],
     variants: {
       alpha: {
@@ -1338,15 +1410,14 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     shortName: 'Mẫu Hạm',
     roleClue: 'Triệu hồi hạm đội tự hành',
     accentColor: '#38BDF8',
-    cost: 200,
-    baseDamage: 36,
+    cost: 280,
+    baseDamage: 43,
     baseCooldown: 0.56,
-    rangeTiles: 20,
+    rangeTiles: 28,
     milestones: [
       { level: 3, name: 'Phi Đội Săn Lọt Lưới', summary: '3 phi thuyền bay nhanh toàn bản đồ, bắn tỉa 215px quái gần Lõi' },
-      { level: 5, name: 'Bến Đỗ Xuất Đội 4', summary: 'Tăng lên 4 phi thuyền chiến đấu, tự né xung Boss & bắn phản công' },
-      { level: 7, name: 'Tên Lửa Plasma Săn Boss', summary: 'Mỗi phát thứ 3 phóng Tên Lửa nổ lan (+40% DMG lên Boss/Siêu Boss)' },
-      { level: 10, name: 'Hạm Đội Độc Tôn', summary: 'Phi đội bay siêu thanh, xuyên 80% giáp & xuất xưởng tức thì' },
+      { level: 5, name: 'Hạm Đội 4 & Tên Lửa Plasma', summary: 'Tăng lên 4 phi thuyền, tự né xung Boss & phóng Tên Lửa (+45% DMG lên Boss)' },
+      { level: 7, name: 'Hạm Đội Độc Tôn', summary: 'Phi đội bay siêu thanh, xuyên 80% giáp & xuất xưởng tức thì' },
     ],
     variants: {
       alpha: {
@@ -1401,10 +1472,9 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     baseCooldown: 1.65,
     rangeTiles: 4.6,
     milestones: [
-      { level: 3, name: 'Ấn Tích Siêu Tân Tinh', summary: 'Gắn ấn khiến toàn đội gây +32% DMG & hạ gục kích hoạt nổ dây chuyền 115px' },
-      { level: 5, name: 'Tia Phán Quyết Ngắt Chiêu', summary: 'Mỗi 4 phát bắn Hyper-Beam xuyên tuyến, ngắt chiêu Boss & phóng +2 mảnh sao' },
-      { level: 7, name: 'Xuyên Giáp Tuyệt Đối', summary: 'Cầu sao xuyên 4–5 mục tiêu, xuyên 100% giáp & nhân 2.0× sát thương Khiên' },
-      { level: 10, name: 'Thiên Hà Khởi Nguyên', summary: 'Nổ dây chuyền 140px (+12% HP tối đa), Tia Phán Quyết mỗi 3 phát & ấn +42%' },
+      { level: 3, name: 'Ấn Tích & Tia Phán Quyết', summary: 'Gắn ấn +35% DMG toàn đội, nổ dây chuyền 115px & phóng Tia Phán Quyết ngắt chiêu Boss' },
+      { level: 5, name: 'Xuyên Giáp Tuyệt Đối', summary: 'Cầu sao xuyên 4 mục tiêu, xuyên 100% giáp & nhân 2.0× sát thương Khiên' },
+      { level: 7, name: 'Thiên Hà Khởi Nguyên', summary: 'Nổ dây chuyền 140px (+12% HP tối đa), Tia Phán Quyết mỗi 3 phát & ấn +42%' },
     ],
     variants: {
       alpha: {
@@ -1454,15 +1524,14 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     shortName: 'Thời Không',
     roleClue: 'Ngưng đọng & tua ngược thời gian',
     accentColor: '#22D3EE',
-    cost: 800,
+    cost: 700,
     baseDamage: 620,
     baseCooldown: 1.45,
     rangeTiles: 5.8,
     milestones: [
-      { level: 3, name: 'Ghi Âm Nghịch Lý', summary: 'Vòng Thời Không ghi lại 38–46% sát thương toàn đội & nổ chuẩn khi sụp đổ' },
-      { level: 5, name: 'Tua Ngược Không Gian', summary: 'Khi sụp đổ kéo lùi quái ngược về cổng + xuyên 100% giáp & ngắt chiêu Boss' },
-      { level: 7, name: 'Trảm Toàn Bản Đồ', summary: 'Duy trì 2–3 Vòng Thời Không & bổ sung Nhát Chém Thực Tại lên Boss xa nhất' },
-      { level: 10, name: 'Chúa Tể Thời Gian', summary: '6 Nhát Chém Thực Tại, ghi âm 56% sát thương toàn đội & 2.45× phá khiên' },
+      { level: 3, name: 'Nghịch Lý & Tua Ngược', summary: 'Vòng Thời Không ghi 46% DMG toàn đội, tua ngược quái về cổng & ngắt chiêu Boss' },
+      { level: 5, name: 'Song Trường & Nhát Chém Thực Tại', summary: 'Duy trì 2–3 Vòng Thời Không & tung Nhát Chém Thực Tại lên Boss xa nhất' },
+      { level: 7, name: 'Chúa Tể Thời Gian', summary: '6 Nhát Chém Thực Tại, ghi âm 56% sát thương toàn đội & 2.45× phá khiên' },
     ],
     variants: {
       alpha: {
@@ -1504,6 +1573,63 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
       heatPerShot: 24,
     },
   },
+  {
+    type: 'astral_ark',
+    category: 'attack',
+    hotkey: 'n',
+    name: 'Pháo Tối Thượng Hư Không',
+    shortName: 'Tối Thượng',
+    roleClue: 'Tia lăng kính + Vết Nứt %HP Boss',
+    accentColor: '#E879F9',
+    cost: 1200,
+    baseDamage: 1040,
+    baseCooldown: 1.5,
+    rangeTiles: 6.4,
+    milestones: [
+      { level: 3, name: 'Chùm Tia & Vết Nứt Hư Không', summary: 'Bắn 3 tia Lăng Kính + mở Vết Nứt đốt chuẩn xé 2.5% Máu tối đa Boss/giây' },
+      { level: 5, name: 'Song Vết Nứt Cộng Hưởng', summary: 'Duy trì 2–3 Vết Nứt song song, xuyên 100% giáp & 2.65× phá khiên' },
+      { level: 7, name: 'Thánh Khí Tận Thế', summary: '4–5 tia Lăng Kính + Vết Nứt xé 4% Máu tối đa Boss/s & nổ sụp đổ cực đại' },
+    ],
+    variants: {
+      alpha: {
+        id: 'alpha',
+        name: 'Alpha · Lăng Kính Đa Tia',
+        shortTag: 'α +1 Tia & Nứt',
+        summary: '+1 Tia Lăng Kính, +1 Vết Nứt Hư Không đồng thời & nhịp bắn +14%',
+        accentColor: '#F0ABFC',
+        damageMult: 0.96,
+        rofMult: 1.14,
+        rangeBonus: 0.4,
+        splashBonus: 24,
+        armorPierceBonus: 0,
+        shieldMultBonus: 0.25,
+        extraProjectiles: 1,
+        extraChain: 1,
+      },
+      omega: {
+        id: 'omega',
+        name: 'Omega · Vực Thẳm Hủy Diệt',
+        shortTag: 'ω Xé Boss 4%',
+        summary: '+44% sát thương chuẩn, xuyên 100% giáp & +65% phá khiên Siêu Boss',
+        accentColor: '#F43F5E',
+        damageMult: 1.44,
+        rofMult: 0.95,
+        rangeBonus: 0.2,
+        splashBonus: 14,
+        armorPierceBonus: 0.08,
+        shieldMultBonus: 0.65,
+        extraProjectiles: 0,
+        extraChain: 0,
+      },
+    },
+    overheatSkill: {
+      key: 'void_cataclysm',
+      name: 'Đại Hồng Thủy Hư Không',
+      color: '#F0ABFC',
+      summary: 'Mở 3 Vết Nứt Hư Không khổng lồ trên tuyến Boss & phóng 6 Tia Lăng Kính cực đại',
+      heatPerShot: 24,
+    },
+  },
 
   // === NHÓM HỆ ĐIỆN / LIGHTNING (2 SÚNG CHUYÊN BIỆT) ===
   {
@@ -1519,10 +1645,9 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     baseCooldown: 0.56,
     rangeTiles: 3.1,
     milestones: [
-      { level: 3, name: 'Hồ Quang 4 Mục Tiêu', summary: 'Tia sét giật lan 4 mục tiêu + làm chậm tê liệt 0.25s' },
-      { level: 5, name: 'Sốc Phá Khiên & Ngắt Chiêu', summary: 'Gây 165% lên Khiên & cắt đứt chiêu Boss đang tụ' },
-      { level: 7, name: 'Cộng Hưởng Ướt Overdrive', summary: 'Đánh mục tiêu ướt/băng gây +40% DMG & +2 lần giật lan' },
-      { level: 10, name: 'Bão Sét 7 Nhánh Vĩnh Cửu', summary: 'Giật 7 mục tiêu + phóng xung nổ điện từ 42px' },
+      { level: 3, name: 'Hồ Quang 4 Nhánh & Ngắt Chiêu', summary: 'Tia sét giật lan 4 mục tiêu, gây 165% Khiên & cắt chiêu Boss đang tụ' },
+      { level: 5, name: 'Bão Ướt Cộng Hưởng', summary: '5 nhánh sét; đánh mục tiêu ướt/băng gây +40% DMG & +2 lần giật lan' },
+      { level: 7, name: 'Bão Sét 7 Nhánh Vĩnh Cửu', summary: 'Giật 7 mục tiêu + phóng xung nổ điện từ 42px' },
     ],
     variants: {
       alpha: {
@@ -1577,10 +1702,9 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     baseCooldown: 0.94,
     rangeTiles: 3.5,
     milestones: [
-      { level: 3, name: 'Song Cầu Điện Từ', summary: 'Phóng 2 cầu bão EMP + tê liệt 26%' },
-      { level: 5, name: 'Xung Phá Khiên & Cắt Chiêu', summary: 'Gây 175% lên Khiên + ngắt chiêu Boss khi phát nổ' },
-      { level: 7, name: 'Cộng Hưởng Bão Ướt', summary: 'Trên mục tiêu ướt: nổ rộng +24px & phóng thêm sét lan' },
-      { level: 10, name: 'Tam Cầu Bão Tối Thượng', summary: '3 cầu EMP + choáng ngắn 0.25s toàn vùng nổ' },
+      { level: 3, name: 'Song Cầu EMP & Cắt Chiêu', summary: 'Phóng 2 cầu EMP, gây 175% Khiên, tê liệt 26% & ngắt chiêu Boss' },
+      { level: 5, name: 'Cộng Hưởng Bão Ướt', summary: 'Trên mục tiêu ướt: nổ rộng +24px & phóng thêm sét lan' },
+      { level: 7, name: 'Tam Cầu Bão Tối Thượng', summary: '3 cầu EMP + choáng ngắn 0.25s toàn vùng nổ' },
     ],
     variants: {
       alpha: {
@@ -1623,7 +1747,7 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     },
   },
 
-  // === NHÓM HỖ TRỢ THUẦN TÚY (3 SÚNG: 0 SÁT THƯƠNG · 0 HỒI MÁU · 0 BUFF TỐC ĐÁNH) ===
+  // === NHÓM HỖ TRỢ THUẦN TÚY (4 SÚNG: 0 SÁT THƯƠNG · 0 HỒI MÁU · 0 BUFF TỐC ĐÁNH) ===
   {
     type: 'beacon',
     category: 'support',
@@ -1638,9 +1762,8 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     rangeTiles: 2.8,
     milestones: [
       { level: 3, name: 'Cộng Hưởng Chí Mạng 30%', summary: 'Đồng minh nhận +20% DMG & +30% Chí Mạng (×1.90)' },
-      { level: 5, name: 'Mạng Lưới Tụ Năng', summary: 'Mở rộng aura +0.35ô & khuếch đại Chí Mạng' },
-      { level: 7, name: 'Trường Siêu Tụ 36%', summary: 'Đồng minh nhận +26% DMG & +36% Chí Mạng (×2.00)' },
-      { level: 10, name: 'Lõi Thái Dương Chí Mạng', summary: '+34% DMG & +45% Chí Mạng (×2.15) quanh tháp' },
+      { level: 5, name: 'Trường Siêu Tụ 36%', summary: 'Mở rộng aura +0.35ô, đồng minh nhận +26% DMG & +36% Chí Mạng (×2.00)' },
+      { level: 7, name: 'Lõi Thái Dương Chí Mạng', summary: '+34% DMG & +45% Chí Mạng (×2.15) quanh tháp (0 DMG)' },
     ],
     variants: {
       alpha: {
@@ -1695,10 +1818,9 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     baseCooldown: 0.85,
     rangeTiles: 2.95,
     milestones: [
-      { level: 3, name: 'Sương Ẩm Dẫn Điện', summary: 'Làm chậm 32% & giữ ẩm 2.6s giúp hệ Điện bùng nổ' },
-      { level: 5, name: 'Giòn Vỡ Kết Tinh', summary: 'Quái bị làm chậm nhận +20% sát thương từ mọi tháp' },
-      { level: 7, name: 'Khí Lạnh Phủ Rộng', summary: 'Chậm 38%, Giòn +24% & hiện hình toàn bộ Tàng Hình' },
-      { level: 10, name: 'Đông Kết Vĩnh Cửu', summary: 'Chậm 44%, Giòn +30% & ướt dẫn điện 3.4s' },
+      { level: 3, name: 'Sương Ẩm Giòn Vỡ', summary: 'Làm chậm 34%, giữ ẩm 2.6s giúp hệ Điện & khiến quái nhận +20% DMG' },
+      { level: 5, name: 'Khí Lạnh Phủ Rộng', summary: 'Chậm 38%, Giòn +24% & hiện hình toàn bộ Tàng Hình' },
+      { level: 7, name: 'Đông Kết Vĩnh Cửu', summary: 'Chậm 44%, Giòn +30% & ướt dẫn điện 3.4s (0 DMG)' },
     ],
     variants: {
       alpha: {
@@ -1753,10 +1875,9 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     baseCooldown: 0.95,
     rangeTiles: 3.6,
     milestones: [
-      { level: 3, name: 'Tín Hiệu Mục Tiêu', summary: '+0.95ô Tầm, +22% Xuyên Giáp, +32% Phá Khiên & khóa yếu +22%' },
-      { level: 5, name: 'Quét Tàng Hình & Giảm Giáp', summary: 'Lộ hình Tàng Hình, bào mòn 24% giáp & khóa yếu +28%' },
-      { level: 7, name: 'Chỉ Thị Bão Hòa', summary: '+1.25ô Tầm, +32% Xuyên Giáp & +42% Phá Khiên đồng minh' },
-      { level: 10, name: 'Mắt Thần Chỉ Huy', summary: '+1.60ô Tầm, +40% Xuyên Giáp, +55% Phá Khiên & khóa yếu +36%' },
+      { level: 3, name: 'Chỉ Thị & Quét Tàng Hình', summary: '+0.95ô Tầm, +24% Xuyên Giáp, +34% Phá Khiên, lộ Tàng Hình & khóa yếu +26%' },
+      { level: 5, name: 'Chỉ Thị Bão Hòa', summary: '+1.25ô Tầm, +32% Xuyên Giáp, +42% Phá Khiên & bào mòn 24% giáp' },
+      { level: 7, name: 'Mắt Thần Chỉ Huy', summary: '+1.60ô Tầm, +40% Xuyên Giáp, +55% Phá Khiên & khóa yếu +36% (0 DMG)' },
     ],
     variants: {
       alpha: {
@@ -1798,6 +1919,63 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
       heatPerShot: 14,
     },
   },
+  {
+    type: 'quantum_prism',
+    category: 'support',
+    hotkey: 'w',
+    name: 'Lăng Kính Cộng Hưởng Lượng Tử ✦',
+    shortName: 'Lượng Tử ✦',
+    roleClue: 'Câm Lặng + Cộng Hưởng + Đa Tia (0 DMG)',
+    accentColor: '#34D399',
+    cost: 500,
+    baseDamage: 0,
+    baseCooldown: 1.0,
+    rangeTiles: 4.1,
+    milestones: [
+      { level: 3, name: 'Cộng Hưởng 24% & Câm Lặng', summary: 'Lan truyền 24% DMG sang 3–4 mục tiêu & Câm Lặng khóa hồi máu/khiên/triệu hồi Boss' },
+      { level: 5, name: 'Liên Kết Đa Tia +1', summary: 'Đồng minh trong vùng bắn +1 đạn/nảy, lan truyền 30% DMG & thu +5⚡ mỗi hạ gục' },
+      { level: 7, name: 'Ma Trận Vĩnh Hằng 38%', summary: 'Lan truyền 38% DMG sang 5 quái + Câm Lặng Boss & +6⚡ mỗi hạ gục (0 DMG)' },
+    ],
+    variants: {
+      alpha: {
+        id: 'alpha',
+        name: 'Alpha · Liên Kết Đa Đạn',
+        shortTag: 'α +Đa Tia & ⚡',
+        summary: '+0.45ô tầm phủ, đồng minh +1 Tia/Nảy & tăng năng lượng thu hoạch',
+        accentColor: '#34D399',
+        damageMult: 1,
+        rofMult: 1.08,
+        rangeBonus: 0.45,
+        splashBonus: 0,
+        armorPierceBonus: 0,
+        shieldMultBonus: 0,
+        extraProjectiles: 0,
+        extraChain: 0,
+      },
+      omega: {
+        id: 'omega',
+        name: 'Omega · Cộng Hưởng Câm Lặng',
+        shortTag: 'ω +14% Lan & Khóa',
+        summary: '+14% tỉ lệ lan truyền Cộng Hưởng & tăng thời gian Câm Lặng Boss',
+        accentColor: '#2DD4BF',
+        damageMult: 1,
+        rofMult: 1,
+        rangeBonus: 0.2,
+        splashBonus: 0,
+        armorPierceBonus: 0,
+        shieldMultBonus: 0,
+        extraProjectiles: 0,
+        extraChain: 0,
+      },
+    },
+    overheatSkill: {
+      key: 'quantum_singularity_protocol',
+      name: 'Giao Thức Câm Lặng Lượng Tử ✦',
+      color: '#34D399',
+      summary: 'Câm lặng toàn vùng rộng, khuếch đại Cộng Hưởng lên 50% & thu ngay +35⚡ (0 sát thương)',
+      heatPerShot: 14,
+    },
+  },
 ];
 
 export function getGunCategory(type: GunType): GunCategory {
@@ -1809,7 +1987,7 @@ export function isElectricGunType(type: GunType): boolean {
 }
 
 export function isSupportGunType(type: GunType): boolean {
-  return type === 'beacon' || type === 'cryo' || type === 'radar';
+  return getGunCategory(type) === 'support';
 }
 
 export function getAvailableGunsForMap(_mapId?: string): GunCatalogItem[] {
@@ -2409,7 +2587,7 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
     recommendedDifficulty: 'hell',
     difficultyLabel: '✦ Siêu Đặc Biệt · 40 Đợt',
     subtitle: 'Thánh địa 57 ô quanh 2 pháo đài lõi thời gian & 5 mạch nước dẫn điện cổ đại.',
-    tacticalHint: 'Gợi ý: Đặt Pháo Thời Không (B · 800⚡) tại (6,7) hoặc (4,2) để bao trùm cả thánh địa & tua ngược đợt Siêu Boss!',
+    tacticalHint: 'Gợi ý: Đặt Pháo Thời Không (B · 700⚡) tại (6,7) hoặc (4,2) để bao trùm cả thánh địa & tua ngược đợt Siêu Boss!',
     biome: 'chrono_sanctum',
     cols: GRID_COLS,
     rows: GRID_ROWS,
@@ -2444,6 +2622,47 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
       { col: 2, row: 6 },
       { col: 7, row: 5 },
       { col: 10, row: 8 },
+    ],
+  },
+  {
+    id: 'sector-19',
+    name: 'Màn 19 · Đại Vực Hư Không (Siêu Rộng)',
+    recommendedDifficulty: 'super_hell',
+    difficultyLabel: '✦ Siêu Rộng 24×14 · 42 Đợt',
+    subtitle: 'Bản đồ siêu rộng 24×14 với tuyến ngoằn ngoèo 73 ô & 6 hồ dẫn điện — chiến trường đỉnh cao cho Pháo 1200⚡ & Lăng Kính 500⚡!',
+    tacticalHint: 'Gợi ý: Đặt Pháo Tối Thượng Hư Không (N · 1200⚡) & Lăng Kính Lượng Tử (W · 500⚡) ở trục trung tâm (7,6) / (12,6) để phủ 3 nhánh đường!',
+    biome: 'astral_abyss',
+    cols: 24,
+    rows: 14,
+    startEnergy: 1340,
+    startCoreHp: 38,
+    totalWaves: 42,
+    path: [
+      { col: 0, row: 2 },
+      { col: 5, row: 2 },
+      { col: 5, row: 11 },
+      { col: 10, row: 11 },
+      { col: 10, row: 1 },
+      { col: 15, row: 1 },
+      { col: 15, row: 12 },
+      { col: 20, row: 12 },
+      { col: 20, row: 3 },
+      { col: 23, row: 3 },
+    ],
+    walls: [
+      { col: 2, row: 6 },
+      { col: 7, row: 6 },
+      { col: 12, row: 6 },
+      { col: 17, row: 7 },
+      { col: 22, row: 8 },
+    ],
+    wetZones: [
+      { col: 5, row: 6 },
+      { col: 10, row: 6 },
+      { col: 15, row: 6 },
+      { col: 20, row: 7 },
+      { col: 12, row: 1 },
+      { col: 17, row: 12 },
     ],
   },
 ];
@@ -2549,14 +2768,13 @@ export function getGunCatalogItem(type: GunType): GunCatalogItem {
 }
 
 /**
- * Upgrade cost from `level` to `level + 1` (supports levels 1..9 -> 10, null at MAX Lv10).
+ * Upgrade cost from `level` to `level + 1` (supports levels 1..6 -> MAX Lv7, null at MAX Lv7).
+ * Each upgrade tier doubles cost: 2x -> 4x -> 8x -> 16x -> 32x -> 64x base cost.
  */
 export function getGunUpgradeCost(type: GunType, level: number): number | null {
   if (level >= MAX_GUN_LEVEL || level < 1) return null;
   const item = getGunCatalogItem(type);
-  const stepFactors = [0.58, 0.72, 0.9, 1.12, 1.38, 1.72, 2.15, 2.65, 3.25];
-  const factor = stepFactors[level - 1] ?? 3.25;
-  return Math.round((item.cost * factor) / 5) * 5;
+  return Math.round(item.cost * Math.pow(2, level));
 }
 
 export function getGunTotalInvested(type: GunType, level: number): number {
@@ -2573,9 +2791,12 @@ export function getGunSellRefund(gun: Pick<PlacedGun, 'type' | 'level'>): number
   return Math.round(getGunTotalInvested(gun.type, gun.level) * 0.72);
 }
 
+const GUN_PROFILE_CACHE = new Map<string, GunCombatProfile>();
+
 /**
- * Computes deterministic combat stats, visual tier, and unlocked milestone skills for Lv1..10.
- * Pure support towers (`beacon`, `cryo`, `radar`) ALWAYS output 0 damage, 0 dpsEstimate, 0 burnDps.
+ * Computes deterministic combat stats, visual tier, and unlocked milestone skills for Lv1..7.
+ * Each upgrade doubles both cost AND base damage (`2^(level-1)`): 1x -> 2x -> 4x -> 8x -> 16x -> 32x -> 64x.
+ * Pure support towers (`beacon`, `cryo`, `radar`, `quantum_prism`) ALWAYS output 0 damage, 0 dpsEstimate, 0 burnDps.
  */
 export function getGunCombatProfile(
   type: GunType,
@@ -2583,15 +2804,19 @@ export function getGunCombatProfile(
   variant: GunVariant = 'alpha'
 ): GunCombatProfile {
   const level = Math.max(1, Math.min(MAX_GUN_LEVEL, Math.round(rawLevel)));
+  const cacheKey = `${type}:${level}:${variant}`;
+  const cached = GUN_PROFILE_CACHE.get(cacheKey);
+  if (cached) return cached;
+
   const item = getGunCatalogItem(type);
   const vSpec = item.variants[variant] ?? item.variants.alpha;
   const isSupport = item.category === 'support';
 
-  const lvOffset = level - 1;
-  const dmgMult = (1 + lvOffset * 0.25 + Math.pow(lvOffset, 1.38) * 0.095) * vSpec.damageMult;
-  const rofMult = (1 + lvOffset * 0.055 + (level === 10 ? 0.08 : 0)) * vSpec.rofMult;
+  const lvOffset = (level - 1) * 1.5;
+  const dmgMult = Math.pow(2, level - 1) * vSpec.damageMult;
+  const rofMult = (1 + lvOffset * 0.055 + (level >= MAX_GUN_LEVEL ? 0.08 : 0)) * vSpec.rofMult;
   const rangeBonusTiles =
-    lvOffset * 0.075 + (level >= 7 ? 0.1 : 0) + (level === 10 ? 0.15 : 0) + vSpec.rangeBonus;
+    lvOffset * 0.075 + (level >= 5 ? 0.1 : 0) + (level >= MAX_GUN_LEVEL ? 0.15 : 0) + vSpec.rangeBonus;
 
   const damage = isSupport ? 0 : Math.round(item.baseDamage * dmgMult);
   const cooldownSec = Number((item.baseCooldown / rofMult).toFixed(3));
@@ -2609,90 +2834,98 @@ export function getGunCombatProfile(
   let pullForce = 0;
 
   if (type === 'gatling') {
-    armorPierce = level >= 10 ? 0.75 : level >= 3 ? 0.35 + (level - 3) * 0.045 : 0.12;
-    projectilesPerShot = level >= 10 ? 4 : level >= 7 ? 3 : level >= 5 ? 2 : 1;
-    splashRadius = level >= 7 ? 22 + (level - 7) * 3 : 0;
-    shieldMult = level >= 7 ? 1.15 : 1;
+    armorPierce = level >= 7 ? 0.75 : level >= 3 ? 0.45 + (level - 3) * 0.07 : 0.15;
+    projectilesPerShot = level >= 7 ? 4 : level >= 5 ? 3 : level >= 3 ? 2 : 1;
+    splashRadius = level >= 5 ? 24 + (level - 5) * 4 : 0;
+    shieldMult = level >= 5 ? 1.15 : 1;
   } else if (type === 'shotgun') {
-    projectilesPerShot = level >= 10 ? 9 : level >= 7 ? 7 : level >= 3 ? 6 : 5;
-    armorPierce = level >= 5 ? 0.32 + (level - 5) * 0.05 : 0.12;
-    burnDps = level >= 5 ? Math.round(damage * 0.45) : 0;
+    projectilesPerShot = level >= 7 ? 9 : level >= 5 ? 7 : level >= 3 ? 6 : 5;
+    armorPierce = level >= 5 ? 0.4 + (level - 5) * 0.1 : level >= 3 ? 0.28 : 0.12;
+    burnDps = level >= 3 ? Math.round(damage * 0.45) : 0;
     shieldMult = 1.1;
   } else if (type === 'flamer') {
-    armorPierce = level >= 5 ? 0.72 : 0.45;
+    armorPierce = level >= 3 ? 0.72 : 0.45;
     burnDps = Math.round(damage * (level >= 3 ? 0.68 : 0.48));
-    slowPct = level >= 7 ? 0.18 : 0;
+    slowPct = level >= 5 ? 0.18 : 0;
     shieldMult = level >= 5 ? 1.15 : 1;
   } else if (type === 'saw') {
-    armorPierce = level >= 5 ? 0.54 : 0.34;
-    projectilesPerShot = level >= 10 ? 3 : level >= 7 ? 2 : 1;
-    chainCount = level >= 10 ? 7 : level >= 7 ? 5 : level >= 3 ? 4 : 3;
-    burnDps = level >= 5 ? Math.round(damage * 0.32) : 0;
+    armorPierce = level >= 3 ? 0.54 : 0.34;
+    projectilesPerShot = level >= 7 ? 3 : level >= 5 ? 2 : 1;
+    chainCount = level >= 7 ? 7 : level >= 5 ? 5 : level >= 3 ? 4 : 3;
+    burnDps = level >= 3 ? Math.round(damage * 0.32) : 0;
     shieldMult = 1.1;
   } else if (type === 'mortar') {
-    armorPierce = 0.55 + lvOffset * 0.025;
-    projectilesPerShot = level >= 10 ? 2 : 1;
-    splashRadius = 76 + lvOffset * 4 + (level >= 7 ? 10 : 0);
-    pullForce = level >= 3 ? 10 + (level - 3) * 1.5 : 4;
-    slowPct = level >= 5 ? 0.3 : 0.18;
-    burnDps = level >= 5 ? Math.round(damage * 0.18) : 0;
+    armorPierce = level >= 5 ? 0.68 : 0.52 + lvOffset * 0.025;
+    projectilesPerShot = level >= 7 ? 2 : 1;
+    splashRadius = 76 + lvOffset * 4 + (level >= 5 ? 10 : 0);
+    pullForce = level >= 3 ? 12 + (level - 3) * 2.2 : 4;
+    slowPct = level >= 3 ? 0.3 : 0.18;
+    burnDps = level >= 3 ? Math.round(damage * 0.18) : 0;
   } else if (type === 'missile') {
     armorPierce = 0.42 + lvOffset * 0.03;
-    projectilesPerShot = level >= 10 ? 3 : level >= 5 ? 2 : 1;
+    projectilesPerShot = level >= 7 ? 3 : level >= 3 ? 2 : 1;
     splashRadius = 64 + lvOffset * 4 + (level >= 3 ? 12 : 0);
     shieldMult = 1.2;
   } else if (type === 'railgun') {
-    armorPierce = level >= 10 ? 1 : level >= 3 ? 0.85 : 0.55;
-    projectilesPerShot = level >= 10 ? 3 : level >= 5 ? 2 : 1;
-    shieldMult = level >= 5 ? 1.75 : 1.3;
-    splashRadius = level >= 7 ? 38 + (level - 7) * 5 : 0;
+    armorPierce = level >= 7 ? 1 : level >= 3 ? 0.85 : 0.55;
+    projectilesPerShot = level >= 7 ? 3 : level >= 5 ? 2 : 1;
+    shieldMult = level >= 3 ? 1.75 : 1.3;
+    splashRadius = level >= 5 ? 40 + (level - 5) * 6 : 0;
   } else if (type === 'orbital') {
-    armorPierce = level >= 7 ? 0.92 : level >= 3 ? 0.78 : 0.65;
-    projectilesPerShot = level >= 10 ? 3 : level >= 5 ? 2 : 1; // number of simultaneous orbital sky pillars
-    splashRadius = level >= 10 ? 74 : level >= 3 ? 56 + (level - 3) * 2 : 48;
-    shieldMult = level >= 7 ? 1.65 : 1.35;
-    burnDps = Math.round(damage * (level >= 3 ? 0.42 : 0.28)); // magma/radiation ground burn dps
+    armorPierce = level >= 5 ? 0.92 : level >= 3 ? 0.78 : 0.65;
+    projectilesPerShot = level >= 7 ? 3 : level >= 3 ? 2 : 1;
+    splashRadius = level >= 7 ? 74 : level >= 3 ? 58 + (level - 3) * 3 : 48;
+    shieldMult = level >= 5 ? 1.65 : 1.35;
+    burnDps = Math.round(damage * (level >= 3 ? 0.42 : 0.28));
     slowPct = level >= 3 ? 0.2 : 0.14;
   } else if (type === 'singularity') {
-    armorPierce = level >= 5 ? 1 : 0.92; // crushes with 100% true damage bypassing armor
-    splashRadius = level >= 7 ? 124 : level >= 3 ? 106 : 96;
-    pullForce = level >= 7 ? 138 : level >= 3 ? 114 : 96;
-    shieldMult = level >= 5 ? 1.55 : 1.3;
-    slowPct = level >= 7 ? 0.42 : level >= 3 ? 0.34 : 0.28;
+    armorPierce = level >= 3 ? 1 : 0.92;
+    splashRadius = level >= 5 ? 124 : level >= 3 ? 108 : 96;
+    pullForce = level >= 5 ? 138 : level >= 3 ? 116 : 96;
+    shieldMult = level >= 3 ? 1.55 : 1.3;
+    slowPct = level >= 5 ? 0.42 : level >= 3 ? 0.34 : 0.28;
   } else if (type === 'mothership') {
-    armorPierce = level >= 10 ? 0.8 : level >= 7 ? 0.68 : 0.52;
-    projectilesPerShot = level >= 5 ? 4 : 3; // autonomous drones maintained
-    shieldMult = level >= 7 ? 1.65 : 1.35;
-    splashRadius = level >= 7 ? 38 : 28;
+    armorPierce = level >= 7 ? 0.8 : level >= 5 ? 0.68 : 0.52;
+    projectilesPerShot = level >= 5 ? 4 : 3;
+    shieldMult = level >= 5 ? 1.65 : 1.35;
+    splashRadius = level >= 5 ? 38 : 28;
   } else if (type === 'supernova') {
-    armorPierce = level >= 7 ? 1 : level >= 3 ? 0.94 : 0.9;
-    chainCount = level >= 10 ? 5 : level >= 5 ? 4 : 3; // targets pierced per Nova Orb
-    projectilesPerShot = level >= 5 ? 2 : 1; // secondary homing star-shards on Hyper-Beam volley
-    splashRadius = level >= 10 ? 118 : level >= 5 ? 104 : 92;
-    shieldMult = level >= 7 ? 2.0 : level >= 3 ? 1.8 : 1.65;
-    slowPct = level >= 7 ? 0.38 : 0.28;
-    brittleBonus = level >= 10 ? 0.42 : level >= 5 ? 0.35 : 0.28; // Supernova Brand damage amp
+    armorPierce = level >= 5 ? 1 : level >= 3 ? 0.94 : 0.9;
+    chainCount = level >= 7 ? 5 : level >= 5 ? 4 : 3;
+    projectilesPerShot = level >= 3 ? 2 : 1;
+    splashRadius = level >= 7 ? 118 : level >= 5 ? 104 : 92;
+    shieldMult = level >= 5 ? 2.0 : level >= 3 ? 1.8 : 1.65;
+    slowPct = level >= 5 ? 0.38 : 0.28;
+    brittleBonus = level >= 7 ? 0.42 : level >= 3 ? 0.35 : 0.28;
   } else if (type === 'chronos') {
-    armorPierce = level >= 5 ? 1 : 0.94;
-    chainCount = level >= 10 ? 6 : level >= 7 ? 5 : level >= 3 ? 4 : 3; // Simultaneous Dimensional Cross-Slashes
-    projectilesPerShot = level >= 7 ? 2 : 1; // Concurrent Chronosphere fields
-    splashRadius = level >= 10 ? 162 : level >= 5 ? 144 : 128; // Chronosphere radius
-    pullForce = level >= 7 ? 74 : level >= 3 ? 60 : 48; // Time-Rewind pull along track
-    shieldMult = level >= 7 ? 2.45 : level >= 3 ? 2.25 : 2.1;
-    slowPct = level >= 7 ? 0.44 : 0.36;
-    brittleBonus = (level >= 10 ? 0.56 : level >= 5 ? 0.46 : 0.38) + (variant === 'alpha' ? 0.18 : 0); // Temporal Echo damage recording ratio
+    armorPierce = level >= 3 ? 1 : 0.94;
+    chainCount = level >= 7 ? 6 : level >= 5 ? 5 : level >= 3 ? 4 : 3;
+    projectilesPerShot = level >= 5 ? 2 : 1;
+    splashRadius = level >= 7 ? 162 : level >= 3 ? 144 : 128;
+    pullForce = level >= 5 ? 74 : level >= 3 ? 60 : 48;
+    shieldMult = level >= 5 ? 2.45 : level >= 3 ? 2.25 : 2.1;
+    slowPct = level >= 5 ? 0.44 : 0.36;
+    brittleBonus = (level >= 7 ? 0.56 : level >= 3 ? 0.46 : 0.38) + (variant === 'alpha' ? 0.18 : 0);
+  } else if (type === 'astral_ark') {
+    armorPierce = level >= 5 ? 1 : 0.96;
+    projectilesPerShot = level >= 7 ? 4 : level >= 3 ? 3 : 2; // Simultaneous Void Prism Beams
+    chainCount = level >= 7 ? 5 : level >= 5 ? 4 : 3; // Void Rift targets / beam pierce emphasis
+    splashRadius = level >= 7 ? 132 : level >= 3 ? 112 : 96; // Impact & Rift radius
+    shieldMult = level >= 5 ? 2.65 : level >= 3 ? 2.35 : 2.15;
+    slowPct = level >= 5 ? 0.46 : 0.34;
+    brittleBonus = level >= 7 ? 0.04 : level >= 3 ? 0.025 : 0.015; // % Max HP/sec Void Rift rupture vs Boss/Super Boss
   } else if (type === 'tesla') {
     armorPierce = 0.65;
-    chainCount = level >= 10 ? 7 : level >= 7 ? 5 : level >= 3 ? 4 : 3;
-    shieldMult = level >= 5 ? 1.65 + (level - 5) * 0.04 : 1.25;
+    chainCount = level >= 7 ? 7 : level >= 5 ? 5 : level >= 3 ? 4 : 3;
+    shieldMult = level >= 3 ? 1.65 + (level - 3) * 0.06 : 1.25;
     slowPct = 0.22 + lvOffset * 0.015;
-    splashRadius = level >= 10 ? 42 : 0;
+    splashRadius = level >= 7 ? 42 : 0;
   } else if (type === 'tempest') {
-    armorPierce = level >= 10 ? 0.78 : 0.38 + lvOffset * 0.035;
-    projectilesPerShot = level >= 10 ? 3 : level >= 3 ? 2 : 1;
-    splashRadius = level >= 10 ? 82 : level >= 7 ? 64 : 44;
-    shieldMult = level >= 5 ? 1.75 : 1.35;
-    slowPct = level >= 10 ? 0.34 : level >= 3 ? 0.26 : 0.18;
+    armorPierce = level >= 7 ? 0.78 : 0.38 + lvOffset * 0.035;
+    projectilesPerShot = level >= 7 ? 3 : level >= 3 ? 2 : 1;
+    splashRadius = level >= 7 ? 82 : level >= 5 ? 64 : 44;
+    shieldMult = level >= 3 ? 1.75 : 1.35;
+    slowPct = level >= 7 ? 0.34 : level >= 3 ? 0.26 : 0.18;
   } else if (type === 'beacon') {
     armorPierce = 0;
     splashRadius = rangePx;
@@ -2701,18 +2934,26 @@ export function getGunCombatProfile(
     armorPierce = 0;
     splashRadius = rangePx;
     slowPct =
-      (level >= 10 ? 0.44 : level >= 7 ? 0.38 : level >= 3 ? 0.32 : 0.24) +
+      (level >= 7 ? 0.44 : level >= 5 ? 0.38 : level >= 3 ? 0.34 : 0.24) +
       (variant === 'omega' ? 0.08 : 0);
     brittleBonus =
-      (level >= 10 ? 0.3 : level >= 5 ? 0.2 + (level - 5) * 0.02 : 0.12) +
+      (level >= 7 ? 0.3 : level >= 5 ? 0.24 : level >= 3 ? 0.2 : 0.12) +
       (variant === 'omega' ? 0.12 : 0);
     shieldMult = 1;
   } else if (type === 'radar') {
     armorPierce = 0;
     splashRadius = rangePx;
     brittleBonus =
-      (level >= 10 ? 0.36 : level >= 5 ? 0.28 : level >= 3 ? 0.22 : 0.18) +
+      (level >= 7 ? 0.36 : level >= 5 ? 0.28 : level >= 3 ? 0.26 : 0.18) +
       (variant === 'omega' ? 0.1 : 0);
+    shieldMult = 1;
+  } else if (type === 'quantum_prism') {
+    armorPierce = 0;
+    splashRadius = rangePx;
+    brittleBonus =
+      (level >= 7 ? 0.38 : level >= 5 ? 0.3 : level >= 3 ? 0.24 : 0.16) +
+      (variant === 'omega' ? 0.14 : 0);
+    chainCount = level >= 7 ? 5 : level >= 5 ? 4 : 3;
     shieldMult = 1;
   }
 
@@ -2733,10 +2974,10 @@ export function getGunCombatProfile(
   }
 
   const visualTier: 1 | 2 | 3 | 4 =
-    level >= 10 ? 4 : level >= 7 ? 3 : level >= 4 ? 2 : 1;
+    level >= MAX_GUN_LEVEL ? 4 : level >= 5 ? 3 : level >= 3 ? 2 : 1;
   const tierLabel =
     visualTier === 4
-      ? 'MYTHIC LV10'
+      ? 'MYTHIC LV7'
       : visualTier === 3
         ? `HYPER LV${level}`
         : visualTier === 2
@@ -2748,7 +2989,7 @@ export function getGunCombatProfile(
     effectiveShots =
       projectilesPerShot >= 4 ? 1.76 : projectilesPerShot === 3 ? 1.62 : projectilesPerShot === 2 ? 1.4 : 1;
   } else if (type === 'shotgun') {
-    effectiveShots = Math.min(5.2, projectilesPerShot * (level >= 10 ? 0.5 : level >= 7 ? 0.52 : 0.56));
+    effectiveShots = Math.min(5.2, projectilesPerShot * (level >= 7 ? 0.5 : level >= 6 ? 0.52 : 0.56));
   } else if (type === 'tesla' || type === 'saw') {
     const sawMulti =
       type === 'saw' ? (projectilesPerShot >= 3 ? 1.5 : projectilesPerShot === 2 ? 1.36 : 1) : 1;
@@ -2761,14 +3002,15 @@ export function getGunCombatProfile(
   } else if (type === 'orbital') {
     effectiveShots = (projectilesPerShot >= 3 ? 1.78 : projectilesPerShot >= 2 ? 1.5 : 1) + (burnDps > 0 ? 0.35 : 0);
   } else if (type === 'singularity') {
-    // Persistent true-DPS gravity well (1..2.5 overlapping holes) + 1.5x core crush + collapse detonation
-    effectiveShots = cooldownSec * (level >= 10 ? 2.45 : level >= 5 ? 1.95 : 1.5);
+    effectiveShots = cooldownSec * (level >= 7 ? 2.45 : level >= 4 ? 1.95 : 1.5);
   } else if (type === 'mothership') {
     effectiveShots = Math.max(1, projectilesPerShot * 0.72);
   } else if (type === 'supernova') {
-    effectiveShots = level >= 10 ? 2.4 : level >= 5 ? 1.95 : 1.65;
+    effectiveShots = level >= 7 ? 2.4 : level >= 4 ? 1.95 : 1.65;
   } else if (type === 'chronos') {
-    effectiveShots = level >= 10 ? 2.65 : level >= 5 ? 2.3 : 1.95;
+    effectiveShots = level >= 7 ? 2.65 : level >= 4 ? 2.3 : 1.95;
+  } else if (type === 'astral_ark') {
+    effectiveShots = level >= 7 ? 2.8 : level >= 4 ? 2.35 : 1.95;
   } else if (type === 'mortar') {
     effectiveShots = projectilesPerShot === 2 ? 1.24 : 1;
   }
@@ -2778,7 +3020,7 @@ export function getGunCombatProfile(
   const unlockedSkills = item.milestones.filter((m) => level >= m.level);
   const nextSkill = item.milestones.find((m) => m.level > level) ?? null;
 
-  return {
+  const result: GunCombatProfile = {
     level,
     category: item.category,
     variant: vSpec.id,
@@ -2804,15 +3046,162 @@ export function getGunCombatProfile(
     unlockedSkills,
     nextSkill,
   };
+  GUN_PROFILE_CACHE.set(cacheKey, result);
+  return result;
+}
+
+export interface GunLevelProgressionStep {
+  readonly level: number;
+  readonly upgradeCostFromPrev: number | null;
+  readonly damage: number;
+  readonly dpsEstimate: number;
+  readonly rangeTiles: number;
+  readonly cooldownSec: number;
+  readonly armorPiercePct: number;
+  readonly powerMultiplierLabel: string;
+  readonly milestone: GunSkillMilestone | null;
+  readonly statChanges: readonly string[];
+  readonly powerSummary: string;
+}
+
+const GUN_PROGRESSION_CACHE = new Map<string, readonly GunLevelProgressionStep[]>();
+
+function formatSupportPowerAtLevel(type: GunType, profile: GunCombatProfile, variant: GunVariant): string {
+  if (type === 'beacon') {
+    const lv = profile.level;
+    const dmgPct = Math.round((0.12 + lv * 0.03 + (variant === 'omega' ? 0.08 : 0)) * 100);
+    const critPct = Math.round((0.1 + lv * 0.035 + (variant === 'alpha' ? 0.07 : 0)) * 100);
+    const critMult = Number((1.45 + lv * 0.07 + (variant === 'omega' ? 0.14 : 0)).toFixed(2));
+    return `+${dmgPct}% DMG · +${critPct}% Chí Mạng (×${critMult}) · Tầm ${profile.rangeTiles}ô`;
+  }
+  if (type === 'cryo') {
+    return `Chậm ${Math.round(profile.slowPct * 100)}% · Giòn Giáp +${Math.round(profile.brittleBonus * 100)}% · Tầm ${profile.rangeTiles}ô`;
+  }
+  if (type === 'radar') {
+    const lv = profile.level;
+    const auraRange = Number((0.4 + Math.floor(lv / 2) * 0.18 + (variant === 'alpha' ? 0.2 : 0)).toFixed(2));
+    const auraPierce = Math.round((0.08 + lv * 0.025 + (variant === 'omega' ? 0.07 : 0)) * 100);
+    return `Khóa +${Math.round(profile.brittleBonus * 100)}% DMG · Đồng đội +${auraRange}ô Tầm & +${auraPierce}% Xuyên`;
+  }
+  if (type === 'quantum_prism') {
+    const lv = profile.level;
+    const harvest = 3 + Math.floor(lv / 2) + (variant === 'alpha' ? 1 : 0);
+    const multishot = lv >= 5 || variant === 'alpha' ? 2 : 1;
+    return `Vọng ${Math.round(profile.brittleBonus * 100)}% ST · +${multishot} Đa Tia · +${harvest}⚡/Hạ`;
+  }
+  return `Tầm ${profile.rangeTiles}ô`;
+}
+
+/**
+ * Computes a complete, cached Lv1..Lv7 skill & power roadmap for any gun + variant.
+ * Clearly shows exact DMG ×2 scaling, stat deltas, and Lv3/Lv5/Lv7 milestone skills.
+ */
+export function getGunProgressionRoadmap(
+  type: GunType,
+  variant: GunVariant = 'alpha'
+): readonly GunLevelProgressionStep[] {
+  const key = `${type}:${variant}`;
+  const cached = GUN_PROGRESSION_CACHE.get(key);
+  if (cached) return cached;
+
+  const item = getGunCatalogItem(type);
+  const isSupport = item.category === 'support';
+  const steps: GunLevelProgressionStep[] = [];
+  let prev: GunCombatProfile | null = null;
+
+  for (let lv = 1; lv <= MAX_GUN_LEVEL; lv++) {
+    const prof = getGunCombatProfile(type, lv, variant);
+    const milestone = item.milestones.find((m) => m.level === lv) ?? null;
+    const costFromPrev = lv === 1 ? null : getGunUpgradeCost(type, lv - 1);
+    const multX = Math.pow(2, lv - 1);
+    const statChanges: string[] = [];
+
+    if (!prev) {
+      if (isSupport) {
+        statChanges.push(`Triển khai ${item.cost}⚡`, `0 DMG (Thuần Hỗ Trợ)`);
+      } else {
+        statChanges.push(`DMG ${prof.damage}`, `DPS ${prof.dpsEstimate}`, `Tầm ${prof.rangeTiles}ô`);
+      }
+    } else if (isSupport) {
+      if (prof.rangeTiles > prev.rangeTiles) {
+        statChanges.push(`Tầm ${prev.rangeTiles}→${prof.rangeTiles}ô`);
+      }
+      if (type === 'cryo') {
+        if (prof.slowPct > prev.slowPct) {
+          statChanges.push(`Chậm ${Math.round(prev.slowPct * 100)}%→${Math.round(prof.slowPct * 100)}%`);
+        }
+        if (prof.brittleBonus > prev.brittleBonus) {
+          statChanges.push(`Yếu giáp +${Math.round(prev.brittleBonus * 100)}%→+${Math.round(prof.brittleBonus * 100)}%`);
+        }
+      } else if (type === 'radar' || type === 'quantum_prism') {
+        if (prof.brittleBonus > prev.brittleBonus) {
+          statChanges.push(
+            `${type === 'quantum_prism' ? 'Vọng' : 'Khóa'} ${Math.round(prev.brittleBonus * 100)}%→${Math.round(prof.brittleBonus * 100)}%`
+          );
+        }
+        if (type === 'quantum_prism' && lv === 5 && variant === 'omega') {
+          statChanges.push('+1→+2 Đa Tia');
+        }
+      } else if (type === 'beacon') {
+        const prevDmg = Math.round((0.12 + (lv - 1) * 0.03 + (variant === 'omega' ? 0.08 : 0)) * 100);
+        const curDmg = Math.round((0.12 + lv * 0.03 + (variant === 'omega' ? 0.08 : 0)) * 100);
+        statChanges.push(`Aura DMG +${prevDmg}%→+${curDmg}%`);
+      }
+      if (prof.cooldownSec < prev.cooldownSec) {
+        statChanges.push(`Nhịp ${prev.cooldownSec.toFixed(2)}s→${prof.cooldownSec.toFixed(2)}s`);
+      }
+    } else {
+      statChanges.push(`DMG ${prev.damage}→${prof.damage} (×2)`);
+      if (prof.projectilesPerShot > prev.projectilesPerShot) {
+        statChanges.push(`${prev.projectilesPerShot}→${prof.projectilesPerShot} tia`);
+      }
+      if (prof.chainCount > prev.chainCount) {
+        statChanges.push(`Nảy ${prev.chainCount}→${prof.chainCount}`);
+      }
+      if (prof.armorPierce > prev.armorPierce) {
+        statChanges.push(`Xuyên ${Math.round(prev.armorPierce * 100)}%→${Math.round(prof.armorPierce * 100)}%`);
+      }
+      if (prof.rangeTiles > prev.rangeTiles) {
+        statChanges.push(`Tầm ${prev.rangeTiles}→${prof.rangeTiles}ô`);
+      }
+      if (prof.splashRadius > prev.splashRadius) {
+        statChanges.push(`Nổ ${prev.splashRadius}→${prof.splashRadius}px`);
+      }
+    }
+
+    const powerSummary = isSupport
+      ? formatSupportPowerAtLevel(type, prof, variant)
+      : `DMG ${prof.damage} · DPS ${prof.dpsEstimate} · Xuyên ${Math.round(prof.armorPierce * 100)}% · Tầm ${prof.rangeTiles}ô`;
+
+    steps.push({
+      level: lv,
+      upgradeCostFromPrev: costFromPrev,
+      damage: prof.damage,
+      dpsEstimate: prof.dpsEstimate,
+      rangeTiles: prof.rangeTiles,
+      cooldownSec: prof.cooldownSec,
+      armorPiercePct: Math.round(prof.armorPierce * 100),
+      powerMultiplierLabel: isSupport ? `Cấp ${lv}/${MAX_GUN_LEVEL}` : `×${multX} DMG`,
+      milestone,
+      statChanges,
+      powerSummary,
+    });
+    prev = prof;
+  }
+
+  GUN_PROGRESSION_CACHE.set(key, steps);
+  return steps;
 }
 
 export interface TeamSupportBuff {
   readonly damageMult: number;
-  readonly critChance: number; // 0..0.85 brand-new Critical Strike aura replacing attack-speed buff
-  readonly critMult: number; // 1.0..2.5 critical damage multiplier
+  readonly critChance: number; // 0..0.95 Critical Strike aura
+  readonly critMult: number; // 1.0..2.85 critical damage multiplier
   readonly rangeBonusTiles: number;
   readonly armorPierceBonus: number;
   readonly shieldMultBonus: number;
+  readonly bonusMultishot: number; // +1 extra projectile/chain hop from Quantum Prism (0 attack-speed buff)
+  readonly energyHarvestBonus: number; // bonus energy per kill inside Quantum Prism aura
   readonly hasSupportLink: boolean;
   readonly linkColors: string[];
 }
@@ -2821,19 +3210,24 @@ export interface TeamSupportBuff {
  * Computes pure non-attack-speed allied support buffs at tile `(col, row)`:
  * - Beacon (`beacon`): +Damage% + Critical Strike Chance & Crit Multiplier (`critChance`, `critMult`)
  * - Radar (`radar`): +Range + Armor Pierce + Shield Damage Bonus
+ * - Quantum Prism (`quantum_prism`): +Multishot Link & Kill Energy Siphon (plus field Silence & Damage Echo)
  * Note: Attack-speed / fire-rate buffs are strictly removed from ALL support guns.
  */
 export function computeTeamSupportBuffAtTile(
   guns: readonly PlacedGun[],
   col: number,
-  row: number
+  row: number,
+  overdriveSupportMult = 1
 ): TeamSupportBuff {
+  const odMult = Math.max(1, overdriveSupportMult);
   let dmgBonus = 0;
   let critChanceBonus = 0;
   let critMultMax = 1.0;
   let rangeBonusTiles = 0;
   let armorPierceBonus = 0;
   let shieldMultBonus = 0;
+  let bonusMultishot = 0;
+  let energyHarvestBonus = 0;
   const linkColors: string[] = [];
   const targetPt = gridToWorldCenter(col, row);
 
@@ -2848,44 +3242,60 @@ export function computeTeamSupportBuffAtTile(
 
     if (g.type === 'beacon') {
       const dm =
-        (g.level >= 10 ? 0.34 : g.level >= 7 ? 0.26 : g.level >= 3 ? 0.2 : 0.16) +
-        (variant === 'omega' ? 0.12 : 0);
+        ((g.level >= 7 ? 0.34 : g.level >= 5 ? 0.26 : g.level >= 3 ? 0.2 : 0.16) +
+          (variant === 'omega' ? 0.12 : 0)) *
+        odMult;
       const cc =
-        (g.level >= 10 ? 0.45 : g.level >= 7 ? 0.36 : g.level >= 3 ? 0.3 : 0.24) +
-        (variant === 'alpha' ? 0.1 : 0) +
-        ((g.overheatTimer ?? 0) > 0 ? 0.35 : 0);
+        ((g.level >= 7 ? 0.45 : g.level >= 5 ? 0.36 : g.level >= 3 ? 0.3 : 0.24) +
+          (variant === 'alpha' ? 0.1 : 0) +
+          ((g.overheatTimer ?? 0) > 0 ? 0.35 : 0)) *
+        odMult;
       const cm =
-        (g.level >= 10 ? 2.15 : g.level >= 7 ? 2.0 : g.level >= 3 ? 1.9 : 1.85) +
-        (variant === 'alpha' ? 0.25 : 0) +
-        ((g.overheatTimer ?? 0) > 0 ? 0.35 : 0);
+        ((g.level >= 7 ? 2.15 : g.level >= 5 ? 2.0 : g.level >= 3 ? 1.9 : 1.85) +
+          (variant === 'alpha' ? 0.25 : 0) +
+          ((g.overheatTimer ?? 0) > 0 ? 0.35 : 0)) *
+        (1 + (odMult - 1) * 0.4);
       dmgBonus += dm;
       critChanceBonus += cc;
       critMultMax = Math.max(critMultMax, cm);
       if (!linkColors.includes('#FACC15')) linkColors.push('#FACC15');
     } else if (g.type === 'radar') {
       const rb =
-        (g.level >= 10 ? 1.6 : g.level >= 7 ? 1.25 : g.level >= 3 ? 0.95 : 0.7) +
-        (variant === 'alpha' ? 0.35 : 0);
+        ((g.level >= 7 ? 1.6 : g.level >= 5 ? 1.25 : g.level >= 3 ? 0.95 : 0.7) +
+          (variant === 'alpha' ? 0.35 : 0)) *
+        (1 + (odMult - 1) * 0.55);
       const ap =
-        (g.level >= 10 ? 0.4 : g.level >= 7 ? 0.32 : g.level >= 3 ? 0.22 : 0.18) +
-        (variant === 'omega' ? 0.12 : 0);
+        ((g.level >= 7 ? 0.4 : g.level >= 5 ? 0.32 : g.level >= 3 ? 0.24 : 0.18) +
+          (variant === 'omega' ? 0.12 : 0)) *
+        odMult;
       const sh =
-        (g.level >= 10 ? 0.55 : g.level >= 7 ? 0.42 : g.level >= 3 ? 0.32 : 0.25) +
-        (variant === 'alpha' ? 0.18 : 0);
+        ((g.level >= 7 ? 0.55 : g.level >= 5 ? 0.42 : g.level >= 3 ? 0.34 : 0.25) +
+          (variant === 'alpha' ? 0.18 : 0)) *
+        odMult;
       rangeBonusTiles += rb;
       armorPierceBonus += ap;
       shieldMultBonus += sh;
       if (!linkColors.includes('#22D3EE')) linkColors.push('#22D3EE');
+    } else if (g.type === 'quantum_prism') {
+      const ms = (g.level >= 5 || variant === 'alpha' ? 1 : 0) + (odMult > 1.1 ? 1 : 0);
+      const eh = Math.round(
+        (3 + (g.level >= 7 ? 3 : g.level >= 5 ? 2 : g.level >= 3 ? 1 : 0) + (variant === 'alpha' ? 1 : 0)) * odMult
+      );
+      bonusMultishot = Math.max(bonusMultishot, ms);
+      energyHarvestBonus += eh;
+      if (!linkColors.includes('#34D399')) linkColors.push('#34D399');
     }
   }
 
   return {
-    damageMult: Number(Math.min(1.65, 1 + dmgBonus).toFixed(2)),
-    critChance: Number(Math.min(0.85, critChanceBonus).toFixed(2)),
-    critMult: critChanceBonus > 0 ? Number(Math.min(2.5, critMultMax).toFixed(2)) : 1.0,
-    rangeBonusTiles: Number(Math.min(2.1, rangeBonusTiles).toFixed(2)),
-    armorPierceBonus: Number(Math.min(0.58, armorPierceBonus).toFixed(3)),
-    shieldMultBonus: Number(Math.min(1.0, shieldMultBonus).toFixed(2)),
+    damageMult: Number(Math.min(odMult > 1 ? 2.15 : 1.65, 1 + dmgBonus).toFixed(2)),
+    critChance: Number(Math.min(odMult > 1 ? 0.95 : 0.85, critChanceBonus).toFixed(2)),
+    critMult: critChanceBonus > 0 ? Number(Math.min(odMult > 1 ? 2.9 : 2.5, critMultMax).toFixed(2)) : 1.0,
+    rangeBonusTiles: Number(Math.min(odMult > 1 ? 2.8 : 2.1, rangeBonusTiles).toFixed(2)),
+    armorPierceBonus: Number(Math.min(odMult > 1 ? 0.72 : 0.58, armorPierceBonus).toFixed(3)),
+    shieldMultBonus: Number(Math.min(odMult > 1 ? 1.35 : 1.0, shieldMultBonus).toFixed(2)),
+    bonusMultishot: Math.min(2, bonusMultishot),
+    energyHarvestBonus: Math.min(18, energyHarvestBonus),
     hasSupportLink: linkColors.length > 0,
     linkColors,
   };
@@ -2902,6 +3312,42 @@ export function computeBeaconBuffAtTile(
     critChance: buff.critChance,
     critMult: buff.critMult,
   };
+}
+
+export interface QuantumEchoTargetResult {
+  readonly target: TdEnemy;
+  readonly echoDamage: number;
+}
+
+/**
+ * Pure Quantum Damage Echo helper: propagates a percentage of hit damage
+ * from a quantum-linked enemy to up to `maxTargets` other linked enemies in range.
+ */
+export function computeQuantumEchoTargets(
+  source: TdEnemy,
+  candidates: readonly TdEnemy[],
+  rawHitDamage: number,
+  rangePx: number,
+  maxTargets: number
+): QuantumEchoTargetResult[] {
+  if (rawHitDamage <= 0 || maxTargets <= 0) return [];
+  if ((source.quantumLinkTimer ?? 0) <= 0) return [];
+  const ratio = source.quantumEchoRatio ?? 0;
+  if (ratio <= 0) return [];
+
+  const echoDamage = Math.round(rawHitDamage * ratio);
+  if (echoDamage <= 0) return [];
+
+  const results: QuantumEchoTargetResult[] = [];
+  for (const cand of candidates) {
+    if (cand.id === source.id || cand.hp <= 0 || cand.koTimer > 0) continue;
+    if ((cand.quantumLinkTimer ?? 0) <= 0) continue;
+    if (Math.hypot(cand.x - source.x, cand.y - source.y) <= rangePx) {
+      results.push({ target: cand, echoDamage });
+      if (results.length >= maxTargets) break;
+    }
+  }
+  return results;
 }
 
 export interface ElectricWetSynergyResult {
@@ -2937,8 +3383,8 @@ export function computeElectricWetSynergy(
   if (isSoaked) {
     return {
       isWetSynergy: true,
-      damageMult: gunLevel >= 7 ? 1.5 : 1.4,
-      extraChains: gunLevel >= 7 ? 2 : 1,
+      damageMult: gunLevel >= 6 ? 1.5 : 1.4,
+      extraChains: gunLevel >= 6 ? 2 : 1,
       splashBonusPx: 24,
       shockSec: 1.15,
       shieldMultBonus: 0.35,
@@ -2998,9 +3444,11 @@ export function buildWaveSpawns(
     lateSwarmBonus;
   const rawCount = Math.round(baseRaw * 2.65);
   const count =
-    mode === 'boss_rush'
-      ? Math.max(22, Math.round(rawCount * 0.54))
-      : Math.max(28, Math.round(rawCount * (modeCfg.swarmCountMult ?? 1)));
+    mode === 'boss_apocalypse'
+      ? Math.max(8, Math.round(6 + waveNumber * 1.45))
+      : mode === 'boss_rush'
+        ? Math.max(22, Math.round(rawCount * 0.54))
+        : Math.max(28, Math.round(rawCount * (modeCfg.swarmCountMult ?? 1)));
   let elapsed = 0.25;
 
   const swarmCompression = waveNumber >= 2 ? 1 / (1 + (waveNumber - 1) * 0.145) : 1;
@@ -3008,55 +3456,62 @@ export function buildWaveSpawns(
 
   for (let i = 0; i < count; i++) {
     let kind: EnemyKind = 'scout';
-    if (waveNumber === 1 && i >= count - 6 && difficulty !== 'easy') kind = 'armored';
-    if (waveNumber >= 2 && i % 4 === 2) kind = 'armored';
-    if (waveNumber >= 2 && i % 5 === 1) kind = 'splitter';
-    if (waveNumber >= 2 && i % 6 === 3) kind = 'stealth';
-    if (waveNumber >= 3 && i % 6 === 4) kind = 'healer';
-    if (waveNumber >= 3 && i % 6 === 5) kind = 'teleporter';
-    if (waveNumber >= 3 && i % 5 === 0 && i > 0) kind = 'shieldbearer';
-    if (waveNumber >= 2 && i % 7 === 6) kind = 'berserker';
-    if (waveNumber >= 4 && i % 8 === 7) kind = 'leech';
-    if (waveNumber >= 4 && i % 8 === 6) kind = 'juggernaut';
-    if (waveNumber >= 5 && i % 9 === 8) kind = 'summoner';
-    if (waveNumber >= 7 && i % 11 === 4) kind = 'juggernaut';
-
-    if (mode === 'boss_rush') {
-      const isLateBossRushSuper = waveNumber >= 4 && i === count - 1;
-      if (isLateBossRushSuper) {
-        kind = 'super_boss';
-      } else if (i % 4 === 3 || i === count - 1) {
-        kind = 'boss';
-      } else if (i % 4 === 0) {
-        kind = 'juggernaut';
-      } else if (i % 4 === 1) {
-        kind = 'summoner';
-      } else {
-        kind = 'berserker';
-      }
+    if (mode === 'boss_apocalypse') {
+      const superRatioFreq = waveNumber <= 2 ? count : waveNumber <= 5 ? 3 : 2;
+      kind =
+        i === count - 1 || (waveNumber >= 2 && i % superRatioFreq === superRatioFreq - 1)
+          ? 'super_boss'
+          : 'boss';
     } else {
-      const isVanguardBoss = waveNumber >= 6 && i === Math.floor(count * 0.32);
-      const isSecondBoss = waveNumber >= 9 && i === Math.floor(count * 0.66);
-      const isMidBossWave = waveNumber >= 3 && i === Math.floor(count * 0.55);
-      const isMajorBossWave = waveNumber === totalWaves || waveNumber % 3 === 0 || waveNumber >= 8;
+      if (waveNumber === 1 && i >= count - 6 && difficulty !== 'easy') kind = 'armored';
+      if (waveNumber >= 2 && i % 4 === 2) kind = 'armored';
+      if (waveNumber >= 2 && i % 5 === 1) kind = 'splitter';
+      if (waveNumber >= 2 && i % 6 === 3) kind = 'stealth';
+      if (waveNumber >= 3 && i % 6 === 4) kind = 'healer';
+      if (waveNumber >= 3 && i % 6 === 5) kind = 'teleporter';
+      if (waveNumber >= 3 && i % 5 === 0 && i > 0) kind = 'shieldbearer';
+      if (waveNumber >= 2 && i % 7 === 6) kind = 'berserker';
+      if (waveNumber >= 4 && i % 8 === 7) kind = 'leech';
+      if (waveNumber >= 4 && i % 8 === 6) kind = 'juggernaut';
+      if (waveNumber >= 5 && i % 9 === 8) kind = 'summoner';
+      if (waveNumber >= 7 && i % 11 === 4) kind = 'juggernaut';
 
-      if ((isMajorBossWave && i === count - 1) || isMidBossWave || isVanguardBoss || isSecondBoss) {
-        kind = 'boss';
-      }
-      if (waveNumber >= 6 && isMajorBossWave && i >= count - 2) {
-        kind = 'boss';
-      }
-      if (waveNumber >= 9 && i >= count - (difficulty === 'hell' ? 5 : 3)) {
-        kind = 'boss';
-      }
+      if (mode === 'boss_rush') {
+        const isLateBossRushSuper = waveNumber >= 4 && i === count - 1;
+        if (isLateBossRushSuper) {
+          kind = 'super_boss';
+        } else if (i % 4 === 3 || i === count - 1) {
+          kind = 'boss';
+        } else if (i % 4 === 0) {
+          kind = 'juggernaut';
+        } else if (i % 4 === 1) {
+          kind = 'summoner';
+        } else {
+          kind = 'berserker';
+        }
+      } else {
+        const isVanguardBoss = waveNumber >= 6 && i === Math.floor(count * 0.32);
+        const isSecondBoss = waveNumber >= 9 && i === Math.floor(count * 0.66);
+        const isMidBossWave = waveNumber >= 3 && i === Math.floor(count * 0.55);
+        const isMajorBossWave = waveNumber === totalWaves || waveNumber % 3 === 0 || waveNumber >= 8;
 
-      // Late-game Super Boss climax (final campaign waves or Endless milestones)
-      const isEndlessSuperWave = mode === 'endless' && waveNumber >= 5 && waveNumber % 5 === 0;
-      const isCampaignSuperWave = mode !== 'endless' && waveNumber >= superBossStartWave;
-      if ((isEndlessSuperWave || isCampaignSuperWave) && i === count - 1) {
-        kind = 'super_boss';
-      } else if (mode !== 'endless' && waveNumber === totalWaves && i === Math.floor(count * 0.72)) {
-        kind = 'super_boss';
+        if ((isMajorBossWave && i === count - 1) || isMidBossWave || isVanguardBoss || isSecondBoss) {
+          kind = 'boss';
+        }
+        if (waveNumber >= 6 && isMajorBossWave && i >= count - 2) {
+          kind = 'boss';
+        }
+        if (waveNumber >= 9 && i >= count - (difficulty === 'hell' || difficulty === 'super_hell' ? 5 : 3)) {
+          kind = 'boss';
+        }
+
+        const isEndlessSuperWave = mode === 'endless' && waveNumber >= 5 && waveNumber % 5 === 0;
+        const isCampaignSuperWave = mode !== 'endless' && waveNumber >= superBossStartWave;
+        if ((isEndlessSuperWave || isCampaignSuperWave) && i === count - 1) {
+          kind = 'super_boss';
+        } else if (mode !== 'endless' && waveNumber === totalWaves && i === Math.floor(count * 0.72)) {
+          kind = 'super_boss';
+        }
       }
     }
 
@@ -3069,24 +3524,26 @@ export function buildWaveSpawns(
       kind !== 'super_boss' &&
       ((mode === 'boss_rush' && i % 2 === 1) ||
         (waveNumber >= 3 && i % eliteModulo === eliteModulo - 1) ||
-        (difficulty === 'hell' && waveNumber >= 2 && i % 4 === 3));
+        ((difficulty === 'hell' || difficulty === 'super_hell') && waveNumber >= 2 && i % 4 === 3));
     items.push({ kind, delaySec: Number(elapsed.toFixed(3)), isElite });
 
     const baseGapRaw = Math.max(
       0.46,
-      1.56 - waveNumber * 0.032 - (difficulty === 'hell' ? 0.065 : difficulty === 'hard' ? 0.032 : 0)
+      1.56 -
+        waveNumber * 0.032 -
+        (difficulty === 'super_hell' ? 0.095 : difficulty === 'hell' ? 0.065 : difficulty === 'hard' ? 0.032 : 0)
     );
     const baseGap = Math.max(0.24, (baseGapRaw * swarmCompression) / modeCfg.spawnRateMult);
-    const squadRhythm = i % 6 === 5 ? 1.48 : 0.92;
+    const squadRhythm = mode === 'boss_apocalypse' ? 1.55 : i % 6 === 5 ? 1.48 : 0.92;
     const roleSpacing =
       kind === 'splitter' || kind === 'berserker'
         ? baseGap * 0.8
         : kind === 'stealth' || kind === 'teleporter'
           ? baseGap * 0.86
           : kind === 'super_boss'
-            ? baseGap * 1.45
+            ? baseGap * (mode === 'boss_apocalypse' ? 2.15 : 1.45)
             : kind === 'boss' || kind === 'juggernaut'
-              ? baseGap * 1.24
+              ? baseGap * (mode === 'boss_apocalypse' ? 1.75 : 1.24)
               : baseGap;
     elapsed += roleSpacing * squadRhythm;
   }
@@ -3125,14 +3582,25 @@ export function createEnemyForWave(
         : 1
       : 1 + Math.pow(11, 1.32) * 0.16 + (waveNumber - 12) * 0.38;
   const openingGrace =
-    difficulty === 'hell' && waveNumber <= 2
+    difficulty === 'super_hell' && waveNumber <= 2
       ? waveNumber === 1
-        ? 0.29
-        : 0.62
-      : difficulty === 'hard' && waveNumber === 1
-        ? 0.56
+        ? 0.25
+        : 0.56
+      : difficulty === 'hell' && waveNumber <= 2
+        ? waveNumber === 1
+          ? 0.29
+          : 0.62
+        : difficulty === 'hard' && waveNumber === 1
+          ? 0.56
+          : 1.0;
+  const bossRushEarlyDamper =
+    mode === 'boss_apocalypse' && waveNumber <= 2
+      ? waveNumber === 1
+        ? 0.42
+        : 0.65
+      : mode === 'boss_rush' && waveNumber <= 2
+        ? 0.52
         : 1.0;
-  const bossRushEarlyDamper = mode === 'boss_rush' && waveNumber <= 2 ? 0.52 : 1.0;
   const eliteMult = isElite ? 1.65 : 1;
   const hpScale =
     baseScale *
@@ -3179,6 +3647,9 @@ export function createEnemyForWave(
     burnDps: 0,
     armorShred: 0,
     stunTimer: 0,
+    silencedTimer: 0,
+    quantumLinkTimer: 0,
+    quantumEchoRatio: 0,
     abilityCooldown: 2.3,
     windupKind: null as BossWindupKind | null,
     windupTimer: 0,
@@ -3213,205 +3684,211 @@ export function createEnemyForWave(
       ...base,
       hp,
       maxHp: hp,
-      shield: difficulty === 'hell' && waveNumber >= 4 ? Math.round(25 * shieldScale) : 0,
-      maxShield: difficulty === 'hell' && waveNumber >= 4 ? Math.round(25 * shieldScale) : 0,
-      speed: (84 + speedBonus) * totalSpeedMult,
-      radius: 14,
-      reward: boostEnemyKillReward(Math.max(6, Math.round((11 + Math.floor(effectiveWave * 0.4)) * rewardScale))),
-      scoreValue: Math.round(45 * scoreMultTotal),
-      armorRatio: Math.min(0.45, 0.12 + armorAdd),
-    };
-  }
+    shield:
+      (difficulty === 'hell' || difficulty === 'super_hell') && waveNumber >= 4
+        ? Math.round(25 * shieldScale)
+        : 0,
+    maxShield:
+      (difficulty === 'hell' || difficulty === 'super_hell') && waveNumber >= 4
+        ? Math.round(25 * shieldScale)
+        : 0,
+    speed: (84 + speedBonus) * totalSpeedMult,
+    radius: 14,
+    reward: boostEnemyKillReward(Math.max(6, Math.round((11 + Math.floor(effectiveWave * 0.4)) * rewardScale))),
+    scoreValue: Math.round(45 * scoreMultTotal),
+    armorRatio: Math.min(0.45, 0.12 + armorAdd),
+  };
+}
 
-  if (kind === 'stealth') {
-    const hp = Math.round(152 * hpScale);
-    const shield = Math.round(72 * shieldScale);
-    return {
-      ...base,
-      hp,
-      maxHp: hp,
-      shield,
-      maxShield: shield,
-      speed: (100 + speedBonus) * totalSpeedMult,
-      radius: 14,
-      reward: boostEnemyKillReward(Math.max(7, Math.round((14 + Math.floor(effectiveWave * 0.5)) * rewardScale))),
-      scoreValue: Math.round(58 * scoreMultTotal),
-      armorRatio: Math.min(0.55, 0.24 + armorAdd),
-    };
-  }
-
-  if (kind === 'healer') {
-    const hp = Math.round(215 * hpScale);
-    const shield = Math.round(95 * shieldScale);
-    return {
-      ...base,
-      hp,
-      maxHp: hp,
-      shield,
-      maxShield: shield,
-      speed: (56 + speedBonus * 0.75) * totalSpeedMult,
-      radius: 16,
-      reward: boostEnemyKillReward(Math.max(9, Math.round((19 + Math.floor(effectiveWave * 0.65)) * rewardScale))),
-      scoreValue: Math.round(78 * scoreMultTotal),
-      armorRatio: Math.min(0.55, 0.22 + armorAdd),
-      abilityCooldown: 1.85,
-    };
-  }
-
-  if (kind === 'teleporter') {
-    const hp = Math.round(175 * hpScale);
-    const shield = Math.round(90 * shieldScale);
-    return {
-      ...base,
-      hp,
-      maxHp: hp,
-      shield,
-      maxShield: shield,
-      speed: (80 + speedBonus * 0.9) * totalSpeedMult,
-      radius: 15,
-      reward: boostEnemyKillReward(Math.max(8, Math.round((17 + Math.floor(effectiveWave * 0.55)) * rewardScale))),
-      scoreValue: Math.round(72 * scoreMultTotal),
-      armorRatio: Math.min(0.5, 0.2 + armorAdd),
-      abilityCooldown: difficulty === 'hell' ? 2.4 : 2.9,
-    };
-  }
-
-  if (kind === 'shieldbearer') {
-    const hp = Math.round(300 * hpScale);
-    const shield = Math.round(265 * shieldScale);
-    return {
-      ...base,
-      hp,
-      maxHp: hp,
-      shield,
-      maxShield: shield,
-      speed: (46 + speedBonus * 0.65) * totalSpeedMult,
-      radius: 18,
-      reward: boostEnemyKillReward(Math.max(10, Math.round((21 + Math.floor(effectiveWave * 0.75)) * rewardScale))),
-      scoreValue: Math.round(90 * scoreMultTotal),
-      armorRatio: Math.min(0.75, 0.48 + armorAdd),
-      abilityCooldown: 2.9,
-    };
-  }
-
-  if (kind === 'berserker') {
-    const hp = Math.round(210 * hpScale);
-    const shield = Math.round(35 * shieldScale);
-    return {
-      ...base,
-      hp,
-      maxHp: hp,
-      shield,
-      maxShield: shield,
-      speed: (78 + speedBonus * 0.85) * totalSpeedMult,
-      radius: 15,
-      reward: boostEnemyKillReward(Math.max(8, Math.round((16 + Math.floor(effectiveWave * 0.52)) * rewardScale))),
-      scoreValue: Math.round(68 * scoreMultTotal),
-      armorRatio: Math.min(0.5, 0.24 + armorAdd),
-    };
-  }
-
-  if (kind === 'juggernaut') {
-    const hp = Math.round(520 * hpScale);
-    const shield = Math.round(150 * shieldScale);
-    return {
-      ...base,
-      hp,
-      maxHp: hp,
-      shield,
-      maxShield: shield,
-      speed: (36 + speedBonus * 0.45) * totalSpeedMult,
-      radius: 21,
-      reward: boostEnemyKillReward(Math.max(14, Math.round((28 + Math.floor(effectiveWave * 0.95)) * rewardScale))),
-      scoreValue: Math.round(125 * scoreMultTotal),
-      armorRatio: Math.min(0.78, 0.62 + armorAdd),
-    };
-  }
-
-  if (kind === 'summoner') {
-    const hp = Math.round(265 * hpScale);
-    const shield = Math.round(135 * shieldScale);
-    return {
-      ...base,
-      hp,
-      maxHp: hp,
-      shield,
-      maxShield: shield,
-      speed: (52 + speedBonus * 0.65) * totalSpeedMult,
-      radius: 18,
-      reward: boostEnemyKillReward(Math.max(12, Math.round((25 + Math.floor(effectiveWave * 0.85)) * rewardScale))),
-      scoreValue: Math.round(108 * scoreMultTotal),
-      armorRatio: Math.min(0.55, 0.3 + armorAdd),
-      abilityCooldown: 3.1,
-    };
-  }
-
-  if (kind === 'leech') {
-    const hp = Math.round(195 * hpScale);
-    const shield = Math.round(165 * shieldScale);
-    return {
-      ...base,
-      hp,
-      maxHp: hp,
-      shield,
-      maxShield: shield,
-      speed: (74 + speedBonus * 0.85) * totalSpeedMult,
-      radius: 16,
-      reward: boostEnemyKillReward(Math.max(10, Math.round((20 + Math.floor(effectiveWave * 0.7)) * rewardScale))),
-      scoreValue: Math.round(92 * scoreMultTotal),
-      armorRatio: Math.min(0.55, 0.28 + armorAdd),
-      abilityCooldown: 2.6,
-    };
-  }
-
-  if (kind === 'boss') {
-    const hp = Math.round(1150 * hpScale);
-    const shield = Math.round(410 * shieldScale);
-    return {
-      ...base,
-      hp,
-      maxHp: hp,
-      shield,
-      maxShield: shield,
-      speed: (39 + speedBonus * 0.55) * totalSpeedMult,
-      radius: 25,
-      reward: boostEnemyKillReward(Math.max(30, Math.round((78 + effectiveWave * 3.2) * rewardScale))),
-      scoreValue: Math.round(360 * scoreMultTotal),
-      armorRatio: Math.min(0.74, 0.46 + armorAdd),
-      abilityCooldown: 3.4,
-    };
-  }
-
-  if (kind === 'super_boss') {
-    const hp = Math.round(2350 * hpScale);
-    const shield = Math.round(860 * shieldScale);
-    return {
-      ...base,
-      hp,
-      maxHp: hp,
-      shield,
-      maxShield: shield,
-      speed: (33 + speedBonus * 0.4) * totalSpeedMult,
-      radius: 29,
-      reward: boostEnemyKillReward(Math.max(70, Math.round((165 + effectiveWave * 5.2) * rewardScale))),
-      scoreValue: Math.round(920 * scoreMultTotal),
-      armorRatio: Math.min(0.76, 0.54 + armorAdd),
-      abilityCooldown: 4.2,
-    };
-  }
-
-  // 'scout'
-  const hp = Math.round(126 * hpScale);
-  const hasScoutShield =
-    waveNumber >= 3 ||
-    (difficulty === 'hard' && waveNumber >= 2) ||
-    (difficulty === 'hell' && waveNumber >= 2);
+if (kind === 'stealth') {
+  const hp = Math.round(152 * hpScale);
+  const shield = Math.round(72 * shieldScale);
   return {
     ...base,
     hp,
     maxHp: hp,
-    shield: hasScoutShield ? Math.round(28 * shieldScale) : 0,
-    maxShield: hasScoutShield ? Math.round(28 * shieldScale) : 0,
+    shield,
+    maxShield: shield,
+    speed: (100 + speedBonus) * totalSpeedMult,
+    radius: 14,
+    reward: boostEnemyKillReward(Math.max(7, Math.round((14 + Math.floor(effectiveWave * 0.5)) * rewardScale))),
+    scoreValue: Math.round(58 * scoreMultTotal),
+    armorRatio: Math.min(0.55, 0.24 + armorAdd),
+  };
+}
+
+if (kind === 'healer') {
+  const hp = Math.round(215 * hpScale);
+  const shield = Math.round(95 * shieldScale);
+  return {
+    ...base,
+    hp,
+    maxHp: hp,
+    shield,
+    maxShield: shield,
+    speed: (56 + speedBonus * 0.75) * totalSpeedMult,
+    radius: 16,
+    reward: boostEnemyKillReward(Math.max(9, Math.round((19 + Math.floor(effectiveWave * 0.65)) * rewardScale))),
+    scoreValue: Math.round(78 * scoreMultTotal),
+    armorRatio: Math.min(0.55, 0.22 + armorAdd),
+    abilityCooldown: 1.85,
+  };
+}
+
+if (kind === 'teleporter') {
+  const hp = Math.round(175 * hpScale);
+  const shield = Math.round(90 * shieldScale);
+  return {
+    ...base,
+    hp,
+    maxHp: hp,
+    shield,
+    maxShield: shield,
+    speed: (80 + speedBonus * 0.9) * totalSpeedMult,
+    radius: 15,
+    reward: boostEnemyKillReward(Math.max(8, Math.round((17 + Math.floor(effectiveWave * 0.55)) * rewardScale))),
+    scoreValue: Math.round(72 * scoreMultTotal),
+    armorRatio: Math.min(0.5, 0.2 + armorAdd),
+    abilityCooldown: difficulty === 'hell' || difficulty === 'super_hell' ? 2.4 : 2.9,
+  };
+}
+
+if (kind === 'shieldbearer') {
+  const hp = Math.round(300 * hpScale);
+  const shield = Math.round(265 * shieldScale);
+  return {
+    ...base,
+    hp,
+    maxHp: hp,
+    shield,
+    maxShield: shield,
+    speed: (46 + speedBonus * 0.65) * totalSpeedMult,
+    radius: 18,
+    reward: boostEnemyKillReward(Math.max(10, Math.round((21 + Math.floor(effectiveWave * 0.75)) * rewardScale))),
+    scoreValue: Math.round(90 * scoreMultTotal),
+    armorRatio: Math.min(0.75, 0.48 + armorAdd),
+    abilityCooldown: 2.9,
+  };
+}
+
+if (kind === 'berserker') {
+  const hp = Math.round(210 * hpScale);
+  const shield = Math.round(35 * shieldScale);
+  return {
+    ...base,
+    hp,
+    maxHp: hp,
+    shield,
+    maxShield: shield,
+    speed: (78 + speedBonus * 0.85) * totalSpeedMult,
+    radius: 15,
+    reward: boostEnemyKillReward(Math.max(8, Math.round((16 + Math.floor(effectiveWave * 0.52)) * rewardScale))),
+    scoreValue: Math.round(68 * scoreMultTotal),
+    armorRatio: Math.min(0.5, 0.24 + armorAdd),
+  };
+}
+
+if (kind === 'juggernaut') {
+  const hp = Math.round(520 * hpScale);
+  const shield = Math.round(150 * shieldScale);
+  return {
+    ...base,
+    hp,
+    maxHp: hp,
+    shield,
+    maxShield: shield,
+    speed: (36 + speedBonus * 0.45) * totalSpeedMult,
+    radius: 21,
+    reward: boostEnemyKillReward(Math.max(14, Math.round((28 + Math.floor(effectiveWave * 0.95)) * rewardScale))),
+    scoreValue: Math.round(125 * scoreMultTotal),
+    armorRatio: Math.min(0.78, 0.62 + armorAdd),
+  };
+}
+
+if (kind === 'summoner') {
+  const hp = Math.round(265 * hpScale);
+  const shield = Math.round(135 * shieldScale);
+  return {
+    ...base,
+    hp,
+    maxHp: hp,
+    shield,
+    maxShield: shield,
+    speed: (52 + speedBonus * 0.65) * totalSpeedMult,
+    radius: 18,
+    reward: boostEnemyKillReward(Math.max(12, Math.round((25 + Math.floor(effectiveWave * 0.85)) * rewardScale))),
+    scoreValue: Math.round(108 * scoreMultTotal),
+    armorRatio: Math.min(0.55, 0.3 + armorAdd),
+    abilityCooldown: 3.1,
+  };
+}
+
+if (kind === 'leech') {
+  const hp = Math.round(195 * hpScale);
+  const shield = Math.round(165 * shieldScale);
+  return {
+    ...base,
+    hp,
+    maxHp: hp,
+    shield,
+    maxShield: shield,
+    speed: (74 + speedBonus * 0.85) * totalSpeedMult,
+    radius: 16,
+    reward: boostEnemyKillReward(Math.max(10, Math.round((20 + Math.floor(effectiveWave * 0.7)) * rewardScale))),
+    scoreValue: Math.round(92 * scoreMultTotal),
+    armorRatio: Math.min(0.55, 0.28 + armorAdd),
+    abilityCooldown: 2.6,
+  };
+}
+
+if (kind === 'boss') {
+  const hp = Math.round(1150 * hpScale);
+  const shield = Math.round(410 * shieldScale);
+  return {
+    ...base,
+    hp,
+    maxHp: hp,
+    shield,
+    maxShield: shield,
+    speed: (39 + speedBonus * 0.55) * totalSpeedMult,
+    radius: 25,
+    reward: boostEnemyKillReward(Math.max(30, Math.round((78 + effectiveWave * 3.2) * rewardScale))),
+    scoreValue: Math.round(360 * scoreMultTotal),
+    armorRatio: Math.min(0.74, 0.46 + armorAdd),
+    abilityCooldown: 3.4,
+  };
+}
+
+if (kind === 'super_boss') {
+  const hp = Math.round(2350 * hpScale);
+  const shield = Math.round(860 * shieldScale);
+  return {
+    ...base,
+    hp,
+    maxHp: hp,
+    shield,
+    maxShield: shield,
+    speed: (33 + speedBonus * 0.4) * totalSpeedMult,
+    radius: 29,
+    reward: boostEnemyKillReward(Math.max(70, Math.round((165 + effectiveWave * 5.2) * rewardScale))),
+    scoreValue: Math.round(920 * scoreMultTotal),
+    armorRatio: Math.min(0.76, 0.54 + armorAdd),
+    abilityCooldown: 4.2,
+  };
+}
+
+// 'scout'
+const hp = Math.round(126 * hpScale);
+const hasScoutShield =
+  waveNumber >= 3 ||
+  (difficulty === 'hard' && waveNumber >= 2) ||
+  ((difficulty === 'hell' || difficulty === 'super_hell') && waveNumber >= 2);
+return {
+  ...base,
+  hp,
+  maxHp: hp,
+  shield: hasScoutShield ? Math.round(28 * shieldScale) : 0,
+  maxShield: hasScoutShield ? Math.round(28 * shieldScale) : 0,
     speed: (70 + speedBonus * 0.9) * totalSpeedMult,
     radius: 14,
     reward: boostEnemyKillReward(Math.max(7, Math.round((13 + Math.floor(effectiveWave * 0.42)) * rewardScale))),
@@ -3655,6 +4132,11 @@ export function stepEnemies(
       if (enemy.markedTimer <= 0) enemy.markedBonus = 0;
     }
     if (enemy.fortifyTimer > 0) enemy.fortifyTimer = Math.max(0, enemy.fortifyTimer - dt);
+    if ((enemy.silencedTimer ?? 0) > 0) enemy.silencedTimer = Math.max(0, enemy.silencedTimer - dt);
+    if ((enemy.quantumLinkTimer ?? 0) > 0) {
+      enemy.quantumLinkTimer = Math.max(0, (enemy.quantumLinkTimer ?? 0) - dt);
+      if (enemy.quantumLinkTimer <= 0) enemy.quantumEchoRatio = 0;
+    }
 
     // Environmental puddle soak when traversing map wetZones
     const tileCol = Math.floor(enemy.x / TILE_SIZE);
@@ -3683,9 +4165,10 @@ export function stepEnemies(
       enemy.speed = Math.round(enemy.speed * 1.55);
     }
 
-    // Special Archetype & Telegraphed Boss/Super Boss Abilities
+    // Special Archetype & Telegraphed Boss/Super Boss Abilities (suppressed when Silenced)
+    const isSilenced = (enemy.silencedTimer ?? 0) > 0;
     if (enemy.stunTimer <= 0) {
-      if (enemy.kind === 'healer') {
+      if (enemy.kind === 'healer' && !isSilenced) {
         enemy.abilityCooldown -= dt;
         if (enemy.abilityCooldown <= 0) {
           enemy.abilityCooldown = 2.25;
@@ -3707,7 +4190,7 @@ export function stepEnemies(
             }
           }
         }
-      } else if (enemy.kind === 'shieldbearer') {
+      } else if (enemy.kind === 'shieldbearer' && !isSilenced) {
         enemy.abilityCooldown -= dt;
         if (enemy.abilityCooldown <= 0) {
           enemy.abilityCooldown = 3.6;
@@ -3717,8 +4200,9 @@ export function stepEnemies(
           }
         }
       } else if (enemy.kind === 'boss' || enemy.kind === 'super_boss') {
+        const bossAbilityDt = isSilenced ? dt * 0.45 : dt;
         if (enemy.windupTimer > 0 && enemy.windupKind) {
-          enemy.windupTimer = Math.max(0, enemy.windupTimer - dt);
+          enemy.windupTimer = Math.max(0, enemy.windupTimer - bossAbilityDt);
           if (enemy.windupTimer <= 0) {
             const castKind = enemy.windupKind;
             enemy.windupKind = null;
@@ -3746,7 +4230,7 @@ export function stepEnemies(
             }
           }
         } else {
-          enemy.abilityCooldown -= dt;
+          enemy.abilityCooldown -= bossAbilityDt;
           if (enemy.abilityCooldown <= 0) {
             const cycle: BossWindupKind =
               enemy.kind === 'super_boss'
@@ -3764,7 +4248,7 @@ export function stepEnemies(
             windupEvents.push({ x: enemy.x, y: enemy.y, kind: cycle });
           }
         }
-      } else if (enemy.kind === 'teleporter' && enemy.slowTimer <= 0) {
+      } else if (enemy.kind === 'teleporter' && enemy.slowTimer <= 0 && !isSilenced) {
         enemy.abilityCooldown -= dt;
         if (enemy.abilityCooldown <= 0) {
           enemy.abilityCooldown = 3.4;
@@ -3779,7 +4263,7 @@ export function stepEnemies(
             continue;
           }
         }
-      } else if (enemy.kind === 'summoner') {
+      } else if (enemy.kind === 'summoner' && !isSilenced) {
         enemy.abilityCooldown -= dt;
         if (enemy.abilityCooldown <= 0) {
           enemy.abilityCooldown = 4.2;
@@ -3809,7 +4293,7 @@ export function stepEnemies(
             });
           }
         }
-      } else if (enemy.kind === 'leech') {
+      } else if (enemy.kind === 'leech' && !isSilenced) {
         enemy.abilityCooldown -= dt;
         if (enemy.abilityCooldown <= 0) {
           enemy.abilityCooldown = 3.4;
@@ -3915,7 +4399,7 @@ export function computeSingularitySwallowGrowth(
   const killsAbsorbed = hole.killsAbsorbed + 1;
   const radiusScale = Math.min(hole.maxScale, 1 + killsAbsorbed * 0.055);
   const currentRadius = Number((hole.baseRadius * radiusScale).toFixed(2));
-  const absorbFraction = (level >= 10 ? 0.72 : level >= 5 ? 0.55 : 0.45) * (variant === 'omega' ? 1.45 : 1);
+  const absorbFraction = (level >= 7 ? 0.72 : level >= 4 ? 0.55 : 0.45) * (variant === 'omega' ? 1.45 : 1);
   const addedDamage = Math.max(28, Math.round(victimMaxHp * absorbFraction));
   return {
     killsAbsorbed,
@@ -3941,7 +4425,15 @@ export function shouldDroneEvadeBossPulse(
  * Pure Chronos Sovereign active Chronosphere field cap (1-2 base; Alpha grants +1 simultaneous field).
  */
 export function getChronosMaxFields(level: number, variant: GunVariant = 'alpha'): number {
-  const base = level >= 7 ? 2 : 1;
+  const base = level >= 5 ? 2 : 1;
+  return variant === 'alpha' ? base + 1 : base;
+}
+
+/**
+ * Pure Astral Ark active Void Rift cap (1-2 base; Alpha grants +1 simultaneous rift).
+ */
+export function getAstralMaxRifts(level: number, variant: GunVariant = 'alpha'): number {
+  const base = level >= 5 ? 2 : 1;
   return variant === 'alpha' ? base + 1 : base;
 }
 
@@ -3959,24 +4451,33 @@ export function computeChronoFieldRecord(
 }
 
 export const OVERDRIVE_CONFIG = {
-  chargeScale: 0.2, // 5x slower Overdrive charge compared to legacy 1.0 rate
-  initialCharge: 10,
-  durationSec: 8.0,
-  speedMult: 1.75,
-  damageMult: 1.55,
-  hudDpsMult: 2.71, // ~1.75 * 1.55 effective firepower multiplier
-  droneRateMult: 1.9,
-  globalJudgmentBase: 260,
-  globalJudgmentPerWave: 42,
-  secondWaveTriggerSec: 4.0,
+  chargeDurationSec: 30, // Minimum 30s real active-battle time to fill 0 -> 100%
+  chargePerSec: 100 / 30,
+  initialCharge: 0,
+  durationSec: 10.0,
+  speedMult: 2.05,
+  damageMult: 1.85,
+  skillPowerMult: 1.65, // amplifies all Overheat skill power, radius, chains & durations
+  supportAuraMult: 1.45, // amplifies all Support aura buffs & Quantum Echo/Harvest
+  hudDpsMult: 3.8,
+  droneRateMult: 2.1,
+  globalJudgmentBase: 360,
+  globalJudgmentPerWave: 55,
+  secondWaveTriggerSec: 5.0,
 } as const;
 
 /**
- * Computes Overdrive ("Hội Tụ Hỏa Lực") charge gained from actual damage dealt.
- * Scaled by 0.2 (5x slower accumulation) in exchange for overwhelming Overdrive burst power.
+ * Time-based Overdrive ("Hội Tụ Hỏa Lực") charge gain:
+ * Fills 100% over `OVERDRIVE_CONFIG.chargeDurationSec` (>= 30s real active combat) strictly while an active wave is running.
  */
-export function computeOverdriveChargeGain(actualDamage: number, baseRate = 0.045): number {
-  if (actualDamage <= 0 || baseRate <= 0) return 0;
-  return actualDamage * baseRate * OVERDRIVE_CONFIG.chargeScale;
+export function computeOverdriveTimeChargeGain(dtSec: number, isWaveActive: boolean): number {
+  if (!isWaveActive || dtSec <= 0) return 0;
+  return dtSec * OVERDRIVE_CONFIG.chargePerSec;
 }
 
+/**
+ * @deprecated Damage-based Overdrive charging is disabled; returns 0 cleanly.
+ */
+export function computeOverdriveChargeGain(_actualDamage: number, _baseRate = 0.045): number {
+  return 0;
+}
