@@ -27,8 +27,14 @@ import {
   buildWaveSpawns,
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
+  CarrierDrone,
+  ChronoField,
+  ChronoSlashFx,
   clampEnemyToTrackCorridor,
+  computeChronoFieldRecord,
   computeElectricWetSynergy,
+  computeOverdriveChargeGain,
+  computeSingularitySwallowGrowth,
   computeTeamSupportBuffAtTile,
   createEnemyForWave,
   DIFFICULTY_CONFIGS,
@@ -40,11 +46,13 @@ import {
   GAME_MODE_ORDER,
   GameModeId,
   getAvailableGunsForMap,
+  getChronosMaxFields,
   getEffectiveMapSetup,
   getGunCatalogItem,
   getGunCombatProfile,
   getGunSellRefund,
   getGunUpgradeCost,
+  getMothershipMaxDrones,
   getTileKind,
   GRID_COLS,
   GRID_ROWS,
@@ -58,12 +66,17 @@ import {
   isWetZoneTile,
   LightningArc,
   MAX_GUN_LEVEL,
+  OrbitalBeamFx,
+  OrbitalRadiationZone,
+  OVERDRIVE_CONFIG,
   PlacedGun,
   PRISM_MAPS,
   ProjectileItem,
   pullEnemyAlongTrack,
   RailBeamFx,
   ShockwaveRing,
+  shouldDroneEvadeBossPulse,
+  SingularityHole,
   stepEnemies,
   TargetPriority,
   TdEnemy,
@@ -77,14 +90,18 @@ import {
   GunArsenalFilter,
 } from '../utils/prismTdMobileHelpers.ts';
 import {
+  drawCarrierDrones,
+  drawChronoFieldsAndSlashes,
   drawEnemySprite,
   drawGroundCraters,
   drawGunTurretSprite,
   drawLightningArcEnhanced,
+  drawOrbitalBeamsAndZones,
   drawOverheatSpecialFx,
   drawProjectileEnhanced,
   drawRailBeamEnhanced,
   drawShellCasings,
+  drawSingularityHoles,
   GroundCraterFx,
   OverheatFx,
   ShellCasingFx,
@@ -322,7 +339,7 @@ export function PrismTdGameSection({
       totalDamage: 0,
       totalDps: 0,
       waveActive: false,
-      overdrivePct: 0,
+      overdrivePct: OVERDRIVE_CONFIG.initialCharge,
       overdriveActive: false,
       speedMult: 1,
       nextWaveCountdown: 8,
@@ -358,6 +375,10 @@ export function PrismTdGameSection({
     shellCasings: ShellCasingFx[];
     groundCraters: GroundCraterFx[];
     overheatEffects: OverheatFx[];
+    orbitalBeams: OrbitalBeamFx[];
+    orbitalZones: OrbitalRadiationZone[];
+    blackHoles: SingularityHole[];
+    carrierDrones: CarrierDrone[];
     floatingTexts: FloatingCombatText[];
     spawnQueue: WaveSpawnItem[];
     waveElapsed: number;
@@ -408,6 +429,10 @@ export function PrismTdGameSection({
     shellCasings: [],
     groundCraters: [],
     overheatEffects: [],
+    orbitalBeams: [],
+    orbitalZones: [],
+    blackHoles: [],
+    carrierDrones: [],
     floatingTexts: [],
     spawnQueue: [],
     waveElapsed: 0,
@@ -459,7 +484,7 @@ export function PrismTdGameSection({
 
   const recomputeFirepower = useCallback(() => {
     const s = simRef.current;
-    const overdriveMult = s.overdriveTimer > 0 ? 2.0 : 1;
+    const overdriveMult = s.overdriveTimer > 0 ? OVERDRIVE_CONFIG.hudDpsMult : 1;
     let total = 0;
     for (const g of s.guns) {
       if (isSupportGunType(g.type)) continue;
@@ -590,6 +615,12 @@ export function PrismTdGameSection({
       s.shellCasings = [];
       s.groundCraters = [];
       s.overheatEffects = [];
+      s.orbitalBeams = [];
+      s.orbitalZones = [];
+      s.blackHoles = [];
+      s.carrierDrones = [];
+      s.chronoFields = [];
+      s.chronoSlashes = [];
       s.floatingTexts = [];
       s.spawnQueue = [];
       s.waveElapsed = 0;
@@ -603,8 +634,9 @@ export function PrismTdGameSection({
       s.score = 0;
       s.kills = 0;
       s.totalDamage = 0;
-      s.overdriveCharge = 45;
+      s.overdriveCharge = OVERDRIVE_CONFIG.initialCharge;
       s.overdriveTimer = 0;
+      s.overdriveSecondWaveFired = false;
       s.speedMult = 1;
       s.shakeTrauma = 0;
       s.visualTime = 0;
@@ -637,6 +669,15 @@ export function PrismTdGameSection({
       if (document.activeElement instanceof HTMLElement) {
         document.activeElement.blur();
       }
+      requestAnimationFrame(() => {
+        const el = document.getElementById('prism-td-section');
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.top < 64 || rect.top > window.innerHeight * 0.6) {
+            window.scrollTo({ top: Math.max(0, rect.top + window.scrollY - 72), behavior: 'auto' });
+          }
+        }
+      });
     },
     [selectedMapIndex, difficulty, gameMode, recomputeFirepower, syncHudFromSim, soundEnabled]
   );
@@ -694,44 +735,117 @@ export function PrismTdGameSection({
     if (gameState !== 'playing' || s.overdriveCharge < 100 || s.overdriveTimer > 0) return;
     unlockPrismAudio(audioCtxRef);
     s.overdriveCharge = 0;
-    s.overdriveTimer = 5.0;
+    s.overdriveTimer = OVERDRIVE_CONFIG.durationSec;
+    s.overdriveSecondWaveFired = false;
     if (s.speedMult < 2) {
-      s.shakeTrauma = 0.65;
+      s.shakeTrauma = 0.85;
     }
 
+    const coreTile = s.map.path[s.map.path.length - 1];
+    const corePt = gridToWorldCenter(coreTile.col, coreTile.row);
+    s.overheatEffects.push({
+      kind: 'overdrive_apex',
+      x: corePt.x,
+      y: corePt.y,
+      radius: 340,
+      angle: 0,
+      life: 1.0,
+      maxLife: 1.0,
+      color: '#FDE047',
+    });
+    s.shockwaves.push({
+      x: corePt.x,
+      y: corePt.y,
+      radius: 20,
+      maxRadius: 420,
+      alpha: 1,
+      color: '#FDE047',
+      lineWidth: 4,
+    });
+
     for (const g of s.guns) {
-      g.heat = 100; // Immediately unleashes every gun's unique Overheat skill on next combat step!
+      g.heat = 100; // Immediately unleashes Wave 1 of every gun's unique Overheat skill!
       const pt = gridToWorldCenter(g.col, g.row);
+      s.overheatEffects.push({
+        kind: 'overdrive_apex',
+        x: pt.x,
+        y: pt.y,
+        radius: 130,
+        angle: g.aimAngle,
+        life: 0.78,
+        maxLife: 0.78,
+        color: '#FB7185',
+      });
       s.shockwaves.push({
         x: pt.x,
         y: pt.y,
         radius: 12,
-        maxRadius: 110,
-        alpha: 0.9,
+        maxRadius: 125,
+        alpha: 0.95,
         color: '#FB7185',
         lineWidth: 3.5,
       });
-      emitParticles(pt.x, pt.y, '#FDE047', 14, 155, 1.25);
+      emitParticles(pt.x, pt.y, '#FDE047', 16, 175, 1.3);
     }
 
-    for (const en of s.enemies) {
-      if (en.hp <= 0 || en.koTimer > 0) continue;
-      const res = applyDamageToEnemy(en, 65 + s.wave * 14, { armorPierce: 1 });
-      en.slowTimer = Math.max(en.slowTimer, 1.8);
-      en.slowFactor = Math.min(en.slowFactor || 1, 0.62);
+    const liveTargets = s.enemies
+      .filter((en) => en.hp > 0 && en.koTimer <= 0)
+      .sort((a, b) => b.hp + b.shield - (a.hp + a.shield));
+
+    for (const tEn of liveTargets.slice(0, 6)) {
+      s.railBeams.push({
+        x1: corePt.x,
+        y1: corePt.y,
+        x2: tEn.x,
+        y2: tEn.y,
+        alpha: 1.25,
+        color: '#FDE047',
+        visualTier: 4,
+        variant: 'supernova',
+      });
+      s.impactFlashes.push({
+        x: tEn.x,
+        y: tEn.y,
+        radius: 44,
+        alpha: 1,
+        color: '#FDE047',
+        spikes: 8,
+        rot: s.animTime,
+      });
+    }
+
+    const judgmentDmg =
+      OVERDRIVE_CONFIG.globalJudgmentBase + s.wave * OVERDRIVE_CONFIG.globalJudgmentPerWave;
+    for (const en of liveTargets) {
+      interruptEnemyWindup(en);
+      if (en.kind !== 'boss' && en.kind !== 'super_boss' && en.kind !== 'juggernaut') {
+        en.stunTimer = Math.max(en.stunTimer, 1.8);
+      }
+      en.slowTimer = Math.max(en.slowTimer, 3.5);
+      en.slowFactor = Math.min(en.slowFactor || 1, 0.48);
+      en.armorShred = Math.max(en.armorShred, 0.28);
+
+      const res = applyDamageToEnemy(en, judgmentDmg, {
+        armorPierce: 1,
+        shieldMult: 2.0,
+      });
+      s.totalDamage += res.actualDamage;
       if (res.killed) {
         s.kills += 1;
         s.energy += en.reward;
         s.score += en.scoreValue;
-        emitParticles(en.x, en.y, '#FBBF24', 18, 150, 1.2);
+        emitParticles(en.x, en.y, '#FBBF24', 20, 170, 1.25);
       }
     }
+    pushCombatText(corePt.x, corePt.y - 34, '⚡ HỘI TỤ HỎA LỰC ×2.71!', '#FDE047', 1.25);
     s.selectedGunVersion += 1;
     recomputeFirepower();
     syncHudFromSim();
-    setStatusNotice('HỘI TỤ HỎA LỰC ×1.75 ĐÃ KÍCH HOẠT! Toàn bộ ụ súng kích nổ kỹ năng Quá Nhiệt!');
+    setStatusNotice(
+      '⚡ HỘI TỤ HỎA LỰC ×2.71 BÙNG NỔ! Thiên Phạt toàn bản đồ + 2 Đợt Quá Nhiệt toàn đội hình!'
+    );
     playSynthFx('overdrive', soundEnabled, audioCtxRef);
-  }, [gameState, recomputeFirepower, syncHudFromSim, soundEnabled, emitParticles]);
+  }, [gameState, recomputeFirepower, syncHudFromSim, soundEnabled, emitParticles, pushCombatText]);
 
   const cycleSelectedPriority = useCallback(() => {
     if (!selectedGunId || gameState !== 'playing') return;
@@ -821,6 +935,7 @@ export function PrismTdGameSection({
     const target = s.guns[idx];
     const refund = getGunSellRefund(target);
     s.guns.splice(idx, 1);
+    s.carrierDrones = s.carrierDrones.filter((d) => d.sourceGunId !== target.id);
     s.energy += refund;
     s.selectedGunId = null;
     s.selectedGunVersion += 1;
@@ -915,7 +1030,10 @@ export function PrismTdGameSection({
       level: 1,
       variant: selectedVariant,
       priority:
-        selectedTool === 'railgun' || selectedTool === 'missile' || selectedTool === 'mortar'
+        selectedTool === 'railgun' ||
+        selectedTool === 'missile' ||
+        selectedTool === 'mortar' ||
+        selectedTool === 'orbital'
           ? 'strongest'
           : 'first',
       chargeTimer: 0,
@@ -1323,6 +1441,55 @@ export function PrismTdGameSection({
         emitParticles(en.x, en.y, '#E879F9', 14, 110, 0.9);
       }
 
+      // Supernova Brand Chain Detonation (Stellar Echo): branded kills erupt in a golden cascade!
+      if (en.supernovaBrandDmg && en.supernovaBrandDmg > 0) {
+        const echoBase = en.supernovaBrandDmg;
+        en.supernovaBrandDmg = 0; // guard: zero BEFORE loop so each enemy detonates at most once
+        const brandGun = killerGunId ? s.guns.find((g) => g.id === killerGunId) : undefined;
+        const echoRadius = brandGun && brandGun.level >= 10 ? 140 : 115;
+        s.impactFlashes.push({
+          x: en.x,
+          y: en.y,
+          radius: echoRadius * 0.62,
+          alpha: 0.96,
+          color: '#FDE047',
+          spikes: 8,
+          rot: s.animTime * 2,
+        });
+        s.shockwaves.push({
+          x: en.x,
+          y: en.y,
+          radius: 14,
+          maxRadius: echoRadius,
+          alpha: 0.85,
+          color: '#FDE047',
+          lineWidth: 2.2,
+        });
+        emitParticles(en.x, en.y, '#FDE047', 16, 175, 1.25);
+        for (const other of s.enemies) {
+          if (other.id === en.id || other.hp <= 0 || other.koTimer > 0) continue;
+          const dist = Math.hypot(other.x - en.x, other.y - en.y);
+          if (dist <= echoRadius + other.radius) {
+            const pctHpBonus = Math.min(Math.round(echoBase * 0.95), Math.round(other.maxHp * 0.1));
+            const cascadeDmg = Math.round(echoBase + pctHpBonus);
+            if (!other.supernovaBrandDmg) {
+              other.markedTimer = Math.max(other.markedTimer, 3.2);
+              other.markedBonus = Math.max(other.markedBonus, 0.25);
+              other.supernovaBrandDmg = Math.round(echoBase * 0.72);
+            }
+            const cRes = applyDamageToEnemy(other, cascadeDmg, {
+              armorPierce: 0.95,
+              shieldMult: 1.85,
+            });
+            s.totalDamage += cRes.actualDamage;
+            if (brandGun) brandGun.totalDamageDealt += cRes.actualDamage;
+            if (cRes.killed) {
+              recordKill(other, killerGunId);
+            }
+          }
+        }
+      }
+
       pushCombatText(en.x, en.y, `+${en.reward}⚡`, '#FBBF24', isBossTier ? 1.3 : 1);
       if (isBossTier) {
         if (s.speedMult < 2) {
@@ -1347,6 +1514,35 @@ export function PrismTdGameSection({
 
         if (s.overdriveTimer > 0) {
           s.overdriveTimer = Math.max(0, s.overdriveTimer - simDt);
+          if (
+            !s.overdriveSecondWaveFired &&
+            s.overdriveTimer > 0 &&
+            s.overdriveTimer <= OVERDRIVE_CONFIG.secondWaveTriggerSec
+          ) {
+            s.overdriveSecondWaveFired = true;
+            for (const g of s.guns) {
+              g.heat = 100;
+              const pt = gridToWorldCenter(g.col, g.row);
+              s.overheatEffects.push({
+                kind: 'overdrive_apex',
+                x: pt.x,
+                y: pt.y,
+                radius: 115,
+                angle: s.animTime,
+                life: 0.68,
+                maxLife: 0.68,
+                color: '#38BDF8',
+              });
+            }
+            pushCombatText(
+              CANVAS_WIDTH / 2,
+              64,
+              '⚡ HỎA LỰC ĐỢT 2 — QUÁ NHIỆT KÉP!',
+              '#FDE047',
+              1.2
+            );
+            playSynthFx('overdrive', soundEnabled, audioCtxRef);
+          }
           if (s.overdriveTimer === 0) {
             recomputeFirepower();
             syncHudFromSim();
@@ -1387,10 +1583,48 @@ export function PrismTdGameSection({
           }
         }
 
-        // 2. Pure Gun Turrets Combat Simulation (Lv1 -> Lv10, α/ω Variants, 18 Unique Overheat Ultimates)
+        // 2. Pure Gun Turrets Combat Simulation (Lv1 -> Lv10, α/ω Variants, 17 Unique Overheat Ultimates)
         const liveEnemies = s.enemies.filter((e) => e.hp > 0 && e.koTimer <= 0);
-        const overdriveSpeedMult = s.overdriveTimer > 0 ? 1.45 : 1;
-        const overdriveDmgMult = s.overdriveTimer > 0 ? 1.22 : 1;
+        const overdriveSpeedMult = s.overdriveTimer > 0 ? OVERDRIVE_CONFIG.speedMult : 1;
+        const overdriveDmgMult = s.overdriveTimer > 0 ? OVERDRIVE_CONFIG.damageMult : 1;
+
+        const recordChronoEchoAt = (ex: number, ey: number, dmg: number, echoScale = 1) => {
+          if (dmg <= 0 || echoScale <= 0 || s.chronoFields.length === 0) return;
+          for (const cf of s.chronoFields) {
+            if (Math.hypot(ex - cf.x, ey - cf.y) <= cf.radius + 20) {
+              cf.recordedDamage = computeChronoFieldRecord(
+                cf.recordedDamage,
+                dmg,
+                cf.echoRatio * echoScale,
+                32000 + cf.level * 9000
+              );
+            }
+          }
+        };
+
+        const recordDamageTelemetry = (
+          en: TdEnemy,
+          actualDamage: number,
+          gunId: string | undefined,
+          chargeBaseRate = 0.045,
+          echoScale = 1
+        ) => {
+          if (actualDamage <= 0) return;
+          s.totalDamage += actualDamage;
+          if (gunId) {
+            const src = s.guns.find((g) => g.id === gunId);
+            if (src) src.totalDamageDealt += actualDamage;
+          }
+          if (s.overdriveTimer <= 0 && chargeBaseRate > 0) {
+            s.overdriveCharge = Math.min(
+              100,
+              s.overdriveCharge + computeOverdriveChargeGain(actualDamage, chargeBaseRate)
+            );
+          }
+          if (s.chronoFields.length > 0 && echoScale > 0) {
+            recordChronoEchoAt(en.x, en.y, actualDamage, echoScale);
+          }
+        };
 
         const spawnCasing = (ox: number, oy: number, angle: number, color = '#FBBF24') => {
           if (s.shellCasings.length >= 64) s.shellCasings.shift();
@@ -1742,6 +1976,302 @@ export function PrismTdGameSection({
               playSynthFx('interrupt', soundEnabled, audioCtxRef);
             }
             pushCombatText(origin.x, origin.y - 28, `RADAR KHÓA ${targets.length} MỤC TIÊU!`, '#22D3EE', 1.04);
+          } else if (gun.type === 'orbital') {
+            const topTargets = [...liveEnemies]
+              .sort((a, b) => b.hp + b.shield - (a.hp + a.shield))
+              .slice(0, 3);
+            const fallbackPts =
+              topTargets.length > 0
+                ? topTargets.map((tEn) => ({ x: tEn.x, y: tEn.y }))
+                : [
+                    target
+                      ? { x: target.x, y: target.y }
+                      : gridToWorldCenter(s.map.path[Math.floor(s.map.path.length / 2)].col, s.map.path[Math.floor(s.map.path.length / 2)].row),
+                  ];
+            for (const ptStrike of fallbackPts) {
+              const strikeR = Math.max(62, profile.splashRadius * 1.18);
+              s.orbitalBeams.push({
+                x: ptStrike.x,
+                y: ptStrike.y,
+                alpha: 1.25,
+                radius: strikeR,
+                color: '#FDE047',
+                visualTier: 4,
+              });
+              s.impactFlashes.push({
+                x: ptStrike.x,
+                y: ptStrike.y,
+                radius: strikeR * 0.72,
+                alpha: 1,
+                color: '#F97316',
+                spikes: 8,
+                rot: s.animTime,
+              });
+              spawnCrater(ptStrike.x, ptStrike.y, Math.min(54, strikeR * 0.8), 'plasma');
+              emitParticles(ptStrike.x, ptStrike.y, '#FDBA74', 20, 175, 1.3);
+              if (s.orbitalZones.length >= 16) s.orbitalZones.shift();
+              s.orbitalZones.push({
+                id: s.nextProjId++,
+                sourceGunId: gun.id,
+                x: ptStrike.x,
+                y: ptStrike.y,
+                radius: strikeR,
+                dps: Math.max(48, Math.round(profile.burnDps * 1.65)),
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                armorShred: 0.35,
+                slowPct: 0.24,
+                life: 5.0,
+                maxLife: 5.0,
+              });
+              for (const en of liveEnemies) {
+                const dist = Math.hypot(en.x - ptStrike.x, en.y - ptStrike.y);
+                if (dist <= strikeR + en.radius) {
+                  const bossBonus = gun.level >= 7 && (en.kind === 'boss' || en.kind === 'super_boss') ? 1.4 : 1;
+                  const hpShredBonus = Math.min(
+                    Math.round(shotDmg * 1.35),
+                    Math.round(en.maxHp * (dist < 30 ? 0.06 : 0.03))
+                  );
+                  const strikeDmg = Math.round(shotDmg * (dist < 28 ? 1.45 : 0.82) * bossBonus) + hpShredBonus;
+                  en.armorShred = Math.max(en.armorShred, 0.32);
+                  en.burnTimer = Math.max(en.burnTimer, 3.2);
+                  en.burnDps = Math.max(en.burnDps, profile.burnDps);
+                  const res = applyDamageToEnemy(en, strikeDmg, {
+                    armorPierce: Math.min(1, profile.armorPierce + 0.12),
+                    shieldMult: profile.shieldMult * 1.25,
+                  });
+                  s.totalDamage += res.actualDamage;
+                  gun.totalDamageDealt += res.actualDamage;
+                  if (res.killed) recordKill(en, gun.id);
+                }
+              }
+            }
+          } else if (gun.type === 'singularity') {
+            const holePos = target
+              ? { x: target.x, y: target.y }
+              : gridToWorldCenter(s.map.path[Math.floor(s.map.path.length / 2)].col, s.map.path[Math.floor(s.map.path.length / 2)].row);
+            const superRadius = Math.round(profile.splashRadius * 1.28);
+            if (s.blackHoles.length >= 10) s.blackHoles.shift();
+            s.blackHoles.push({
+              id: s.nextProjId++,
+              sourceGunId: gun.id,
+              x: holePos.x,
+              y: holePos.y,
+              baseRadius: superRadius,
+              currentRadius: superRadius,
+              pullStrength: profile.pullForce * 1.45,
+              trueDps: Math.round(Math.max(shotDmg, profile.damage) * 1.6),
+              accumulatedDamage: Math.round(Math.max(shotDmg, profile.damage) * 3.0),
+              killsAbsorbed: 0,
+              life: 5.5,
+              maxLife: 5.5,
+              maxScale: 1.9,
+              level: gun.level,
+              variant: gun.variant ?? 'alpha',
+              isCrit: true,
+            });
+            s.overheatEffects.push({
+              kind: 'vortex',
+              x: holePos.x,
+              y: holePos.y,
+              radius: superRadius,
+              angle: 0,
+              life: 1.0,
+              maxLife: 1.0,
+              color: '#C084FC',
+            });
+            emitParticles(holePos.x, holePos.y, '#C084FC', 22, 165, 1.3);
+          } else if (gun.type === 'mothership') {
+            const teamBuffOh = computeTeamSupportBuffAtTile(s.guns, gun.col, gun.row);
+            const droneDmg = Math.round(profile.damage * overdriveDmgMult * teamBuffOh.damageMult * 1.65);
+            for (const d of s.carrierDrones) {
+              if (d.sourceGunId === gun.id) {
+                d.life = d.maxLife;
+                d.fireCooldown = 0;
+                d.damage = Math.max(d.damage, droneDmg);
+              }
+            }
+            for (let bIdx = 0; bIdx < 2; bIdx++) {
+              const launchA = gun.aimAngle + (bIdx === 0 ? -0.55 : 0.55);
+              s.carrierDrones.push({
+                id: s.nextProjId++,
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(launchA) * 16,
+                y: origin.y + Math.sin(launchA) * 16,
+                vx: Math.cos(launchA) * 290,
+                vy: Math.sin(launchA) * 290,
+                heading: launchA,
+                fireCooldown: 0.08,
+                shotCount: 2,
+                life: 14,
+                maxLife: 14,
+                damage: droneDmg,
+                armorPierce: Math.min(1, profile.armorPierce + 0.16),
+                shieldMult: profile.shieldMult * 1.25,
+                bossMult: gun.level >= 7 ? 1.45 : 1.25,
+                speed: 295 + gun.level * 10,
+                variant: gun.variant ?? 'alpha',
+                visualTier: 4,
+                evadeTimer: 0,
+                trail: [],
+              });
+            }
+            s.overheatEffects.push({
+              kind: 'solar_flare',
+              x: origin.x,
+              y: origin.y,
+              radius: 72,
+              angle: 0,
+              life: 0.72,
+              maxLife: 0.72,
+              color: '#38BDF8',
+            });
+          } else if (gun.type === 'supernova') {
+            const cx = target?.x ?? origin.x + Math.cos(gun.aimAngle) * 140;
+            const cy = target?.y ?? origin.y + Math.sin(gun.aimAngle) * 140;
+            const novaRadius = 260;
+            s.overheatEffects.push({
+              kind: 'supernova_nova',
+              x: cx,
+              y: cy,
+              radius: novaRadius,
+              angle: 0,
+              life: 1.0,
+              maxLife: 1.0,
+              color: '#FDE047',
+            });
+            spawnCrater(cx, cy, 62, 'plasma');
+            emitParticles(cx, cy, '#FEF08A', 28, 220, 1.45);
+            for (let rb = -1; rb <= 1; rb++) {
+              const ba = gun.aimAngle + rb * 0.22;
+              s.railBeams.push({
+                x1: origin.x + Math.cos(ba) * 24,
+                y1: origin.y + Math.sin(ba) * 24,
+                x2: origin.x + Math.cos(ba) * 760,
+                y2: origin.y + Math.sin(ba) * 760,
+                alpha: 1.25,
+                color: '#FDE047',
+                visualTier: 4,
+                variant: 'supernova',
+              });
+            }
+            for (const en of liveEnemies) {
+              const dist = Math.hypot(en.x - cx, en.y - cy);
+              if (dist <= novaRadius + en.radius) {
+                en.markedTimer = Math.max(en.markedTimer, 5.0);
+                en.markedBonus = Math.max(en.markedBonus, 0.45);
+                en.supernovaBrandDmg = Math.max(en.supernovaBrandDmg ?? 0, Math.round(shotDmg * 0.75));
+                en.slowTimer = Math.max(en.slowTimer, 2.2);
+                en.slowFactor = Math.min(en.slowFactor || 1, 0.62);
+                if (interruptEnemyWindup(en)) {
+                  pushCombatText(en.x, en.y - 18, '✦ KHỞI NGUYÊN NGẮT CHIÊU!', '#FDE047', 1.15);
+                  playSynthFx('interrupt', soundEnabled, audioCtxRef);
+                }
+                const burstDmg = Math.round(shotDmg * (dist < 90 ? 1.5 : 1.05));
+                const res = applyDamageToEnemy(en, burstDmg, {
+                  armorPierce: 1,
+                  shieldMult: 2.2,
+                });
+                s.totalDamage += res.actualDamage;
+                gun.totalDamageDealt += res.actualDamage;
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+            pushCombatText(cx, cy - 28, '✦ ĐẠI VỤ NỔ KHỞI NGUYÊN!', '#FEF08A', 1.18);
+          } else if (gun.type === 'chronos') {
+            const centerPt = target
+              ? { x: target.x, y: target.y }
+              : gridToWorldCenter(
+                  s.map.path[Math.floor(s.map.path.length / 2)].col,
+                  s.map.path[Math.floor(s.map.path.length / 2)].row
+                );
+            s.overheatEffects.push({
+              kind: 'chrono_collapse',
+              x: centerPt.x,
+              y: centerPt.y,
+              radius: 280,
+              angle: 0,
+              life: 1.05,
+              maxLife: 1.05,
+              color: '#67E8F9',
+            });
+            emitParticles(centerPt.x, centerPt.y, '#67E8F9', 26, 200, 1.35);
+
+            const sortedAll = [...liveEnemies].sort(
+              (a, b) => b.hp + b.shield - (a.hp + a.shield)
+            );
+            for (const slEn of sortedAll.slice(0, 8)) {
+              s.chronoSlashes.push({
+                x: slEn.x,
+                y: slEn.y,
+                angle: Math.atan2(slEn.y - origin.y, slEn.x - origin.x),
+                length: 62,
+                alpha: 1,
+                color: '#67E8F9',
+                isCrit: true,
+              });
+            }
+
+            const maxFields = Math.max(2, getChronosMaxFields(gun.level, gun.variant ?? 'alpha'));
+            const fieldSeeds =
+              sortedAll.length >= 2
+                ? [sortedAll[0], sortedAll[1]]
+                : [
+                    centerPt,
+                    gridToWorldCenter(
+                      s.map.path[Math.max(1, Math.floor(s.map.path.length * 0.68))].col,
+                      s.map.path[Math.max(1, Math.floor(s.map.path.length * 0.68))].row
+                    ),
+                  ];
+            for (const fPt of fieldSeeds) {
+              if (s.chronoFields.filter((cf) => cf.sourceGunId === gun.id).length >= maxFields) {
+                const oldestIdx = s.chronoFields.findIndex((cf) => cf.sourceGunId === gun.id);
+                if (oldestIdx >= 0) s.chronoFields.splice(oldestIdx, 1);
+              }
+              s.chronoFields.push({
+                id: s.nextProjId++,
+                sourceGunId: gun.id,
+                x: fPt.x,
+                y: fPt.y,
+                radius: profile.splashRadius,
+                recordedDamage: Math.round(shotDmg * 0.9),
+                dps: Math.round(shotDmg * 0.56),
+                echoRatio: profile.brittleBonus,
+                slowPct: profile.slowPct,
+                pullForce: profile.pullForce * 1.2,
+                armorPierce: 1,
+                shieldMult: profile.shieldMult * 1.15,
+                life: 4.8,
+                maxLife: 4.8,
+                level: gun.level,
+                variant: gun.variant ?? 'alpha',
+                isCrit: true,
+              });
+            }
+
+            let interruptedAny = false;
+            for (const en of liveEnemies) {
+              const isHeavy =
+                en.kind === 'boss' || en.kind === 'super_boss' || en.kind === 'juggernaut';
+              en.stunTimer = Math.max(en.stunTimer, isHeavy ? 0.9 : 2.4);
+              en.slowTimer = Math.max(en.slowTimer, 4.0);
+              en.slowFactor = Math.min(en.slowFactor || 1, 0.52);
+              en.armorShred = Math.max(en.armorShred, 0.35);
+              if (interruptEnemyWindup(en)) {
+                interruptedAny = true;
+                pushCombatText(en.x, en.y - 18, '⏳ NGƯNG ĐỌNG NGẮT CHIÊU!', '#67E8F9', 1.14);
+              }
+              const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.4), {
+                armorPierce: 1,
+                shieldMult: 2.3,
+              });
+              recordDamageTelemetry(en, res.actualDamage, gun.id, 0, 0.5);
+              if (res.killed) recordKill(en, gun.id);
+            }
+            if (interruptedAny) {
+              playSynthFx('interrupt', soundEnabled, audioCtxRef);
+            }
+            pushCombatText(centerPt.x, centerPt.y - 26, '⏳ NGƯNG ĐỌNG VĨNH HẰNG!', '#67E8F9', 1.18);
           }
         };
 
@@ -1762,15 +2292,64 @@ export function PrismTdGameSection({
             : rawProfile;
           const origin = gridToWorldCenter(gun.col, gun.row);
           const rangeSq = profile.rangePx * profile.rangePx;
+          const teamDamageBuff = computeTeamSupportBuffAtTile(s.guns, gun.col, gun.row);
 
-          // Target selection honoring TargetPriority
+          // Mothership Hangar: continuously maintains 3-4 (+1 Alpha) autonomous fighter drones
+          if (gun.type === 'mothership' && (s.waveActive || liveEnemies.length > 0)) {
+            const droneCap = getMothershipMaxDrones(gun.level, gun.variant ?? 'alpha');
+            const padDrones = s.carrierDrones.filter((d) => d.sourceGunId === gun.id);
+            const liveDroneDmg = Math.round(profile.damage * overdriveDmgMult * teamDamageBuff.damageMult);
+            const droneSpeed = (gun.variant === 'alpha' ? 285 : 242) + gun.level * 10;
+            for (const d of padDrones) {
+              d.damage = (gun.overheatTimer ?? 0) > 0 ? Math.round(liveDroneDmg * 1.65) : liveDroneDmg;
+              d.armorPierce = profile.armorPierce;
+              d.shieldMult = profile.shieldMult;
+              d.bossMult = gun.level >= 7 ? 1.45 : 1.2;
+              d.speed = droneSpeed;
+              d.variant = gun.variant ?? 'alpha';
+              d.visualTier = profile.visualTier;
+            }
+            if (padDrones.length < droneCap && (padDrones.length === 0 || gun.chargeTimer >= 0.34)) {
+              const slotAngle = gun.aimAngle + (padDrones.length - 1.5) * 0.55;
+              const droneLife = 18 + gun.level * 0.9;
+              s.carrierDrones.push({
+                id: s.nextProjId++,
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(slotAngle) * 14,
+                y: origin.y + Math.sin(slotAngle) * 14,
+                vx: Math.cos(slotAngle) * droneSpeed,
+                vy: Math.sin(slotAngle) * droneSpeed,
+                heading: slotAngle,
+                fireCooldown: 0.12,
+                shotCount: 0,
+                life: droneLife,
+                maxLife: droneLife,
+                damage: liveDroneDmg,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                bossMult: gun.level >= 7 ? 1.45 : 1.2,
+                speed: droneSpeed,
+                variant: gun.variant ?? 'alpha',
+                visualTier: profile.visualTier,
+                evadeTimer: 0,
+                trail: [],
+              });
+              emitParticles(origin.x, origin.y, '#38BDF8', 8, 95, 0.9);
+              if (padDrones.length > 0) {
+                gun.chargeTimer = 0;
+              }
+            }
+          }
+
+          // Target selection honoring TargetPriority (Orbital has unlimited global range)
           let target: TdEnemy | null = null;
           let bestScore = -Infinity;
           for (const en of liveEnemies) {
             const dx = en.x - origin.x;
             const dy = en.y - origin.y;
             const distSq = dx * dx + dy * dy;
-            if (distSq <= rangeSq) {
+            const inRange = gun.type === 'orbital' || gun.type === 'mothership' ? true : distSq <= rangeSq;
+            if (inRange) {
               let priorityVal = 0;
               if (gun.priority === 'strongest') {
                 priorityVal = en.hp + en.shield + en.waypointIndex * 25;
@@ -1981,11 +2560,7 @@ export function PrismTdGameSection({
                     armorPierce: profile.armorPierce,
                     shieldMult: profile.shieldMult,
                   });
-                  s.totalDamage += res.actualDamage;
-                  gun.totalDamageDealt += res.actualDamage;
-                  if (s.overdriveTimer <= 0) {
-                    s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.05);
-                  }
+                  recordDamageTelemetry(en, res.actualDamage, gun.id, 0.05);
                   if (res.killed) recordKill(en, gun.id);
                 }
               }
@@ -2076,13 +2651,9 @@ export function PrismTdGameSection({
                 armorPierce: profile.armorPierce,
                 shieldMult: profile.shieldMult + syn.shieldMultBonus,
               });
-              s.totalDamage += res.actualDamage;
-              gun.totalDamageDealt += res.actualDamage;
+              recordDamageTelemetry(cur, res.actualDamage, gun.id, 0.05);
               if (didCrit && j === 0 && res.actualDamage > 0) {
                 pushCombatText(cur.x, cur.y - 10, `CHÍ MẠNG! -${Math.round(res.actualDamage)}`, '#FDE047', 1.04);
-              }
-              if (s.overdriveTimer <= 0) {
-                s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.05);
               }
               if (res.killed) recordKill(cur, gun.id);
 
@@ -2230,8 +2801,7 @@ export function PrismTdGameSection({
                     armorPierce: profile.armorPierce,
                     shieldMult: profile.shieldMult,
                   });
-                  s.totalDamage += res.actualDamage;
-                  gun.totalDamageDealt += res.actualDamage;
+                  recordDamageTelemetry(en, res.actualDamage, gun.id, 0.04);
                   if ((bossCrit || didCrit) && res.actualDamage > 0) {
                     pushCombatText(
                       en.x,
@@ -2240,9 +2810,6 @@ export function PrismTdGameSection({
                       '#FDE047',
                       1.12
                     );
-                  }
-                  if (s.overdriveTimer <= 0) {
-                    s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.04);
                   }
                   if (res.killed) recordKill(en, gun.id);
 
@@ -2453,6 +3020,359 @@ export function PrismTdGameSection({
               });
             }
             playSynthFx('tempest', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'orbital') {
+            // Global-range Sky Pillar Laser + % Max HP Thermal Shred + Magma/Radiation burn & armor-melt zone
+            const pillarTargets = [...liveEnemies]
+              .sort((a, b) => {
+                if (gun.priority === 'weakest') return a.hp + a.shield - (b.hp + b.shield);
+                if (gun.priority === 'first') return b.waypointIndex - a.waypointIndex;
+                return b.hp + b.shield - (a.hp + a.shield);
+              })
+              .slice(0, profile.projectilesPerShot);
+            const isOmega = (gun.variant ?? 'alpha') === 'omega';
+            const zoneRadius = Math.round(profile.splashRadius * (isOmega ? 1.24 : 1.0));
+            const zoneLife = isOmega ? 5.4 : 4.1;
+            const shredPct = gun.level >= 7 ? 0.35 : 0.24;
+
+            for (const oTarget of pillarTargets) {
+              s.orbitalBeams.push({
+                x: oTarget.x,
+                y: oTarget.y,
+                alpha: 1.12,
+                radius: profile.splashRadius,
+                color: profile.visualTier === 4 ? '#FDE047' : '#F97316',
+                visualTier: profile.visualTier,
+              });
+              s.impactFlashes.push({
+                x: oTarget.x,
+                y: oTarget.y,
+                radius: Math.min(58, profile.splashRadius * 0.78),
+                alpha: 1,
+                color: '#FB923C',
+                spikes: 7,
+                rot: s.animTime,
+              });
+              spawnCrater(oTarget.x, oTarget.y, Math.min(48, zoneRadius * 0.75), 'scorch');
+              emitParticles(oTarget.x, oTarget.y, '#FDBA74', 18, 165, 1.25);
+
+              if (s.orbitalZones.length >= 16) s.orbitalZones.shift();
+              s.orbitalZones.push({
+                id: s.nextProjId++,
+                sourceGunId: gun.id,
+                x: oTarget.x,
+                y: oTarget.y,
+                radius: zoneRadius,
+                dps: Math.max(32, Math.round(profile.burnDps * overdriveDmgMult * teamBuff.damageMult)),
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                armorShred: shredPct,
+                slowPct: profile.slowPct,
+                life: zoneLife,
+                maxLife: zoneLife,
+              });
+
+              for (const en of liveEnemies) {
+                const dist = Math.hypot(en.x - oTarget.x, en.y - oTarget.y);
+                if (dist <= profile.splashRadius + en.radius) {
+                  const isBoss = en.kind === 'boss' || en.kind === 'super_boss';
+                  const bossMult = gun.level >= 7 && isBoss ? 1.38 : 1;
+                  const centerRatio = en.id === oTarget.id || dist < 26 ? 1 : 0.68;
+                  const maxHpBurn =
+                    en.id === oTarget.id
+                      ? Math.min(
+                          Math.round(shotDmg * 1.15),
+                          Math.round(en.maxHp * (gun.level >= 7 ? 0.06 : 0.035))
+                        )
+                      : 0;
+                  const pillarDmg = Math.round(shotDmg * centerRatio * bossMult) + maxHpBurn;
+                  en.armorShred = Math.max(en.armorShred, shredPct);
+                  en.burnTimer = Math.max(en.burnTimer, 2.8);
+                  en.burnDps = Math.max(en.burnDps, profile.burnDps);
+                  const res = applyDamageToEnemy(en, pillarDmg, {
+                    armorPierce: profile.armorPierce,
+                    shieldMult: profile.shieldMult,
+                  });
+                  recordDamageTelemetry(en, res.actualDamage, gun.id, 0.045);
+                  if (en.id === oTarget.id && res.actualDamage > 0 && (didCrit || isBoss)) {
+                    pushCombatText(
+                      en.x,
+                      en.y - 12,
+                      `${didCrit ? 'CHÍ MẠNG' : 'THIÊN PHẠT'} -${Math.round(res.actualDamage)}`,
+                      '#FDBA74',
+                      1.06
+                    );
+                  }
+                  if (res.killed) recordKill(en, gun.id);
+                }
+              }
+            }
+            playSynthFx('orbital', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'singularity') {
+            // Persistent Black Hole hovering directly on the enemy track with strong vortex trap & swallow growth
+            if (s.blackHoles.length >= 10) s.blackHoles.shift();
+            const isOmega = (gun.variant ?? 'alpha') === 'omega';
+            const holeLife = 4.6 + (gun.level >= 10 ? 0.7 : 0);
+            s.blackHoles.push({
+              id: s.nextProjId++,
+              sourceGunId: gun.id,
+              x: target.x,
+              y: target.y,
+              baseRadius: profile.splashRadius,
+              currentRadius: profile.splashRadius,
+              pullStrength: profile.pullForce * (gun.variant === 'alpha' ? 1.32 : 1),
+              trueDps: Math.round(shotDmg * (isOmega ? 1.2 : 1.0)),
+              accumulatedDamage: Math.round(shotDmg * (isOmega ? 2.6 : 2.1)),
+              killsAbsorbed: 0,
+              life: holeLife,
+              maxLife: holeLife,
+              maxScale: 1.85,
+              level: gun.level,
+              variant: gun.variant ?? 'alpha',
+              isCrit: didCrit,
+            });
+            s.shockwaves.push({
+              x: target.x,
+              y: target.y,
+              radius: 8,
+              maxRadius: profile.splashRadius * 0.9,
+              alpha: 0.85,
+              color: '#C084FC',
+              lineWidth: 2.4,
+            });
+            emitParticles(target.x, target.y, '#C084FC', 16, 120, 1.15);
+            playSynthFx('singularity', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'mothership') {
+            // Fleet Hangar synchronization pulse & immediate target volley boost
+            s.harmonicRays.push({
+              x: origin.x,
+              y: origin.y,
+              angle: gun.aimAngle,
+              length: 44,
+              alpha: 0.55,
+              color: '#38BDF8',
+            });
+            playSynthFx('mothership', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'supernova') {
+            gun.shotsFired = (gun.shotsFired ?? 0) + 1;
+            const isOmega = (gun.variant ?? 'alpha') === 'omega';
+            const beamEvery = isOmega || gun.level >= MAX_GUN_LEVEL ? 3 : 4;
+            const triggerHyperBeam = gun.shotsFired % beamEvery === 0;
+            const muzzleX = origin.x + Math.cos(gun.aimAngle) * 24;
+            const muzzleY = origin.y + Math.sin(gun.aimAngle) * 24;
+            const orbSpeed = 470 + gun.level * 10;
+
+            s.projectiles.push({
+              id: s.nextProjId++,
+              kind: 'supernova_orb',
+              sourceGunId: gun.id,
+              x: muzzleX,
+              y: muzzleY,
+              vx: Math.cos(gun.aimAngle) * orbSpeed,
+              vy: Math.sin(gun.aimAngle) * orbSpeed,
+              targetId: target.id,
+              damage: shotDmg,
+              armorPierce: profile.armorPierce,
+              shieldMult: profile.shieldMult,
+              splashRadius: profile.splashRadius,
+              pullForce: 0,
+              burnDps: 0,
+              burnDuration: 0,
+              slowAmount: profile.slowPct,
+              pierceLeft: profile.chainCount,
+              hitIds: [],
+              life: 2.1,
+              maxLife: 2.1,
+              age: 0,
+              speed: orbSpeed,
+              color: isOmega ? '#F59E0B' : '#FDE047',
+              visualTier: profile.visualTier,
+              supernovaBrandAmp: profile.brittleBonus,
+              supernovaEchoDmg: Math.round(shotDmg * 0.65),
+              isCrit: didCrit,
+              trail: [],
+            });
+            s.muzzleFlashes.push({
+              x: muzzleX,
+              y: muzzleY,
+              angle: gun.aimAngle,
+              radius: 26 + profile.visualTier * 3,
+              alpha: 1,
+              color: '#FDE047',
+            });
+
+            if (triggerHyperBeam) {
+              const beamLength = Math.max(profile.rangePx + 220, 720);
+              const endX = origin.x + Math.cos(gun.aimAngle) * beamLength;
+              const endY = origin.y + Math.sin(gun.aimAngle) * beamLength;
+              s.railBeams.push({
+                x1: muzzleX,
+                y1: muzzleY,
+                x2: endX,
+                y2: endY,
+                alpha: 1.18,
+                color: isOmega ? '#F59E0B' : '#FDE047',
+                visualTier: 4,
+                variant: 'supernova',
+              });
+              const segLenSq = (endX - origin.x) ** 2 + (endY - origin.y) ** 2;
+              const beamDmg = Math.round(shotDmg * (isOmega ? 1.12 : 0.92));
+              for (const en of liveEnemies) {
+                if (en.hp <= 0 || en.koTimer > 0) continue;
+                const tProj = Math.max(
+                  0,
+                  Math.min(1, ((en.x - origin.x) * (endX - origin.x) + (en.y - origin.y) * (endY - origin.y)) / segLenSq)
+                );
+                const px = origin.x + tProj * (endX - origin.x);
+                const py = origin.y + tProj * (endY - origin.y);
+                if ((en.x - px) ** 2 + (en.y - py) ** 2 <= (en.radius + 22) ** 2) {
+                  en.markedTimer = Math.max(en.markedTimer, 4.2);
+                  en.markedBonus = Math.max(en.markedBonus, profile.brittleBonus);
+                  en.supernovaBrandDmg = Math.max(en.supernovaBrandDmg ?? 0, Math.round(shotDmg * 0.65));
+                  if (gun.level >= 5 && interruptEnemyWindup(en)) {
+                    pushCombatText(en.x, en.y - 16, '✦ PHÁN QUYẾT NGẮT CHIÊU!', '#FDE047', 1.1);
+                    playSynthFx('interrupt', soundEnabled, audioCtxRef);
+                  }
+                  const res = applyDamageToEnemy(en, beamDmg, {
+                    armorPierce: Math.min(1, profile.armorPierce + 0.08),
+                    shieldMult: profile.shieldMult * 1.15,
+                  });
+                  recordDamageTelemetry(en, res.actualDamage, gun.id, 0.045);
+                  if (res.killed) recordKill(en, gun.id);
+                }
+              }
+
+              // Lv5+ spawns 2 homing Golden Star-Shards on Hyper-Beam volley
+              if (gun.level >= 5 && liveEnemies.length > 0) {
+                const topLocks = [...liveEnemies].sort((a, b) => b.hp + b.shield - (a.hp + a.shield));
+                for (let sh = 0; sh < 2; sh++) {
+                  const lock = topLocks[sh % topLocks.length];
+                  const sa = gun.aimAngle + (sh === 0 ? -0.45 : 0.45);
+                  s.projectiles.push({
+                    id: s.nextProjId++,
+                    kind: 'missile',
+                    sourceGunId: gun.id,
+                    x: muzzleX,
+                    y: muzzleY,
+                    vx: Math.cos(sa) * 360,
+                    vy: Math.sin(sa) * 360,
+                    targetId: lock.id,
+                    damage: Math.round(shotDmg * 0.48),
+                    armorPierce: profile.armorPierce,
+                    shieldMult: profile.shieldMult,
+                    splashRadius: 56,
+                    pullForce: 0,
+                    burnDps: 0,
+                    burnDuration: 0,
+                    slowAmount: 0,
+                    pierceLeft: 0,
+                    life: 2.2,
+                    maxLife: 2.2,
+                    age: 0,
+                    speed: 360,
+                    color: '#FEF08A',
+                    visualTier: 4,
+                    isCrit: didCrit,
+                    trail: [],
+                  });
+                }
+              }
+            }
+            playSynthFx('supernova', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'chronos') {
+            const isOmega = (gun.variant ?? 'alpha') === 'omega';
+            const inRange = liveEnemies
+              .filter((e) => (e.x - origin.x) ** 2 + (e.y - origin.y) ** 2 <= rangeSq)
+              .sort((a, b) => b.hp + b.shield - (a.hp + a.shield));
+            const slashList: TdEnemy[] = inRange.slice(0, profile.chainCount);
+            if (gun.level >= 7) {
+              const globalTop = [...liveEnemies]
+                .filter((e) => !slashList.some((x) => x.id === e.id))
+                .sort((a, b) => b.hp + b.shield - (a.hp + a.shield))[0];
+              if (globalTop) slashList.push(globalTop);
+            }
+
+            const slashColor = isOmega ? '#C084FC' : '#22D3EE';
+            slashList.forEach((sEn, idx) => {
+              const slAngle = Math.atan2(sEn.y - origin.y, sEn.x - origin.x);
+              s.chronoSlashes.push({
+                x: sEn.x,
+                y: sEn.y,
+                angle: slAngle,
+                length: isOmega ? 56 : 48,
+                alpha: 1,
+                color: slashColor,
+                isCrit: didCrit || idx === 0,
+              });
+              sEn.armorShred = Math.max(sEn.armorShred, 0.08 + gun.level * 0.015);
+              if (sEn.kind !== 'boss' && sEn.kind !== 'super_boss' && sEn.kind !== 'juggernaut') {
+                sEn.stunTimer = Math.max(sEn.stunTimer, 0.22);
+              }
+              sEn.slowTimer = Math.max(sEn.slowTimer, 2.4);
+              sEn.slowFactor = Math.min(sEn.slowFactor || 1, 1 - profile.slowPct);
+
+              const slashHit = Math.round(shotDmg * (idx === 0 ? 1 : 0.78));
+              const res = applyDamageToEnemy(sEn, slashHit, {
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+              });
+              recordDamageTelemetry(sEn, res.actualDamage, gun.id, 0.045, 0.5);
+              if ((didCrit || idx === 0) && res.actualDamage > 0 && (didCrit || sEn.kind === 'boss' || sEn.kind === 'super_boss')) {
+                pushCombatText(
+                  sEn.x,
+                  sEn.y - 12,
+                  `${didCrit ? 'CHÍ MẠNG' : 'TRẢM'} -${Math.round(res.actualDamage)}`,
+                  slashColor,
+                  1.06
+                );
+              }
+              emitParticles(sEn.x, sEn.y, slashColor, 8, 120, 1.05);
+              if (res.killed) recordKill(sEn, gun.id);
+            });
+
+            // Spawn / Maintain Chronosphere Field centered on primary target
+            const maxFields = getChronosMaxFields(gun.level, gun.variant ?? 'alpha');
+            const gunFields = s.chronoFields.filter((cf) => cf.sourceGunId === gun.id);
+            const nearbyExisting = gunFields.find(
+              (cf) => Math.hypot(cf.x - target.x, cf.y - target.y) <= cf.radius * 0.55
+            );
+            if (nearbyExisting) {
+              nearbyExisting.life = Math.max(nearbyExisting.life, 3.6);
+              nearbyExisting.dps = Math.max(nearbyExisting.dps, Math.round(shotDmg * 0.48));
+            } else {
+              if (gunFields.length >= maxFields) {
+                const oldestIdx = s.chronoFields.findIndex((cf) => cf.sourceGunId === gun.id);
+                if (oldestIdx >= 0) s.chronoFields.splice(oldestIdx, 1);
+              }
+              s.chronoFields.push({
+                id: s.nextProjId++,
+                sourceGunId: gun.id,
+                x: target.x,
+                y: target.y,
+                radius: profile.splashRadius,
+                recordedDamage: Math.round(shotDmg * 0.55),
+                dps: Math.round(shotDmg * 0.48),
+                echoRatio: profile.brittleBonus,
+                slowPct: profile.slowPct,
+                pullForce: profile.pullForce,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                life: 4.4,
+                maxLife: 4.4,
+                level: gun.level,
+                variant: gun.variant ?? 'alpha',
+                isCrit: didCrit,
+              });
+            }
+
+            s.muzzleFlashes.push({
+              x: origin.x + Math.cos(gun.aimAngle) * 22,
+              y: origin.y + Math.sin(gun.aimAngle) * 22,
+              angle: gun.aimAngle,
+              radius: 26 + profile.visualTier * 3,
+              alpha: 0.96,
+              color: slashColor,
+            });
+            playSynthFx('chronos', soundEnabled, audioCtxRef);
           }
         }
 
@@ -2497,8 +3417,8 @@ export function PrismTdGameSection({
             }
           }
 
-          if ((pr.kind === 'missile' || pr.kind === 'mortar') && Math.random() < 0.65) {
-            emitParticles(pr.x, pr.y, pr.color, 1, 32, pr.visualTier >= 3 ? 0.9 : 0.72);
+          if ((pr.kind === 'missile' || pr.kind === 'mortar' || pr.kind === 'supernova_orb') && Math.random() < 0.65) {
+            emitParticles(pr.x, pr.y, pr.color, 1, 36, pr.visualTier >= 3 ? 0.95 : 0.75);
           } else if (pr.kind === 'sawblade' && pr.visualTier >= 3 && Math.random() < 0.45) {
             emitParticles(pr.x, pr.y, '#FDE047', 1, 45, 0.75);
           }
@@ -2554,11 +3474,7 @@ export function PrismTdGameSection({
                     armorPierce: pr.armorPierce,
                     shieldMult: pr.shieldMult,
                   });
-                  s.totalDamage += res.actualDamage;
-                  if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
-                  if (s.overdriveTimer <= 0) {
-                    s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.045);
-                  }
+                  recordDamageTelemetry(en, res.actualDamage, pr.sourceGunId, 0.045);
                   if (res.killed) recordKill(en, pr.sourceGunId);
                 }
               }
@@ -2584,11 +3500,7 @@ export function PrismTdGameSection({
                     armorPierce: pr.armorPierce,
                     shieldMult: pr.shieldMult,
                   });
-                  s.totalDamage += res.actualDamage;
-                  if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
-                  if (s.overdriveTimer <= 0) {
-                    s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.045);
-                  }
+                  recordDamageTelemetry(en, res.actualDamage, pr.sourceGunId, 0.045);
                   if (res.killed) recordKill(en, pr.sourceGunId);
                 }
               }
@@ -2634,11 +3546,7 @@ export function PrismTdGameSection({
                 hitEnemy.burnTimer = Math.max(hitEnemy.burnTimer, pr.burnDuration);
                 hitEnemy.burnDps = Math.max(hitEnemy.burnDps, pr.burnDps);
               }
-              s.totalDamage += res.actualDamage;
-              if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
-              if (s.overdriveTimer <= 0) {
-                s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.045);
-              }
+              recordDamageTelemetry(hitEnemy, res.actualDamage, pr.sourceGunId, 0.045);
               s.impactFlashes.push({
                 x: pr.x,
                 y: pr.y,
@@ -2710,11 +3618,7 @@ export function PrismTdGameSection({
                     armorPierce: pr.armorPierce,
                     shieldMult: pr.shieldMult + enSyn.shieldMultBonus,
                   });
-                  s.totalDamage += res.actualDamage;
-                  if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
-                  if (s.overdriveTimer <= 0) {
-                    s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.045);
-                  }
+                  recordDamageTelemetry(en, res.actualDamage, pr.sourceGunId, 0.045);
                   if (res.killed) recordKill(en, pr.sourceGunId);
                 }
               }
@@ -2751,6 +3655,42 @@ export function PrismTdGameSection({
               }
               playSynthFx('tesla', soundEnabled, audioCtxRef);
               continue;
+            } else if (pr.kind === 'supernova_orb') {
+              s.impactFlashes.push({
+                x: pr.x,
+                y: pr.y,
+                radius: Math.min(68, Math.max(36, pr.splashRadius * 0.56)),
+                alpha: 0.98,
+                color: '#FDE047',
+                spikes: 8,
+                rot: s.animTime * 2.5,
+              });
+              emitParticles(pr.x, pr.y, '#FEF08A', 16, 165, 1.25);
+              for (const en of s.enemies) {
+                if (en.hp <= 0 || en.koTimer > 0) continue;
+                const dist = Math.hypot(en.x - pr.x, en.y - pr.y);
+                if (dist <= pr.splashRadius + en.radius) {
+                  en.slowTimer = Math.max(en.slowTimer, 1.8);
+                  en.slowFactor = Math.min(en.slowFactor || 1, 1 - Math.min(0.4, pr.slowAmount));
+                  en.markedTimer = Math.max(en.markedTimer, 4.0);
+                  en.markedBonus = Math.max(en.markedBonus, pr.supernovaBrandAmp ?? 0.28);
+                  en.supernovaBrandDmg = Math.max(en.supernovaBrandDmg ?? 0, pr.supernovaEchoDmg ?? Math.round(pr.damage * 0.62));
+                  const novaHitDmg = Math.round(pr.damage * (en.id === hitEnemy.id || dist < 34 ? 1 : 0.74));
+                  const res = applyDamageToEnemy(en, novaHitDmg, {
+                    armorPierce: pr.armorPierce,
+                    shieldMult: pr.shieldMult,
+                  });
+                  recordDamageTelemetry(en, res.actualDamage, pr.sourceGunId, 0.045);
+                  if (res.killed) recordKill(en, pr.sourceGunId);
+                }
+              }
+              if (pr.pierceLeft > 0) {
+                pr.pierceLeft -= 1;
+                if (!pr.hitIds) pr.hitIds = [];
+                pr.hitIds.push(hitEnemy.id);
+              } else {
+                continue;
+              }
             } else {
               // Bullet / Pellet / Bomblet (AoE, Burn, Slow, Pierce)
               if (pr.burnDps > 0) {
@@ -2784,11 +3724,7 @@ export function PrismTdGameSection({
                       armorPierce: pr.armorPierce,
                       shieldMult: pr.shieldMult,
                     });
-                    s.totalDamage += res.actualDamage;
-                    if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
-                    if (s.overdriveTimer <= 0) {
-                      s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.045);
-                    }
+                    recordDamageTelemetry(en, res.actualDamage, pr.sourceGunId, 0.045);
                     if (res.killed) recordKill(en, pr.sourceGunId);
                   }
                 }
@@ -2797,13 +3733,9 @@ export function PrismTdGameSection({
                   armorPierce: pr.armorPierce,
                   shieldMult: pr.shieldMult,
                 });
-                s.totalDamage += res.actualDamage;
-                if (sourceGun) sourceGun.totalDamageDealt += res.actualDamage;
+                recordDamageTelemetry(hitEnemy, res.actualDamage, pr.sourceGunId, 0.05);
                 if (pr.isCrit && res.actualDamage > 0 && Math.random() < 0.25) {
                   pushCombatText(hitEnemy.x, hitEnemy.y - 8, `CHÍ MẠNG -${Math.round(res.actualDamage)}`, '#FDE047', 0.94);
-                }
-                if (s.overdriveTimer <= 0) {
-                  s.overdriveCharge = Math.min(100, s.overdriveCharge + res.actualDamage * 0.05);
                 }
                 emitParticles(pr.x, pr.y, pr.color, 5, 85, 0.8);
                 if (res.killed) recordKill(hitEnemy, pr.sourceGunId);
@@ -2986,6 +3918,323 @@ export function PrismTdGameSection({
           s.enemies = s.enemies.filter((e) => e.hp > 0 || e.koTimer > 0);
         }
 
+        // 4b. Step Orbital Radiation Zones (continuous magma/radiation burn + armor melt + thermal slow)
+        if (s.orbitalZones.length > 0) {
+          const survivingZones: OrbitalRadiationZone[] = [];
+          for (const z of s.orbitalZones) {
+            z.life -= simDt;
+            if (z.life <= 0) continue;
+            survivingZones.push(z);
+            const zGun = s.guns.find((g) => g.id === z.sourceGunId);
+            const zoneTickDmg = z.dps * simDt;
+            for (const en of s.enemies) {
+              if (en.hp <= 0 || en.koTimer > 0) continue;
+              if (Math.hypot(en.x - z.x, en.y - z.y) <= z.radius + en.radius) {
+                if ((z.armorShred ?? 0) > 0) {
+                  en.armorShred = Math.max(en.armorShred, z.armorShred ?? 0);
+                }
+                if ((z.slowPct ?? 0) > 0) {
+                  en.slowTimer = Math.max(en.slowTimer, 0.45);
+                  en.slowFactor = Math.min(en.slowFactor || 1, 1 - (z.slowPct ?? 0));
+                }
+                const res = applyDamageToEnemy(en, zoneTickDmg, {
+                  armorPierce: z.armorPierce,
+                  shieldMult: z.shieldMult,
+                });
+                recordDamageTelemetry(en, res.actualDamage, z.sourceGunId, 0.04);
+                if (Math.random() < 0.14) {
+                  emitParticles(en.x, en.y, '#F97316', 1, 38, 0.85);
+                }
+                if (res.killed) recordKill(en, z.sourceGunId);
+              }
+            }
+          }
+          s.orbitalZones = survivingZones;
+        }
+
+        // 4c. Step Singularity Black Holes (track-confined vortex pull + 100% True DPS + core crush + swallow growth & life extension + collapse blast)
+        if (s.blackHoles.length > 0) {
+          const survivingHoles: SingularityHole[] = [];
+          for (const hole of s.blackHoles) {
+            hole.life -= simDt;
+            const hGun = s.guns.find((g) => g.id === hole.sourceGunId);
+            const holeSlowFactor = hole.level >= 7 ? 0.58 : hole.level >= 3 ? 0.66 : 0.72;
+            for (const en of s.enemies) {
+              if (en.hp <= 0 || en.koTimer > 0) continue;
+              const dist = Math.hypot(en.x - hole.x, en.y - hole.y);
+              if (dist <= hole.currentRadius + en.radius) {
+                if (dist > 6 && en.kind !== 'boss' && en.kind !== 'super_boss' && en.kind !== 'juggernaut') {
+                  pullEnemyAlongTrack(en, s.map, hole.x, hole.y, hole.pullStrength * simDt);
+                }
+                en.slowTimer = Math.max(en.slowTimer, 0.45);
+                en.slowFactor = Math.min(en.slowFactor || 1, holeSlowFactor);
+                const coreCrushMult = dist <= hole.currentRadius * 0.45 ? 1.5 : 1.0;
+                const tickTrueDmg = hole.trueDps * coreCrushMult * simDt;
+                const res = applyDamageToEnemy(en, tickTrueDmg, {
+                  armorPierce: 1,
+                  shieldMult: 1.4,
+                });
+                recordDamageTelemetry(en, res.actualDamage, hole.sourceGunId, 0.04);
+                if (res.killed) {
+                  const grown = computeSingularitySwallowGrowth(
+                    hole,
+                    en.maxHp,
+                    hole.level,
+                    hole.variant
+                  );
+                  hole.killsAbsorbed = grown.killsAbsorbed;
+                  hole.currentRadius = grown.currentRadius;
+                  hole.accumulatedDamage = grown.accumulatedDamage;
+                  hole.life = Math.min(hole.maxLife + 1.8, hole.life + 0.16);
+                  emitParticles(hole.x, hole.y, '#FDE047', 6, 75, 1.05);
+                  recordKill(en, hole.sourceGunId);
+                }
+              }
+            }
+
+            if (hole.life <= 0) {
+              // Gravitational Collapse Detonation releasing all swallowed damage
+              const blastR = Math.round(hole.currentRadius * 1.4);
+              s.impactFlashes.push({
+                x: hole.x,
+                y: hole.y,
+                radius: Math.min(76, blastR * 0.68),
+                alpha: 1,
+                color: '#E879F9',
+                spikes: 9,
+                rot: s.animTime,
+              });
+              s.shockwaves.push({
+                x: hole.x,
+                y: hole.y,
+                radius: 14,
+                maxRadius: blastR,
+                alpha: 0.95,
+                color: '#C084FC',
+                lineWidth: 3.2,
+              });
+              spawnCrater(hole.x, hole.y, Math.min(58, blastR * 0.55), 'plasma');
+              emitParticles(hole.x, hole.y, '#E879F9', 26, 205, 1.35);
+              pushCombatText(
+                hole.x,
+                hole.y - 16,
+                `NỔ HỐ ĐEN! -${Math.round(hole.accumulatedDamage)}`,
+                '#E879F9',
+                1.14
+              );
+              for (const en of s.enemies) {
+                if (en.hp <= 0 || en.koTimer > 0) continue;
+                const d = Math.hypot(en.x - hole.x, en.y - hole.y);
+                if (d <= blastR + en.radius) {
+                  const res = applyDamageToEnemy(en, Math.round(hole.accumulatedDamage * (d < 48 ? 1 : 0.78)), {
+                    armorPierce: 1,
+                    shieldMult: 1.5,
+                  });
+                  s.totalDamage += res.actualDamage;
+                  if (hGun) hGun.totalDamageDealt += res.actualDamage;
+                  if (res.killed) recordKill(en, hole.sourceGunId);
+                }
+              }
+              playSynthFx('explosion', soundEnabled, audioCtxRef);
+            } else {
+              survivingHoles.push(hole);
+            }
+          }
+          s.blackHoles = survivingHoles;
+        }
+
+        // 4d. Step Mothership Autonomous Carrier Drones (hunt leaked enemies, evade Boss skills + counter-salvo, scaled ROF + micro-missile)
+        if (s.carrierDrones.length > 0) {
+          const bossHazards: { x: number; y: number; r: number }[] = [];
+          for (const en of s.enemies) {
+            if (en.hp > 0 && en.koTimer <= 0 && (en.kind === 'boss' || en.kind === 'super_boss') && en.windupTimer > 0) {
+              bossHazards.push({ x: en.x, y: en.y, r: 85 });
+            }
+          }
+          const coreFallbackPt = gridToWorldCenter(
+            s.map.path[s.map.path.length - 1].col,
+            s.map.path[s.map.path.length - 1].row
+          );
+          const survivingDrones: CarrierDrone[] = [];
+          for (const drone of s.carrierDrones) {
+            drone.life -= simDt;
+            if (drone.life <= 0) continue;
+            drone.evadeTimer = Math.max(0, drone.evadeTimer - simDt);
+            drone.fireCooldown = Math.max(0, drone.fireCooldown - simDt);
+
+            drone.trail.push({ x: drone.x, y: drone.y });
+            if (drone.trail.length > 8) drone.trail.shift();
+
+            // Evade Boss/Super Boss windup pulses automatically + trigger immediate counter-salvo
+            if (drone.evadeTimer <= 0) {
+              for (const hz of bossHazards) {
+                if (shouldDroneEvadeBossPulse(drone.x, drone.y, hz.x, hz.y, hz.r)) {
+                  drone.evadeTimer = 0.65;
+                  drone.fireCooldown = 0;
+                  const evadeAngle = Math.atan2(drone.y - hz.y, drone.x - hz.x) + Math.PI * 0.4;
+                  drone.x = Math.max(16, Math.min(CANVAS_WIDTH - 16, drone.x + Math.cos(evadeAngle) * 36));
+                  drone.y = Math.max(16, Math.min(CANVAS_HEIGHT - 16, drone.y + Math.sin(evadeAngle) * 36));
+                  emitParticles(drone.x, drone.y, '#FDE047', 6, 120, 0.9);
+                  break;
+                }
+              }
+            }
+
+            // Hunt leaked enemies closest to the Core across the entire map
+            let huntTarget: TdEnemy | null = null;
+            let bestLeakScore = -Infinity;
+            for (const en of s.enemies) {
+              if (en.hp <= 0 || en.koTimer > 0) continue;
+              const distToDrone = Math.hypot(en.x - drone.x, en.y - drone.y);
+              const leakScore = en.waypointIndex * 540 - distToDrone * 0.35 + (en.kind === 'boss' || en.kind === 'super_boss' ? 200 : 0);
+              if (leakScore > bestLeakScore) {
+                bestLeakScore = leakScore;
+                huntTarget = en;
+              }
+            }
+
+            const goalX = huntTarget ? huntTarget.x : coreFallbackPt.x - 42;
+            const goalY = huntTarget ? huntTarget.y : coreFallbackPt.y - 24;
+            const dx = goalX - drone.x;
+            const dy = goalY - drone.y;
+            const distToGoal = Math.hypot(dx, dy);
+
+            let desiredAngle = Math.atan2(dy, dx);
+            if (huntTarget && distToGoal < 84) {
+              // Orbit smoothly around target while sniping
+              desiredAngle += Math.PI * 0.46;
+            }
+            const steerRate = 7.4 * simDt;
+            const angleDiff = Math.atan2(Math.sin(desiredAngle - drone.heading), Math.cos(desiredAngle - drone.heading));
+            drone.heading += Math.max(-steerRate, Math.min(steerRate, angleDiff));
+            drone.vx = Math.cos(drone.heading) * drone.speed;
+            drone.vy = Math.sin(drone.heading) * drone.speed;
+            drone.x = Math.max(14, Math.min(CANVAS_WIDTH - 14, drone.x + drone.vx * simDt));
+            drone.y = Math.max(14, Math.min(CANVAS_HEIGHT - 14, drone.y + drone.vy * simDt));
+
+            if (huntTarget && distToGoal <= 215 && drone.fireCooldown <= 0) {
+              const parentGun = s.guns.find((g) => g.id === drone.sourceGunId);
+              const parentProfile = parentGun
+                ? getGunCombatProfile(parentGun.type, parentGun.level, parentGun.variant ?? 'alpha')
+                : null;
+              const shotA = Math.atan2(huntTarget.y - drone.y, huntTarget.x - drone.x);
+              const isBoss = huntTarget.kind === 'boss' || huntTarget.kind === 'super_boss';
+              const nextShotCount = (drone.shotCount ?? 0) + 1;
+              drone.shotCount = nextShotCount;
+              const launchMissileSalvo = nextShotCount % 3 === 0;
+              const baseHitDmg = Math.round(drone.damage * (isBoss ? drone.bossMult : 1));
+              const salvoDmg = launchMissileSalvo ? Math.round(baseHitDmg * 1.45) : baseHitDmg;
+
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: launchMissileSalvo ? 'missile' : 'bullet',
+                sourceGunId: drone.sourceGunId,
+                x: drone.x + Math.cos(shotA) * 10,
+                y: drone.y + Math.sin(shotA) * 10,
+                vx: Math.cos(shotA) * (launchMissileSalvo ? 440 : 720),
+                vy: Math.sin(shotA) * (launchMissileSalvo ? 440 : 720),
+                targetId: huntTarget.id,
+                damage: salvoDmg,
+                armorPierce: drone.armorPierce,
+                shieldMult: drone.shieldMult,
+                splashRadius: launchMissileSalvo ? (parentProfile?.splashRadius ?? 34) : 0,
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0,
+                pierceLeft: 0,
+                life: 0.65,
+                maxLife: 0.65,
+                age: 0,
+                speed: launchMissileSalvo ? 440 : 720,
+                color: launchMissileSalvo ? '#FDE047' : drone.variant === 'omega' ? '#FACC15' : '#38BDF8',
+                visualTier: drone.visualTier,
+                isCrit: launchMissileSalvo,
+                trail: [],
+              });
+              const baseCd = parentProfile
+                ? parentProfile.cooldownSec * (drone.variant === 'alpha' ? 0.85 : 0.94)
+                : drone.variant === 'alpha'
+                  ? 0.4
+                  : 0.45;
+              drone.fireCooldown = Math.max(
+                0.16,
+                baseCd / (s.overdriveTimer > 0 ? OVERDRIVE_CONFIG.droneRateMult : 1)
+              );
+            }
+            survivingDrones.push(drone);
+          }
+          s.carrierDrones = survivingDrones;
+        }
+
+        // 4e. Step Chronos Time-Dilation Spheres (time slow + true tick + damage echo collapse + track-safe rewind)
+        if (s.chronoFields.length > 0) {
+          const survivingFields: ChronoField[] = [];
+          for (const field of s.chronoFields) {
+            field.life -= simDt;
+            const tickDmg = field.dps * simDt;
+            for (const en of s.enemies) {
+              if (en.hp <= 0 || en.koTimer > 0) continue;
+              if (Math.hypot(en.x - field.x, en.y - field.y) <= field.radius + en.radius) {
+                en.slowTimer = Math.max(en.slowTimer, 0.55);
+                en.slowFactor = Math.min(en.slowFactor || 1, 1 - Math.min(0.45, field.slowPct));
+                const res = applyDamageToEnemy(en, tickDmg, {
+                  armorPierce: 1,
+                  shieldMult: field.shieldMult,
+                });
+                recordDamageTelemetry(en, res.actualDamage, field.sourceGunId, 0.04, 0);
+                if (res.killed) recordKill(en, field.sourceGunId);
+              }
+            }
+
+            if (field.life <= 0) {
+              const blastDmg = Math.max(Math.round(field.dps * 1.5), Math.round(field.recordedDamage));
+              s.overheatEffects.push({
+                kind: 'chrono_collapse',
+                x: field.x,
+                y: field.y,
+                radius: field.radius * 1.15,
+                angle: 0,
+                life: 0.72,
+                maxLife: 0.72,
+                color: field.variant === 'omega' ? '#C084FC' : '#22D3EE',
+              });
+              emitParticles(field.x, field.y, '#67E8F9', 22, 180, 1.25);
+              pushCombatText(
+                field.x,
+                field.y - 16,
+                `⏳ SỤP ĐỔ! -${blastDmg}`,
+                '#67E8F9',
+                1.14
+              );
+              for (const en of s.enemies) {
+                if (en.hp <= 0 || en.koTimer > 0) continue;
+                const d = Math.hypot(en.x - field.x, en.y - field.y);
+                if (d <= field.radius * 1.15 + en.radius) {
+                  if (field.level >= 5 && interruptEnemyWindup(en)) {
+                    pushCombatText(en.x, en.y - 14, '⏳ TUA NGƯỢC NGẮT CHIÊU!', '#67E8F9', 1.06);
+                  }
+                  if (en.kind !== 'boss' && en.kind !== 'super_boss' && en.kind !== 'juggernaut') {
+                    const backWp = s.map.path[Math.max(0, en.waypointIndex - 2)] ?? s.map.path[0];
+                    const backPt = gridToWorldCenter(backWp.col, backWp.row);
+                    pullEnemyAlongTrack(en, s.map, backPt.x, backPt.y, field.pullForce);
+                  }
+                  const res = applyDamageToEnemy(en, blastDmg, {
+                    armorPierce: 1,
+                    shieldMult: field.shieldMult,
+                  });
+                  recordDamageTelemetry(en, res.actualDamage, field.sourceGunId, 0.04, 0);
+                  if (res.killed) recordKill(en, field.sourceGunId);
+                }
+              }
+              playSynthFx('explosion', soundEnabled, audioCtxRef);
+            } else {
+              survivingFields.push(field);
+            }
+          }
+          s.chronoFields = survivingFields;
+        }
+
         // 5. Update transient FX (speed-scaled so 1x/2x/3x weapon FX stay crisp without stacking)
         const fxDt = dt * Math.min(2.0, s.speedMult);
         for (const p of s.particles) {
@@ -3060,6 +4309,14 @@ export function PrismTdGameSection({
         s.overheatEffects = s.overheatEffects.filter((oh) => {
           oh.life -= fxDt;
           return oh.life > 0;
+        });
+        s.orbitalBeams = s.orbitalBeams.filter((bm) => {
+          bm.alpha -= fxDt * 2.1;
+          return bm.alpha > 0.04;
+        });
+        s.chronoSlashes = s.chronoSlashes.filter((cs) => {
+          cs.alpha -= fxDt * 4.4;
+          return cs.alpha > 0.04;
         });
 
         // 6. Wave Clear / Victory / Defeat Check
@@ -3169,12 +4426,36 @@ export function PrismTdGameSection({
                     octx.strokeStyle = palette.gridLine;
                     octx.lineWidth = 1;
                     octx.strokeRect(x + 0.5, y + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
-                    octx.fillStyle = palette.gridLine;
-                    octx.beginPath();
-                    octx.arc(x + TILE_SIZE / 2, y + TILE_SIZE / 2, 3, 0, Math.PI * 2);
-                    octx.fill();
+                    if (s.map.biome === 'prismatic_nexus' || s.map.biome === 'chrono_sanctum') {
+                      // Championship / Chrono Sanctum geometric inlay markers on buildable high-ground tiles
+                      octx.fillStyle =
+                        s.map.biome === 'chrono_sanctum'
+                          ? 'rgba(34, 211, 238, 0.22)'
+                          : 'rgba(250, 204, 21, 0.22)';
+                      octx.beginPath();
+                      octx.moveTo(x + TILE_SIZE / 2, y + TILE_SIZE / 2 - 4);
+                      octx.lineTo(x + TILE_SIZE / 2 + 4, y + TILE_SIZE / 2);
+                      octx.lineTo(x + TILE_SIZE / 2, y + TILE_SIZE / 2 + 4);
+                      octx.lineTo(x + TILE_SIZE / 2 - 4, y + TILE_SIZE / 2);
+                      octx.closePath();
+                      octx.fill();
+                    } else {
+                      octx.fillStyle = palette.gridLine;
+                      octx.beginPath();
+                      octx.arc(x + TILE_SIZE / 2, y + TILE_SIZE / 2, 3, 0, Math.PI * 2);
+                      octx.fill();
+                    }
                   }
                 }
+              }
+              if (s.map.biome === 'prismatic_nexus' || s.map.biome === 'chrono_sanctum') {
+                // Subtle golden/cyan sanctuary border frame
+                octx.strokeStyle =
+                  s.map.biome === 'chrono_sanctum'
+                    ? 'rgba(34, 211, 238, 0.34)'
+                    : 'rgba(250, 204, 21, 0.28)';
+                octx.lineWidth = 3;
+                octx.strokeRect(2, 2, CANVAS_WIDTH - 4, CANVAS_HEIGHT - 4);
               }
             }
             cachedStaticBg = off;
@@ -3303,6 +4584,15 @@ export function PrismTdGameSection({
             isCompactViewport: isCompactViewportRef.current,
           });
           drawGroundCraters(ctx, s.groundCraters);
+          drawOrbitalBeamsAndZones(ctx, s.orbitalZones, [], s.animTime, vfxDamp.effectAlphaScale);
+          drawSingularityHoles(ctx, s.blackHoles, s.animTime, vfxDamp.effectAlphaScale);
+          drawChronoFieldsAndSlashes(
+            ctx,
+            s.chronoFields,
+            s.chronoSlashes,
+            s.animTime,
+            vfxDamp.effectAlphaScale
+          );
           drawOverheatSpecialFx(ctx, s.overheatEffects, s.animTime, vfxDamp.effectAlphaScale);
 
           // 6. Shockwaves (ultra-faint hairline pulse for non-combat UI/status cues only)
@@ -3568,6 +4858,8 @@ export function PrismTdGameSection({
           for (const pr of s.projectiles) {
             drawProjectileEnhanced(ctx, pr, s.animTime);
           }
+          drawCarrierDrones(ctx, s.carrierDrones, s.animTime);
+          drawOrbitalBeamsAndZones(ctx, [], s.orbitalBeams, s.animTime, vfxDamp.beamAlphaScale);
 
           // 11. Muzzle Flashes & Starburst Impact Blooms (damped during dense barrages to keep grid sharp)
           for (const mf of s.muzzleFlashes) {
@@ -3651,6 +4943,19 @@ export function PrismTdGameSection({
             ctx.fillText(ft.text, ft.x, ft.y);
             ctx.restore();
           }
+
+          // 15. Overdrive ("Hội Tụ Hỏa Lực") Epic Screen Perimeter Aura
+          if (s.overdriveTimer > 0) {
+            const pulse = 0.55 + Math.sin(s.animTime * 9) * 0.25;
+            ctx.save();
+            ctx.strokeStyle = `rgba(250, 204, 21, ${pulse})`;
+            ctx.lineWidth = 4;
+            ctx.strokeRect(3, 3, CANVAS_WIDTH - 6, CANVAS_HEIGHT - 6);
+            ctx.strokeStyle = `rgba(244, 63, 94, ${pulse * 0.85})`;
+            ctx.lineWidth = 2;
+            ctx.strokeRect(7, 7, CANVAS_WIDTH - 14, CANVAS_HEIGHT - 14);
+            ctx.restore();
+          }
         }
       }
 
@@ -3712,7 +5017,7 @@ export function PrismTdGameSection({
                     Thủ Thành Pháo Đài Lv10
                   </h1>
                   <p className="text-xs sm:text-sm mobile-ls:text-[10px] text-sky-300/90 font-mono">
-                    4 Cấp · 8 Chế Độ · {PRISM_MAPS.length} Màn 16×10 · {GUN_CATALOG.length} Súng (7 Công · 2 Điện · 3 Thuần Hỗ Trợ)
+                    4 Cấp · 8 Chế Độ · {PRISM_MAPS.length} Màn 16×10 · {GUN_CATALOG.length} Súng (12 Công · 2 Điện · 3 Thuần Hỗ Trợ)
                     {hud.bestScore > 0 ? ` · Kỷ lục: ${hud.bestScore}đ` : ''}
                   </p>
                 </div>
@@ -3836,6 +5141,8 @@ export function PrismTdGameSection({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   {PRISM_MAPS.map((m, idx) => {
                     const active = idx === selectedMapIndex;
+                    const isMap18 = m.id === 'sector-18';
+                    const isSpecialMap = m.id === 'sector-17' || isMap18;
                     const accent = BIOME_PALETTES[m.biome].accent;
                     const mapDiffCfg = DIFFICULTY_CONFIGS[m.recommendedDifficulty];
                     return (
@@ -3845,28 +5152,74 @@ export function PrismTdGameSection({
                         data-testid={`td-map-${m.id}`}
                         onClick={() => setSelectedMapIndex(idx)}
                         className={`min-h-[54px] p-2 rounded-xl border text-left transition-colors cursor-pointer ${
+                          isSpecialMap ? 'col-span-2 sm:col-span-2 px-3 py-2.5' : ''
+                        } ${
                           active
-                            ? 'border-amber-400 bg-amber-950/35 text-white'
-                            : 'border-slate-700/80 bg-[#0F172A] text-slate-300 hover:border-slate-500'
+                            ? isMap18
+                              ? 'border-cyan-300 bg-cyan-950/50 text-white'
+                              : 'border-amber-400 bg-amber-950/40 text-white'
+                            : isMap18
+                              ? 'border-cyan-400/60 bg-gradient-to-r from-cyan-950/40 via-[#081524] to-violet-950/35 text-cyan-50 hover:border-cyan-300'
+                              : isSpecialMap
+                                ? 'border-amber-400/60 bg-gradient-to-r from-amber-950/35 via-[#171209] to-cyan-950/25 text-amber-50 hover:border-amber-300'
+                                : 'border-slate-700/80 bg-[#0F172A] text-slate-300 hover:border-slate-500'
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-1">
-                          <span
-                            className="text-[10px] font-mono font-semibold truncate"
-                            style={{ color: mapDiffCfg.badgeColor }}
-                          >
-                            {m.difficultyLabel}
-                          </span>
-                          <span
-                            className="w-2 h-2 rounded-full shrink-0"
-                            style={{ backgroundColor: accent }}
-                            aria-hidden="true"
-                          />
-                        </div>
-                        <div className="text-[11px] font-bold mt-0.5 truncate">{m.name}</div>
-                        <div className="text-[9px] font-mono text-cyan-300/90 truncate mt-0.5">
-                          ≈ {m.wetZones.length} vùng nước dẫn điện
-                        </div>
+                        {isSpecialMap ? (
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={`text-[10px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                                    isMap18
+                                      ? 'bg-cyan-400/20 border-cyan-400/40'
+                                      : 'bg-amber-400/20 border-amber-400/40'
+                                  }`}
+                                  style={{ color: mapDiffCfg.badgeColor }}
+                                >
+                                  {m.difficultyLabel}
+                                </span>
+                                <span
+                                  className={`text-xs sm:text-[13px] font-extrabold ${
+                                    isMap18 ? 'text-cyan-200' : 'text-amber-200'
+                                  }`}
+                                >
+                                  {m.name}
+                                </span>
+                              </div>
+                              <p className="text-[10px] font-mono text-cyan-300/90 mt-1">
+                                {isMap18
+                                  ? `≈ ${m.wetZones.length} mạch nước · Khởi đầu ${m.startEnergy}⚡ (đặt Pháo Thời Không 800⚡)`
+                                  : `≈ ${m.wetZones.length} vùng nước · Khởi đầu ${m.startEnergy}⚡ (đặt Siêu Tân Tinh 500⚡)`}
+                              </p>
+                            </div>
+                            <span
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: accent }}
+                              aria-hidden="true"
+                            />
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-between gap-1">
+                              <span
+                                className="text-[10px] font-mono font-semibold truncate"
+                                style={{ color: mapDiffCfg.badgeColor }}
+                              >
+                                {m.difficultyLabel}
+                              </span>
+                              <span
+                                className="w-2 h-2 rounded-full shrink-0"
+                                style={{ backgroundColor: accent }}
+                                aria-hidden="true"
+                              />
+                            </div>
+                            <div className="text-[11px] font-bold mt-0.5 truncate">{m.name}</div>
+                            <div className="text-[9px] font-mono text-cyan-300/90 truncate mt-0.5">
+                              ≈ {m.wetZones.length} vùng nước dẫn điện
+                            </div>
+                          </>
+                        )}
                       </button>
                     );
                   })}
@@ -3904,14 +5257,14 @@ export function PrismTdGameSection({
                   className="w-full h-auto rounded-lg block border border-slate-800"
                 />
                 <p className="text-xs mobile-ls:text-[10px] text-slate-400 text-center">
-                  Kho <strong className="text-amber-300">{GUN_CATALOG.length} súng tinh gọn</strong> (7 Tấn Công · 2 Hệ Điện · 3 Thuần Hỗ Trợ) · Biến thể <strong className="text-cyan-300">α / ω</strong> · <strong className="text-rose-300">Siêu Boss</strong>
+                  Kho <strong className="text-amber-300">{GUN_CATALOG.length} súng tinh gọn</strong> (12 Tấn Công · 2 Hệ Điện · 3 Thuần Hỗ Trợ) · Biến thể <strong className="text-cyan-300">α / ω</strong> · <strong className="text-rose-300">Siêu Boss</strong>
                 </p>
               </div>
             </div>
           </div>
 
           <p className="text-[11px] font-mono text-slate-400 border-t border-slate-800/80 pt-3 mobile-ls:pt-2 mobile-ls:text-[10px] text-center">
-            1-7 Súng Công · 8-9 Hệ Điện · 0, Q, E Thuần Hỗ Trợ · U nâng cấp · R α/ω · T mục tiêu · Space Quá Tải
+            1-7, Z, X, C, V, B Súng Công · 8-9 Hệ Điện · 0, Q, E Thuần Hỗ Trợ · U nâng cấp · R α/ω · T mục tiêu · Space Hỏa Lực
           </p>
         </div>
       )}
@@ -4021,18 +5374,18 @@ export function PrismTdGameSection({
                 data-testid="td-overdrive-btn"
                 onClick={activateOverdrive}
                 disabled={hud.overdrivePct < 100 || hud.overdriveActive}
-                title="Kích hoạt Hội Tụ Hỏa Lực & bùng nổ Quá Nhiệt toàn đội hình (Space)"
+                title="Hội Tụ Hỏa Lực ×2.71 (tích chậm ×5 · bùng nổ Quá Nhiệt 2 đợt + Thiên Phạt toàn bản đồ) (Space)"
                 className={`min-h-[40px] px-2 sm:px-3 rounded-lg border text-xs font-mono font-bold inline-flex items-center gap-1 sm:gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 tabular-nums ${
                   hud.overdriveActive
-                    ? 'bg-rose-600 border-rose-400 text-white'
+                    ? 'bg-gradient-to-r from-rose-600 via-amber-500 to-rose-600 border-amber-300 text-white shadow-[0_0_16px_rgba(251,191,36,0.55)]'
                     : hud.overdrivePct >= 100
-                      ? 'bg-amber-400 hover:bg-amber-300 border-amber-300 text-[#070B14]'
+                      ? 'bg-amber-400 hover:bg-amber-300 border-amber-300 text-[#070B14] shadow-[0_0_12px_rgba(251,191,36,0.45)]'
                       : 'bg-slate-900 border-slate-700 text-slate-400 cursor-not-allowed'
                 }`}
               >
                 <Flame className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                 <span>
-                  {hud.overdriveActive ? 'QUÁ TẢI!' : `Hỏa Lực ${hud.overdrivePct}%`}
+                  {hud.overdriveActive ? 'HỎA LỰC ×2.7!' : `Hỏa Lực ${hud.overdrivePct}%`}
                 </span>
               </button>
 
@@ -4287,7 +5640,7 @@ export function PrismTdGameSection({
                 ) : (
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-mono uppercase tracking-[0.08em] text-slate-400">
-                      Kho {availableGuns.length} Súng (7 Công · 2 Điện · 3 Thuần Hỗ Trợ)
+                      Kho {availableGuns.length} Súng (12 Công · 2 Điện · 3 Thuần Hỗ Trợ)
                     </span>
                     <div className="flex items-center gap-1.5" role="group" aria-label="Biến thể mặc định khi đặt súng">
                       <button
@@ -4650,12 +6003,12 @@ export function PrismTdGameSection({
                         </div>
                       )}
 
-                      {/* 12-Gun Arsenal Grid (comfortable touch targets >= 44px) */}
+                      {/* 16-Gun Arsenal Grid (4 symmetrical rows of 4 on desktop) */}
                       <div
                         className={
                           useSidebarTheater
                             ? 'flex flex-nowrap overflow-x-auto gap-1.5 pb-1 mobile-ls:grid mobile-ls:grid-cols-2 mobile-ls:overflow-visible mobile-ls:pb-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:pb-0'
-                            : 'flex flex-nowrap overflow-x-auto gap-1.5 pb-1 md:grid md:grid-cols-6 md:overflow-visible md:pb-0'
+                            : 'flex flex-nowrap overflow-x-auto gap-1.5 pb-1 md:grid md:grid-cols-4 md:overflow-visible md:pb-0'
                         }
                       >
                         {(useSidebarTheater ? filteredArsenalGuns : availableGuns).map((item) => {
@@ -4663,6 +6016,13 @@ export function PrismTdGameSection({
                           const canAfford = hud.energy >= item.cost;
                           const isElectric = isElectricGunType(item.type);
                           const isSupport = isSupportGunType(item.type);
+                          const isTranscendent = item.cost >= 800;
+                          const isSupreme = item.cost >= 500 && item.cost < 800;
+                          const spanClass = isTranscendent
+                            ? useSidebarTheater
+                              ? 'mobile-ls:col-span-2 lg:col-span-3'
+                              : 'md:col-span-4'
+                            : '';
                           return (
                             <button
                               key={item.type}
@@ -4675,27 +6035,55 @@ export function PrismTdGameSection({
                               }}
                               className={`min-w-[116px] ${
                                 useSidebarTheater ? 'mobile-ls:min-w-0 lg:min-w-0 min-h-[46px]' : 'md:min-w-0 min-h-[48px]'
-                              } shrink-0 px-2 py-1.5 rounded-xl border text-left transition-colors cursor-pointer ${
+                              } ${spanClass} shrink-0 px-2.5 py-1.5 rounded-xl border text-left transition-colors cursor-pointer ${
                                 isActive
                                   ? 'bg-amber-950/65 border-amber-400 text-white shadow-[0_0_0_1px_rgba(251,191,36,0.45)]'
-                                  : isElectric
-                                    ? 'bg-sky-950/30 border-sky-500/50 text-sky-100 hover:border-sky-400'
-                                    : isSupport
-                                      ? 'bg-emerald-950/25 border-emerald-500/45 text-emerald-100 hover:border-emerald-400'
-                                      : 'bg-slate-900/90 border-slate-700/80 text-slate-200 hover:border-slate-500'
+                                  : isTranscendent
+                                    ? 'bg-gradient-to-r from-cyan-950/45 via-[#0B172B] to-violet-950/40 border-cyan-400/70 text-cyan-50 hover:border-cyan-300'
+                                    : isSupreme
+                                      ? 'bg-amber-950/30 border-amber-400/65 text-amber-50 hover:border-amber-300'
+                                      : isElectric
+                                        ? 'bg-sky-950/30 border-sky-500/50 text-sky-100 hover:border-sky-400'
+                                        : isSupport
+                                          ? 'bg-emerald-950/25 border-emerald-500/45 text-emerald-100 hover:border-emerald-400'
+                                          : 'bg-slate-900/90 border-slate-700/80 text-slate-200 hover:border-slate-500'
                               }`}
                             >
                               <div className="flex items-center justify-between gap-1 text-[11px] font-bold">
                                 <span className="truncate">
                                   <span className="hidden lg:inline">[{item.hotkey.toUpperCase()}] </span>
-                                  {item.shortName}
+                                  {isTranscendent ? item.name : item.shortName}
                                 </span>
-                                <span className={`font-mono shrink-0 tabular-nums ${canAfford ? 'text-amber-300' : 'text-rose-400'}`}>
+                                <span
+                                  className={`font-mono shrink-0 tabular-nums ${
+                                    canAfford
+                                      ? isTranscendent
+                                        ? 'text-cyan-300'
+                                        : 'text-amber-300'
+                                      : 'text-rose-400'
+                                  }`}
+                                >
                                   {item.cost}⚡
                                 </span>
                               </div>
-                              <p className={`text-[9px] truncate mt-0.5 ${isElectric ? 'text-sky-300/90 font-semibold' : isSupport ? 'text-emerald-300/90' : 'text-slate-400'}`}>
-                                {isElectric ? '⚡ Hệ Điện' : isSupport ? '✦ Thuần Hỗ Trợ' : item.roleClue}
+                              <p
+                                className={`text-[9px] truncate mt-0.5 ${
+                                  isTranscendent
+                                    ? 'text-cyan-200/90 font-semibold'
+                                    : isElectric
+                                      ? 'text-sky-300/90 font-semibold'
+                                      : isSupport
+                                        ? 'text-emerald-300/90'
+                                        : 'text-slate-400'
+                                }`}
+                              >
+                                {isElectric
+                                  ? '⚡ Hệ Điện'
+                                  : isSupport
+                                    ? '✦ Thuần Hỗ Trợ'
+                                    : isTranscendent
+                                      ? `✦ Siêu Phẩm 800⚡ · ${item.roleClue}`
+                                      : item.roleClue}
                               </p>
                             </button>
                           );

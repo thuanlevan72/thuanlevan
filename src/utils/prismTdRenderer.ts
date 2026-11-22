@@ -1,10 +1,16 @@
 import {
+  CarrierDrone,
+  ChronoField,
+  ChronoSlashFx,
   GunType,
   GunVariant,
   LightningArc,
   MAX_GUN_LEVEL,
+  OrbitalBeamFx,
+  OrbitalRadiationZone,
   ProjectileItem,
   RailBeamFx,
+  SingularityHole,
   TdEnemy,
 } from './prismTdEngine.ts';
 
@@ -38,7 +44,10 @@ export interface OverheatFx {
     | 'target_lock'
     | 'solar_flare'
     | 'radar_sweep'
-    | 'emp_ring';
+    | 'emp_ring'
+    | 'supernova_nova'
+    | 'chrono_collapse'
+    | 'overdrive_apex';
   x: number;
   y: number;
   tx?: number;
@@ -365,6 +374,103 @@ export function drawOverheatSpecialFx(
       ctx.moveTo(0, 0);
       ctx.lineTo(Math.cos(sweepAng) * fx.radius, Math.sin(sweepAng) * fx.radius);
       ctx.stroke();
+    } else if (fx.kind === 'supernova_nova') {
+      ctx.translate(fx.x, fx.y);
+      const expand = 0.22 + (1 - t) * 0.78;
+      ctx.globalAlpha = t * 0.92;
+      const ng = ctx.createRadialGradient(0, 0, 6, 0, 0, fx.radius * expand);
+      ng.addColorStop(0, '#FFFFFF');
+      ng.addColorStop(0.28, '#FEF08A');
+      ng.addColorStop(0.65, 'rgba(250, 204, 21, 0.42)');
+      ng.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = ng;
+      ctx.beginPath();
+      ctx.arc(0, 0, fx.radius * expand, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#FEF08A';
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, fx.radius * expand, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#38BDF8';
+      ctx.lineWidth = 2;
+      for (let r = 0; r < 10; r++) {
+        const ra = (r * Math.PI * 2) / 10 + animTime * 3.5;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(ra) * 14, Math.sin(ra) * 14);
+        ctx.lineTo(Math.cos(ra) * fx.radius * expand, Math.sin(ra) * fx.radius * expand);
+        ctx.stroke();
+      }
+    } else if (fx.kind === 'chrono_collapse') {
+      ctx.translate(fx.x, fx.y);
+      const expand = 0.25 + (1 - t) * 0.75;
+      ctx.globalAlpha = t * 0.92;
+      const cg = ctx.createRadialGradient(0, 0, 8, 0, 0, fx.radius * expand);
+      cg.addColorStop(0, '#FFFFFF');
+      cg.addColorStop(0.25, '#67E8F9');
+      cg.addColorStop(0.65, 'rgba(192, 132, 252, 0.35)');
+      cg.addColorStop(1, 'rgba(34, 211, 238, 0)');
+      ctx.fillStyle = cg;
+      ctx.beginPath();
+      ctx.arc(0, 0, fx.radius * expand, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#67E8F9';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, fx.radius * expand, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#C084FC';
+      ctx.lineWidth = 2;
+      for (let h = 0; h < 12; h++) {
+        const ha = (h * Math.PI * 2) / 12 - animTime * 2.4;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(ha) * fx.radius * expand * 0.76, Math.sin(ha) * fx.radius * expand * 0.76);
+        ctx.lineTo(Math.cos(ha) * fx.radius * expand, Math.sin(ha) * fx.radius * expand);
+        ctx.stroke();
+      }
+    } else if (fx.kind === 'overdrive_apex') {
+      ctx.translate(fx.x, fx.y);
+      const expand = 0.18 + (1 - t) * 0.85;
+      const curR = fx.radius * expand;
+      ctx.globalAlpha = Math.min(0.95, t * 1.15);
+      const og = ctx.createRadialGradient(0, 0, 10, 0, 0, curR);
+      og.addColorStop(0, '#FFFFFF');
+      og.addColorStop(0.22, '#FDE047');
+      og.addColorStop(0.55, 'rgba(244, 63, 94, 0.38)');
+      og.addColorStop(0.82, 'rgba(56, 189, 248, 0.2)');
+      og.addColorStop(1, 'rgba(244, 63, 94, 0)');
+      ctx.fillStyle = og;
+      ctx.beginPath();
+      ctx.arc(0, 0, curR, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#FDE047';
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, curR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#FB7185';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([12, 8]);
+      ctx.beginPath();
+      ctx.arc(0, 0, curR * 0.72, animTime * 2.5, animTime * 2.5 + Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      for (let ray = 0; ray < 12; ray++) {
+        const ra = (ray * Math.PI * 2) / 12 + animTime * 1.8;
+        ctx.strokeStyle = ray % 2 === 0 ? '#FEF08A' : '#67E8F9';
+        ctx.lineWidth = ray % 2 === 0 ? 2.4 : 1.5;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(ra) * 18, Math.sin(ra) * 18);
+        ctx.lineTo(Math.cos(ra) * curR * 1.05, Math.sin(ra) * curR * 1.05);
+        ctx.stroke();
+      }
     }
 
     ctx.restore();
@@ -383,29 +489,32 @@ export function drawRailBeamEnhanced(
   ctx.globalAlpha = effAlpha;
   ctx.lineCap = 'round';
 
+  const isSupernovaBeam = rb.variant === 'supernova';
+  const beamScale = isSupernovaBeam ? 1.48 : 1;
+
   ctx.strokeStyle = rb.color;
-  ctx.lineWidth = (17 + rTier * 4.2) * rb.alpha;
+  ctx.lineWidth = (17 + rTier * 4.2) * beamScale * rb.alpha;
   ctx.beginPath();
   ctx.moveTo(rb.x1, rb.y1);
   ctx.lineTo(rb.x2, rb.y2);
   ctx.stroke();
 
-  ctx.strokeStyle = rTier >= 3 ? '#FDE047' : '#E879F9';
-  ctx.lineWidth = (7.5 + rTier * 2) * rb.alpha;
+  ctx.strokeStyle = isSupernovaBeam ? '#FDE047' : rTier >= 3 ? '#FDE047' : '#E879F9';
+  ctx.lineWidth = (7.5 + rTier * 2) * beamScale * rb.alpha;
   ctx.beginPath();
   ctx.moveTo(rb.x1, rb.y1);
   ctx.lineTo(rb.x2, rb.y2);
   ctx.stroke();
 
   ctx.strokeStyle = '#FFFFFF';
-  ctx.lineWidth = (3 + rTier * 0.9) * rb.alpha;
+  ctx.lineWidth = (3 + rTier * 0.9) * beamScale * rb.alpha;
   ctx.beginPath();
   ctx.moveTo(rb.x1, rb.y1);
   ctx.lineTo(rb.x2, rb.y2);
   ctx.stroke();
 
   const beamAngle = Math.atan2(rb.y2 - rb.y1, rb.x2 - rb.x1);
-  const ringCount = 3 + rTier;
+  const ringCount = (isSupernovaBeam ? 5 : 3) + rTier;
   for (let m = 1; m <= ringCount; m++) {
     const frac = 0.06 + m * 0.11;
     const rx = rb.x1 + (rb.x2 - rb.x1) * frac;
@@ -413,10 +522,10 @@ export function drawRailBeamEnhanced(
     ctx.save();
     ctx.translate(rx, ry);
     ctx.rotate(beamAngle);
-    ctx.strokeStyle = rTier >= 3 ? '#38BDF8' : '#FEF08A';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = isSupernovaBeam ? '#FEF08A' : rTier >= 3 ? '#38BDF8' : '#FEF08A';
+    ctx.lineWidth = isSupernovaBeam ? 2.4 : 2;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 5.5, (16 + rTier * 3 - m * 2) * (1.25 - rb.alpha * 0.4), 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, 5.5, (16 + rTier * 3 - m * 1.6) * (1.25 - rb.alpha * 0.4), 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
@@ -505,6 +614,34 @@ export function drawProjectileEnhanced(
     ctx.rotate(Math.PI / 2);
     ctx.beginPath();
     ctx.ellipse(0, 0, 9.5, 4.2, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (pr.kind === 'supernova_orb') {
+    const spin = animTime * 16 + pr.id;
+    const orbR = 13 + pr.visualTier * 1.4;
+    const g = ctx.createRadialGradient(0, 0, 1.5, 0, 0, orbR);
+    g.addColorStop(0, '#FFFFFF');
+    g.addColorStop(0.38, '#FEF08A');
+    g.addColorStop(0.75, pr.color || '#F59E0B');
+    g.addColorStop(1, 'rgba(250, 204, 21, 0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, orbR, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#38BDF8';
+    ctx.lineWidth = 1.8;
+    ctx.rotate(spin);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, orbR * 0.92, 4.4, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = '#FEF08A';
+    ctx.rotate(Math.PI / 2);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, orbR * 0.92, 4.4, 0, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
     return;
@@ -902,6 +1039,186 @@ export function drawGunTurretSprite(
     ctx.fill();
     ctx.stroke();
     ctx.restore();
+  } else if (type === 'orbital') {
+    // Solar Uplink Satellite Dish + Sky-Beam Emitter Core
+    ctx.save();
+    ctx.rotate(aimAngle * 0.35 + animTime * 0.8);
+    ctx.fillStyle = '#27130A';
+    ctx.strokeStyle = isOmega ? '#EF4444' : '#F97316';
+    ctx.lineWidth = 2.1;
+    drawPolygon(ctx, 0, 0, 6, 15 + tier * 0.8, 0);
+    ctx.fill();
+    ctx.stroke();
+    // Parabolic solar uplink fins
+    for (let f = 0; f < 3; f++) {
+      const fa = (f * Math.PI * 2) / 3;
+      ctx.save();
+      ctx.rotate(fa);
+      ctx.fillStyle = isOmega ? '#FCA5A5' : '#FDBA74';
+      ctx.fillRect(10, -2.5, 8 + tier, 5);
+      ctx.restore();
+    }
+    ctx.restore();
+    ctx.fillStyle = '#FEF08A';
+    ctx.beginPath();
+    ctx.arc(0, 0, 6.2 + tier * 0.6 + Math.sin(animTime * 8) * 1.1, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'singularity') {
+    // Gravitational Singularity Reactor Pad + Contained Event Horizon
+    ctx.save();
+    ctx.rotate(-animTime * (1.8 + tier * 0.4));
+    ctx.strokeStyle = isOmega ? '#E879F9' : '#A855F7';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 18 + tier, 9, 0.4, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 18 + tier, 9, -0.4, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = '#020617';
+    ctx.strokeStyle = '#FDE047';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, 9.5 + tier * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else if (type === 'mothership') {
+    // Sci-Fi Carrier Airfield Pad + Runway Chevrons
+    ctx.save();
+    ctx.rotate(aimAngle);
+    ctx.fillStyle = '#082F49';
+    ctx.strokeStyle = isOmega ? '#FACC15' : '#38BDF8';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(19 + tier, 0);
+    ctx.lineTo(-10, -14 - tier * 0.5);
+    ctx.lineTo(-15, -6);
+    ctx.lineTo(-15, 6);
+    ctx.lineTo(-10, 14 + tier * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    // Illuminated flight deck runway strip
+    ctx.strokeStyle = '#BAE6FD';
+    ctx.lineWidth = 2.2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(-11, 0);
+    ctx.lineTo(14, 0);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = isOmega ? '#FDE047' : '#7DD3FC';
+    ctx.beginPath();
+    ctx.arc(-4, 0, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (type === 'supernova') {
+    // 500-Energy Apex Supernova Star-Cannon: counter-rotating celestial astrolabe rings + twin golden prism barrels
+    ctx.save();
+    ctx.rotate(animTime * 2.2);
+    ctx.strokeStyle = isOmega ? '#F59E0B' : '#FDE047';
+    ctx.lineWidth = 2.4;
+    ctx.setLineDash([7, 4]);
+    ctx.beginPath();
+    ctx.arc(0, 0, baseRadius + 4.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.rotate(-animTime * 3.1);
+    ctx.strokeStyle = '#38BDF8';
+    ctx.lineWidth = 1.8;
+    drawPolygon(ctx, 0, 0, 6, 15 + tier * 0.9, 0);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.rotate(aimAngle);
+    const kick = recoil * 5;
+    const len = 21 + tier * 2.4;
+    ctx.fillStyle = isOmega ? '#F59E0B' : '#FDE047';
+    ctx.fillRect(2 - kick, -7.5, len, 4);
+    ctx.fillRect(2 - kick, 3.5, len, 4);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(6 - kick, -2, len - 2, 4);
+
+    ctx.fillStyle = '#1E1B4B';
+    ctx.strokeStyle = '#FDE047';
+    ctx.lineWidth = 2.2;
+    drawPolygon(ctx, 0, 0, 8, 12.5 + tier * 0.6, Math.PI / 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    // Pulsing white-gold stellar singularity core
+    const starGlow = 5.2 + tier * 0.65 + Math.sin(animTime * 9) * 1.1;
+    ctx.fillStyle = '#FEF08A';
+    ctx.beginPath();
+    ctx.arc(0, 0, starGlow, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(0, 0, starGlow * 0.52, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'chronos') {
+    // 800-Energy Transcendent Chronos Sovereign: counter-rotating astral clock rings, prism hands & cyan-violet singularity
+    ctx.save();
+    ctx.rotate(animTime * 1.4);
+    ctx.strokeStyle = isOmega ? '#C084FC' : '#22D3EE';
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, baseRadius + 5.5, 0, Math.PI * 2);
+    ctx.stroke();
+    for (let tick = 0; tick < 12; tick++) {
+      const ta = (tick * Math.PI * 2) / 12;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(ta) * (baseRadius + 2.5), Math.sin(ta) * (baseRadius + 2.5));
+      ctx.lineTo(Math.cos(ta) * (baseRadius + 6.5), Math.sin(ta) * (baseRadius + 6.5));
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.rotate(-animTime * 2.8);
+    ctx.strokeStyle = isOmega ? '#67E8F9' : '#C084FC';
+    ctx.lineWidth = 2;
+    drawPolygon(ctx, 0, 0, 4, 15.5 + tier * 0.8, 0);
+    ctx.stroke();
+    drawPolygon(ctx, 0, 0, 4, 15.5 + tier * 0.8, Math.PI / 4);
+    ctx.stroke();
+    ctx.restore();
+
+    // Sweeping astral clock hands
+    ctx.save();
+    ctx.rotate(aimAngle);
+    const kick = recoil * 4.5;
+    ctx.fillStyle = '#E0F2FE';
+    ctx.beginPath();
+    ctx.moveTo(22 + tier * 2.2 - kick, 0);
+    ctx.lineTo(2 - kick, -5);
+    ctx.lineTo(-7 - kick, 0);
+    ctx.lineTo(2 - kick, 5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = '#0B1120';
+    ctx.strokeStyle = '#67E8F9';
+    ctx.lineWidth = 2.2;
+    drawPolygon(ctx, 0, 0, 8, 11.5 + tier * 0.6, Math.PI / 8);
+    ctx.fill();
+    ctx.stroke();
+
+    const chronoPulse = 5 + tier * 0.6 + Math.sin(animTime * 10) * 1.1;
+    ctx.fillStyle = isOmega ? '#E879F9' : '#67E8F9';
+    ctx.beginPath();
+    ctx.arc(0, 0, chronoPulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(0, 0, chronoPulse * 0.52, 0, Math.PI * 2);
+    ctx.fill();
   } else if (type === 'mortar') {
     ctx.save();
     ctx.rotate(aimAngle);
@@ -1594,13 +1911,322 @@ export function drawEnemySprite(
       const hpRatio = Math.max(0, Math.min(1, en.hp / Math.max(1, en.maxHp)));
       ctx.fillStyle = en.isElite ? '#FBBF24' : '#34D399';
       ctx.fillRect(-bw / 2, by, bw * hpRatio, 3);
-      if (en.maxShield > 0 && en.shield > 0) {
-        const sRatio = Math.max(0, Math.min(1, en.shield / en.maxShield));
-        ctx.fillStyle = '#38BDF8';
-        ctx.fillRect(-bw / 2, by - 3, bw * sRatio, 2);
-      }
+    if (en.maxShield > 0 && en.shield > 0) {
+      const sRatio = Math.max(0, Math.min(1, en.shield / en.maxShield));
+      ctx.fillStyle = '#38BDF8';
+      ctx.fillRect(-bw / 2, by - 3, bw * sRatio, 2);
     }
   }
+}
 
   ctx.restore();
+}
+
+/**
+ * Renders lingering Orbital magma/radiation zones and towering sky-to-ground laser pillars.
+ */
+export function drawOrbitalBeamsAndZones(
+  ctx: CanvasRenderingContext2D,
+  zones: readonly OrbitalRadiationZone[],
+  beams: readonly OrbitalBeamFx[],
+  animTime: number,
+  alphaScale = 1
+) {
+  const safeScale = Math.max(0.42, Math.min(1, alphaScale));
+  for (const z of zones) {
+    const fade = Math.max(0.12, Math.min(1, z.life / Math.max(0.4, z.maxLife)));
+    ctx.save();
+    ctx.globalAlpha = fade * 0.62 * safeScale;
+    const grad = ctx.createRadialGradient(z.x, z.y, 4, z.x, z.y, z.radius);
+    grad.addColorStop(0, 'rgba(254, 240, 138, 0.58)');
+    grad.addColorStop(0.45, 'rgba(249, 115, 22, 0.42)');
+    grad.addColorStop(0.82, 'rgba(220, 38, 38, 0.22)');
+    grad.addColorStop(1, 'rgba(127, 29, 29, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bubbling radiation crust perimeter
+    ctx.strokeStyle = 'rgba(251, 146, 60, 0.68)';
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([6, 5]);
+    ctx.lineDashOffset = -animTime * 18;
+    ctx.beginPath();
+    ctx.arc(z.x, z.y, z.radius * 0.88, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  for (const bm of beams) {
+    const t = Math.max(0, Math.min(1, bm.alpha)) * safeScale;
+    ctx.save();
+    const beamHalfW = (14 + bm.visualTier * 3) * (0.6 + t * 0.4);
+    const skyTop = -40;
+
+    // Outer solar column bloom
+    ctx.globalAlpha = t * 0.38;
+    const colGrad = ctx.createLinearGradient(bm.x - beamHalfW * 2.2, 0, bm.x + beamHalfW * 2.2, 0);
+    colGrad.addColorStop(0, 'rgba(249, 115, 22, 0)');
+    colGrad.addColorStop(0.5, bm.color);
+    colGrad.addColorStop(1, 'rgba(249, 115, 22, 0)');
+    ctx.fillStyle = colGrad;
+    ctx.fillRect(bm.x - beamHalfW * 2.2, skyTop, beamHalfW * 4.4, bm.y - skyTop);
+
+    // Mid plasma sheath
+    ctx.globalAlpha = t * 0.78;
+    ctx.fillStyle = bm.color;
+    ctx.fillRect(bm.x - beamHalfW * 0.55, skyTop, beamHalfW * 1.1, bm.y - skyTop);
+
+    // Razor white-hot orbital laser core
+    ctx.globalAlpha = Math.min(1, t * 1.05);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(bm.x - beamHalfW * 0.24, skyTop, beamHalfW * 0.48, bm.y - skyTop);
+
+    // Ground flare disc
+    const hitGrad = ctx.createRadialGradient(bm.x, bm.y, 2, bm.x, bm.y, bm.radius * 1.05);
+    hitGrad.addColorStop(0, '#FFFFFF');
+    hitGrad.addColorStop(0.35, '#FDE047');
+    hitGrad.addColorStop(0.7, bm.color);
+    hitGrad.addColorStop(1, 'rgba(249, 115, 22, 0)');
+    ctx.fillStyle = hitGrad;
+    ctx.beginPath();
+    ctx.ellipse(bm.x, bm.y, bm.radius * 1.05, bm.radius * 0.65, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+/**
+ * Renders active persistent Singularity Black Holes directly on the track, scaling cleanly with swallowed kills.
+ */
+export function drawSingularityHoles(
+  ctx: CanvasRenderingContext2D,
+  holes: readonly SingularityHole[],
+  animTime: number,
+  alphaScale = 1
+) {
+  const safeScale = Math.max(0.45, Math.min(1, alphaScale));
+  for (const hole of holes) {
+    const fadeIn = Math.min(1, (hole.maxLife - hole.life) * 5 + 0.25);
+    const fadeOut = Math.min(1, hole.life * 2.2);
+    const visAlpha = Math.min(fadeIn, fadeOut) * safeScale;
+    const growthFactor = hole.currentRadius / Math.max(1, hole.baseRadius);
+    const coreRadius = 11 * Math.min(1.85, 0.9 + (growthFactor - 1) * 1.4);
+
+    ctx.save();
+    ctx.translate(hole.x, hole.y);
+
+    // Gravitational pull field boundary
+    ctx.globalAlpha = visAlpha * 0.46;
+    const wellGrad = ctx.createRadialGradient(0, 0, coreRadius, 0, 0, hole.currentRadius);
+    wellGrad.addColorStop(0, 'rgba(2, 6, 23, 0.96)');
+    wellGrad.addColorStop(0.32, 'rgba(88, 28, 135, 0.56)');
+    wellGrad.addColorStop(0.72, 'rgba(168, 85, 247, 0.22)');
+    wellGrad.addColorStop(1, 'rgba(168, 85, 247, 0)');
+    ctx.fillStyle = wellGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, hole.currentRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Swirling accretion spiral arms
+    ctx.globalAlpha = visAlpha * 0.85;
+    ctx.strokeStyle = hole.variant === 'omega' ? '#F0ABFC' : '#C084FC';
+    ctx.lineWidth = 2.1;
+    for (let arm = 0; arm < 4; arm++) {
+      const baseA = -animTime * (6.2 + (growthFactor - 1) * 3) + (arm * Math.PI) / 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, hole.currentRadius * 0.45, baseA, baseA + 1.35);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 0, hole.currentRadius * 0.72, baseA + 0.45, baseA + 1.25);
+      ctx.stroke();
+    }
+
+    // Glowing photon ring & pitch-black Event Horizon
+    ctx.globalAlpha = visAlpha;
+    ctx.fillStyle = '#020617';
+    ctx.strokeStyle = hole.killsAbsorbed >= 3 ? '#FDE047' : '#E879F9';
+    ctx.lineWidth = 2.6;
+    ctx.beginPath();
+    ctx.arc(0, 0, coreRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    if (hole.killsAbsorbed > 0) {
+      ctx.fillStyle = '#FDE047';
+      ctx.font = 'bold 8.5px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`×${hole.killsAbsorbed}`, 0, -coreRadius - 8);
+    }
+    ctx.restore();
+  }
+}
+
+/**
+ * Renders autonomous Mothership combat fighter drones patrolling across the map.
+ */
+export function drawCarrierDrones(
+  ctx: CanvasRenderingContext2D,
+  drones: readonly CarrierDrone[],
+  animTime: number
+) {
+  for (const d of drones) {
+    const isOmega = d.variant === 'omega';
+    const isEvading = d.evadeTimer > 0;
+    ctx.save();
+
+    // Flight contrail
+    if (d.trail.length >= 2) {
+      ctx.strokeStyle = isEvading ? '#FDE047' : isOmega ? '#FACC15' : '#38BDF8';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      for (let i = 1; i < d.trail.length; i++) {
+        ctx.globalAlpha = (i / d.trail.length) * 0.48;
+        ctx.beginPath();
+        ctx.moveTo(d.trail[i - 1].x, d.trail[i - 1].y);
+        ctx.lineTo(d.trail[i].x, d.trail[i].y);
+        ctx.stroke();
+      }
+    }
+
+    ctx.translate(d.x, d.y);
+    ctx.rotate(d.heading);
+    ctx.globalAlpha = isEvading ? 0.55 + Math.sin(animTime * 42) * 0.35 : 0.96;
+
+    // Thruster flame
+    ctx.fillStyle = isEvading ? '#FEF08A' : '#38BDF8';
+    ctx.beginPath();
+    ctx.moveTo(-9, -3);
+    ctx.lineTo(-16 - Math.sin(animTime * 36) * 3, 0);
+    ctx.lineTo(-9, 3);
+    ctx.closePath();
+    ctx.fill();
+
+    // Swept-wing heavy drone hull
+    ctx.fillStyle = isOmega ? '#422006' : '#082F49';
+    ctx.strokeStyle = isEvading ? '#FFFFFF' : isOmega ? '#FACC15' : '#7DD3FC';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(12, 0);
+    ctx.lineTo(-6, -9);
+    ctx.lineTo(-3, 0);
+    ctx.lineTo(-6, 9);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Nose laser emitter dot
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(7, 0, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+}
+
+/**
+ * Renders Chronos Sovereign Time-Dilation Spheres (with live Echo accumulation readout) & Dimensional Cross-Slashes.
+ */
+export function drawChronoFieldsAndSlashes(
+  ctx: CanvasRenderingContext2D,
+  fields: readonly ChronoField[],
+  slashes: readonly ChronoSlashFx[],
+  animTime: number,
+  alphaScale = 1
+) {
+  const safeScale = Math.max(0.45, Math.min(1, alphaScale));
+  for (const field of fields) {
+    const fadeIn = Math.min(1, (field.maxLife - field.life) * 5 + 0.25);
+    const fadeOut = Math.min(1, field.life * 2.2);
+    const visAlpha = Math.min(fadeIn, fadeOut) * safeScale;
+    const isOmega = field.variant === 'omega';
+
+    ctx.save();
+    ctx.translate(field.x, field.y);
+
+    // Subtle translucent time-dilation dome (kept transparent so road & enemies remain crisp)
+    ctx.globalAlpha = visAlpha * 0.42;
+    const grad = ctx.createRadialGradient(0, 0, 12, 0, 0, field.radius);
+    grad.addColorStop(0, isOmega ? 'rgba(192, 132, 252, 0.24)' : 'rgba(34, 211, 238, 0.22)');
+    grad.addColorStop(0.68, 'rgba(56, 189, 248, 0.14)');
+    grad.addColorStop(1, 'rgba(34, 211, 238, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(0, 0, field.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Outer astral dial ring + 12 clock ticks
+    ctx.globalAlpha = visAlpha * 0.85;
+    ctx.strokeStyle = isOmega ? '#C084FC' : '#22D3EE';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([8, 5]);
+    ctx.lineDashOffset = -animTime * 22;
+    ctx.beginPath();
+    ctx.arc(0, 0, field.radius * 0.96, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    for (let h = 0; h < 12; h++) {
+      const ha = (h * Math.PI * 2) / 12 + animTime * 0.45;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(ha) * field.radius * 0.86, Math.sin(ha) * field.radius * 0.86);
+      ctx.lineTo(Math.cos(ha) * field.radius * 0.96, Math.sin(ha) * field.radius * 0.96);
+      ctx.stroke();
+    }
+
+    // Inner counter-rotating clock hands
+    ctx.strokeStyle = '#E0F2FE';
+    ctx.lineWidth = 1.8;
+    const fastHand = -animTime * 4.2;
+    const slowHand = animTime * 1.1;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(fastHand) * field.radius * 0.46, Math.sin(fastHand) * field.radius * 0.46);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(slowHand) * field.radius * 0.28, Math.sin(slowHand) * field.radius * 0.28);
+    ctx.stroke();
+
+    if (field.recordedDamage > 0) {
+      ctx.fillStyle = '#E0F2FE';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`⏳ ECHO ${Math.round(field.recordedDamage)}`, 0, -field.radius * 0.56);
+    }
+
+    ctx.restore();
+  }
+
+  for (const sl of slashes) {
+    const t = Math.max(0, Math.min(1, sl.alpha)) * safeScale;
+    ctx.save();
+    ctx.translate(sl.x, sl.y);
+    ctx.rotate(sl.angle);
+    ctx.globalAlpha = t;
+
+    for (const crossAngle of [0, Math.PI * 0.48]) {
+      ctx.save();
+      ctx.rotate(crossAngle);
+      ctx.strokeStyle = sl.color;
+      ctx.lineWidth = (sl.isCrit ? 6.5 : 5) * t;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-sl.length * 0.5, 0);
+      ctx.lineTo(sl.length * 0.5, 0);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = (sl.isCrit ? 2.6 : 2) * t;
+      ctx.beginPath();
+      ctx.moveTo(-sl.length * 0.42, 0);
+      ctx.lineTo(sl.length * 0.42, 0);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    ctx.restore();
+  }
 }

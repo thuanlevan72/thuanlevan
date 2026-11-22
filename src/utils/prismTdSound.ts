@@ -498,6 +498,11 @@ const SFX_MIN_GAP_MS: Partial<Record<PrismSfxKind, number>> = {
   mortar: 135,
   missile: 120,
   railgun: 130,
+  orbital: 240,
+  singularity: 220,
+  mothership: 150,
+  supernova: 170,
+  chronos: 185,
   tesla: 110,
   tempest: 125,
   beacon: 220,
@@ -731,6 +736,85 @@ export function playPrismSfx(
         playSubKick(ctx, bus, 94, 28, 0.18, 0.28 * mix);
         break;
 
+      case 'orbital':
+        // Deep orbital sky-beam discharge + atmospheric thunder crack
+        playStableTone(ctx, bus, 880, 0.06, 0.08 * mix, 'sine', 0, 0.002);
+        playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
+          filterType: 'lowpass',
+          cutoffHz: 2900,
+          rate: 0.88,
+          dur: 0.34,
+          vol: 0.34 * mix,
+          delay: 0.03,
+        });
+        playFoleyBuffer(ctx, bus, bus.buffers.flame, {
+          filterType: 'bandpass',
+          cutoffHz: 1100,
+          q: 0.7,
+          rate: 0.85,
+          dur: 0.28,
+          vol: 0.22 * mix,
+          delay: 0.04,
+        });
+        playSubKick(ctx, bus, 88, 24, 0.32, 0.3 * mix, 0.02);
+        break;
+
+      case 'singularity':
+        // Deep gravitational sub-warp + dark plasma implosion hum
+        playSubKick(ctx, bus, 76, 24, 0.42, 0.32 * mix);
+        playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
+          filterType: 'lowpass',
+          cutoffHz: 620,
+          rate: 0.72,
+          dur: 0.38,
+          vol: 0.28 * mix,
+        });
+        playStableTone(ctx, bus, 146.83, 0.28, 0.08 * mix, 'triangle', 0.02, 0.02);
+        break;
+
+      case 'mothership':
+        // Twin aerospace fighter laser + hangar catapult pulse
+        playBoltClick(ctx, bus, 3400, 0.1 * mix, 0);
+        playFoleyBuffer(ctx, bus, bus.buffers.rifleCrack, {
+          filterType: 'bandpass',
+          cutoffHz: 2800,
+          q: 0.85,
+          rate: 1.18,
+          dur: 0.08,
+          vol: 0.22 * mix,
+        });
+        playSubKick(ctx, bus, 92, 46, 0.07, 0.12 * mix);
+        break;
+
+      case 'supernova':
+        // Resonant stellar plasma pulse + cosmic bell chime + deep recoil punch
+        playStableTone(ctx, bus, 587.33, 0.14, 0.09 * mix, 'sine', 0, 0.004);
+        playStableTone(ctx, bus, 880, 0.18, 0.075 * mix, 'triangle', 0.02, 0.004);
+        playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
+          filterType: 'lowpass',
+          cutoffHz: 2600,
+          rate: jitter(0.92, 0.05),
+          dur: 0.28,
+          vol: 0.32 * mix,
+        });
+        playSubKick(ctx, bus, 92, 26, 0.28, 0.28 * mix);
+        break;
+
+      case 'chronos':
+        // Crystalline astral clockwork chime + deep temporal phase drop
+        playStableTone(ctx, bus, 740, 0.16, 0.09 * mix, 'sine', 0, 0.003);
+        playStableTone(ctx, bus, 1108.73, 0.2, 0.08 * mix, 'triangle', 0.025, 0.004);
+        playFoleyBuffer(ctx, bus, bus.buffers.steel, {
+          filterType: 'bandpass',
+          cutoffHz: 2900,
+          q: 1.1,
+          rate: 1.08,
+          dur: 0.14,
+          vol: 0.22 * mix,
+        });
+        playSubKick(ctx, bus, 86, 22, 0.34, 0.3 * mix);
+        break;
+
       // ---- ELECTRIC / LIGHTNING WEAPONS (2) ----
       case 'tesla':
         playElectricArc(ctx, bus, 0.24 * mix, 0.095, 0);
@@ -950,6 +1034,70 @@ export function playOverheatSkillSfx(
         playStableTone(ctx, bus, 554.37, 0.2, 0.09 * mix, 'triangle', 0.04);
         playStableTone(ctx, bus, 659.25, 0.25, 0.11 * mix, 'sine', 0.08);
         playSubKick(ctx, bus, 90, 44, 0.18, 0.15 * mix);
+        break;
+
+      case 'orbital_solar_judgment':
+        for (let i = 0; i < 3; i++) {
+          playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
+            filterType: 'lowpass',
+            cutoffHz: 2800 - i * 300,
+            rate: 0.9 - i * 0.04,
+            dur: 0.3,
+            vol: 0.3 * mix,
+            delay: i * 0.09,
+          });
+          playSubKick(ctx, bus, 90, 24, 0.28, 0.24 * mix, i * 0.09);
+        }
+        break;
+
+      case 'singularity_big_crunch':
+        playSubKick(ctx, bus, 84, 22, 0.52, 0.34 * mix);
+        playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
+          filterType: 'lowpass',
+          cutoffHz: 780,
+          rate: 0.68,
+          dur: 0.45,
+          vol: 0.34 * mix,
+          delay: 0.06,
+        });
+        break;
+
+      case 'mothership_fleet_scramble':
+        for (let i = 0; i < 3; i++) {
+          playBoltClick(ctx, bus, 3800, 0.12 * mix, i * 0.05);
+          playStableTone(ctx, bus, 440 + i * 110, 0.14, 0.085 * mix, 'triangle', i * 0.05);
+        }
+        playSubKick(ctx, bus, 96, 40, 0.18, 0.2 * mix);
+        break;
+
+      case 'supernova_genesis_collapse':
+        playStableTone(ctx, bus, 523.25, 0.24, 0.11 * mix, 'triangle', 0, 0.004);
+        playStableTone(ctx, bus, 783.99, 0.28, 0.11 * mix, 'sine', 0.04, 0.004);
+        playStableTone(ctx, bus, 1046.5, 0.34, 0.12 * mix, 'sine', 0.08, 0.005);
+        playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
+          filterType: 'lowpass',
+          cutoffHz: 1850,
+          rate: 0.85,
+          dur: 0.42,
+          vol: 0.36 * mix,
+          delay: 0.03,
+        });
+        playSubKick(ctx, bus, 96, 22, 0.48, 0.34 * mix, 0.02);
+        break;
+
+      case 'chronos_time_collapse':
+        playStableTone(ctx, bus, 987.77, 0.24, 0.11 * mix, 'sine', 0, 0.004);
+        playStableTone(ctx, bus, 739.99, 0.28, 0.11 * mix, 'triangle', 0.05, 0.004);
+        playStableTone(ctx, bus, 493.88, 0.38, 0.12 * mix, 'sine', 0.1, 0.005);
+        playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
+          filterType: 'lowpass',
+          cutoffHz: 1450,
+          rate: 0.78,
+          dur: 0.46,
+          vol: 0.34 * mix,
+          delay: 0.04,
+        });
+        playSubKick(ctx, bus, 90, 20, 0.54, 0.36 * mix, 0.02);
         break;
 
       default:

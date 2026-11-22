@@ -842,34 +842,55 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
             y: sim.player.y,
             radius: empRadius,
             color: '#818CF8',
-            life: 0.42,
-            maxLife: 0.42,
+            life: 0.48,
+            maxLife: 0.48,
             doubleRing: true,
           });
-          spawnParticles(sim.player.x, sim.player.y, 18, '#A5B4FC', 90, 220, 3, 'spark', 0.45);
+          sim.explosions.push({
+            x: sim.player.x,
+            y: sim.player.y,
+            radius: empRadius * 0.58,
+            color: '#38BDF8',
+            life: 0.34,
+            maxLife: 0.34,
+            doubleRing: false,
+          });
+          spawnParticles(sim.player.x, sim.player.y, 24, '#A5B4FC', 110, 260, 3.2, 'spark', 0.48);
+          spawnParticles(sim.player.x, sim.player.y, 10, '#67E8F9', 60, 140, 4.5, 'ring', 0.38);
+          sim.shakeTrauma = Math.min(1, sim.shakeTrauma + 0.16);
           playArenaSfx(ensureAudio(), 'emp', muted);
-          sim.skillBanner = '🌀 TỤ XUNG CHOÁNG EMP!';
-          sim.skillBannerTimer = 1.6;
+          sim.skillBanner = '⚡ TỤ XUNG ĐIỆN TỪ EMP — TÊ LIỆT TOÀN VÙNG!';
+          sim.skillBannerTimer = 1.8;
           for (const en of sim.enemies) {
             const dx = en.x - sim.player.x;
             const dy = en.y - sim.player.y;
             const d = Math.hypot(dx, dy) || 1;
             if (d <= empRadius) {
-              const empDmg = 28 + round * 4;
+              const empDmg = 34 + round * 5;
               en.hp -= empDmg;
-              en.stunTimer = Math.max(en.stunTimer, 1.35);
-              en.hitFlash = 0.1;
-              en.x += (dx / d) * 32;
-              en.y += (dy / d) * 32;
+              en.stunTimer = Math.max(en.stunTimer, 1.45);
+              en.hitFlash = 0.12;
+              en.x += (dx / d) * 36;
+              en.y += (dy / d) * 36;
               sim.totalDamage += empDmg;
+              sim.bolts.push({
+                points: [
+                  { x: sim.player.x, y: sim.player.y },
+                  { x: en.x, y: en.y },
+                ],
+                life: 0.24,
+                maxLife: 0.24,
+                color: '#818CF8',
+              });
+              spawnParticles(en.x, en.y, 6, '#C7D2FE', 40, 130, 2.4, 'spark', 0.3);
               sim.dmgFxs.push({
                 x: en.x,
-                y: en.y - 14,
-                text: `⚡CHOÁNG ${empDmg}`,
+                y: en.y - 16,
+                text: `⚡EMP ${empDmg}`,
                 color: '#A5B4FC',
-                isCrit: false,
-                life: 0.55,
-                maxLife: 0.55,
+                isCrit: true,
+                life: 0.62,
+                maxLife: 0.62,
               });
             }
           }
@@ -1352,18 +1373,33 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
             sim.shieldGlow = 0.85;
           }
           if (playerEval.reactiveArmorCount > 0 && sim.reactiveCd <= 0) {
-            sim.reactiveCd = 1.6;
+            sim.reactiveCd = 1.5;
             sim.explosions.push({
               x: sim.player.x,
               y: sim.player.y,
-              radius: 105,
+              radius: 122,
               color: '#38BDF8',
-              life: 0.28,
-              maxLife: 0.28,
+              life: 0.34,
+              maxLife: 0.34,
+              doubleRing: true,
             });
-            en.x -= (dx / dist) * 48;
-            en.y -= (dy / dist) * 48;
-            en.hp -= 24 + round * 3;
+            spawnParticles(sim.player.x, sim.player.y, 16, '#7DD3FC', 80, 210, 2.8, 'spark', 0.36);
+            sim.shakeTrauma = Math.min(1, sim.shakeTrauma + 0.14);
+            playArenaSfx(ensureAudio(), 'boom', muted);
+            en.x -= (dx / dist) * 56;
+            en.y -= (dy / dist) * 56;
+            const counterDmg = 28 + round * 4;
+            en.hp -= counterDmg;
+            en.hitFlash = 0.12;
+            sim.dmgFxs.push({
+              x: en.x,
+              y: en.y - 16,
+              text: `🛡️ PHẢN XUNG ${counterDmg}`,
+              color: '#7DD3FC',
+              isCrit: false,
+              life: 0.55,
+              maxLife: 0.55,
+            });
           }
         }
       }
@@ -1663,6 +1699,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
             muzzleColor: sim.player.muzzleColor,
             shieldGlow: sim.shieldGlow,
             chainLightningActive: playerEval.chainLightningActive,
+            empCount: playerEval.empCount,
             weapons: playerEval.weapons,
           },
           ghost: {
@@ -1792,42 +1829,75 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
             </div>
           </div>
 
-          {/* Bespoke SVG Emblem Centerpiece */}
+          {/* Bespoke Machined-Steel Mech Backpack Emblem Centerpiece */}
           <div className="mobile-ls:col-span-4 lg:col-span-5 flex justify-center">
-            <div className="w-full max-w-[340px] mobile-ls:max-w-[200px] aspect-square rounded-2xl border border-cyan-500/30 bg-[#0D1526] p-5 mobile-ls:p-2.5 flex flex-col items-center justify-center relative">
+            <div className="w-full max-w-[350px] mobile-ls:max-w-[210px] aspect-square rounded-2xl border border-cyan-500/40 bg-gradient-to-b from-[#131F35] to-[#080E1B] p-4 mobile-ls:p-2.5 flex flex-col items-center justify-center relative shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_18px_36px_rgba(0,0,0,0.55)]">
               <svg viewBox="0 0 240 240" className="w-full h-full" aria-hidden="true">
                 <defs>
-                  <linearGradient id="gearGrad" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="#22D3EE" />
-                    <stop offset="100%" stopColor="#A855F7" />
+                  <linearGradient id="gearChassisGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#1E293B" />
+                    <stop offset="50%" stopColor="#0F172A" />
+                    <stop offset="100%" stopColor="#050811" />
                   </linearGradient>
+                  <linearGradient id="gearGrad" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#38BDF8" />
+                    <stop offset="50%" stopColor="#A855F7" />
+                    <stop offset="100%" stopColor="#FACC15" />
+                  </linearGradient>
+                  <radialGradient id="novaShowcaseGrad" cx="45%" cy="40%" r="60%">
+                    <stop offset="0%" stopColor="#FFFFFF" />
+                    <stop offset="35%" stopColor="#C084FC" />
+                    <stop offset="100%" stopColor="#581C87" />
+                  </radialGradient>
                 </defs>
-                <rect x="20" y="20" width="200" height="200" rx="22" fill="#070B14" stroke="#1E2E4A" strokeWidth="3" />
+                {/* Armored Outer Steel Frame + Corner Bolts */}
+                <rect x="14" y="14" width="212" height="212" rx="22" fill="url(#gearChassisGrad)" stroke="#334155" strokeWidth="3" />
+                <rect x="22" y="22" width="196" height="196" rx="16" fill="#060B15" stroke="#1E293B" strokeWidth="1.5" />
+                <circle cx="26" cy="26" r="3" fill="#64748B" />
+                <circle cx="214" cy="26" r="3" fill="#64748B" />
+                <circle cx="26" cy="214" r="3" fill="#64748B" />
+                <circle cx="214" cy="214" r="3" fill="#64748B" />
+
                 {[0, 1, 2, 3, 4].map((c) =>
                   [0, 1, 2, 3, 4].map((r) => (
-                    <rect
-                      key={`${c}-${r}`}
-                      x={36 + c * 34}
-                      y={36 + r * 34}
-                      width="30"
-                      height="30"
-                      rx="6"
-                      fill="#0F1A2E"
-                      stroke="#1E2E4A"
-                      strokeWidth="1.5"
-                    />
+                    <g key={`${c}-${r}`}>
+                      <rect
+                        x={36 + c * 34}
+                        y={36 + r * 34}
+                        width="30"
+                        height="30"
+                        rx="6"
+                        fill="#0B1324"
+                        stroke="#1E293B"
+                        strokeWidth="1.4"
+                      />
+                      <circle cx={51 + c * 34} cy={51 + r * 34} r="1.5" fill="#1E293B" />
+                    </g>
                   ))
                 )}
-                {/* 2x2 Nova Cannon + Overclock + EMP + Tesla synergy preview */}
-                <rect x="104" y="70" width="64" height="64" rx="8" fill="#9333EA" fillOpacity="0.32" stroke="#C084FC" strokeWidth="2.5" />
-                <rect x="70" y="104" width="30" height="30" rx="6" fill="#EF4444" fillOpacity="0.32" stroke="#EF4444" strokeWidth="2.2" />
-                <rect x="36" y="104" width="30" height="30" rx="6" fill="#10B981" fillOpacity="0.28" stroke="#10B981" strokeWidth="2.2" />
-                <rect x="104" y="138" width="64" height="30" rx="6" fill="#D97706" fillOpacity="0.3" stroke="#FBBF24" strokeWidth="2.2" />
-                <path d="M51 119 L85 119 L136 102 M136 102 L136 153" stroke="url(#gearGrad)" strokeWidth="4" strokeLinecap="round" fill="none" />
-                <circle cx="51" cy="119" r="5" fill="#6EE7B7" />
-                <circle cx="136" cy="102" r="7" fill="#E9D5FF" />
-                <text x="120" y="210" textAnchor="middle" fill="#67E8F9" fontSize="10.5" fontFamily="monospace" fontWeight="700">
-                  26 TRANG BỊ · NOVA 2×2 · EMP ⚡
+
+                {/* 2x2 Nova Cannon + Overclock + Battery + Railgun Modules */}
+                <rect x="104" y="70" width="64" height="64" rx="8" fill="#3B0764" stroke="#C084FC" strokeWidth="2.4" />
+                <circle cx="136" cy="102" r="18" fill="#1E1B4B" stroke="#E9D5FF" strokeWidth="1.5" strokeDasharray="4 2" />
+                <circle cx="136" cy="102" r="10" fill="url(#novaShowcaseGrad)" />
+
+                <rect x="70" y="104" width="30" height="30" rx="6" fill="#450A0A" stroke="#EF4444" strokeWidth="2.2" />
+                <path d="M87 111l-5 8h4l-2 7 6-8h-4z" fill="#FEF08A" />
+
+                <rect x="36" y="104" width="30" height="30" rx="6" fill="#064E3B" stroke="#34D399" strokeWidth="2.2" />
+                <circle cx="51" cy="119" r="6" fill="#6EE7B7" fillOpacity="0.6" stroke="#A7F3D0" strokeWidth="1.2" />
+
+                <rect x="104" y="138" width="64" height="30" rx="6" fill="#451A03" stroke="#FBBF24" strokeWidth="2.2" />
+                <rect x="112" y="149" width="48" height="7" rx="3" fill="#F59E0B" />
+
+                {/* Glowing Animated Energy Conduits */}
+                <path d="M51 119 L85 119 L136 102 M136 102 L136 153" stroke="url(#gearGrad)" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+                <circle cx="51" cy="119" r="3.5" fill="#A7F3D0" />
+                <circle cx="85" cy="119" r="3.5" fill="#FDE047" />
+                <circle cx="136" cy="102" r="4" fill="#FFFFFF" />
+                <circle cx="136" cy="153" r="3.5" fill="#FBBF24" />
+                <text x="120" y="212" textAnchor="middle" fill="#67E8F9" fontSize="10" fontFamily="monospace" fontWeight="700">
+                  26 MÔ-ĐUN CƠ KHÍ · NOVA 2×2 · EMP ⚡
                 </text>
               </svg>
             </div>
@@ -2009,7 +2079,13 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
             )}
 
             {/* 5x5 Armored Mech Hangar Grid Board */}
-            <div className="relative mx-auto w-full max-w-[440px] mobile-ls:max-w-[min(100%,calc(100dvh-130px))] aspect-square p-3 mobile-ls:p-2 rounded-2xl border border-slate-700/80 bg-gradient-to-b from-[#111C31] to-[#080E1B] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_30px_rgba(0,0,0,0.45)]">
+            <div className="relative mx-auto w-full max-w-[450px] mobile-ls:max-w-[min(100%,calc(100dvh-130px))] aspect-square p-3.5 mobile-ls:p-2 rounded-2xl border-2 border-slate-600/80 bg-gradient-to-b from-[#1A263D] via-[#0E1729] to-[#060B15] shadow-[inset_0_2px_1px_rgba(255,255,255,0.14),0_16px_38px_rgba(0,0,0,0.65)]">
+              {/* Machined Chassis Corner Hex Rivets */}
+              <span aria-hidden="true" className="pointer-events-none absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-slate-400/70 shadow-[inset_0_1px_1px_rgba(0,0,0,0.8)]" />
+              <span aria-hidden="true" className="pointer-events-none absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-slate-400/70 shadow-[inset_0_1px_1px_rgba(0,0,0,0.8)]" />
+              <span aria-hidden="true" className="pointer-events-none absolute bottom-1.5 left-1.5 w-2 h-2 rounded-full bg-slate-400/70 shadow-[inset_0_1px_1px_rgba(0,0,0,0.8)]" />
+              <span aria-hidden="true" className="pointer-events-none absolute bottom-1.5 right-1.5 w-2 h-2 rounded-full bg-slate-400/70 shadow-[inset_0_1px_1px_rgba(0,0,0,0.8)]" />
+
               <div
                 className="grid grid-cols-5 grid-rows-5 gap-1.5 w-full h-full"
                 onMouseLeave={() => setHoverCell(null)}
@@ -2060,19 +2136,23 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                       aria-label={`Ô ba lô ${col + 1},${row + 1}`}
                       onMouseEnter={() => setHoverCell({ col, row })}
                       onClick={() => handleGridCellClick(col, row)}
-                      className={`relative rounded-xl border transition-all cursor-pointer shadow-[inset_0_2px_6px_rgba(0,0,0,0.75)] ${
+                      className={`relative rounded-xl border transition-all cursor-pointer shadow-[inset_0_3px_8px_rgba(0,0,0,0.85),0_1px_0_rgba(255,255,255,0.05)] ${
                         previewState === 'valid'
                           ? 'bg-emerald-500/30 border-emerald-400'
                           : previewState === 'invalid'
                             ? 'bg-rose-500/30 border-rose-400'
                             : previewState === 'synergy'
-                              ? 'bg-amber-500/15 border-amber-400/70 border-dashed'
-                              : 'bg-[#060B15] border-slate-800/90 hover:border-cyan-400/60'
+                              ? 'bg-amber-500/15 border-amber-400/75 border-dashed'
+                              : 'bg-gradient-to-b from-[#060A14] to-[#0B1222] border-slate-700/80 hover:border-cyan-400/75'
                       }`}
                     >
                       <span
                         aria-hidden="true"
-                        className="pointer-events-none absolute inset-2 rounded-md border border-slate-800/40"
+                        className="pointer-events-none absolute inset-2 rounded-lg border border-slate-700/40"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-slate-700/60"
                       />
                     </button>
                   );
@@ -2080,7 +2160,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
               </div>
 
               {/* Placed Multi-Cell Armored Hardware Modules */}
-              <div className="pointer-events-none absolute inset-3 mobile-ls:inset-2 grid grid-cols-5 grid-rows-5 gap-1.5">
+              <div className="pointer-events-none absolute inset-3.5 mobile-ls:inset-2 grid grid-cols-5 grid-rows-5 gap-1.5">
                 {grid.map((g) => {
                   const entry = getGearCatalogEntry(g.itemId);
                   const dim = getRotatedDimensions(g.itemId, g.rotation);
@@ -2098,20 +2178,25 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                         gridColumn: `${g.col + 1} / span ${dim.width}`,
                         gridRow: `${g.row + 1} / span ${dim.height}`,
                         borderColor: borderCol,
+                        boxShadow: `inset 0 1px 0 rgba(255,255,255,0.22), 0 6px 14px rgba(0,0,0,0.6), 0 0 12px ${borderCol}28`,
                       }}
-                      className={`rounded-xl border-2 p-1.5 flex flex-col justify-between bg-gradient-to-br from-[#192640] via-[#0E172A] to-[#080E1B] shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_4px_12px_rgba(0,0,0,0.5)] relative overflow-hidden ${
-                        isEnergized && playerEval.chainLightningActive ? 'ring-2 ring-cyan-400/70' : ''
+                      className={`rounded-xl border-2 p-1.5 flex flex-col justify-between bg-gradient-to-br from-[#23324D] via-[#10192D] to-[#070B16] relative overflow-hidden ${
+                        isEnergized && playerEval.chainLightningActive ? 'ring-2 ring-cyan-400/80' : ''
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-1 z-10">
+                      {/* Corner metallic micro-rivets */}
+                      <span aria-hidden="true" className="absolute top-1 left-1 w-1 h-1 rounded-full bg-slate-400/60" />
+                      <span aria-hidden="true" className="absolute top-1 right-1 w-1 h-1 rounded-full bg-slate-400/60" />
+
+                      <div className="flex items-start justify-between gap-1 z-10 pl-1">
                         <span
-                          className="text-[10px] font-bold leading-tight truncate"
+                          className="text-[10px] font-bold leading-tight truncate drop-shadow"
                           style={{ color: entry.accent }}
                         >
                           {entry.shortName}
                         </span>
                         {weaponSpec && weaponSpec.fireRateMult > 1 && (
-                          <span className="px-1 rounded bg-rose-500 text-white font-mono text-[9px] font-extrabold shrink-0">
+                          <span className="px-1 rounded bg-rose-500 text-white font-mono text-[9px] font-extrabold shrink-0 shadow">
                             ×{weaponSpec.fireRateMult}
                           </span>
                         )}
@@ -2122,12 +2207,12 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                           itemId={g.itemId}
                           color={entry.color}
                           accent={entry.accent}
-                          className={dim.width >= 2 || dim.height >= 2 ? 'w-10 h-10' : 'w-6 h-6'}
+                          className={dim.width >= 2 || dim.height >= 2 ? 'w-12 h-12 drop-shadow-[0_2px_6px_rgba(0,0,0,0.8)]' : 'w-7 h-7 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]'}
                         />
                       </div>
 
                       <div className="flex items-end justify-between gap-1 text-[9px] font-mono z-10">
-                        <span className="text-slate-200 font-semibold">
+                        <span className="text-slate-100 font-bold">
                           {weaponSpec
                             ? `${weaponSpec.dps}dps`
                             : entry.category === 'accessory'
@@ -2139,7 +2224,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                                   : 'DEF'}
                         </span>
                         {weaponSpec?.chainLightning && (
-                          <span className="text-cyan-300 font-bold">⚡SÉT</span>
+                          <span className="text-cyan-300 font-extrabold">⚡SÉT</span>
                         )}
                         {weaponSpec && weaponSpec.lifestealPct > 0 && (
                           <span className="text-rose-300 font-bold">🩸</span>
@@ -2153,11 +2238,11 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                 })}
               </div>
 
-              {/* Synergy Circuit Connector Overlay SVG */}
+              {/* Dual-Pass Synergy Circuit Conduit Overlay SVG */}
               {playerEval.synergyLinks.length > 0 && (
                 <svg
                   viewBox="0 0 100 100"
-                  className="pointer-events-none absolute inset-2.5 w-[calc(100%-20px)] h-[calc(100%-20px)]"
+                  className="pointer-events-none absolute inset-3.5 w-[calc(100%-28px)] h-[calc(100%-28px)]"
                 >
                   {playerEval.synergyLinks.map((lnk, idx) => {
                     const a = grid.find((x) => x.uid === lnk.fromUid);
@@ -2170,17 +2255,31 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                     const bx = ((b.col + db.width / 2) / GRID_SIZE) * 100;
                     const by = ((b.row + db.height / 2) / GRID_SIZE) * 100;
                     return (
-                      <line
-                        key={`${lnk.fromUid}-${lnk.toUid}-${idx}`}
-                        x1={ax}
-                        y1={ay}
-                        x2={bx}
-                        y2={by}
-                        stroke={lnk.color}
-                        strokeWidth="1.6"
-                        strokeDasharray={lnk.kind === 'lightning' ? '3 2' : undefined}
-                        strokeOpacity="0.88"
-                      />
+                      <g key={`${lnk.fromUid}-${lnk.toUid}-${idx}`}>
+                        <line
+                          x1={ax}
+                          y1={ay}
+                          x2={bx}
+                          y2={by}
+                          stroke={lnk.color}
+                          strokeWidth="3.2"
+                          strokeOpacity="0.28"
+                          strokeLinecap="round"
+                        />
+                        <line
+                          x1={ax}
+                          y1={ay}
+                          x2={bx}
+                          y2={by}
+                          stroke="#FFFFFF"
+                          strokeWidth="1.2"
+                          strokeDasharray={lnk.kind === 'lightning' ? '2.5 2' : undefined}
+                          strokeOpacity="0.92"
+                          strokeLinecap="round"
+                        />
+                        <circle cx={ax} cy={ay} r="1.8" fill={lnk.color} />
+                        <circle cx={bx} cy={by} r="1.8" fill="#FFFFFF" />
+                      </g>
                     );
                   })}
                 </svg>
@@ -2281,13 +2380,16 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                           : 'bg-[#080D18]/70 border-slate-800/80 opacity-55'
                       }`}
                     >
-                      <div className="flex items-center gap-2">
-                        <div className="w-9 h-9 rounded-lg border border-slate-700/70 bg-[#060A13] flex items-center justify-center shrink-0">
+                      <div className="flex items-center gap-2.5">
+                        <div
+                          className="w-10 h-10 rounded-lg border bg-gradient-to-br from-[#0F182A] to-[#050811] flex items-center justify-center shrink-0 shadow-[inset_0_1px_2px_rgba(0,0,0,0.8)]"
+                          style={{ borderColor: `${entry.color}66` }}
+                        >
                           <GearItemGlyph
                             itemId={itemId}
                             color={entry.color}
                             accent={entry.accent}
-                            className="w-7 h-7"
+                            className="w-8 h-8"
                           />
                         </div>
                         <div className="min-w-0 flex-1 space-y-0.5">
@@ -2295,7 +2397,7 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                             <strong className="text-xs truncate" style={{ color: entry.accent }}>
                               {entry.name}
                             </strong>
-                            <span className="font-mono text-xs font-bold text-amber-300 shrink-0">
+                            <span className="font-mono text-xs font-bold text-amber-300 shrink-0 tabular-nums">
                               {entry.cost}G
                             </span>
                           </div>

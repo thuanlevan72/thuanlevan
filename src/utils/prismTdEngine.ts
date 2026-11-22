@@ -9,6 +9,8 @@ export type GunType =
   | 'orbital'
   | 'singularity'
   | 'mothership'
+  | 'supernova'
+  | 'chronos'
   | 'tesla'
   | 'tempest'
   | 'beacon'
@@ -44,7 +46,9 @@ export type MapBiome =
   | 'crimson_forge'
   | 'violet_void'
   | 'amber_desert'
-  | 'arctic_core';
+  | 'arctic_core'
+  | 'prismatic_nexus'
+  | 'chrono_sanctum';
 
 export interface BiomePalette {
   readonly bg: string;
@@ -117,6 +121,26 @@ export const BIOME_PALETTES: Record<MapBiome, BiomePalette> = {
     wallFill: '#162D45',
     wallStroke: '#7DD3FC',
     accent: '#BAE6FD',
+  },
+  prismatic_nexus: {
+    bg: '#070512',
+    gridLine: 'rgba(250, 204, 21, 0.16)',
+    pathFill: '#17112B',
+    pathBorder: 'rgba(56, 189, 248, 0.36)',
+    trackGlow: 'rgba(250, 204, 21, 0.44)',
+    wallFill: '#1F193B',
+    wallStroke: '#FACC15',
+    accent: '#FDE047',
+  },
+  chrono_sanctum: {
+    bg: '#040611',
+    gridLine: 'rgba(56, 189, 248, 0.16)',
+    pathFill: '#12132E',
+    pathBorder: 'rgba(167, 139, 250, 0.44)',
+    trackGlow: 'rgba(34, 211, 238, 0.52)',
+    wallFill: '#1B1C3E',
+    wallStroke: '#38BDF8',
+    accent: '#67E8F9',
   },
 };
 
@@ -272,7 +296,7 @@ export const GAME_MODE_CONFIGS: Record<GameModeId, GameModeConfig> = {
     label: 'Chiến Dịch',
     shortLabel: 'CHIẾN DỊCH',
     badgeColor: '#38BDF8',
-    description: '16–39 đợt chuẩn chiến thuật · Phối hợp 15 súng & khắc chế Siêu Boss cuối trận',
+    description: '16–46 đợt chuẩn chiến thuật · Phối hợp 17 súng & khắc chế Siêu Boss cuối trận',
     waveCountMult: 1.0,
     spawnRateMult: 0.94,
     speedMult: 0.95,
@@ -516,6 +540,7 @@ export interface PlacedGun {
   variant?: GunVariant;
   priority: TargetPriority;
   chargeTimer: number;
+  shotsFired?: number;
   heat?: number; // 0..100
   overheatTimer?: number; // active signature surge timer
   aimAngle: number;
@@ -573,7 +598,8 @@ export interface TdEnemy {
   wetTimer: number; // conductive water soak (wetZones or Cryo mist)
   shockTimer: number; // electric shock arc visual + stun cue
   markedTimer: number; // Radar weakpoint lock countdown
-  markedBonus: number; // Radar weakpoint damage amp (0..0.45)
+  markedBonus: number; // Radar / Supernova weakpoint damage amp (0..0.45)
+  supernovaBrandDmg?: number; // Chain explosion damage released on enemy death
   burnTimer: number;
   burnDps: number;
   armorShred: number; // 0..0.55 permanent armor stripped
@@ -591,7 +617,7 @@ export interface TdEnemy {
 
 export interface ProjectileItem {
   id: number;
-  kind: 'bullet' | 'pellet' | 'missile' | 'mortar' | 'bomblet' | 'sawblade' | 'tempest_orb';
+  kind: 'bullet' | 'pellet' | 'missile' | 'mortar' | 'bomblet' | 'sawblade' | 'tempest_orb' | 'supernova_orb';
   sourceGunId: string;
   x: number;
   y: number;
@@ -620,6 +646,8 @@ export interface ProjectileItem {
   spawnCluster?: boolean;
   isClusterBomblet?: boolean;
   isElectricStorm?: boolean;
+  supernovaBrandAmp?: number;
+  supernovaEchoDmg?: number;
   isCrit?: boolean;
   trail?: { x: number; y: number }[];
 }
@@ -641,7 +669,7 @@ export interface RailBeamFx {
   alpha: number;
   color: string;
   visualTier: 1 | 2 | 3 | 4;
-  variant?: 'railgun';
+  variant?: 'railgun' | 'supernova';
 }
 
 export interface FlameConeFx {
@@ -693,6 +721,8 @@ export interface OrbitalRadiationZone {
   dps: number;
   armorPierce: number;
   shieldMult: number;
+  armorShred?: number;
+  slowPct?: number;
   life: number;
   maxLife: number;
 }
@@ -725,6 +755,7 @@ export interface CarrierDrone {
   vy: number;
   heading: number;
   fireCooldown: number;
+  shotCount?: number;
   life: number;
   maxLife: number;
   damage: number;
@@ -738,6 +769,36 @@ export interface CarrierDrone {
   trail: { x: number; y: number }[];
 }
 
+export interface ChronoField {
+  id: number;
+  sourceGunId: string;
+  x: number;
+  y: number;
+  radius: number;
+  recordedDamage: number;
+  dps: number;
+  echoRatio: number;
+  slowPct: number;
+  pullForce: number;
+  armorPierce: number;
+  shieldMult: number;
+  life: number;
+  maxLife: number;
+  level: number;
+  variant: GunVariant;
+  isCrit?: boolean;
+}
+
+export interface ChronoSlashFx {
+  x: number;
+  y: number;
+  angle: number;
+  length: number;
+  alpha: number;
+  color: string;
+  isCrit?: boolean;
+}
+
 export const GRID_COLS = 16;
 export const GRID_ROWS = 10;
 export const TILE_SIZE = 56;
@@ -746,7 +807,7 @@ export const CANVAS_HEIGHT = GRID_ROWS * TILE_SIZE; // 560
 export const MAX_GUN_LEVEL = 10;
 
 export const GUN_CATALOG: readonly GunCatalogItem[] = [
-  // === NHÓM TẤN CÔNG (7 SÚNG CHUYÊN BIỆT) ===
+  // === NHÓM TẤN CÔNG (11 SÚNG CHUYÊN BIỆT) ===
   {
     type: 'gatling',
     category: 'attack',
@@ -1162,14 +1223,14 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     roleClue: 'Gọi tia hủy diệt toàn bản đồ',
     accentColor: '#F97316',
     cost: 220,
-    baseDamage: 245,
-    baseCooldown: 3.15,
+    baseDamage: 295,
+    baseCooldown: 2.35,
     rangeTiles: 22,
     milestones: [
-      { level: 3, name: 'Vùng Dung Nham Bức Xạ', summary: 'Cột sáng để lại vùng dung nham đốt cháy mọi quái đi qua' },
+      { level: 3, name: 'Vùng Dung Nham Bức Xạ', summary: 'Vùng dung nham đốt 42% DMG/s, làm chậm 20% & nung chảy 25% giáp' },
       { level: 5, name: 'Khóa Mục Tiêu Kép', summary: 'Gọi đồng thời 2 tia Thiên Phạt lên 2 quái nhiều máu nhất bản đồ' },
-      { level: 7, name: 'Xuyên Giáp Quỹ Đạo', summary: '+80% xuyên giáp & +35% sát thương lên Boss / Siêu Boss' },
-      { level: 10, name: 'Thiên Phạt Vĩnh Hằng', summary: 'Bán kính bức xạ siêu rộng + cột sáng tối thượng đốt sạch đường' },
+      { level: 7, name: 'Xuyên Giáp & Thiêu Máu Tối Đa', summary: 'Xuyên 90% giáp + thiêu đốt thêm 6% Máu tối đa Boss / Thiết Giáp' },
+      { level: 10, name: 'Tam Trụ Thiên Phạt Vĩnh Hằng', summary: '3 cột sáng hủy diệt đồng loạt + vùng dung nham khổng lồ bào 35% giáp' },
     ],
     variants: {
       alpha: {
@@ -1181,7 +1242,7 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
         damageMult: 1.34,
         rofMult: 1.0,
         rangeBonus: 0,
-        splashBonus: 6,
+        splashBonus: 8,
         armorPierceBonus: 0.22,
         shieldMultBonus: 0.35,
         extraProjectiles: 0,
@@ -1191,14 +1252,14 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
         id: 'omega',
         name: 'Omega · Bức Xạ Dung Nham',
         shortTag: 'ω Dung Nham',
-        summary: '+42% bán kính & thời gian vùng dung nham đốt đường đi',
+        summary: '+45% bán kính & thời gian vùng dung nham đốt đường đi',
         accentColor: '#EF4444',
-        damageMult: 0.94,
+        damageMult: 0.98,
         rofMult: 1.12,
         rangeBonus: 0,
-        splashBonus: 24,
-        armorPierceBonus: 0.1,
-        shieldMultBonus: 0.15,
+        splashBonus: 26,
+        armorPierceBonus: 0.12,
+        shieldMultBonus: 0.2,
         extraProjectiles: 0,
         extraChain: 0,
       },
@@ -1208,7 +1269,7 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
       name: 'Mưa Thiên Phạt Quỹ Đạo',
       color: '#F97316',
       summary: 'Giáng 3 cột sáng hủy diệt đồng loạt lên 3 quái máu cao nhất toàn bản đồ',
-      heatPerShot: 25,
+      heatPerShot: 24,
     },
   },
   {
@@ -1220,41 +1281,41 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     roleClue: 'Nuốt chửng & nghiền nát không gian',
     accentColor: '#A855F7',
     cost: 250,
-    baseDamage: 74,
-    baseCooldown: 4.5,
-    rangeTiles: 4.2,
+    baseDamage: 148,
+    baseCooldown: 3.6,
+    rangeTiles: 4.4,
     milestones: [
-      { level: 3, name: 'Chân Trời Nuốt Chửng', summary: 'Quái chết bên trong làm hố đen phình to & tích sát thương nổ cuối' },
-      { level: 5, name: 'Nghiền Sát Thương Chuẩn', summary: 'Gây 100% sát thương chuẩn xuyên mọi lớp giáp mỗi giây' },
-      { level: 7, name: 'Trường Hấp Dẫn Sâu', summary: '+28% bán kính hút dính bầy quái trên đường đi' },
-      { level: 10, name: 'Vụ Nổ Sụp Đổ Vũ Trụ', summary: 'Tích tụ mạnh sát thương quái bị nuốt & giải phóng vụ nổ hủy diệt' },
+      { level: 3, name: 'Chân Trời Nuốt Chửng', summary: 'Hút chặt bầy quái vào tâm, nuốt 45% máu xác & kéo dài thời gian tồn tại' },
+      { level: 5, name: 'Nghiền Sát Thương Chuẩn', summary: '100% sát thương chuẩn xuyên mọi giáp · tâm hố đen nghiền ×1.5' },
+      { level: 7, name: 'Trường Hấp Dẫn Siêu Sâu', summary: 'Bán kính hút 124px + làm chậm 42% toàn bộ quái trong xoáy' },
+      { level: 10, name: 'Vụ Nổ Sụp Đổ Vũ Trụ', summary: 'Tích 70% máu quái bị nuốt & giải phóng vụ nổ chuẩn hủy diệt cuối giờ' },
     ],
     variants: {
       alpha: {
         id: 'alpha',
         name: 'Alpha · Chân Trời Sự Kiện',
         shortTag: 'α Hút Rộng',
-        summary: '+28% lực hút gom bầy & +24px bán kính hố đen',
+        summary: '+32% lực hút gom bầy & +26px bán kính hố đen',
         accentColor: '#C084FC',
-        damageMult: 0.95,
+        damageMult: 0.98,
         rofMult: 1.08,
         rangeBonus: 0.35,
-        splashBonus: 24,
+        splashBonus: 26,
         armorPierceBonus: 0,
-        shieldMultBonus: 0.2,
+        shieldMultBonus: 0.25,
         extraProjectiles: 0,
         extraChain: 0,
       },
       omega: {
         id: 'omega',
-        name: 'ω Sụp Đổ Chuẩn',
+        name: 'Omega · Sụp Đổ Chuẩn',
         shortTag: 'ω Nổ Chuẩn',
         summary: '+45% sát thương chuẩn/giây & +45% nổ tích tụ khi hết giờ',
         accentColor: '#E879F9',
         damageMult: 1.45,
         rofMult: 0.96,
         rangeBonus: 0,
-        splashBonus: 8,
+        splashBonus: 10,
         armorPierceBonus: 0.2,
         shieldMultBonus: 0.35,
         extraProjectiles: 0,
@@ -1266,7 +1327,7 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
       name: 'Siêu Hố Đen Hủy Diệt',
       color: '#C084FC',
       summary: 'Mở siêu hố đen khổng lồ hút chặt đường đi, nghiền chuẩn & phát nổ cuối giờ',
-      heatPerShot: 24,
+      heatPerShot: 22,
     },
   },
   {
@@ -1278,14 +1339,14 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     roleClue: 'Triệu hồi hạm đội tự hành',
     accentColor: '#38BDF8',
     cost: 200,
-    baseDamage: 40,
+    baseDamage: 36,
     baseCooldown: 0.56,
     rangeTiles: 20,
     milestones: [
-      { level: 3, name: 'Phi Đội Săn Lọt Lưới', summary: '3 phi thuyền bay tự do toàn bản đồ, ưu tiên săn quái gần Lõi' },
-      { level: 5, name: 'Bến Đỗ Xuất Đội 4', summary: 'Tăng lên 4 phi thuyền chiến đấu & tự né đòn kỹ năng Boss' },
-      { level: 7, name: 'Plasma Tỉa Săn Boss', summary: 'Phi thuyền bắn tỉa liên tục (+35% sát thương lên Boss/Siêu Boss)' },
-      { level: 10, name: 'Hạm Đội Độc Tôn', summary: 'Hạm đội tối đa bay siêu nhanh, xuất xưởng tức thì khi hết năng lượng' },
+      { level: 3, name: 'Phi Đội Săn Lọt Lưới', summary: '3 phi thuyền bay nhanh toàn bản đồ, bắn tỉa 215px quái gần Lõi' },
+      { level: 5, name: 'Bến Đỗ Xuất Đội 4', summary: 'Tăng lên 4 phi thuyền chiến đấu, tự né xung Boss & bắn phản công' },
+      { level: 7, name: 'Tên Lửa Plasma Săn Boss', summary: 'Mỗi phát thứ 3 phóng Tên Lửa nổ lan (+40% DMG lên Boss/Siêu Boss)' },
+      { level: 10, name: 'Hạm Đội Độc Tôn', summary: 'Phi đội bay siêu thanh, xuyên 80% giáp & xuất xưởng tức thì' },
     ],
     variants: {
       alpha: {
@@ -1294,12 +1355,12 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
         shortTag: 'α +1 Thuyền',
         summary: '+1 phi thuyền tự hành & +22% tốc độ bay truy đuổi cuối đường',
         accentColor: '#38BDF8',
-        damageMult: 0.92,
-        rofMult: 1.12,
+        damageMult: 0.95,
+        rofMult: 1.14,
         rangeBonus: 0,
         splashBonus: 0,
-        armorPierceBonus: 0.08,
-        shieldMultBonus: 0.15,
+        armorPierceBonus: 0.12,
+        shieldMultBonus: 0.2,
         extraProjectiles: 1,
         extraChain: 0,
       },
@@ -1310,10 +1371,10 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
         summary: '+42% sát thương plasma tỉa & +35% phá khiên Boss',
         accentColor: '#FACC15',
         damageMult: 1.42,
-        rofMult: 0.94,
+        rofMult: 0.96,
         rangeBonus: 0,
         splashBonus: 0,
-        armorPierceBonus: 0.22,
+        armorPierceBonus: 0.24,
         shieldMultBonus: 0.35,
         extraProjectiles: 0,
         extraChain: 0,
@@ -1323,8 +1384,124 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
       key: 'mothership_fleet_scramble',
       name: 'Tổng Động Viên Hạm Đội',
       color: '#38BDF8',
-      summary: 'Xuất kích thêm phi đội cường kích & tăng 100% hỏa lực toàn phi thuyền',
+      summary: 'Xuất kích thêm phi đội cường kích & tăng hỏa lực toàn phi thuyền',
       heatPerShot: 14,
+    },
+  },
+  {
+    type: 'supernova',
+    category: 'attack',
+    hotkey: 'v',
+    name: 'Pháo Siêu Tân Tinh',
+    shortName: 'Siêu Tân Tinh',
+    roleClue: 'Nổ dây chuyền & tia phán quyết',
+    accentColor: '#FDE047',
+    cost: 500,
+    baseDamage: 380,
+    baseCooldown: 1.65,
+    rangeTiles: 4.6,
+    milestones: [
+      { level: 3, name: 'Ấn Tích Siêu Tân Tinh', summary: 'Gắn ấn khiến toàn đội gây +32% DMG & hạ gục kích hoạt nổ dây chuyền 115px' },
+      { level: 5, name: 'Tia Phán Quyết Ngắt Chiêu', summary: 'Mỗi 4 phát bắn Hyper-Beam xuyên tuyến, ngắt chiêu Boss & phóng +2 mảnh sao' },
+      { level: 7, name: 'Xuyên Giáp Tuyệt Đối', summary: 'Cầu sao xuyên 4–5 mục tiêu, xuyên 100% giáp & nhân 2.0× sát thương Khiên' },
+      { level: 10, name: 'Thiên Hà Khởi Nguyên', summary: 'Nổ dây chuyền 140px (+12% HP tối đa), Tia Phán Quyết mỗi 3 phát & ấn +42%' },
+    ],
+    variants: {
+      alpha: {
+        id: 'alpha',
+        name: 'Alpha · Liên Hoàn Sao',
+        shortTag: 'α Dây Chuyền',
+        summary: '+1 mục tiêu xuyên thấu, +26px bán kính nổ sao & tốc bắn +12%',
+        accentColor: '#FDE047',
+        damageMult: 0.96,
+        rofMult: 1.12,
+        rangeBonus: 0.35,
+        splashBonus: 26,
+        armorPierceBonus: 0,
+        shieldMultBonus: 0.15,
+        extraProjectiles: 0,
+        extraChain: 1,
+      },
+      omega: {
+        id: 'omega',
+        name: 'Omega · Phán Quyết Boss',
+        shortTag: 'ω Phán Quyết',
+        summary: '+42% sát thương, xuyên 100% giáp, +55% phá khiên & Phán Quyết mỗi 3 phát',
+        accentColor: '#F59E0B',
+        damageMult: 1.42,
+        rofMult: 0.94,
+        rangeBonus: 0.15,
+        splashBonus: 12,
+        armorPierceBonus: 0.1,
+        shieldMultBonus: 0.55,
+        extraProjectiles: 0,
+        extraChain: 0,
+      },
+    },
+    overheatSkill: {
+      key: 'supernova_genesis_collapse',
+      name: 'Đại Vụ Nổ Khởi Nguyên',
+      color: '#FDE047',
+      summary: 'Bùng nổ sóng sao 260px + 3 Tia Phán Quyết ngắt chiêu Boss & gắn ấn +45%',
+      heatPerShot: 25,
+    },
+  },
+  {
+    type: 'chronos',
+    category: 'attack',
+    hotkey: 'b',
+    name: 'Pháo Thời Không',
+    shortName: 'Thời Không',
+    roleClue: 'Ngưng đọng & tua ngược thời gian',
+    accentColor: '#22D3EE',
+    cost: 800,
+    baseDamage: 620,
+    baseCooldown: 1.45,
+    rangeTiles: 5.8,
+    milestones: [
+      { level: 3, name: 'Ghi Âm Nghịch Lý', summary: 'Vòng Thời Không ghi lại 38–46% sát thương toàn đội & nổ chuẩn khi sụp đổ' },
+      { level: 5, name: 'Tua Ngược Không Gian', summary: 'Khi sụp đổ kéo lùi quái ngược về cổng + xuyên 100% giáp & ngắt chiêu Boss' },
+      { level: 7, name: 'Trảm Toàn Bản Đồ', summary: 'Duy trì 2–3 Vòng Thời Không & bổ sung Nhát Chém Thực Tại lên Boss xa nhất' },
+      { level: 10, name: 'Chúa Tể Thời Gian', summary: '6 Nhát Chém Thực Tại, ghi âm 56% sát thương toàn đội & 2.45× phá khiên' },
+    ],
+    variants: {
+      alpha: {
+        id: 'alpha',
+        name: 'Alpha · Trường Nghịch Lý',
+        shortTag: 'α Đa Trường',
+        summary: '+1 Vòng Thời Không đồng thời, +30px bán kính & +18% tích lũy sát thương toàn đội',
+        accentColor: '#22D3EE',
+        damageMult: 0.94,
+        rofMult: 1.12,
+        rangeBonus: 0.4,
+        splashBonus: 30,
+        armorPierceBonus: 0,
+        shieldMultBonus: 0.15,
+        extraProjectiles: 1,
+        extraChain: 0,
+      },
+      omega: {
+        id: 'omega',
+        name: 'Omega · Đoạn Mệnh Thần Kiếm',
+        shortTag: 'ω Thần Kiếm',
+        summary: '+45% sát thương Nhát Chém Thực Tại, xuyên 100% giáp & +2 mục tiêu trảm',
+        accentColor: '#C084FC',
+        damageMult: 1.45,
+        rofMult: 0.95,
+        rangeBonus: 0.2,
+        splashBonus: 12,
+        armorPierceBonus: 0.08,
+        shieldMultBonus: 0.45,
+        extraProjectiles: 0,
+        extraChain: 2,
+      },
+    },
+    overheatSkill: {
+      key: 'chronos_time_collapse',
+      name: 'Ngưng Đọng Vĩnh Hằng',
+      color: '#67E8F9',
+      summary: 'Đóng băng thời gian toàn bản đồ 2.4s, ngắt mọi chiêu Boss & tung 8 Nhát Chém Thực Tại',
+      heatPerShot: 24,
     },
   },
 
@@ -2184,6 +2361,91 @@ export const PRISM_MAPS: readonly TdMapDef[] = [
       { col: 12, row: 6 },
     ],
   },
+  {
+    id: 'sector-17',
+    name: 'Màn 17 · Đấu Trường Hoàng Kim',
+    recommendedDifficulty: 'hell',
+    difficultyLabel: '★ Đặc Biệt · 38 Đợt',
+    subtitle: 'Đại lộ Hoàng Kim xoắn kép 56 ô — hai tuyến áp sát song song qua 4 hồ dẫn điện cổ đại.',
+    tacticalHint: 'Gợi ý: Đặt Pháo Siêu Tân Tinh (V · 500⚡) tại (6,2) hoặc (4,2) để bắn xuyên 2 đại lộ & kích hoạt nổ dây chuyền!',
+    biome: 'prismatic_nexus',
+    cols: GRID_COLS,
+    rows: GRID_ROWS,
+    startEnergy: 560,
+    startCoreHp: 30,
+    totalWaves: 38,
+    path: [
+      { col: 0, row: 1 },
+      { col: 14, row: 1 },
+      { col: 14, row: 4 },
+      { col: 10, row: 4 },
+      { col: 10, row: 3 },
+      { col: 2, row: 3 },
+      { col: 2, row: 8 },
+      { col: 6, row: 8 },
+      { col: 6, row: 5 },
+      { col: 8, row: 5 },
+      { col: 8, row: 8 },
+      { col: 14, row: 8 },
+      { col: 14, row: 6 },
+      { col: 15, row: 6 },
+    ],
+    walls: [
+      { col: 1, row: 5 },
+      { col: 7, row: 4 },
+      { col: 12, row: 2 },
+      { col: 12, row: 5 },
+    ],
+    wetZones: [
+      { col: 7, row: 1 },
+      { col: 6, row: 3 },
+      { col: 2, row: 6 },
+      { col: 11, row: 8 },
+    ],
+  },
+  {
+    id: 'sector-18',
+    name: 'Màn 18 · Thánh Địa Thời Không',
+    recommendedDifficulty: 'hell',
+    difficultyLabel: '✦ Siêu Đặc Biệt · 40 Đợt',
+    subtitle: 'Thánh địa 57 ô quanh 2 pháo đài lõi thời gian & 5 mạch nước dẫn điện cổ đại.',
+    tacticalHint: 'Gợi ý: Đặt Pháo Thời Không (B · 800⚡) tại (6,7) hoặc (4,2) để bao trùm cả thánh địa & tua ngược đợt Siêu Boss!',
+    biome: 'chrono_sanctum',
+    cols: GRID_COLS,
+    rows: GRID_ROWS,
+    startEnergy: 880,
+    startCoreHp: 35,
+    totalWaves: 40,
+    path: [
+      { col: 0, row: 1 },
+      { col: 14, row: 1 },
+      { col: 14, row: 4 },
+      { col: 11, row: 4 },
+      { col: 11, row: 3 },
+      { col: 2, row: 3 },
+      { col: 2, row: 8 },
+      { col: 5, row: 8 },
+      { col: 5, row: 5 },
+      { col: 8, row: 5 },
+      { col: 8, row: 8 },
+      { col: 12, row: 8 },
+      { col: 12, row: 6 },
+      { col: 15, row: 6 },
+    ],
+    walls: [
+      { col: 0, row: 4 },
+      { col: 15, row: 2 },
+      { col: 1, row: 9 },
+      { col: 14, row: 8 },
+    ],
+    wetZones: [
+      { col: 6, row: 1 },
+      { col: 8, row: 3 },
+      { col: 2, row: 6 },
+      { col: 7, row: 5 },
+      { col: 10, row: 8 },
+    ],
+  },
 ];
 
 export function gridToWorldCenter(col: number, row: number): { x: number; y: number } {
@@ -2385,22 +2647,40 @@ export function getGunCombatProfile(
     shieldMult = level >= 5 ? 1.75 : 1.3;
     splashRadius = level >= 7 ? 38 + (level - 7) * 5 : 0;
   } else if (type === 'orbital') {
-    armorPierce = level >= 7 ? 0.9 : level >= 3 ? 0.72 : 0.58;
-    projectilesPerShot = level >= 5 ? 2 : 1; // number of simultaneous orbital sky pillars
-    splashRadius = level >= 10 ? 68 : level >= 3 ? 52 + (level - 3) * 2 : 42;
-    shieldMult = level >= 7 ? 1.55 : 1.25;
-    burnDps = Math.round(damage * (level >= 3 ? 0.28 : 0.18)); // magma/radiation ground burn dps
+    armorPierce = level >= 7 ? 0.92 : level >= 3 ? 0.78 : 0.65;
+    projectilesPerShot = level >= 10 ? 3 : level >= 5 ? 2 : 1; // number of simultaneous orbital sky pillars
+    splashRadius = level >= 10 ? 74 : level >= 3 ? 56 + (level - 3) * 2 : 48;
+    shieldMult = level >= 7 ? 1.65 : 1.35;
+    burnDps = Math.round(damage * (level >= 3 ? 0.42 : 0.28)); // magma/radiation ground burn dps
+    slowPct = level >= 3 ? 0.2 : 0.14;
   } else if (type === 'singularity') {
-    armorPierce = level >= 5 ? 1 : 0.88; // crushes with 100% true damage bypassing armor
-    splashRadius = level >= 7 ? 114 : level >= 3 ? 98 : 88;
-    pullForce = level >= 7 ? 56 : 42;
-    shieldMult = level >= 5 ? 1.45 : 1.2;
-    slowPct = level >= 3 ? 0.34 : 0.24;
+    armorPierce = level >= 5 ? 1 : 0.92; // crushes with 100% true damage bypassing armor
+    splashRadius = level >= 7 ? 124 : level >= 3 ? 106 : 96;
+    pullForce = level >= 7 ? 138 : level >= 3 ? 114 : 96;
+    shieldMult = level >= 5 ? 1.55 : 1.3;
+    slowPct = level >= 7 ? 0.42 : level >= 3 ? 0.34 : 0.28;
   } else if (type === 'mothership') {
-    armorPierce = level >= 7 ? 0.68 : 0.45;
+    armorPierce = level >= 10 ? 0.8 : level >= 7 ? 0.68 : 0.52;
     projectilesPerShot = level >= 5 ? 4 : 3; // autonomous drones maintained
-    shieldMult = level >= 7 ? 1.55 : 1.25;
-    splashRadius = 28;
+    shieldMult = level >= 7 ? 1.65 : 1.35;
+    splashRadius = level >= 7 ? 38 : 28;
+  } else if (type === 'supernova') {
+    armorPierce = level >= 7 ? 1 : level >= 3 ? 0.94 : 0.9;
+    chainCount = level >= 10 ? 5 : level >= 5 ? 4 : 3; // targets pierced per Nova Orb
+    projectilesPerShot = level >= 5 ? 2 : 1; // secondary homing star-shards on Hyper-Beam volley
+    splashRadius = level >= 10 ? 118 : level >= 5 ? 104 : 92;
+    shieldMult = level >= 7 ? 2.0 : level >= 3 ? 1.8 : 1.65;
+    slowPct = level >= 7 ? 0.38 : 0.28;
+    brittleBonus = level >= 10 ? 0.42 : level >= 5 ? 0.35 : 0.28; // Supernova Brand damage amp
+  } else if (type === 'chronos') {
+    armorPierce = level >= 5 ? 1 : 0.94;
+    chainCount = level >= 10 ? 6 : level >= 7 ? 5 : level >= 3 ? 4 : 3; // Simultaneous Dimensional Cross-Slashes
+    projectilesPerShot = level >= 7 ? 2 : 1; // Concurrent Chronosphere fields
+    splashRadius = level >= 10 ? 162 : level >= 5 ? 144 : 128; // Chronosphere radius
+    pullForce = level >= 7 ? 74 : level >= 3 ? 60 : 48; // Time-Rewind pull along track
+    shieldMult = level >= 7 ? 2.45 : level >= 3 ? 2.25 : 2.1;
+    slowPct = level >= 7 ? 0.44 : 0.36;
+    brittleBonus = (level >= 10 ? 0.56 : level >= 5 ? 0.46 : 0.38) + (variant === 'alpha' ? 0.18 : 0); // Temporal Echo damage recording ratio
   } else if (type === 'tesla') {
     armorPierce = 0.65;
     chainCount = level >= 10 ? 7 : level >= 7 ? 5 : level >= 3 ? 4 : 3;
@@ -2479,12 +2759,16 @@ export function getGunCombatProfile(
   } else if (type === 'railgun') {
     effectiveShots = projectilesPerShot >= 3 ? 1.35 : projectilesPerShot === 2 ? 1.24 : 1;
   } else if (type === 'orbital') {
-    effectiveShots = (projectilesPerShot >= 2 ? 1.65 : 1) + (burnDps > 0 ? 0.55 : 0);
+    effectiveShots = (projectilesPerShot >= 3 ? 1.78 : projectilesPerShot >= 2 ? 1.5 : 1) + (burnDps > 0 ? 0.35 : 0);
   } else if (type === 'singularity') {
-    // Persistent true-DPS gravity well + collapse detonation
-    effectiveShots = cooldownSec * (level >= 10 ? 1.85 : 1.45);
+    // Persistent true-DPS gravity well (1..2.5 overlapping holes) + 1.5x core crush + collapse detonation
+    effectiveShots = cooldownSec * (level >= 10 ? 2.45 : level >= 5 ? 1.95 : 1.5);
   } else if (type === 'mothership') {
-    effectiveShots = Math.max(1, projectilesPerShot * 0.85);
+    effectiveShots = Math.max(1, projectilesPerShot * 0.72);
+  } else if (type === 'supernova') {
+    effectiveShots = level >= 10 ? 2.4 : level >= 5 ? 1.95 : 1.65;
+  } else if (type === 'chronos') {
+    effectiveShots = level >= 10 ? 2.65 : level >= 5 ? 2.3 : 1.95;
   } else if (type === 'mortar') {
     effectiveShots = projectilesPerShot === 2 ? 1.24 : 1;
   }
@@ -2890,6 +3174,7 @@ export function createEnemyForWave(
     shockTimer: 0,
     markedTimer: 0,
     markedBonus: 0,
+    supernovaBrandDmg: 0,
     burnTimer: 0,
     burnDps: 0,
     armorShred: 0,
@@ -3628,10 +3913,10 @@ export function computeSingularitySwallowGrowth(
   variant: GunVariant = 'alpha'
 ): { killsAbsorbed: number; currentRadius: number; accumulatedDamage: number } {
   const killsAbsorbed = hole.killsAbsorbed + 1;
-  const radiusScale = Math.min(hole.maxScale, 1 + killsAbsorbed * 0.045);
+  const radiusScale = Math.min(hole.maxScale, 1 + killsAbsorbed * 0.055);
   const currentRadius = Number((hole.baseRadius * radiusScale).toFixed(2));
-  const absorbFraction = (level >= 10 ? 0.55 : level >= 5 ? 0.42 : 0.32) * (variant === 'omega' ? 1.45 : 1);
-  const addedDamage = Math.max(18, Math.round(victimMaxHp * absorbFraction));
+  const absorbFraction = (level >= 10 ? 0.72 : level >= 5 ? 0.55 : 0.45) * (variant === 'omega' ? 1.45 : 1);
+  const addedDamage = Math.max(28, Math.round(victimMaxHp * absorbFraction));
   return {
     killsAbsorbed,
     currentRadius,
@@ -3651,3 +3936,47 @@ export function shouldDroneEvadeBossPulse(
 ): boolean {
   return Math.hypot(droneX - pulseX, droneY - pulseY) <= pulseRadius + 16;
 }
+
+/**
+ * Pure Chronos Sovereign active Chronosphere field cap (1-2 base; Alpha grants +1 simultaneous field).
+ */
+export function getChronosMaxFields(level: number, variant: GunVariant = 'alpha'): number {
+  const base = level >= 7 ? 2 : 1;
+  return variant === 'alpha' ? base + 1 : base;
+}
+
+/**
+ * Accumulates team damage dealt inside a Chronosphere field (capped cleanly per collapse).
+ */
+export function computeChronoFieldRecord(
+  recordedDamage: number,
+  incomingDamage: number,
+  echoRatio: number,
+  maxCap: number
+): number {
+  if (incomingDamage <= 0 || echoRatio <= 0) return recordedDamage;
+  return Math.min(maxCap, recordedDamage + Math.round(incomingDamage * echoRatio));
+}
+
+export const OVERDRIVE_CONFIG = {
+  chargeScale: 0.2, // 5x slower Overdrive charge compared to legacy 1.0 rate
+  initialCharge: 10,
+  durationSec: 8.0,
+  speedMult: 1.75,
+  damageMult: 1.55,
+  hudDpsMult: 2.71, // ~1.75 * 1.55 effective firepower multiplier
+  droneRateMult: 1.9,
+  globalJudgmentBase: 260,
+  globalJudgmentPerWave: 42,
+  secondWaveTriggerSec: 4.0,
+} as const;
+
+/**
+ * Computes Overdrive ("Hội Tụ Hỏa Lực") charge gained from actual damage dealt.
+ * Scaled by 0.2 (5x slower accumulation) in exchange for overwhelming Overdrive burst power.
+ */
+export function computeOverdriveChargeGain(actualDamage: number, baseRate = 0.045): number {
+  if (actualDamage <= 0 || baseRate <= 0) return 0;
+  return actualDamage * baseRate * OVERDRIVE_CONFIG.chargeScale;
+}
+

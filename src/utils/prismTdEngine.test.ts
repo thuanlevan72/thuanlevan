@@ -10,7 +10,10 @@ import {
   CANVAS_WIDTH,
   clampEnemyToTrackCorridor,
   computeBeaconBuffAtTile,
+  computeChronoFieldRecord,
   computeElectricWetSynergy,
+  computeOverdriveChargeGain,
+  computeSingularitySwallowGrowth,
   computeTeamSupportBuffAtTile,
   createEnemyForWave,
   DIFFICULTY_CONFIGS,
@@ -19,13 +22,16 @@ import {
   GAME_MODE_CONFIGS,
   GAME_MODE_ORDER,
   getAvailableGunsForMap,
+  getChronosMaxFields,
   getEffectiveMapSetup,
+  getGunCatalogItem,
   getGunCategory,
   getGunCombatProfile,
   getGunSellRefund,
   getGunTotalInvested,
   getGunUpgradeCost,
   getMapPathTileSet,
+  getMothershipMaxDrones,
   getTileKind,
   GRID_COLS,
   GRID_ROWS,
@@ -37,28 +43,30 @@ import {
   isWetZoneTile,
   MAX_CORRIDOR_LATERAL_PX,
   MAX_GUN_LEVEL,
+  OVERDRIVE_CONFIG,
   PlacedGun,
   PRISM_MAPS,
   pullEnemyAlongTrack,
+  shouldDroneEvadeBossPulse,
   stepEnemies,
   TILE_SIZE,
   validateMapPathNonIntersecting,
 } from './prismTdEngine.ts';
 import { playOverheatSkillSfx, playPrismSfx } from './prismTdSound.ts';
 
-test('PRISM_MAPS define 16 non-intersecting 16x10 maps with wetZones, tacticalHint, 12 consolidated guns, and 8 modes', () => {
-  assert.equal(PRISM_MAPS.length, 16);
+test('PRISM_MAPS define 18 non-intersecting 16x10 maps with wetZones, tacticalHint, 17 consolidated guns, and 8 modes', () => {
+  assert.equal(PRISM_MAPS.length, 18);
   assert.equal(GRID_COLS, 16);
   assert.equal(GRID_ROWS, 10);
   assert.equal(TILE_SIZE, 56);
   assert.equal(CANVAS_WIDTH, 896);
   assert.equal(CANVAS_HEIGHT, 560);
 
-  assert.equal(GUN_CATALOG.length, 12);
+  assert.equal(GUN_CATALOG.length, 17);
   const attackGuns = GUN_CATALOG.filter((g) => g.category === 'attack');
   const electricGuns = GUN_CATALOG.filter((g) => g.category === 'electric');
   const supportGuns = GUN_CATALOG.filter((g) => g.category === 'support');
-  assert.equal(attackGuns.length, 7);
+  assert.equal(attackGuns.length, 12);
   assert.equal(electricGuns.length, 2);
   assert.equal(supportGuns.length, 3);
   assert.equal(isElectricGunType('tesla'), true);
@@ -68,6 +76,11 @@ test('PRISM_MAPS define 16 non-intersecting 16x10 maps with wetZones, tacticalHi
   assert.equal(isSupportGunType('cryo'), true);
   assert.equal(isSupportGunType('radar'), true);
   assert.equal(isSupportGunType('tesla'), false);
+  assert.equal(isSupportGunType('orbital'), false);
+  assert.equal(isSupportGunType('singularity'), false);
+  assert.equal(isSupportGunType('mothership'), false);
+  assert.equal(isSupportGunType('supernova'), false);
+  assert.equal(isSupportGunType('chronos'), false);
 
   assert.equal(MAX_GUN_LEVEL, 10);
   assert.deepEqual(DIFFICULTY_ORDER, ['easy', 'normal', 'hard', 'hell']);
@@ -98,7 +111,7 @@ test('PRISM_MAPS define 16 non-intersecting 16x10 maps with wetZones, tacticalHi
     assert.equal(map.rows, 10);
     assert.ok(BIOME_PALETTES[map.biome]);
     assert.ok(DIFFICULTY_CONFIGS[map.recommendedDifficulty]);
-    assert.ok(map.totalWaves >= 16 && map.totalWaves <= 36, `${map.id} waves should be 16..36`);
+    assert.ok(map.totalWaves >= 16 && map.totalWaves <= 40, `${map.id} waves should be 16..40`);
     assert.ok(map.tacticalHint.length > 10, `${map.id} must define a tacticalHint`);
     assert.ok(map.wetZones.length >= 2, `${map.id} must define >= 2 conductive wetZones`);
     assert.equal(
@@ -123,7 +136,7 @@ test('PRISM_MAPS define 16 non-intersecting 16x10 maps with wetZones, tacticalHi
     }
 
     const available = getAvailableGunsForMap(map.id);
-    assert.equal(available.length, 12, `${map.id} should expose all 12 consolidated guns`);
+    assert.equal(available.length, 17, `${map.id} should expose all 17 consolidated guns`);
   }
 });
 
@@ -180,9 +193,38 @@ test('Campaign wave counts, 8 modes scaling, late-game Super Boss waves, and Hel
 
   const hellMap16 = getEffectiveMapSetup(PRISM_MAPS[15], 'hell', 'campaign');
   assert.equal(hellMap16.totalWaves, 42);
+
+  const map17 = PRISM_MAPS[16];
+  assert.equal(map17.id, 'sector-17');
+  assert.equal(map17.biome, 'prismatic_nexus');
+  assert.equal(map17.wetZones.length, 4);
+  for (const diff of DIFFICULTY_ORDER) {
+    const setup17 = getEffectiveMapSetup(map17, diff, 'campaign');
+    assert.ok(
+      setup17.startEnergy >= 500,
+      `sector-17 (${diff}) startEnergy=${setup17.startEnergy} must allow Wave 1 deployment of 500⚡ supernova`
+    );
+  }
+  const hellMap17 = getEffectiveMapSetup(map17, 'hell', 'campaign');
+  assert.equal(hellMap17.totalWaves, 44);
+
+  const map18 = PRISM_MAPS[17];
+  assert.equal(map18.id, 'sector-18');
+  assert.equal(map18.biome, 'chrono_sanctum');
+  assert.equal(map18.wetZones.length, 5);
+  assert.ok(getMapPathTileSet(map18).size >= 55);
+  for (const diff of DIFFICULTY_ORDER) {
+    const setup18 = getEffectiveMapSetup(map18, diff, 'campaign');
+    assert.ok(
+      setup18.startEnergy >= 800,
+      `sector-18 (${diff}) startEnergy=${setup18.startEnergy} must allow Wave 1 deployment of 800⚡ chronos`
+    );
+  }
+  const hellMap18 = getEffectiveMapSetup(map18, 'hell', 'campaign');
+  assert.equal(hellMap18.totalWaves, 46);
 });
 
-test('12-gun Lv1..Lv10 progression, pure 0-damage support contract, and Crit/Range/Pierce buffs (NO attack-speed buff)', () => {
+test('17-gun Lv1..Lv10 progression, pure 0-damage support contract, and Crit/Range/Pierce buffs (NO attack-speed buff)', () => {
   const overheatKeys = new Set<string>();
   const hotkeys = new Set<string>();
 
@@ -236,7 +278,8 @@ test('12-gun Lv1..Lv10 progression, pure 0-damage support contract, and Crit/Ran
       }
     }
   }
-  assert.equal(overheatKeys.size, 12);
+  assert.equal(overheatKeys.size, 17);
+  assert.equal(hotkeys.size, 17);
 
   // Beacon grants +Damage% + Critical Strike Chance & Multiplier (NO attack-speed buff!)
   const beaconGun: PlacedGun = {
@@ -404,7 +447,7 @@ test('Anti-permafreeze & combat balance across all 13 enemy archetypes + Lv10 at
     assert.equal(heavy.x, beforeX, `${heavyKind} must resist vortex pull`);
   }
 
-  // Distinct combat roles for Attack (7) and Electric (2) Lv10 guns
+  // Distinct combat roles for Attack (10) and Electric (2) Lv10 guns
   assert.equal(getGunCombatProfile('gatling', 10).projectilesPerShot, 4);
   assert.ok(getGunCombatProfile('shotgun', 10).projectilesPerShot >= 9);
   assert.ok(getGunCombatProfile('flamer', 10).burnDps > 0);
@@ -415,9 +458,106 @@ test('Anti-permafreeze & combat balance across all 13 enemy archetypes + Lv10 at
   assert.ok(getGunCombatProfile('tesla', 10).chainCount >= 7);
   assert.ok(getGunCombatProfile('tempest', 10, 'omega').shieldMult >= 1.9);
 
+  // Orbital Laser (220), Singularity Core (250), Mothership Carrier (200)
+  const orbitalMeta = getGunCatalogItem('orbital');
+  const singularityMeta = getGunCatalogItem('singularity');
+  const mothershipMeta = getGunCatalogItem('mothership');
+  assert.equal(orbitalMeta.cost, 220);
+  assert.equal(orbitalMeta.roleClue, 'Gọi tia hủy diệt toàn bản đồ');
+  assert.ok(getGunCombatProfile('orbital', 5).rangeTiles >= 20);
+  assert.equal(getGunCombatProfile('orbital', 5).projectilesPerShot, 2);
+  assert.equal(getGunCombatProfile('orbital', 10).projectilesPerShot, 3);
+  assert.ok(getGunCombatProfile('orbital', 5).burnDps >= 120);
+  assert.ok(getGunCombatProfile('orbital', 1).dpsEstimate >= 180, 'Orbital 220⚡ Lv1 DPS must justify 220⚡ price');
+
+  assert.equal(singularityMeta.cost, 250);
+  assert.equal(singularityMeta.roleClue, 'Nuốt chửng & nghiền nát không gian');
+  assert.equal(getGunCombatProfile('singularity', 5).armorPierce, 1);
+  assert.ok(getGunCombatProfile('singularity', 1).pullForce >= 90, 'Singularity pullForce must trap normal swarms');
+  assert.ok(getGunCombatProfile('singularity', 1).dpsEstimate >= 150, 'Singularity 250⚡ Lv1 DPS must justify 250⚡ price');
+  const holeGrowth = computeSingularitySwallowGrowth(
+    { baseRadius: 96, killsAbsorbed: 2, accumulatedDamage: 250, maxScale: 1.85 },
+    400,
+    7,
+    'omega'
+  );
+  assert.equal(holeGrowth.killsAbsorbed, 3);
+  assert.ok(holeGrowth.currentRadius > 96);
+  assert.ok(holeGrowth.accumulatedDamage >= 550);
+
+  assert.equal(mothershipMeta.cost, 200);
+  assert.equal(mothershipMeta.roleClue, 'Triệu hồi hạm đội tự hành');
+  assert.equal(getMothershipMaxDrones(1, 'omega'), 3);
+  assert.equal(getMothershipMaxDrones(5, 'omega'), 4);
+  assert.equal(getMothershipMaxDrones(5, 'alpha'), 5);
+  assert.ok(getGunCombatProfile('mothership', 1).dpsEstimate >= 180, 'Mothership 200⚡ Lv1 DPS must justify 200⚡ price');
+  assert.equal(shouldDroneEvadeBossPulse(210, 210, 200, 200, 80), true);
+  assert.equal(shouldDroneEvadeBossPulse(400, 400, 200, 200, 80), false);
+
+  // Supernova Supreme Cannon (500⚡)
+  const supernovaMeta = getGunCatalogItem('supernova');
+  assert.equal(supernovaMeta.cost, 500);
+  assert.equal(supernovaMeta.hotkey, 'v');
+  const superLv1Alpha = getGunCombatProfile('supernova', 1, 'alpha');
+  const superLv1Omega = getGunCombatProfile('supernova', 1, 'omega');
+  const superLv10Alpha = getGunCombatProfile('supernova', 10, 'alpha');
+  assert.ok(superLv1Alpha.dpsEstimate >= 400, 'Supernova 500⚡ Lv1 DPS must justify 500⚡ supreme cost');
+  assert.ok(superLv1Omega.damage > superLv1Alpha.damage);
+  assert.ok(superLv1Alpha.rangeTiles >= 4.6);
+  assert.ok(superLv1Alpha.chainCount >= 3);
+  assert.ok(superLv1Alpha.brittleBonus >= 0.28);
+  assert.equal(superLv10Alpha.armorPierce, 1);
+
+  // Chronos Sovereign Transcendent Cannon (800⚡)
+  const chronosMeta = getGunCatalogItem('chronos');
+  assert.equal(chronosMeta.cost, 800);
+  assert.equal(chronosMeta.hotkey, 'b');
+  const chronosLv1Alpha = getGunCombatProfile('chronos', 1, 'alpha');
+  const chronosLv1Omega = getGunCombatProfile('chronos', 1, 'omega');
+  const chronosLv10Alpha = getGunCombatProfile('chronos', 10, 'alpha');
+  assert.ok(chronosLv1Alpha.dpsEstimate >= 800, 'Chronos 800⚡ Lv1 DPS must justify 800⚡ cost');
+  assert.ok(chronosLv1Omega.damage > chronosLv1Alpha.damage);
+  assert.ok(chronosLv1Alpha.rangeTiles >= 5.5);
+  assert.ok(chronosLv1Alpha.chainCount >= 3);
+  assert.ok(chronosLv1Alpha.brittleBonus >= 0.48);
+  assert.equal(chronosLv10Alpha.armorPierce, 1);
+  assert.equal(getChronosMaxFields(1, 'omega'), 1);
+  assert.equal(getChronosMaxFields(7, 'omega'), 2);
+  assert.equal(getChronosMaxFields(7, 'alpha'), 3);
+  assert.equal(computeChronoFieldRecord(500, 1000, 0.56, 30000), 1060);
+  assert.equal(computeChronoFieldRecord(29800, 1000, 0.56, 30000), 30000);
+
+  // Overdrive ("Hội Tụ Hỏa Lực"): 5x slower charge (0.2x scale), 10% start, 8s duration, 2-wave Overheat & 2.71x burst
+  assert.equal(OVERDRIVE_CONFIG.chargeScale, 0.2);
+  assert.equal(OVERDRIVE_CONFIG.initialCharge, 10);
+  assert.equal(OVERDRIVE_CONFIG.durationSec, 8.0);
+  assert.equal(OVERDRIVE_CONFIG.speedMult, 1.75);
+  assert.equal(OVERDRIVE_CONFIG.damageMult, 1.55);
+  assert.equal(OVERDRIVE_CONFIG.hudDpsMult, 2.71);
+  assert.equal(OVERDRIVE_CONFIG.secondWaveTriggerSec, 4.0);
+  assert.equal(computeOverdriveChargeGain(1000, 0.045), 9);
+  assert.equal(computeOverdriveChargeGain(-50, 0.045), 0);
+
   for (const g of GUN_CATALOG) {
     const p10 = getGunCombatProfile(g.type, 10);
-    assert.ok(p10.dpsEstimate < 1400, `${g.type} Lv10 DPS=${p10.dpsEstimate} stays balanced (<1400)`);
+    if (g.cost >= 800) {
+      assert.ok(
+        p10.dpsEstimate >= 8000 && p10.dpsEstimate <= 14500,
+        `Transcendent ${g.type} (${g.cost}⚡) Lv10 DPS=${p10.dpsEstimate} stays transcendent-tier & bounded`
+      );
+    } else if (g.cost >= 500) {
+      assert.ok(
+        p10.dpsEstimate >= 4000 && p10.dpsEstimate < 7000,
+        `Supreme ${g.type} (${g.cost}⚡) Lv10 DPS=${p10.dpsEstimate} stays supreme-strong & bounded`
+      );
+    } else if (g.cost >= 200) {
+      assert.ok(
+        p10.dpsEstimate >= 1400 && p10.dpsEstimate < 3000,
+        `Apex ${g.type} (${g.cost}⚡) Lv10 DPS=${p10.dpsEstimate} stays apex-strong & bounded`
+      );
+    } else {
+      assert.ok(p10.dpsEstimate < 1600, `${g.type} Lv10 DPS=${p10.dpsEstimate} stays balanced (<1600)`);
+    }
   }
 
   // Kill reward boost across all 13 enemy archetypes
@@ -446,7 +586,7 @@ test('Anti-permafreeze & combat balance across all 13 enemy archetypes + Lv10 at
   }
 });
 
-test('prismTdSound synthesizes compressor+shaper bus, guards suspended state, and covers all 12 guns + Overheat + interrupt', () => {
+test('prismTdSound synthesizes compressor+shaper bus, guards suspended state, and covers all 16 guns + Overheat + interrupt', () => {
   let oscCount = 0;
   let noiseSrcCount = 0;
   let filterCount = 0;
@@ -563,7 +703,7 @@ test('prismTdSound synthesizes compressor+shaper bus, guards suspended state, an
     ] as const) {
       playPrismSfx(uiFx, true, cleanRef);
     }
-    assert.ok(noiseSrcCount + oscCount - beforeVoices >= 36);
+    assert.ok(noiseSrcCount + oscCount - beforeVoices >= 47);
     assert.ok(filterCount > 0);
 
     const preMuted = noiseSrcCount + oscCount;

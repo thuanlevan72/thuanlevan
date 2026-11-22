@@ -35,16 +35,16 @@ test('computeCombatVisualDamping stays crisp in calm combat and damps glare + mi
   assert.ok(heavyMobile3x.maxFloatingTexts <= 8);
 });
 
-test('filterArsenalGuns cleanly partitions all, attack, electric, and support guns across the 12-gun roster', () => {
+test('filterArsenalGuns cleanly partitions all, attack, electric, and support guns across the 17-gun roster', () => {
   const guns = getAvailableGunsForMap(PRISM_MAPS[0].id);
   const all = filterArsenalGuns(guns, 'all');
   const attack = filterArsenalGuns(guns, 'attack');
   const electric = filterArsenalGuns(guns, 'electric');
   const support = filterArsenalGuns(guns, 'support');
 
-  assert.equal(all.length, 12);
-  assert.equal(guns.length, 12);
-  assert.equal(attack.length, 7);
+  assert.equal(all.length, 17);
+  assert.equal(guns.length, 17);
+  assert.equal(attack.length, 12);
   assert.equal(electric.length, 2);
   assert.equal(support.length, 3);
   assert.equal(attack.length + electric.length + support.length, all.length);
