@@ -1,6 +1,6 @@
-import { GunCatalogItem, isSupportGunType } from './prismTdEngine.ts';
+import { getGunCategory, GunCatalogItem } from './prismTdEngine.ts';
 
-export type GunArsenalFilter = 'all' | 'support' | 'exclusive' | 'dps';
+export type GunArsenalFilter = 'all' | 'attack' | 'electric' | 'support';
 
 export interface CombatVisualDamping {
   /** Multiplier for beam alpha & glow glare (0.48 .. 1.0) */
@@ -66,9 +66,7 @@ export function filterArsenalGuns(
   filter: GunArsenalFilter
 ): GunCatalogItem[] {
   if (filter === 'all') return [...guns];
-  if (filter === 'support') return guns.filter((g) => isSupportGunType(g.type));
-  if (filter === 'exclusive') return guns.filter((g) => Boolean(g.exclusiveMapId));
-  return guns.filter((g) => !isSupportGunType(g.type) && !g.exclusiveMapId);
+  return guns.filter((g) => getGunCategory(g.type) === filter);
 }
 
 /**

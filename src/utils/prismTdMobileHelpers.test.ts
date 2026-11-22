@@ -35,17 +35,19 @@ test('computeCombatVisualDamping stays crisp in calm combat and damps glare + mi
   assert.ok(heavyMobile3x.maxFloatingTexts <= 8);
 });
 
-test('filterArsenalGuns cleanly partitions all, support, exclusive, and dps guns', () => {
+test('filterArsenalGuns cleanly partitions all, attack, electric, and support guns across the 12-gun roster', () => {
   const guns = getAvailableGunsForMap(PRISM_MAPS[0].id);
   const all = filterArsenalGuns(guns, 'all');
+  const attack = filterArsenalGuns(guns, 'attack');
+  const electric = filterArsenalGuns(guns, 'electric');
   const support = filterArsenalGuns(guns, 'support');
-  const exclusive = filterArsenalGuns(guns, 'exclusive');
-  const dps = filterArsenalGuns(guns, 'dps');
 
-  assert.equal(all.length, guns.length);
-  assert.equal(exclusive.length, 1);
-  assert.ok(support.length >= 3, 'Should include team support guns');
-  assert.equal(support.length + exclusive.length + dps.length, all.length);
+  assert.equal(all.length, 12);
+  assert.equal(guns.length, 12);
+  assert.equal(attack.length, 7);
+  assert.equal(electric.length, 2);
+  assert.equal(support.length, 3);
+  assert.equal(attack.length + electric.length + support.length, all.length);
 });
 
 test('computeMobileLandscapeSidebarPx preserves 70%–75%+ map width across iPhone 14–18 Pro/Pro Max landscape viewports', () => {

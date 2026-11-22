@@ -112,8 +112,8 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     category: 'strategy',
     title: 'Thủ Thành Pháo Đài',
     shortTitle: 'Pháo Đài',
-    subtitle: 'Pure Gun TD · 16 Màn 16×10 · x2 Thời Lượng · 8 Chế Độ · 39 Súng (23 Chung + 16 Đặc Quyền)',
-    badge: '39 Súng · 8 Chế Độ',
+    subtitle: 'Pure Gun TD · 16 Màn 16×10 · Siêu Boss · 12 Súng (7 Công · 2 Hệ Điện · 3 Hỗ Trợ)',
+    badge: '12 Súng · 8 Chế Độ',
     playable: true,
     gameKey: 'prism_td',
   },
@@ -387,6 +387,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       if (
         playParam === 'prism' ||
         playParam === 'prism-td' ||
+        playParam === 'prism_td' ||
         playParam === 'laser' ||
         playParam === 'gun' ||
         playParam === 'td' ||

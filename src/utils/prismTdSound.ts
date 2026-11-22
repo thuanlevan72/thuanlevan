@@ -10,6 +10,7 @@ export type PrismSfxKind =
   | 'overheat'
   | 'explosion'
   | 'kill'
+  | 'interrupt'
   | 'wave'
   | 'overdrive'
   | 'hurt'
@@ -491,46 +492,20 @@ function playElectricArc(
 
 const SFX_MIN_GAP_MS: Partial<Record<PrismSfxKind, number>> = {
   gatling: 82,
-  map01_cyber_smg: 78,
-  map07_cyclone_rotary: 80,
-  map05_dune_needler: 90,
-  hunter: 95,
   shotgun: 115,
-  sniper: 125,
-  cannon: 135,
-  mortar: 135,
-  cluster: 130,
-  railgun: 130,
-  map03_forge_magma: 135,
-  map08_titan_flak: 130,
-  map10_meteor_rail: 130,
-  map16_void_sovereign: 145,
   flamer: 150,
-  cryo: 150,
-  map11_cryo_shatter: 145,
-  acid: 145,
-  map09_venom_hydra: 145,
-  prism_laser: 150,
-  map02_matrix_spire: 145,
-  map06_aurora_beam: 150,
-  beacon: 220,
-  amp_spire: 200,
-  radar: 190,
-  aegis_field: 210,
-  tesla: 110,
   saw: 115,
-  map04_void_katana: 105,
-  map15_emerald_reaper: 115,
-  plasma: 120,
-  map14_omega_disruptor: 125,
-  tempest: 125,
-  sonic: 125,
-  gravity_lance: 130,
+  mortar: 135,
   missile: 120,
-  map12_hellfire_organ: 120,
-  map13_shadow_hive: 115,
+  railgun: 130,
+  tesla: 110,
+  tempest: 125,
+  beacon: 220,
+  cryo: 150,
+  radar: 190,
   explosion: 95,
   kill: 95,
+  interrupt: 140,
   hurt: 160,
   overheat: 240,
 };
@@ -538,7 +513,7 @@ const SFX_MIN_GAP_MS: Partial<Record<PrismSfxKind, number>> = {
 function getSfxCategory(kind: PrismSfxKind): MixCategory {
   if (USER_GESTURE_UI_KINDS.has(kind)) return 'ui';
   if (kind === 'overheat') return 'skill';
-  if (kind === 'kill' || kind === 'explosion' || kind === 'hurt') return 'hit';
+  if (kind === 'kill' || kind === 'explosion' || kind === 'hurt' || kind === 'interrupt') return 'hit';
   return 'fire';
 }
 
@@ -632,6 +607,13 @@ export function playPrismSfx(
         playBoltClick(ctx, bus, 2400, 0.12 * mix, 0);
         playSubKick(ctx, bus, 95, 48, 0.04, 0.07 * mix);
         break;
+      case 'interrupt':
+        // Distinct EMP skill-break crunch + downward clamp tone
+        playElectricArc(ctx, bus, 0.28 * mix, 0.12, 0);
+        playBoltClick(ctx, bus, 3600, 0.14 * mix, 0.01);
+        playStableTone(ctx, bus, 660, 0.07, 0.08 * mix, 'triangle', 0);
+        playStableTone(ctx, bus, 330, 0.14, 0.09 * mix, 'triangle', 0.04);
+        break;
       case 'hurt':
         playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
           filterType: 'lowpass',
@@ -654,7 +636,7 @@ export function playPrismSfx(
         playStableTone(ctx, bus, 164.81, 0.4, 0.16, 'triangle', 0.16);
         break;
 
-      // ---- REALISTIC FIREARMS & BALLISTICS ----
+      // ---- REALISTIC ATTACK WEAPONS (7) ----
       case 'gatling':
         // Crisp 5.56mm SAW rifle burst + chamber punch + brass bolt tick
         playFoleyBuffer(ctx, bus, bus.buffers.rifleCrack, {
@@ -666,57 +648,6 @@ export function playPrismSfx(
         });
         playSubKick(ctx, bus, 96, 44, 0.042, 0.13 * mix);
         playBoltClick(ctx, bus, 4600, 0.08 * mix, 0.015);
-        break;
-
-      case 'map01_cyber_smg':
-        // Tight crisp suppressed PDW / MP7 rapid pop
-        playFoleyBuffer(ctx, bus, bus.buffers.rifleCrack, {
-          filterType: 'lowpass',
-          cutoffHz: jitter(3400, 0.07),
-          rate: jitter(1.16, 0.05),
-          dur: 0.07,
-          vol: 0.25 * mix,
-        });
-        playSubKick(ctx, bus, 102, 48, 0.036, 0.11 * mix);
-        playBoltClick(ctx, bus, 5200, 0.075 * mix, 0.011);
-        break;
-
-      case 'map07_cyclone_rotary':
-        // Deep 20mm rotary Vulcan autocannon bark
-        playFoleyBuffer(ctx, bus, bus.buffers.rifleCrack, {
-          filterType: 'lowpass',
-          cutoffHz: jitter(2800, 0.08),
-          rate: jitter(0.84, 0.05),
-          dur: 0.12,
-          vol: 0.31 * mix,
-        });
-        playSubKick(ctx, bus, 88, 38, 0.055, 0.18 * mix);
-        playBoltClick(ctx, bus, 3600, 0.085 * mix, 0.016);
-        break;
-
-      case 'hunter':
-        // Tactical carbine snap
-        playFoleyBuffer(ctx, bus, bus.buffers.rifleCrack, {
-          filterType: 'lowpass',
-          cutoffHz: jitter(3100, 0.07),
-          rate: jitter(1.08, 0.06),
-          dur: 0.08,
-          vol: 0.23 * mix,
-        });
-        playSubKick(ctx, bus, 94, 46, 0.04, 0.11 * mix);
-        break;
-
-      case 'map05_dune_needler':
-        // High-pressure pneumatic flechette rifle crack
-        playFoleyBuffer(ctx, bus, bus.buffers.rifleCrack, {
-          filterType: 'bandpass',
-          cutoffHz: jitter(3600, 0.07),
-          q: 0.7,
-          rate: jitter(1.25, 0.05),
-          dur: 0.07,
-          vol: 0.24 * mix,
-        });
-        playSubKick(ctx, bus, 98, 50, 0.038, 0.1 * mix);
         break;
 
       case 'shotgun':
@@ -732,48 +663,27 @@ export function playPrismSfx(
         playBoltClick(ctx, bus, 3100, 0.1 * mix, 0.065);
         break;
 
-      case 'sniper':
-        // Sharp .50 BMG supersonic crack + echoing tail + bolt action
-        playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
+      case 'flamer':
+        playFoleyBuffer(ctx, bus, bus.buffers.flame, {
           filterType: 'lowpass',
-          cutoffHz: 5200,
-          rate: jitter(1.18, 0.04),
-          dur: 0.24,
-          vol: 0.36 * mix,
+          cutoffHz: jitter(1500, 0.08),
+          rate: jitter(0.98, 0.07),
+          dur: 0.22,
+          vol: 0.28 * mix,
+          attack: 0.012,
         });
-        playFoleyBuffer(ctx, bus, bus.buffers.rifleCrack, {
-          filterType: 'highpass',
-          cutoffHz: 1100,
-          rate: 1.05,
-          dur: 0.08,
+        break;
+
+      case 'saw':
+        playFoleyBuffer(ctx, bus, bus.buffers.steel, {
+          filterType: 'bandpass',
+          cutoffHz: jitter(2500, 0.08),
+          q: 0.85,
+          rate: jitter(0.95, 0.06),
+          dur: 0.13,
           vol: 0.24 * mix,
         });
-        playSubKick(ctx, bus, 98, 36, 0.09, 0.24 * mix);
-        playBoltClick(ctx, bus, 4800, 0.09 * mix, 0.055);
-        break;
-
-      case 'cannon':
-        // Heavy 105mm siege artillery blast
-        playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
-          filterType: 'lowpass',
-          cutoffHz: jitter(1650, 0.08),
-          rate: jitter(0.8, 0.05),
-          dur: 0.32,
-          vol: 0.4 * mix,
-        });
-        playSubKick(ctx, bus, 82, 26, 0.2, 0.3 * mix);
-        break;
-
-      case 'map08_titan_flak':
-        // 88mm anti-air flak cannon punch
-        playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
-          filterType: 'lowpass',
-          cutoffHz: jitter(2200, 0.08),
-          rate: jitter(0.88, 0.05),
-          dur: 0.28,
-          vol: 0.38 * mix,
-        });
-        playSubKick(ctx, bus, 88, 30, 0.16, 0.26 * mix);
+        playSubKick(ctx, bus, 94, 48, 0.06, 0.1 * mix);
         break;
 
       case 'mortar':
@@ -788,22 +698,22 @@ export function playPrismSfx(
         playSubKick(ctx, bus, 92, 34, 0.16, 0.26 * mix);
         break;
 
-      case 'cluster':
-        // Grenade launcher "THUMP-CLANK"
-        playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
-          filterType: 'lowpass',
-          cutoffHz: 1150,
-          rate: 0.92,
-          dur: 0.18,
-          vol: 0.3 * mix,
+      case 'missile':
+        // Rocket propellant whoosh + tube ignition thud
+        playFoleyBuffer(ctx, bus, bus.buffers.flame, {
+          filterType: 'bandpass',
+          cutoffHz: jitter(1450, 0.08),
+          q: 0.65,
+          rate: jitter(1.15, 0.06),
+          dur: 0.2,
+          vol: 0.28 * mix,
+          attack: 0.008,
         });
-        playSubKick(ctx, bus, 96, 38, 0.12, 0.2 * mix);
-        playBoltClick(ctx, bus, 3100, 0.09 * mix, 0.022);
+        playSubKick(ctx, bus, 86, 40, 0.12, 0.18 * mix);
         break;
 
       case 'railgun':
-      case 'map10_meteor_rail':
-        // Hypersonic magnetic railgun: capacitor crack + sonic boom (ZERO laser chirp!)
+        // Hypersonic magnetic railgun: capacitor crack + sonic boom
         playFoleyBuffer(ctx, bus, bus.buffers.rifleCrack, {
           filterType: 'highpass',
           cutoffHz: 900,
@@ -821,120 +731,13 @@ export function playPrismSfx(
         playSubKick(ctx, bus, 94, 28, 0.18, 0.28 * mix);
         break;
 
-      // ---- THERMAL, ROCKET, ACID, CRYO, BLADE ----
-      case 'flamer':
-        playFoleyBuffer(ctx, bus, bus.buffers.flame, {
-          filterType: 'lowpass',
-          cutoffHz: jitter(1500, 0.08),
-          rate: jitter(0.98, 0.07),
-          dur: 0.22,
-          vol: 0.28 * mix,
-          attack: 0.012,
-        });
-        break;
-
-      case 'missile':
-      case 'map12_hellfire_organ':
-        // Rocket propellant whoosh + tube ignition thud
-        playFoleyBuffer(ctx, bus, bus.buffers.flame, {
-          filterType: 'bandpass',
-          cutoffHz: jitter(1450, 0.08),
-          q: 0.65,
-          rate: jitter(1.15, 0.06),
-          dur: 0.2,
-          vol: 0.28 * mix,
-          attack: 0.008,
-        });
-        playSubKick(ctx, bus, 86, 40, 0.12, 0.18 * mix);
-        break;
-
-      case 'map03_forge_magma':
-        playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
-          filterType: 'lowpass',
-          cutoffHz: 980,
-          rate: 0.78,
-          dur: 0.25,
-          vol: 0.34 * mix,
-        });
-        playFoleyBuffer(ctx, bus, bus.buffers.flame, {
-          filterType: 'lowpass',
-          cutoffHz: 1800,
-          rate: 0.92,
-          dur: 0.18,
-          vol: 0.18 * mix,
-          delay: 0.02,
-        });
-        break;
-
-      case 'cryo':
-      case 'map11_cryo_shatter':
-        playFoleyBuffer(ctx, bus, bus.buffers.ice, {
-          filterType: 'highpass',
-          cutoffHz: 1100,
-          rate: jitter(1.0, 0.08),
-          dur: 0.18,
-          vol: 0.28 * mix,
-        });
-        playSubKick(ctx, bus, 88, 42, 0.07, 0.11 * mix);
-        break;
-
-      case 'acid':
-      case 'map09_venom_hydra':
-        playFoleyBuffer(ctx, bus, bus.buffers.flame, {
-          filterType: 'bandpass',
-          cutoffHz: jitter(2100, 0.08),
-          q: 0.9,
-          rate: jitter(1.22, 0.06),
-          dur: 0.16,
-          vol: 0.24 * mix,
-        });
-        playSubKick(ctx, bus, 90, 44, 0.07, 0.11 * mix);
-        break;
-
-      case 'saw':
-      case 'map15_emerald_reaper':
-        playFoleyBuffer(ctx, bus, bus.buffers.steel, {
-          filterType: 'bandpass',
-          cutoffHz: jitter(2500, 0.08),
-          q: 0.85,
-          rate: jitter(0.95, 0.06),
-          dur: 0.13,
-          vol: 0.24 * mix,
-        });
-        playSubKick(ctx, bus, 94, 48, 0.06, 0.1 * mix);
-        break;
-
-      case 'map04_void_katana':
-        playFoleyBuffer(ctx, bus, bus.buffers.steel, {
-          filterType: 'highpass',
-          cutoffHz: 1200,
-          rate: jitter(1.12, 0.05),
-          dur: 0.12,
-          vol: 0.27 * mix,
-        });
-        playSubKick(ctx, bus, 98, 44, 0.05, 0.12 * mix);
-        break;
-
-      // ---- ELECTROMAGNETIC, PLASMA, SONIC, GRAVITY, LASER ----
+      // ---- ELECTRIC / LIGHTNING WEAPONS (2) ----
       case 'tesla':
         playElectricArc(ctx, bus, 0.24 * mix, 0.095, 0);
         break;
 
-      case 'plasma':
-      case 'map14_omega_disruptor':
-        // Grounded ion cannon punch + plasma crack
-        playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
-          filterType: 'lowpass',
-          cutoffHz: 1850,
-          rate: jitter(1.02, 0.06),
-          dur: 0.18,
-          vol: 0.28 * mix,
-        });
-        playSubKick(ctx, bus, 96, 36, 0.14, 0.22 * mix);
-        break;
-
       case 'tempest':
-        playElectricArc(ctx, bus, 0.2 * mix, 0.1, 0);
+        playElectricArc(ctx, bus, 0.22 * mix, 0.1, 0);
         playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
           filterType: 'lowpass',
           cutoffHz: 950,
@@ -945,38 +748,21 @@ export function playPrismSfx(
         });
         break;
 
-      case 'sonic':
-        // Seismic sub-bass shockwave thump + air slap
-        playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
-          filterType: 'lowpass',
-          cutoffHz: 720,
-          rate: 0.72,
-          dur: 0.24,
-          vol: 0.34 * mix,
-        });
-        playSubKick(ctx, bus, 92, 26, 0.22, 0.28 * mix);
-        break;
-
-      case 'gravity_lance':
-        playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
-          filterType: 'lowpass',
-          cutoffHz: 680,
-          rate: 0.75,
-          dur: 0.24,
-          vol: 0.28 * mix,
-        });
-        playSubKick(ctx, bus, 84, 26, 0.24, 0.26 * mix);
-        break;
-
+      // ---- PURE SUPPORT TOWERS (3) ----
       case 'beacon':
         playStableTone(ctx, bus, 587.33, 0.13, 0.06 * mix, 'sine', 0, 0.006);
         playStableTone(ctx, bus, 880, 0.13, 0.05 * mix, 'triangle', 0.03, 0.006);
         break;
 
-      case 'amp_spire':
-        playBoltClick(ctx, bus, 2800, 0.06 * mix, 0);
-        playStableTone(ctx, bus, 392, 0.14, 0.075 * mix, 'triangle', 0, 0.006);
-        playStableTone(ctx, bus, 587.33, 0.15, 0.06 * mix, 'sine', 0.035, 0.006);
+      case 'cryo':
+        playFoleyBuffer(ctx, bus, bus.buffers.ice, {
+          filterType: 'highpass',
+          cutoffHz: 1100,
+          rate: jitter(1.0, 0.08),
+          dur: 0.18,
+          vol: 0.28 * mix,
+        });
+        playSubKick(ctx, bus, 88, 42, 0.07, 0.11 * mix);
         break;
 
       case 'radar':
@@ -990,57 +776,6 @@ export function playPrismSfx(
           dur: 0.08,
           vol: 0.11 * mix,
         });
-        break;
-
-      case 'aegis_field':
-        playSubKick(ctx, bus, 94, 38, 0.16, 0.2 * mix);
-        playFoleyBuffer(ctx, bus, bus.buffers.steel, {
-          filterType: 'lowpass',
-          cutoffHz: 1850,
-          rate: 0.92,
-          dur: 0.12,
-          vol: 0.18 * mix,
-        });
-        playStableTone(ctx, bus, 293.66, 0.16, 0.07 * mix, 'triangle', 0.015, 0.006);
-        break;
-
-      case 'prism_laser':
-      case 'map02_matrix_spire':
-      case 'map06_aurora_beam':
-        // Focused optical beam hum + emitter click (NO chirp slide)
-        playBoltClick(ctx, bus, 3400, 0.08 * mix, 0);
-        playFoleyBuffer(ctx, bus, bus.buffers.flame, {
-          filterType: 'bandpass',
-          cutoffHz: 1650,
-          q: 0.9,
-          rate: 1.25,
-          dur: 0.11,
-          vol: 0.17 * mix,
-        });
-        playSubKick(ctx, bus, 98, 62, 0.08, 0.1 * mix);
-        break;
-
-      case 'map13_shadow_hive':
-        playFoleyBuffer(ctx, bus, bus.buffers.rifleCrack, {
-          filterType: 'lowpass',
-          cutoffHz: 2600,
-          rate: jitter(1.18, 0.06),
-          dur: 0.075,
-          vol: 0.22 * mix,
-        });
-        playSubKick(ctx, bus, 94, 48, 0.05, 0.1 * mix);
-        break;
-
-      case 'map16_void_sovereign':
-        playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
-          filterType: 'lowpass',
-          cutoffHz: 1450,
-          rate: 0.82,
-          dur: 0.3,
-          vol: 0.36 * mix,
-        });
-        playSubKick(ctx, bus, 90, 26, 0.26, 0.28 * mix);
-        playStableTone(ctx, bus, 146.83, 0.18, 0.07 * mix, 'triangle', 0.01, 0.01);
         break;
 
       case 'overheat':
@@ -1060,7 +795,7 @@ export function playPrismSfx(
 }
 
 /**
- * Distinct multi-stage Overheat Ultimate SFX matched 1-to-1 with ALL 36 `overheatSkill.key` values in `prismTdEngine.ts`.
+ * Distinct multi-stage Overheat Ultimate SFX matched 1-to-1 with ALL 12 `overheatSkill.key` values in `prismTdEngine.ts`.
  */
 export function playOverheatSkillSfx(
   skillKey: string,
@@ -1079,10 +814,7 @@ export function playOverheatSkillSfx(
     if (mix <= 0) return;
 
     switch (skillKey) {
-      // 1. Rapid Autocannon / SMG / Rotary Fan Bursts
-      case 'supersonic_fan':
-      case 'cyber_smg_hyper_barrage':
-      case 'cyclone_360_bullet_ring':
+      case 'gatling_hyper_barrage':
         for (let i = 0; i < 4; i++) {
           playFoleyBuffer(ctx, bus, bus.buffers.rifleCrack, {
             filterType: 'lowpass',
@@ -1096,11 +828,8 @@ export function playOverheatSkillSfx(
         }
         break;
 
-      // 2. Pyro / Dragon's Breath / Magma / Hellfire Inferno
-      case 'thermal_buckshot_ring':
-      case 'phoenix_cyclone':
-      case 'forge_volcanic_eruption':
-      case 'hellfire_organ_crescendo':
+      case 'shotgun_nova_blast':
+      case 'flamer_phoenix_ring':
         playSubKick(ctx, bus, 92, 28, 0.36, 0.26 * mix);
         playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
           filterType: 'lowpass',
@@ -1119,106 +848,7 @@ export function playOverheatSkillSfx(
         });
         break;
 
-      // 3. Cryo / Glacial Avalanche Shatter
-      case 'hex_frost_nova':
-      case 'aurora_borealis_sweep':
-      case 'cryo_shatter_nova':
-        playSubKick(ctx, bus, 96, 36, 0.2, 0.2 * mix);
-        for (let i = 0; i < 3; i++) {
-          playFoleyBuffer(ctx, bus, bus.buffers.ice, {
-            filterType: 'highpass',
-            cutoffHz: 1200 + i * 350,
-            rate: 1.12 - i * 0.08,
-            dur: 0.16,
-            vol: 0.22 * mix,
-            delay: i * 0.05,
-          });
-        }
-        break;
-
-      // 4. Thunderclap / Lightning Grid / EMP Blackout
-      case 'sky_thunder_web':
-      case 'electromagnetic_cyclone':
-      case 'omega_emp_blackout':
-        playElectricArc(ctx, bus, 0.26 * mix, 0.11, 0);
-        playElectricArc(ctx, bus, 0.2 * mix, 0.09, 0.07);
-        playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
-          filterType: 'lowpass',
-          cutoffHz: 920,
-          rate: 0.8,
-          dur: 0.36,
-          vol: 0.32 * mix,
-          delay: 0.02,
-        });
-        playSubKick(ctx, bus, 90, 26, 0.38, 0.28 * mix, 0.02);
-        break;
-
-      // 5. Heavy Artillery / Carpet Bomb / Titan Flak / Meteor Orbital Strike
-      case 'titan_artillery_salvo':
-      case 'tactical_carpet_bomb':
-      case 'titan_flak_skyburst':
-      case 'meteor_orbital_rain':
-        playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
-          filterType: 'lowpass',
-          cutoffHz: 1900,
-          rate: 0.84,
-          dur: 0.32,
-          vol: 0.36 * mix,
-        });
-        playSubKick(ctx, bus, 88, 26, 0.26, 0.28 * mix);
-        playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
-          filterType: 'lowpass',
-          cutoffHz: 1400,
-          rate: 0.9,
-          dur: 0.32,
-          vol: 0.32 * mix,
-          delay: 0.14,
-        });
-        break;
-
-      // 6. Railgun Hyperbeam / Sniper Execution / Plasma Supernova
-      case 'quantum_hyperbeam':
-      case 'crimson_execution':
-      case 'plasma_supernova':
-        playStableTone(ctx, bus, 1046.5, 0.045, 0.075 * mix, 'sine', 0, 0.002);
-        playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
-          filterType: 'lowpass',
-          cutoffHz: 3800,
-          rate: 1.08,
-          dur: 0.26,
-          vol: 0.36 * mix,
-          delay: 0.045,
-        });
-        playSubKick(ctx, bus, 94, 28, 0.22, 0.28 * mix, 0.045);
-        playBoltClick(ctx, bus, 5100, 0.1 * mix, 0.09);
-        break;
-
-      // 7. Chemical Tank Rupture / Acid Rain / Hydra Pandemic
-      case 'boiling_acid_rain':
-      case 'hydra_toxic_deluge':
-        playSubKick(ctx, bus, 92, 34, 0.2, 0.2 * mix);
-        playFoleyBuffer(ctx, bus, bus.buffers.flame, {
-          filterType: 'bandpass',
-          cutoffHz: 1950,
-          q: 0.95,
-          rate: 1.12,
-          dur: 0.26,
-          vol: 0.28 * mix,
-        });
-        playFoleyBuffer(ctx, bus, bus.buffers.ice, {
-          filterType: 'highpass',
-          cutoffHz: 2200,
-          rate: 0.9,
-          dur: 0.18,
-          vol: 0.16 * mix,
-          delay: 0.04,
-        });
-        break;
-
-      // 8. Triple Steel Slashes / Sawstorm / Void Katana / Emerald Reaper
-      case 'ricochet_sawstorm':
-      case 'void_crescent_tempest':
-      case 'emerald_reaper_maelstrom':
+      case 'saw_cyclone_wheel':
         for (let i = 0; i < 3; i++) {
           playFoleyBuffer(ctx, bus, bus.buffers.steel, {
             filterType: 'highpass',
@@ -1232,47 +862,7 @@ export function playOverheatSkillSfx(
         }
         break;
 
-      // 9. Tactical Sync / Prism Nova / Matrix Code Overload / Team Support Ultimates
-      case 'solar_flare_pulse':
-      case 'rainbow_refraction':
-      case 'matrix_code_overload':
-      case 'supply_drop_surge':
-      case 'orbital_target_lock':
-        playBoltClick(ctx, bus, 3400, 0.1 * mix, 0);
-        playStableTone(ctx, bus, 440, 0.2, 0.09 * mix, 'triangle', 0);
-        playStableTone(ctx, bus, 554.37, 0.2, 0.09 * mix, 'triangle', 0.04);
-        playStableTone(ctx, bus, 659.25, 0.25, 0.11 * mix, 'sine', 0.08);
-        playSubKick(ctx, bus, 90, 44, 0.18, 0.15 * mix);
-        break;
-
-      case 'aegis_fortress_pulse':
-        playSubKick(ctx, bus, 94, 28, 0.34, 0.28 * mix);
-        playFoleyBuffer(ctx, bus, bus.buffers.steel, {
-          filterType: 'lowpass',
-          cutoffHz: 2100,
-          rate: 0.85,
-          dur: 0.22,
-          vol: 0.26 * mix,
-        });
-        playStableTone(ctx, bus, 329.63, 0.26, 0.1 * mix, 'triangle', 0.03, 0.008);
-        break;
-
-      // 10. Sonic Mega Resonance
-      case 'sonic_resonance_nova':
-        playSubKick(ctx, bus, 94, 24, 0.42, 0.3 * mix);
-        playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
-          filterType: 'lowpass',
-          cutoffHz: 680,
-          rate: 0.72,
-          dur: 0.34,
-          vol: 0.34 * mix,
-        });
-        break;
-
-      // 11. Singularity / Void Sovereign Eclipse
-      case 'reverse_singularity':
-      case 'gravity_singularity_lance':
-      case 'sovereign_void_eclipse':
+      case 'mortar_vortex_singularity':
         playFoleyBuffer(ctx, bus, bus.buffers.flame, {
           filterType: 'lowpass',
           cutoffHz: 900,
@@ -1291,23 +881,75 @@ export function playOverheatSkillSfx(
         });
         break;
 
-      // 12. Swarm Micro-Missiles / Drones / Dune Crystal Storm
-      case 'swarm_barrage':
-      case 'interceptor_drone_pack':
-      case 'dune_crystal_storm':
-      case 'shadow_hive_swarm':
-        for (let i = 0; i < 4; i++) {
-          playFoleyBuffer(ctx, bus, bus.buffers.rifleCrack, {
-            filterType: 'bandpass',
-            cutoffHz: 2600 + i * 240,
-            q: 0.75,
-            rate: 1.15 + i * 0.05,
-            dur: 0.075,
-            vol: 0.2 * mix,
-            delay: i * 0.045,
+      case 'missile_swarm_carpet':
+        playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
+          filterType: 'lowpass',
+          cutoffHz: 1900,
+          rate: 0.84,
+          dur: 0.32,
+          vol: 0.36 * mix,
+        });
+        playSubKick(ctx, bus, 88, 26, 0.26, 0.28 * mix);
+        playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
+          filterType: 'lowpass',
+          cutoffHz: 1400,
+          rate: 0.9,
+          dur: 0.32,
+          vol: 0.32 * mix,
+          delay: 0.14,
+        });
+        break;
+
+      case 'railgun_orbital_beam':
+        playStableTone(ctx, bus, 1046.5, 0.045, 0.075 * mix, 'sine', 0, 0.002);
+        playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
+          filterType: 'lowpass',
+          cutoffHz: 3800,
+          rate: 1.08,
+          dur: 0.26,
+          vol: 0.36 * mix,
+          delay: 0.045,
+        });
+        playSubKick(ctx, bus, 94, 28, 0.22, 0.28 * mix, 0.045);
+        playBoltClick(ctx, bus, 5100, 0.1 * mix, 0.09);
+        break;
+
+      case 'tesla_chain_overcharge':
+      case 'tempest_emp_storm':
+        playElectricArc(ctx, bus, 0.26 * mix, 0.11, 0);
+        playElectricArc(ctx, bus, 0.22 * mix, 0.09, 0.065);
+        playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
+          filterType: 'lowpass',
+          cutoffHz: 940,
+          rate: 0.82,
+          dur: 0.34,
+          vol: 0.3 * mix,
+          delay: 0.02,
+        });
+        playSubKick(ctx, bus, 90, 26, 0.36, 0.26 * mix, 0.02);
+        break;
+
+      case 'cryo_absolute_zero':
+        playSubKick(ctx, bus, 96, 36, 0.2, 0.2 * mix);
+        for (let i = 0; i < 3; i++) {
+          playFoleyBuffer(ctx, bus, bus.buffers.ice, {
+            filterType: 'highpass',
+            cutoffHz: 1200 + i * 350,
+            rate: 1.12 - i * 0.08,
+            dur: 0.16,
+            vol: 0.22 * mix,
+            delay: i * 0.05,
           });
-          playSubKick(ctx, bus, 92, 46, 0.05, 0.11 * mix, i * 0.045);
         }
+        break;
+
+      case 'beacon_solar_flare':
+      case 'radar_target_lock':
+        playBoltClick(ctx, bus, 3400, 0.1 * mix, 0);
+        playStableTone(ctx, bus, 440, 0.2, 0.09 * mix, 'triangle', 0);
+        playStableTone(ctx, bus, 554.37, 0.2, 0.09 * mix, 'triangle', 0.04);
+        playStableTone(ctx, bus, 659.25, 0.25, 0.11 * mix, 'sine', 0.08);
+        playSubKick(ctx, bus, 90, 44, 0.18, 0.15 * mix);
         break;
 
       default:
