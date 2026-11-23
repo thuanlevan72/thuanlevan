@@ -1896,8 +1896,8 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
                 <circle cx="85" cy="119" r="3.5" fill="#FDE047" />
                 <circle cx="136" cy="102" r="4" fill="#FFFFFF" />
                 <circle cx="136" cy="153" r="3.5" fill="#FBBF24" />
-                <text x="120" y="212" textAnchor="middle" fill="#67E8F9" fontSize="10" fontFamily="monospace" fontWeight="700">
-                  26 MÔ-ĐUN CƠ KHÍ · NOVA 2×2 · EMP ⚡
+                <text x="120" y="210" textAnchor="middle" fill="#67E8F9" fontSize="8.4" fontFamily="monospace" fontWeight="700">
+                  26 MÔ-ĐUN · NOVA 2×2 · EMP ⚡
                 </text>
               </svg>
             </div>
