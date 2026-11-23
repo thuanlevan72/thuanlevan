@@ -8,6 +8,7 @@ import {
   FileSearch,
   Flame,
   Gamepad2,
+  Ghost,
   Gift,
   Grid3X3,
   Layers,
@@ -15,7 +16,6 @@ import {
   Maximize2,
   Minimize2,
   Network,
-  Skull,
   Sparkles,
   Zap,
 } from 'lucide-react';
@@ -56,9 +56,9 @@ const LuongCuocDuongGameSection = lazyWithRetry(() =>
     default: m.LuongCuocDuongGameSection,
   }))
 );
-const TuanTangGameSection = lazyWithRetry(() =>
-  import('./TuanTangGameSection.tsx').then((m) => ({
-    default: m.TuanTangGameSection,
+const ThanhMinhGameSection = lazyWithRetry(() =>
+  import('./ThanhMinhGameSection.tsx').then((m) => ({
+    default: m.ThanhMinhGameSection,
   }))
 );
 
@@ -66,7 +66,7 @@ type GameId =
   | 'xiangqi'
   | 'anomaly'
   | 'luong_cuoc_duong'
-  | 'tuan_tang'
+  | 'thanh_minh'
   | 'asmr_organizer'
   | 'blind_box'
   | 'cat_finder'
@@ -174,14 +174,14 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     gameKey: 'luong_cuoc_duong',
   },
   {
-    id: 'tuan-tang',
+    id: 'thanh-minh',
     category: 'casual',
-    title: 'Tuẫn Táng: Địa Cung Ly Sơn (殉葬)',
-    shortTitle: 'Tuẫn Táng 3D',
-    subtitle: '3D First-Person Sensory Horror · Mic Nín Thở · Diêm Ẩm · Binh Mã Dũng Sống (210 TCN)',
-    badge: '3D Kinh Dị · Mic',
+    title: 'Thanh Minh: Học Viện Cô Sơn (清明)',
+    shortTitle: 'Thanh Minh 2.5D',
+    subtitle: '2.5D Psychological Horror · Cốt truyện 4 Hồi · 4 Kết Cục · Nín thở & Radio Âm–Dương',
+    badge: '2.5D Kinh Dị · 4 Hồi',
     playable: true,
-    gameKey: 'tuan_tang',
+    gameKey: 'thanh_minh',
   },
   {
     id: 'asmr-organizer',
@@ -289,11 +289,11 @@ function renderGameIcon(gameKey: GameId | undefined, isSelected: boolean) {
       />
     );
   }
-  if (gameKey === 'tuan_tang') {
+  if (gameKey === 'thanh_minh') {
     return (
-      <Skull
+      <Ghost
         className={`w-3.5 h-3.5 shrink-0 ${
-          isSelected ? 'text-red-300' : 'text-red-700 dark:text-red-400'
+          isSelected ? 'text-rose-200' : 'text-red-700 dark:text-rose-400'
         }`}
         aria-hidden="true"
       />
@@ -386,12 +386,12 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
         return 'luong_cuoc_duong';
       }
       if (
-        playParam === 'tuantang' ||
-        playParam === 'tuan-tang' ||
-        playParam === 'tuan_tang' ||
-        playParam === 'lyson'
+        playParam === 'thanhminh' ||
+        playParam === 'thanh-minh' ||
+        playParam === 'thanh_minh' ||
+        playParam === 'coson'
       ) {
-        return 'tuan_tang';
+        return 'thanh_minh';
       }
       if (playParam === 'asmr' || playParam === 'ocd' || playParam === 'organizer') {
         return 'asmr_organizer';
@@ -772,7 +772,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
           activeGame !== 'traffic_router' &&
           activeGame !== 'cat_finder' &&
           activeGame !== 'luong_cuoc_duong' &&
-          activeGame !== 'tuan_tang' && (
+          activeGame !== 'thanh_minh' && (
           <button
             type="button"
             data-testid="hub-exit-fullscreen-btn"
@@ -821,8 +821,8 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
                   onExitFullscreen={exitFullscreen}
                 />
               )}
-              {activeGame === 'tuan_tang' && (
-                <TuanTangGameSection
+              {activeGame === 'thanh_minh' && (
+                <ThanhMinhGameSection
                   theme={theme}
                   onToggleTheme={onToggleTheme}
                   isFullscreen={isFullscreen}
