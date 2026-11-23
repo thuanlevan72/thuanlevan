@@ -327,6 +327,7 @@ export function LuongCuocDuongGameSection({
   useEffect(() => {
     const el = canvasMountRef.current;
     if (!el) return;
+    setWebglError(null);
     const ctrl = mountCellarScene(el, {
       onPropClick: handlePropInteraction,
       onHoverPropChange: setHoveredProp,
@@ -499,6 +500,13 @@ export function LuongCuocDuongGameSection({
               Không thể khởi tạo khung hình 3D WebGL
             </h3>
             <p className="text-xs text-[#B5A68C]">{webglError}</p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 border border-[#A63A32] bg-[#451412] hover:bg-[#5E1A16] text-xs font-mono text-[#FFE0DB] cursor-pointer"
+            >
+              Tải lại trang
+            </button>
           </div>
         </div>
       )}

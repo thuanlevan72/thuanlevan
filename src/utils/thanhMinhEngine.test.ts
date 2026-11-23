@@ -6,6 +6,7 @@ import {
   evaluateFinalEnding,
   interactWithHotspot,
   setRadioFrequency,
+  STORY_LORE_ENTRIES,
   submitWuxingElement,
   swapPuppetSlots,
   tickThanhMinhSimulation,
@@ -21,6 +22,7 @@ test('thanhMinh: initial state starts in Hồi 1 Lớp 12B with full sanity & br
   assert.equal(s.sanity, 100);
   assert.equal(s.breathStamina, 100);
   assert.equal(s.collectedKeepsakeIds.length, 0);
+  assert.equal(s.collectedLoreIds.length, 0);
 });
 
 test('thanhMinh: holding breath consumes stamina and triggers gasp when depleted', () => {
@@ -76,7 +78,7 @@ test('thanhMinh: Radio unlocks Realm Shift at 104.7 MHz (Act 2) and secret 109.2
   assert.equal(s3.radioSecretAct3Solved, true);
 });
 
-test('thanhMinh: 4-slot Shadow Puppet puzzle solves when ordered [0, 1, 2, 3]', () => {
+test('thanhMinh: 4-slot Shadow Puppet puzzle solves when ordered [0, 1, 2, 3] and pacifies Act 3 specter', () => {
   // Initial puppetOrder is [2, 0, 3, 1]
   let s = createInitialThanhMinhState();
   s = swapPuppetSlots(s, 0, 1); // [0, 2, 3, 1]
@@ -85,6 +87,8 @@ test('thanhMinh: 4-slot Shadow Puppet puzzle solves when ordered [0, 1, 2, 3]', 
   s = swapPuppetSlots(s, 2, 3); // [0, 1, 2, 3]
   assert.equal(s.puppetsSolved, true);
   assert.equal(s.flags.puppets_solved, true);
+  const act3Ghost = s.ghosts.find((g) => g.scene === 'auditorium');
+  assert.equal(act3Ghost?.pacified, true);
 });
 
 test('thanhMinh: evaluates all 4 endings based on honesty, keepsakes %, Act 3 radio & sanityBottomCount', () => {
@@ -157,3 +161,44 @@ test('thanhMinh: triggers 3.4s monster kill cutscene on sanity collapse and resp
   assert.equal(cur.deathCutscene, null);
   assert.equal(cur.sanity, 52);
 });
+
+test('thanhMinh: expanded lore archive, darkroom_key unlock, and 1986 Qingming memorial tribute work properly', () => {
+  assert.equal(STORY_LORE_ENTRIES.length, 10);
+
+  // 1. Lore echo pickup in Classroom 12B
+  let s = { ...createInitialThanhMinhState(), playerX: 405 };
+  s = interactWithHotspot(s);
+  assert.equal(s.activeModal, 'memory_echo');
+  assert.equal(s.activeLoreId, 'lore-1-blackboard');
+  assert.ok(s.collectedLoreIds.includes('lore-1-blackboard'));
+
+  // 2. Darkroom ledger secret unlocks when holding darkroom_key
+  s = {
+    ...s,
+    activeModal: 'none',
+    scene: 'darkroom',
+    playerX: 305,
+    inventory: ['darkroom_key'],
+  };
+  s = interactWithHotspot(s);
+  assert.equal(s.flags.darkroom_drawer_opened, true);
+  assert.equal(s.activeLoreId, 'lore-7-darkroom-ledger');
+
+  // 3. 1986 Wine Cup pickup + Memorial tribute with Tô Viễn restores sanity
+  s = {
+    ...s,
+    activeModal: 'none',
+    scene: 'ruined_hall_1986',
+    playerX: 225,
+    sanity: 70,
+  };
+  s = interactWithHotspot(s);
+  assert.ok(s.inventory.includes('wine_cup'));
+
+  s = { ...s, playerX: 555 };
+  s = interactWithHotspot(s);
+  assert.equal(s.flags.offered_qingming_tribute, true);
+  assert.equal(s.sanity, 88);
+  assert.equal(s.activeLoreId, 'lore-10-to-vien-1986');
+});
+

@@ -29,6 +29,7 @@ import {
   INVENTORY_ITEMS,
   SCENE_META,
   setRadioFrequency,
+  STORY_LORE_ENTRIES,
   submitWuxingElement,
   swapPuppetSlots,
   type ThanhMinhScreenMode,
@@ -50,22 +51,27 @@ const CHARACTER_DOSSIER = [
   {
     name: 'Lâm Tĩnh (17 tuổi)',
     role: 'Học sinh nội trú',
-    desc: 'Xuất thân từ gia đình trí thức bị quy là thành phần xấu. Luôn sợ hãi, khao khát cảm giác an toàn và ghen tị trong âm thầm.',
+    desc: 'Xuất thân từ gia đình trí thức bị quy là thành phần xấu. Vì sợ hãi, tự ti và ghen tị trong âm thầm mà trượt dài vào đêm phản bội năm 1967.',
   },
   {
     name: 'Thầy Trần Mặc (34 tuổi)',
     role: 'Giáo viên dạy Văn',
-    desc: 'Bí mật lập nhóm đọc các tác phẩm cổ điển & ngoại quốc bị cấm. Điểm tựa tinh thần duy nhất của Lâm Tĩnh và Tô Dao.',
+    desc: 'Lén lập nhóm đọc thơ cổ & văn học bị cấm, lặng lẽ che chở Lâm Tĩnh nhưng lại bị học trò nghi kỵ. Trước cơn cuồng nộ của sân trường vẫn giữ trọn lòng bao dung.',
   },
   {
     name: 'Tô Dao (17 tuổi)',
     role: 'Bạn thân nhất',
-    desc: 'Thẳng thắn, dũng cảm. Người đã âm thầm đốt tờ giấy ghi tên Lâm Tĩnh để bảo vệ bạn mình ngay trong phòng biệt giam.',
+    desc: 'Thẳng thắn, nhân hậu. Đan dở chiếc khăn hoa mai cho sinh nhật bạn và âm thầm đốt trang sổ có tên Lâm Tĩnh trong phòng biệt giam để cứu cô.',
   },
   {
     name: 'Trương Vệ Quốc (18 tuổi)',
     role: 'Đội trưởng tự vệ',
-    desc: 'Cuồng tín và tàn nhẫn. Ép Lâm Tĩnh giao nộp danh sách nhóm đọc sách trước khi chính hắn bị treo ngược ngoài cột cờ.',
+    desc: 'Cuồng tín và tàn nhẫn. Dùng lệnh bắt cha mẹ giả để bẫy Lâm Tĩnh phản bội thầy bạn, trước khi trở thành oan hồn bị treo ngược nơi cột cờ.',
+  },
+  {
+    name: 'Tô Viễn (1986)',
+    role: 'Em trai Tô Dao',
+    desc: 'Hai mươi năm sau biến cố, anh vẫn lên đỉnh Cô Sơn dâng hoa cúc trắng mỗi tiết Thanh Minh, tìm trang sự thật cuối cùng minh oan cho chị và Thầy Trần.',
   },
 ] as const;
 
@@ -99,18 +105,21 @@ const PUPPET_SCENES: readonly { id: number; roman: string; title: string; detail
 const INTERROGATION_PROMPTS = [
   {
     step: 0,
+    echo: 'Thầy Trần Mặc khẽ đặt cây bút máy xuống bàn: “Thầy biết em sợ hãi...”',
     question: 'Hồi I — Vì sao danh sách nhóm đọc sách bị cấm lại rơi vào tay đội tự vệ Trương Vệ Quốc?',
     honestLabel: 'Chính tôi đã lén giao nộp danh sách ấy vì sợ hãi và ghen tuông.',
     denialLabel: 'Tôi bị ép buộc! Hoàn cảnh lúc đó ai cũng làm vậy, không phải lỗi của tôi!',
   },
   {
     step: 1,
+    echo: 'Tô Dao siết nhẹ chiếc khăn len hoa mai chưa đan xong: “Tĩnh, tớ chưa từng trách cậu...”',
     question: 'Hồi II — Khi Thầy Trần Mặc bị ép quỳ trên mảnh thủy tinh và Tô Dao bị tra tấn, ngươi đã đứng ở đâu?',
     honestLabel: 'Tôi đứng nhìn trong im lặng, tự dối lòng để trốn chạy khỏi tội lỗi.',
     denialLabel: 'Tôi cũng là nạn nhân của gia đình bị bắt bớ! Tôi vô can!',
   },
   {
     step: 2,
+    echo: 'Tô Viễn (1986) lặng lẽ mở cuốn sổ còn thiếu trang cuối dưới ánh bình minh xa xăm...',
     question: 'Hồi III — Đêm Tiết Thanh Minh trên tầng thượng năm 1967, sự thật cuối cùng ngươi chọn đối diện là gì?',
     honestLabel: 'Tôi thừa nhận tội phản bội thầy và bạn. Xin đừng xóa nhòa nỗi oan của họ thêm nữa.',
     denialLabel: 'Hãy cho tôi quên hết đêm mưa này và quay lại Lớp 12B như chưa từng có gì xảy ra.',
@@ -178,6 +187,7 @@ export function ThanhMinhGameSection({
   const [muted, setMuted] = useState(false);
   const [selectedPuppetSlot, setSelectedPuppetSlot] = useState<number | null>(null);
   const [showObjectiveHint, setShowObjectiveHint] = useState(false);
+  const [journalTab, setJournalTab] = useState<'keepsakes' | 'lore'>('keepsakes');
 
   const stateRef = useRef<ThanhMinhState>(hudState);
   const lastHudSyncRef = useRef<number>(0);
@@ -562,6 +572,10 @@ export function ThanhMinhGameSection({
 
             <div className="text-xs font-mono text-amber-300 whitespace-nowrap">
               Kỷ vật {hudState.collectedKeepsakeIds.length}/{TRUTH_KEEPSAKES.length} ({keepsakePct}%)
+              <span className="mx-1.5 text-stone-600">·</span>
+              <span className="text-stone-300">
+                Tư liệu {hudState.collectedLoreIds.length}/{STORY_LORE_ENTRIES.length}
+              </span>
             </div>
           </div>
         )}
@@ -711,17 +725,17 @@ export function ThanhMinhGameSection({
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 text-left">
                 {CHARACTER_DOSSIER.map((ch) => (
                   <div
                     key={ch.name}
-                    className="rounded-xl border border-stone-800 bg-stone-950/80 p-3.5 space-y-1"
+                    className="rounded-xl border border-stone-800 bg-stone-950/80 p-3 space-y-1"
                   >
                     <div className="flex items-center justify-between gap-2 text-xs">
                       <span className="font-semibold text-amber-200">{ch.name}</span>
                       <span className="text-[11px] font-mono text-stone-400">{ch.role}</span>
                     </div>
-                    <p className="text-xs text-stone-300 leading-relaxed">{ch.desc}</p>
+                    <p className="text-[11px] text-stone-300 leading-relaxed">{ch.desc}</p>
                   </div>
                 ))}
               </div>
@@ -794,13 +808,13 @@ export function ThanhMinhGameSection({
         {/* INTERACTIVE STORY & PUZZLE MODALS */}
         {screenMode === 'playing' && hudState.activeModal !== 'none' && (
           <div className="absolute inset-0 bg-black/84 backdrop-blur-sm flex items-center justify-center p-4 z-20 overflow-y-auto">
-            {/* 1. JOURNAL & TRUTH KEEPSAKES CODEX */}
+            {/* 1. JOURNAL & TRUTH KEEPSAKES + LORE CODEX */}
             {hudState.activeModal === 'journal' && (
               <div className="max-w-2xl w-full max-h-[86vh] overflow-y-auto rounded-2xl border border-amber-700/40 bg-[#14110e] p-5 space-y-4">
                 <div className="flex items-center justify-between border-b border-stone-800 pb-3">
                   <div>
                     <h3 className="text-lg font-editorial font-bold text-amber-200">
-                      Sổ Kỷ Vật Sự Thật ({hudState.collectedKeepsakeIds.length}/6 · {keepsakePct}%)
+                      Hồ Sơ Cô Sơn · Kỷ Vật {hudState.collectedKeepsakeIds.length}/6 ({keepsakePct}%)
                     </h3>
                     <p className="text-xs text-stone-400">{currentObjective}</p>
                   </div>
@@ -814,36 +828,107 @@ export function ThanhMinhGameSection({
                   </button>
                 </div>
 
-                <div className="space-y-3">
-                  {TRUTH_KEEPSAKES.map((ks) => {
-                    const owned = hudState.collectedKeepsakeIds.includes(ks.id);
-                    return (
-                      <div
-                        key={ks.id}
-                        className={`rounded-xl border p-3.5 ${
-                          owned
-                            ? 'border-amber-600/40 bg-stone-900/90'
-                            : 'border-stone-800 bg-stone-950/60 opacity-65'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2 text-xs">
-                          <span className="font-semibold text-amber-200">
-                            {owned ? ks.title : `Kỷ vật Hồi ${ks.act} — Chưa thu thập`}
-                          </span>
-                          <span className="text-[11px] font-mono text-stone-400">{ks.subtitle}</span>
-                        </div>
-                        {owned && (
-                          <div className="mt-2 space-y-1.5">
-                            <p className="text-xs text-stone-300">{ks.description}</p>
-                            <p className="text-sm font-editorial italic text-amber-100/95 rounded-lg border border-stone-800 bg-black/45 p-2.5 leading-relaxed">
-                              {ks.diaryText}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                {/* Codex Tabs */}
+                <div className="flex items-center gap-2 border-b border-stone-800 pb-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setJournalTab('keepsakes')}
+                    className={`min-h-[36px] px-3.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${
+                      journalTab === 'keepsakes'
+                        ? 'border-amber-500/70 bg-amber-950/50 text-amber-200'
+                        : 'border-stone-800 bg-stone-900/70 text-stone-400 hover:text-stone-200'
+                    }`}
+                  >
+                    Kỷ Vật Sự Thật ({hudState.collectedKeepsakeIds.length}/6)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setJournalTab('lore')}
+                    className={`min-h-[36px] px-3.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${
+                      journalTab === 'lore'
+                        ? 'border-amber-500/70 bg-amber-950/50 text-amber-200'
+                        : 'border-stone-800 bg-stone-900/70 text-stone-400 hover:text-stone-200'
+                    }`}
+                  >
+                    Ký Ức & Tư Liệu ({hudState.collectedLoreIds.length}/{STORY_LORE_ENTRIES.length})
+                  </button>
                 </div>
+
+                {journalTab === 'keepsakes' ? (
+                  <div className="space-y-3">
+                    {TRUTH_KEEPSAKES.map((ks) => {
+                      const owned = hudState.collectedKeepsakeIds.includes(ks.id);
+                      return (
+                        <div
+                          key={ks.id}
+                          className={`rounded-xl border p-3.5 ${
+                            owned
+                              ? 'border-amber-600/40 bg-stone-900/90'
+                              : 'border-stone-800 bg-stone-950/60 opacity-65'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="font-semibold text-amber-200">
+                              {owned ? ks.title : `Kỷ vật Hồi ${ks.act} — Chưa thu thập`}
+                            </span>
+                            <span className="text-[11px] font-mono text-stone-400">{ks.subtitle}</span>
+                          </div>
+                          {owned && (
+                            <div className="mt-2 space-y-1.5">
+                              <p className="text-xs text-stone-300">{ks.description}</p>
+                              <p className="text-sm font-editorial italic text-amber-100/95 rounded-lg border border-stone-800 bg-black/45 p-2.5 leading-relaxed">
+                                {ks.diaryText}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {STORY_LORE_ENTRIES.map((lore) => {
+                      const owned = hudState.collectedLoreIds.includes(lore.id);
+                      const showSecret =
+                        (lore.id === 'lore-7-darkroom-ledger' &&
+                          hudState.flags.darkroom_drawer_opened) ||
+                        (lore.id === 'lore-10-to-vien-1986' &&
+                          hudState.flags.offered_qingming_tribute);
+                      return (
+                        <div
+                          key={lore.id}
+                          className={`rounded-xl border p-3.5 ${
+                            owned
+                              ? 'border-amber-600/40 bg-stone-900/90'
+                              : 'border-stone-800 bg-stone-950/60 opacity-60'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="font-semibold text-amber-200">
+                              {owned ? lore.title : `Mảnh ký ức Hồi ${lore.act} — Chưa khám phá`}
+                            </span>
+                            <span className="text-[11px] font-mono text-stone-400">
+                              {lore.location}
+                            </span>
+                          </div>
+                          {owned && (
+                            <div className="mt-2 space-y-1.5">
+                              <p className="text-xs font-editorial italic text-amber-300">
+                                {lore.quote}
+                              </p>
+                              <p className="text-xs text-stone-300 leading-relaxed">{lore.body}</p>
+                              {showSecret && lore.secretBody && (
+                                <p className="text-xs text-rose-200 rounded-lg border border-rose-900/60 bg-rose-950/30 p-2.5 leading-relaxed">
+                                  {lore.secretBody}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {hudState.inventory.length > 0 && (
                   <div className="pt-3 border-t border-stone-800 flex flex-wrap items-center gap-2 text-xs text-stone-300">
@@ -858,6 +943,84 @@ export function ThanhMinhGameSection({
                 )}
               </div>
             )}
+
+            {/* 1B. MEMORY ECHO MODAL (ENVIRONMENTAL STORYTELLING & 1986 TO VIEN) */}
+            {hudState.activeModal === 'memory_echo' &&
+              (() => {
+                const entry = STORY_LORE_ENTRIES.find((l) => l.id === hudState.activeLoreId);
+                if (!entry) return null;
+                const showSecret =
+                  (entry.id === 'lore-7-darkroom-ledger' &&
+                    hudState.flags.darkroom_drawer_opened) ||
+                  (entry.id === 'lore-10-to-vien-1986' &&
+                    hudState.flags.offered_qingming_tribute);
+                return (
+                  <div className="max-w-lg w-full rounded-2xl border border-amber-700/50 bg-[#15110e] p-5 space-y-4">
+                    <div className="flex items-start justify-between gap-3 border-b border-stone-800 pb-3">
+                      <div className="space-y-0.5">
+                        <div className="text-[11px] font-mono text-amber-400">
+                          {entry.location} · {entry.speaker}
+                        </div>
+                        <h3 className="text-lg font-editorial font-bold text-stone-100">
+                          {entry.title}
+                        </h3>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          commitState({
+                            ...stateRef.current,
+                            activeModal: 'none',
+                            activeLoreId: null,
+                          })
+                        }
+                        className="min-h-[36px] min-w-[36px] rounded-lg border border-stone-700 flex items-center justify-center cursor-pointer shrink-0"
+                        aria-label="Đóng ký ức"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <p className="text-sm font-editorial italic text-amber-200 bg-black/50 p-3.5 rounded-xl border border-stone-800 leading-relaxed">
+                      {entry.quote}
+                    </p>
+
+                    <p className="text-xs sm:text-sm text-stone-200 leading-relaxed">
+                      {entry.body}
+                    </p>
+
+                    {entry.secretBody && (
+                      <div
+                        className={`rounded-xl border p-3 text-xs leading-relaxed ${
+                          showSecret
+                            ? 'border-amber-500/50 bg-amber-950/30 text-amber-100'
+                            : 'border-stone-800 bg-stone-950/80 text-stone-400'
+                        }`}
+                      >
+                        {showSecret
+                          ? entry.secretBody
+                          : entry.id === 'lore-7-darkroom-ledger'
+                            ? 'Ngăn kéo dưới khóa chặt. Cần Chìa Khóa Phòng Rửa Ảnh (tìm trong Âm Giới của Phòng Phát Thanh).'
+                            : 'Bạn có thể tìm Xấp Tiền Vàng Mã (Sân Trường) hoặc Chén Rượu Tế (Cô Sơn 1986) để dâng hương tại bia đá này.'}
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        commitState({
+                          ...stateRef.current,
+                          activeModal: 'none',
+                          activeLoreId: null,
+                        })
+                      }
+                      className="w-full min-h-[42px] rounded-xl bg-amber-700 hover:bg-amber-600 text-white text-xs font-semibold cursor-pointer transition-colors"
+                    >
+                      Lưu Vào Sổ Ký Ức
+                    </button>
+                  </div>
+                );
+              })()}
 
             {/* 2. NGŨ HÀNH SPIRIT TABLETS (ACT 1) */}
             {hudState.activeModal === 'wuxing_puzzle' && (
@@ -1101,6 +1264,9 @@ export function ThanhMinhGameSection({
                   <h3 className="text-lg font-editorial font-bold text-stone-100">
                     Bóng Ma Lâm Tĩnh đối diện qua bàn gỗ hỏi:
                   </h3>
+                  <p className="text-xs font-editorial italic text-stone-400">
+                    {INTERROGATION_PROMPTS[hudState.interrogationStep].echo}
+                  </p>
                 </div>
 
                 <p className="text-sm sm:text-base font-editorial text-amber-100 leading-relaxed bg-black/55 p-4 rounded-xl border border-stone-800">

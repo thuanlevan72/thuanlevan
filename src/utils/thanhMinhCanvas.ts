@@ -535,6 +535,69 @@ export class ThanhMinhCanvasRenderer {
           ctx.strokeStyle = 'rgba(248, 113, 113, 0.42)';
           ctx.lineWidth = 4;
           ctx.stroke();
+        } else if (dc.killerVariant === 'auditor_specter') {
+          // Ác Linh Tự Vệ — Trương Vệ Quốc close-up: snapped neck tilt, bruised face, cracked tin megaphone
+          ctx.save();
+          ctx.rotate(0.28 + Math.sin(timeSec * 21) * 0.04);
+          // Bruised swollen water-pale face
+          const guardGrad = ctx.createRadialGradient(-8, -28, 8, 0, -18, 86);
+          guardGrad.addColorStop(0, ghostPass ? '#991b1b' : '#9ca3af');
+          guardGrad.addColorStop(0.6, ghostPass ? '#450a0a' : '#4b5563');
+          guardGrad.addColorStop(1, '#111827');
+          ctx.fillStyle = guardGrad;
+          ctx.beginPath();
+          ctx.ellipse(0, -24, 54, 68, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Red Guard peaked cloth cap with broken visor
+          ctx.fillStyle = '#1f2937';
+          ctx.beginPath();
+          ctx.moveTo(-58, -56);
+          ctx.quadraticCurveTo(0, -112, 58, -56);
+          ctx.lineTo(48, -42);
+          ctx.lineTo(-48, -42);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = '#7f1d1d';
+          ctx.beginPath();
+          ctx.arc(0, -68, 7, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Bloodshot staring eyes + water-logged bruises
+          for (const side of [-1, 1] as const) {
+            ctx.fillStyle = '#09090b';
+            ctx.beginPath();
+            ctx.ellipse(side * 22, -26, 13, 15, side * -0.1, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc(side * 21, -26, 3.8, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          // Fused cracked tin megaphone screaming acoustic crimson rings
+          const megaPulse = 1 + Math.sin(timeSec * 28) * 0.08;
+          ctx.save();
+          ctx.translate(0, 32);
+          ctx.scale(megaPulse, megaPulse);
+          ctx.fillStyle = '#334155';
+          ctx.beginPath();
+          ctx.moveTo(-22, -16);
+          ctx.lineTo(22, -16);
+          ctx.lineTo(68, 42);
+          ctx.lineTo(-68, 42);
+          ctx.closePath();
+          ctx.fill();
+          ctx.fillStyle = '#090507';
+          ctx.beginPath();
+          ctx.ellipse(0, 42, 66, 18, 0, 0, Math.PI * 2);
+          ctx.fill();
+          // Wet propaganda paper tatters stuffed behind megaphone rim
+          ctx.fillStyle = '#d6d3d1';
+          ctx.fillRect(-28, 22, 18, 24);
+          ctx.fillRect(10, 20, 20, 26);
+          ctx.restore();
+          ctx.restore();
         } else {
           // Quỷ Sai Cắt Lưỡi close-up: Rusted iron chain collar, weeping mask skull, giant notched shears
           const hoodGrad = ctx.createRadialGradient(0, -32, 10, 0, -24, 86);
@@ -1196,30 +1259,197 @@ export class ThanhMinhCanvasRenderer {
           ctx.fill();
         }
       } else if (hs.kind === 'flagpole_corpse') {
-        ctx.fillStyle = '#475569';
-        ctx.fillRect(-5, -270, 10, 270);
+        // Steel Flagpole + Concrete Plinth + Detailed Inverted Corpse of Trương Vệ Quốc
         ctx.fillStyle = '#334155';
-        ctx.fillRect(-28, -22, 56, 22);
+        ctx.fillRect(-30, -22, 60, 22);
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(-30, -22, 60, 22);
+        const poleGrad = ctx.createLinearGradient(-6, 0, 6, 0);
+        poleGrad.addColorStop(0, '#1e293b');
+        poleGrad.addColorStop(0.5, '#64748b');
+        poleGrad.addColorStop(1, '#1e293b');
+        ctx.fillStyle = poleGrad;
+        ctx.fillRect(-5, -275, 10, 255);
 
-        const swing = Math.sin(timeSec * 1.9) * 0.045;
+        const swing = Math.sin(timeSec * 1.9) * 0.05;
         ctx.save();
-        ctx.translate(16, -210);
+        ctx.translate(18, -220);
         ctx.rotate(swing);
-        ctx.strokeStyle = '#78573a';
-        ctx.lineWidth = 2;
+        // Pulley rope bound around ankles
+        ctx.strokeStyle = '#856547';
+        ctx.lineWidth = 2.4;
         ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(0, 36);
+        ctx.moveTo(-16, -24);
+        ctx.lineTo(0, 26);
         ctx.stroke();
-        ctx.fillStyle = '#1e293b';
-        ctx.fillRect(-11, 36, 22, 58);
-        ctx.fillStyle = '#cbd5e1';
+
+        // Bound trousers/legs hanging upside-down
+        ctx.fillStyle = '#1e242b';
         ctx.beginPath();
-        ctx.arc(0, 104, 11, 0, Math.PI * 2);
+        ctx.moveTo(-7, 24);
+        ctx.lineTo(7, 24);
+        ctx.lineTo(11, 60);
+        ctx.lineTo(-11, 60);
+        ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = '#e2e8f0';
-        ctx.fillRect(-4, 104, 8, 10);
+        ctx.fillStyle = '#090d12';
+        ctx.fillRect(-6, 18, 12, 8);
+
+        // Inverted 1960s Guard Tunic Torso + Dangling Crimson Armband
+        const tunicGrad = ctx.createLinearGradient(-13, 60, 13, 106);
+        tunicGrad.addColorStop(0, '#2c362e');
+        tunicGrad.addColorStop(1, '#141a16');
+        ctx.fillStyle = tunicGrad;
+        ctx.beginPath();
+        ctx.moveTo(-12, 58);
+        ctx.lineTo(12, 58);
+        ctx.lineTo(15, 104);
+        ctx.lineTo(-15, 104);
+        ctx.closePath();
+        ctx.fill();
+
+        // Slack dangling arms & torn red guard armband
+        ctx.strokeStyle = '#242c26';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-13, 100);
+        ctx.lineTo(-17, 130);
+        ctx.moveTo(13, 100);
+        ctx.lineTo(18, 128);
+        ctx.stroke();
+        ctx.fillStyle = '#991b1b';
+        ctx.fillRect(12, 104, 7, 12);
+
+        // Pale inverted head with wet soaked hair & crumpled newspaper stuffed in mouth
+        ctx.fillStyle = '#9ca3af';
+        ctx.beginPath();
+        ctx.ellipse(0, 117, 10.5, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#09090b';
+        ctx.beginPath();
+        ctx.arc(0, 124, 11, 0, Math.PI);
+        ctx.fill();
+        // Crumpled wet newspaper jutting from mouth
+        ctx.fillStyle = '#d6d3d1';
+        ctx.fillRect(-5, 110, 10, 7);
+
+        // Dripping storm blood/water drop into flooded courtyard
+        const drip = (timeSec * 1.2) % 1;
+        ctx.fillStyle = `rgba(185, 28, 28, ${1 - drip * 0.7})`;
+        ctx.beginPath();
+        ctx.ellipse(0, 136 + drip * 72, 1.8, 3.6, 0, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
+      } else if (hs.kind === 'lore') {
+        const uncollected = Boolean(hs.loreId && !state.collectedLoreIds.includes(hs.loreId));
+        // Distinct props per lore object
+        if (hs.id === 'hs-12b-lore1') {
+          // Chalk tray & folded note below blackboard
+          ctx.fillStyle = '#3b281c';
+          ctx.fillRect(-26, -34, 52, 6);
+          ctx.fillStyle = '#f1f5f9';
+          ctx.fillRect(-10, -39, 10, 4);
+        } else if (hs.id === 'hs-dorm-lore4') {
+          // Dorm wooden bunk & red knitted scarf
+          ctx.fillStyle = '#2d1e15';
+          ctx.fillRect(-34, -54, 68, 54);
+          ctx.fillStyle = '#991b1b';
+          ctx.beginPath();
+          ctx.ellipse(0, -56, 20, 7, 0, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (hs.id === 'hs-dorm-lore5') {
+          // Levitating bloodied torn accusation drafts in Yin realm
+          for (let p = -1; p <= 1; p += 1) {
+            ctx.save();
+            ctx.translate(p * 14, -56 + Math.sin(timeSec * 3.4 + p) * 6);
+            ctx.rotate(p * 0.25 + Math.sin(timeSec * 2 + p) * 0.1);
+            ctx.fillStyle = '#d6c7b2';
+            ctx.fillRect(-8, -11, 16, 22);
+            ctx.fillStyle = '#991b1b';
+            ctx.fillRect(-5, -4, 10, 2);
+            ctx.restore();
+          }
+        } else if (hs.id === 'hs-dark-lore7') {
+          // Locked steel ledger cabinet with keyhole
+          ctx.fillStyle = '#27272a';
+          ctx.fillRect(-26, -86, 52, 86);
+          ctx.strokeStyle = state.flags.darkroom_drawer_opened ? '#f59e0b' : '#52525b';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(-22, -80, 44, 34);
+          ctx.fillStyle = '#d97706';
+          ctx.beginPath();
+          ctx.arc(0, -63, 3, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // Small wooden stool/archive pile with weathered journal sheet
+          ctx.fillStyle = '#2c2017';
+          ctx.fillRect(-22, -32, 44, 32);
+          ctx.fillStyle = '#e7dcc8';
+          ctx.fillRect(-13, -36, 26, 5);
+        }
+
+        if (uncollected) {
+          const glowR = 13 + Math.sin(timeSec * 4.2) * 3;
+          const glint = ctx.createRadialGradient(0, -56, 1, 0, -56, glowR);
+          glint.addColorStop(0, 'rgba(253, 224, 71, 0.92)');
+          glint.addColorStop(1, 'rgba(253, 224, 71, 0)');
+          ctx.fillStyle = glint;
+          ctx.fillRect(-glowR, -56 - glowR, glowR * 2, glowR * 2);
+        }
+      } else if (hs.kind === 'memorial_1986') {
+        // Mossy Qingming Stone Tablet + White Chrysanthemum + Tô Viễn (1986) NPC
+        ctx.fillStyle = '#2c352f';
+        ctx.beginPath();
+        ctx.moveTo(-24, 0);
+        ctx.lineTo(-19, -76);
+        ctx.quadraticCurveTo(0, -88, 19, -76);
+        ctx.lineTo(24, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#4d5c52';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Carved Qingming inscription on stone
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = 'bold 12px serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('清明', 0, -48);
+        ctx.font = '9px serif';
+        ctx.fillText('1967', 0, -30);
+
+        // White Qingming chrysanthemum blossoms at base of stone
+        for (const fx of [-10, 0, 9]) {
+          ctx.fillStyle = '#f8fafc';
+          ctx.beginPath();
+          ctx.arc(fx, -8, 4.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#facc15';
+          ctx.beginPath();
+          ctx.arc(fx, -8, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        // Tribute glow if player offered wine/spirit money
+        if (state.flags.offered_qingming_tribute) {
+          ctx.fillStyle = '#e2e8f0';
+          ctx.fillRect(-20, -14, 7, 6);
+          const emberGlow = ctx.createRadialGradient(-16, -24, 1, -16, -24, 22);
+          emberGlow.addColorStop(0, 'rgba(251, 191, 36, 0.85)');
+          emberGlow.addColorStop(1, 'rgba(251, 191, 36, 0)');
+          ctx.fillStyle = emberGlow;
+          ctx.fillRect(-38, -46, 44, 44);
+        }
+
+        // Render Tô Viễn (1986) standing solemnly beside the memorial stone
+        this.drawDetailedHuman(ctx, 38, 0, 1.0, {
+          role: 'tovien',
+          facing: -1,
+          timeSec,
+          alpha: 0.96,
+        });
       } else if (hs.kind === 'radio') {
         ctx.fillStyle = '#2d251d';
         ctx.fillRect(-38, -56, 76, 56);
@@ -1314,49 +1544,37 @@ export class ThanhMinhCanvasRenderer {
   ): void {
     ctx.save();
     ctx.translate(675, floorY);
-    ctx.fillStyle = '#2b1e16';
-    ctx.fillRect(-44, -56, 88, 56);
 
-    const lampGrad = ctx.createLinearGradient(0, -240, 0, 0);
-    lampGrad.addColorStop(0, 'rgba(254, 240, 138, 0.24)');
+    // Overhead swinging interrogation lamp cone
+    const lampGrad = ctx.createLinearGradient(0, -245, 0, 0);
+    lampGrad.addColorStop(0, 'rgba(254, 240, 138, 0.28)');
     lampGrad.addColorStop(1, 'rgba(254, 240, 138, 0.04)');
     ctx.fillStyle = lampGrad;
     ctx.beginPath();
-    ctx.moveTo(0, -240);
-    ctx.lineTo(-96, 0);
-    ctx.lineTo(96, 0);
+    ctx.moveTo(0, -245);
+    ctx.lineTo(-108, 0);
+    ctx.lineTo(108, 0);
     ctx.closePath();
     ctx.fill();
 
-    // Spectral Doppelganger silhouette seated across desk with unsettling face shadow
-    const tremble = Math.sin(timeSec * 29) > 0.94 ? 2.5 : 0;
-    ctx.translate(45 + tremble, Math.sin(timeSec * 1.8) * 1.4);
-    ctx.fillStyle = '#090d16';
-    ctx.beginPath();
-    ctx.moveTo(-16, -50);
-    ctx.quadraticCurveTo(-18, -112, 0, -118);
-    ctx.quadraticCurveTo(18, -112, 16, -50);
-    ctx.closePath();
-    ctx.fill();
+    // Detailed seated Lâm Tĩnh Doppelgänger behind wooden desk
+    const tremble = Math.sin(timeSec * 31) > 0.94 ? 2.2 : 0;
+    this.drawDetailedHuman(ctx, 44 + tremble, 0, 1.0, {
+      role: 'doppelganger',
+      facing: -1,
+      timeSec,
+      seated: true,
+    });
 
-    const skullShade = ctx.createRadialGradient(-3, -128, 2, 0, -126, 15);
-    skullShade.addColorStop(0, '#94a3b8');
-    skullShade.addColorStop(0.65, '#475569');
-    skullShade.addColorStop(1, '#0f172a');
-    ctx.fillStyle = skullShade;
-    ctx.beginPath();
-    ctx.ellipse(0, -126, 12, 14, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Sunken eye hollows with faint pinpoint glint
-    ctx.fillStyle = '#020617';
-    ctx.beginPath();
-    ctx.ellipse(-4.5, -127, 2.8, 3.4, 0, 0, Math.PI * 2);
-    ctx.ellipse(4.5, -127, 2.8, 3.4, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(220, 38, 38, 0.72)';
-    ctx.fillRect(-5, -127.5, 1.5, 1.5);
-    ctx.fillRect(4, -127.5, 1.5, 1.5);
+    // Heavy wooden interrogation table + bloodstained confession sheet on top
+    ctx.fillStyle = '#2b1e16';
+    ctx.fillRect(-48, -56, 96, 56);
+    ctx.fillStyle = '#3b291e';
+    ctx.fillRect(-52, -62, 104, 8);
+    ctx.fillStyle = '#e7dcc8';
+    ctx.fillRect(-16, -65, 32, 4);
+    ctx.fillStyle = '#991b1b';
+    ctx.fillRect(-4, -65, 9, 2);
     ctx.restore();
   }
 
@@ -1656,6 +1874,89 @@ export class ThanhMinhCanvasRenderer {
           ctx.lineTo(handX + 8 + armLift * 5, handY + f * 3.5 + 4);
           ctx.stroke();
         }
+      } else if (ghost.variant === 'auditor_specter') {
+        // Ác Linh Tự Vệ — Trương Vệ Quốc: 70° snapped sideways neck, Red Guard armband, cracked megaphone & heavy spiked ruler
+        // Torn crimson armband around left sleeve
+        if (!isAfterimage) {
+          ctx.fillStyle = '#881337';
+          ctx.fillRect(-16 + upperSway, -124 + strideBob, 11, 14);
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(-14 + upperSway, -120 + strideBob, 7, 2);
+        }
+
+        // Unnaturally snapped sideways head on sinewy cords
+        ctx.save();
+        ctx.translate(6 + upperSway, -155 + strideBob);
+        ctx.rotate(0.68 + neckSnap * 0.6);
+        const auditorFace = ctx.createRadialGradient(2, -2, 2, 0, 0, 17);
+        auditorFace.addColorStop(0, isAfterimage ? '#991b1b' : '#9ca3af');
+        auditorFace.addColorStop(0.68, isAfterimage ? '#450a0a' : '#374151');
+        auditorFace.addColorStop(1, '#09090b');
+        ctx.fillStyle = auditorFace;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 13, 15, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Peaked guard cap + glaring bloodshot eye
+        ctx.fillStyle = '#18181b';
+        ctx.beginPath();
+        ctx.arc(0, -5, 14, Math.PI, 0);
+        ctx.fill();
+        ctx.fillRect(-4, -10, 20, 4);
+        ctx.fillStyle = '#dc2626';
+        ctx.beginPath();
+        ctx.arc(6, -1, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Fused cracked tin megaphone emitting acoustic crimson nightmare rings
+        const megaX = 16 + upperSway;
+        const megaY = -132 + strideBob;
+        ctx.fillStyle = isAfterimage ? '#7f1d1d' : '#475569';
+        ctx.beginPath();
+        ctx.moveTo(megaX - 6, megaY - 5);
+        ctx.lineTo(megaX + 18, megaY - 12);
+        ctx.lineTo(megaX + 18, megaY + 12);
+        ctx.lineTo(megaX - 6, megaY + 5);
+        ctx.closePath();
+        ctx.fill();
+
+        if (!isAfterimage) {
+          const waveP = (timeSec * 1.9) % 1;
+          ctx.strokeStyle = `rgba(220, 38, 38, ${(1 - waveP) * 0.55})`;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.arc(megaX + 19, megaY, 7 + waveP * 26, -0.7, 0.7);
+          ctx.stroke();
+        }
+
+        // Dragged heavy wooden disciplinary ruler / broken flagpole staff
+        const armThrust = Math.sin(timeSec * (ghost.alerted ? 6 : 3)) * 5;
+        ctx.strokeStyle = isAfterimage ? '#7f1d1d' : '#262b27';
+        ctx.lineWidth = 6;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(0 + upperSway, -126 + strideBob);
+        ctx.lineTo(13, -86);
+        ctx.lineTo(22 + armThrust, -58);
+        ctx.stroke();
+
+        ctx.strokeStyle = isAfterimage ? '#991b1b' : '#573b24';
+        ctx.lineWidth = 4.5;
+        ctx.beginPath();
+        ctx.moveTo(22 + armThrust, -60);
+        ctx.lineTo(38 + armThrust * 0.8, -2);
+        ctx.stroke();
+
+        // Placard
+        ctx.fillStyle = isAfterimage ? '#450a0a' : '#573c26';
+        ctx.fillRect(-18, -118, 38, 20);
+        if (!isAfterimage) {
+          ctx.fillStyle = '#09090b';
+          ctx.font = 'bold 6.8px serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(ghost.placardText, 1, -105);
+        }
       } else {
         // Quỷ Sai Cắt Lưỡi: Stooped Prison Warden, Rusted Shackle Chains, Thrusting Notched Shears
         // Heavy swinging rusted iron chains scraping the floor
@@ -1760,6 +2061,339 @@ export class ThanhMinhCanvasRenderer {
     ctx.restore();
   }
 
+  // Richly Detailed, Illustrated 1960s–1980s Human Portrait-Rig Helper
+  // Used for Lâm Tĩnh, Thầy Trần Mặc, Tô Dao, Tô Viễn (1986), Doppelgänger & Ending Tableaux
+  private drawDetailedHuman(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    scale: number,
+    opts: {
+      role: 'linjing' | 'tranmac' | 'todao' | 'tovien' | 'doppelganger';
+      facing: 1 | -1;
+      timeSec: number;
+      alpha?: number;
+      seated?: boolean;
+      kneeling?: boolean;
+    }
+  ): void {
+    const breathe = Math.sin(opts.timeSec * 2.1 + x * 0.03) * 1.1;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale * opts.facing, scale);
+    ctx.globalAlpha = opts.alpha ?? 1;
+
+    // Soft grounded shadow
+    if (!opts.seated) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.44)';
+      ctx.beginPath();
+      ctx.ellipse(0, 3, 21, 5.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    const baseLift = opts.kneeling ? 26 : 0;
+    ctx.translate(0, baseLift + breathe);
+
+    if (opts.role === 'tranmac') {
+      // Thầy Trần Mặc (34 tuổi): Scholarly Zhongshan coat, leather poetry book, slender glasses
+      if (!opts.seated && !opts.kneeling) {
+        for (const lx of [-5, 5]) {
+          ctx.fillStyle = '#1f2937';
+          ctx.fillRect(lx - 3.5, -44, 7, 41);
+          ctx.fillStyle = '#0f172a';
+          ctx.beginPath();
+          ctx.ellipse(lx + 2, -2, 7.5, 3.2, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Tailored Charcoal-Taupe Long Scholar Coat
+      const coatGrad = ctx.createLinearGradient(-16, -108, 16, -24);
+      coatGrad.addColorStop(0, '#44403c');
+      coatGrad.addColorStop(0.55, '#292524');
+      coatGrad.addColorStop(1, '#1c1917');
+      ctx.fillStyle = coatGrad;
+      ctx.beginPath();
+      ctx.moveTo(-13, -108);
+      ctx.lineTo(13, -108);
+      ctx.lineTo(18, -28);
+      ctx.quadraticCurveTo(0, -24, -18, -28);
+      ctx.closePath();
+      ctx.fill();
+
+      // Warm cream scarf + brass coat buttons
+      ctx.fillStyle = '#d6c7b2';
+      ctx.beginPath();
+      ctx.moveTo(-8, -108);
+      ctx.lineTo(8, -108);
+      ctx.lineTo(2, -91);
+      ctx.lineTo(-4, -91);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#d97706';
+      for (const by of [-84, -72, -60]) {
+        ctx.beginPath();
+        ctx.arc(3, by, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Arm clutching forbidden leather-bound poetry volume
+      ctx.strokeStyle = '#3f3b38';
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(4, -100);
+      ctx.lineTo(14, -84);
+      ctx.lineTo(17, -75);
+      ctx.stroke();
+      ctx.fillStyle = '#7c2d12';
+      ctx.fillRect(11, -83, 12, 16);
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(12, -82, 10, 14);
+
+      // Expressive gentle head, parted hair & silver-rimmed spectacles
+      ctx.fillStyle = '#d9bea8';
+      ctx.fillRect(-3.5, -116, 7, 10);
+      const faceGrad = ctx.createRadialGradient(2, -126, 2, 0, -125, 14);
+      faceGrad.addColorStop(0, '#ecd5c2');
+      faceGrad.addColorStop(1, '#c4a48d');
+      ctx.fillStyle = faceGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, -126, 11.5, 13.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Neat parted hair with subtle silver temple highlight
+      ctx.fillStyle = '#18181b';
+      ctx.beginPath();
+      ctx.arc(-1, -129, 12.2, Math.PI * 0.88, Math.PI * 2.08);
+      ctx.quadraticCurveTo(6, -135, -8, -131);
+      ctx.closePath();
+      ctx.fill();
+
+      // Gentle eyes + wire-frame spectacles
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(5.5, -127, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#e5e7eb';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.arc(5.5, -127, 3.6, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(2, -127);
+      ctx.lineTo(-4, -128);
+      ctx.stroke();
+    } else if (opts.role === 'tovien') {
+      // Tô Viễn (1986): 1980s olive-grey trench coat + black rain umbrella over shoulder
+      for (const lx of [-5, 5]) {
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(lx - 3.5, -46, 7, 43);
+        ctx.fillStyle = '#0f172a';
+        ctx.beginPath();
+        ctx.ellipse(lx + 2, -2, 7.5, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      const coatGrad = ctx.createLinearGradient(-15, -108, 15, -34);
+      coatGrad.addColorStop(0, '#4d574e');
+      coatGrad.addColorStop(1, '#262e28');
+      ctx.fillStyle = coatGrad;
+      ctx.beginPath();
+      ctx.moveTo(-13, -108);
+      ctx.lineTo(13, -108);
+      ctx.lineTo(17, -34);
+      ctx.lineTo(-17, -34);
+      ctx.closePath();
+      ctx.fill();
+
+      // Raised collar & white shirt V-neck
+      ctx.fillStyle = '#cbd5e1';
+      ctx.beginPath();
+      ctx.moveTo(-6, -108);
+      ctx.lineTo(6, -108);
+      ctx.lineTo(0, -96);
+      ctx.closePath();
+      ctx.fill();
+
+      // Black storm umbrella held diagonally behind shoulder
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(8, -76);
+      ctx.lineTo(-18, -142);
+      ctx.stroke();
+      ctx.fillStyle = '#111827';
+      ctx.beginPath();
+      ctx.moveTo(-36, -138);
+      ctx.quadraticCurveTo(-18, -158, 2, -136);
+      ctx.closePath();
+      ctx.fill();
+
+      // Arm holding umbrella
+      ctx.strokeStyle = '#3f4a41';
+      ctx.lineWidth = 5.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(2, -102);
+      ctx.lineTo(11, -86);
+      ctx.lineTo(8, -76);
+      ctx.stroke();
+
+      // Head & windswept hair
+      ctx.fillStyle = '#d4b59e';
+      ctx.fillRect(-3, -116, 6.5, 9);
+      ctx.fillStyle = '#e5cbb5';
+      ctx.beginPath();
+      ctx.ellipse(0, -126, 11, 13, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(-1, -129, 12, Math.PI * 0.85, Math.PI * 2.08);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#09090b';
+      ctx.beginPath();
+      ctx.arc(5.5, -126.5, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Tô Dao (17), Lâm Tĩnh (Ending/Kneeling), or Interrogation Doppelgänger
+      const isDoppel = opts.role === 'doppelganger';
+      const isToDao = opts.role === 'todao';
+
+      if (!opts.seated && !opts.kneeling) {
+        for (const lx of [-4.5, 4.5]) {
+          ctx.strokeStyle = isDoppel ? '#94a3b8' : '#dfc5b2';
+          ctx.lineWidth = 5.6;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(lx, -38);
+          ctx.lineTo(lx, -3);
+          ctx.stroke();
+          ctx.fillStyle = '#f1f5f9';
+          ctx.fillRect(lx - 2.8, -11, 5.6, 7);
+          ctx.fillStyle = '#09090b';
+          ctx.beginPath();
+          ctx.ellipse(lx + 2, -2, 6.8, 3, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Pleated navy skirt (unless seated behind desk)
+      if (!opts.seated) {
+        ctx.fillStyle = isDoppel ? '#0f172a' : isToDao ? '#1e293b' : '#172554';
+        ctx.beginPath();
+        ctx.moveTo(-11, -72);
+        ctx.lineTo(11, -72);
+        ctx.lineTo(16, -34);
+        ctx.quadraticCurveTo(0, -30, -16, -34);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      // Blouse / Warm Cardigan
+      const topGrad = ctx.createLinearGradient(-12, -108, 12, -72);
+      if (isDoppel) {
+        topGrad.addColorStop(0, '#94a3b8');
+        topGrad.addColorStop(1, '#475569');
+      } else if (isToDao) {
+        topGrad.addColorStop(0, '#f5e8d3');
+        topGrad.addColorStop(1, '#d6c1a3');
+      } else {
+        topGrad.addColorStop(0, '#e2e8f0');
+        topGrad.addColorStop(1, '#94a3b8');
+      }
+      ctx.fillStyle = topGrad;
+      ctx.beginPath();
+      ctx.moveTo(-10, -108);
+      ctx.lineTo(10, -108);
+      ctx.lineTo(12, -72);
+      ctx.lineTo(-12, -72);
+      ctx.closePath();
+      ctx.fill();
+
+      // Sailor collar + crimson ribbon tie
+      ctx.fillStyle = isDoppel ? '#1e293b' : '#334155';
+      ctx.beginPath();
+      ctx.moveTo(-10, -108);
+      ctx.lineTo(0, -93);
+      ctx.lineTo(10, -108);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = isDoppel ? '#7f1d1d' : '#b91c1c';
+      ctx.beginPath();
+      ctx.arc(0, -93, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Gentle arms (clasped on table if seated, or resting warmly)
+      ctx.strokeStyle = isDoppel ? '#64748b' : isToDao ? '#d6c1a3' : '#cbd5e1';
+      ctx.lineWidth = 4.8;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(4, -102);
+      ctx.lineTo(13, opts.seated ? -80 : -85);
+      ctx.lineTo(opts.seated ? 20 : 10, opts.seated ? -65 : -72);
+      ctx.stroke();
+
+      // Head, Braids tied with red ribbons & Tô Dao's Plum Hairpin
+      ctx.fillStyle = isDoppel ? '#cbd5e1' : '#e5cab5';
+      ctx.fillRect(-3.2, -116, 6.4, 9);
+
+      // Twin flowing braids
+      const braidSway = Math.sin(opts.timeSec * 2.4) * 2.2;
+      ctx.strokeStyle = '#09090b';
+      ctx.lineWidth = 5.4;
+      ctx.beginPath();
+      ctx.moveTo(-8, -124);
+      ctx.quadraticCurveTo(-13 - braidSway, -106, -11 - braidSway, -89);
+      ctx.stroke();
+      ctx.fillStyle = isDoppel ? '#7f1d1d' : '#dc2626';
+      ctx.fillRect(-13 - braidSway, -92, 4.5, 2.5);
+
+      const skinGrad = ctx.createRadialGradient(2, -125, 2, 0, -125, 13);
+      skinGrad.addColorStop(0, isDoppel ? '#cbd5e1' : '#f3dfd0');
+      skinGrad.addColorStop(1, isDoppel ? '#64748b' : '#cba992');
+      ctx.fillStyle = skinGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, -125, 11.5, 13, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Hair crown + bangs
+      ctx.fillStyle = '#09090b';
+      ctx.beginPath();
+      ctx.arc(-1, -127.5, 12.6, Math.PI * 0.72, Math.PI * 2.04);
+      ctx.quadraticCurveTo(8, -131, 2, -134);
+      ctx.closePath();
+      ctx.fill();
+
+      // Tô Dao's plum-blossom hairpin
+      if (isToDao) {
+        ctx.fillStyle = '#fb7185';
+        ctx.beginPath();
+        ctx.arc(-6, -133, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fef08a';
+        ctx.beginPath();
+        ctx.arc(-6, -133, 1.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Expressive face eyes + Doppelgänger crimson tear streaks
+      ctx.fillStyle = isDoppel ? '#dc2626' : '#0f172a';
+      ctx.beginPath();
+      ctx.arc(5.5, -125.5, 1.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.fillRect(6, -126.4, 0.9, 0.9);
+      if (isDoppel) {
+        ctx.fillStyle = 'rgba(127, 29, 29, 0.75)';
+        ctx.fillRect(5.2, -123.5, 1.4, 6);
+      }
+    }
+
+    ctx.restore();
+  }
+
   // Expressive, Fluid Articulated Lâm Tĩnh Rig
   private drawLinJing(
     ctx: CanvasRenderingContext2D,
@@ -1779,25 +2413,25 @@ export class ThanhMinhCanvasRenderer {
     ctx.translate(state.playerX, floorY);
 
     // Soft anchored contact shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.54)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.56)';
     ctx.beginPath();
-    ctx.ellipse(0, 4, 20, 5.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 4, 21, 5.8, 0, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.translate(panicTremble, -walkBob + idleBreathe);
     ctx.scale(state.playerFacing, 1);
 
-    // 1. Articulated Legs (Back leg then Front leg with knee bend & shoes)
-    const swingA = stride * 12;
-    const swingB = -stride * 12;
+    // 1. Articulated Tapered Legs (Back leg then Front leg with knee bend, socks & buckled Mary-Jane shoes)
+    const swingA = stride * 12.5;
+    const swingB = -stride * 12.5;
     for (const [legIdx, hipSwing] of [
       [0, swingB],
       [1, swingA],
     ] as const) {
       const kneeX = hipSwing * 0.55 + 2;
       const footX = hipSwing;
-      ctx.strokeStyle = legIdx === 0 ? '#d6bfb0' : '#e7d5c5';
-      ctx.lineWidth = 6.2;
+      ctx.strokeStyle = legIdx === 0 ? '#cfb4a2' : '#ecd7c6';
+      ctx.lineWidth = 6;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.beginPath();
@@ -1806,44 +2440,54 @@ export class ThanhMinhCanvasRenderer {
       ctx.lineTo(footX, -3);
       ctx.stroke();
 
-      // 1960s black student shoe & white sock
-      ctx.fillStyle = '#e2e8f0';
-      ctx.fillRect(footX - 3, -10, 6, 6);
-      ctx.fillStyle = '#0f172a';
+      // Crisp 1960s knee-sock cuff & Mary-Jane shoe
+      ctx.fillStyle = legIdx === 0 ? '#cbd5e1' : '#f1f5f9';
+      ctx.fillRect(footX - 3.2, -13, 6.4, 9);
+      ctx.fillStyle = '#090d16';
       ctx.beginPath();
-      ctx.ellipse(footX + 2, -2.5, 7, 3.2, 0, 0, Math.PI * 2);
+      ctx.ellipse(footX + 2.2, -2.4, 7.2, 3.3, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.fillStyle = '#64748b';
+      ctx.fillRect(footX - 1, -4.5, 3, 1.2);
     }
 
-    // 2. Upper Body Lean & Swaying Pleated Skirt
+    // 2. Upper Body Lean & Richly Shaded Pleated Skirt + Collared Blouse
     ctx.save();
     ctx.translate(0, -38);
     ctx.rotate(fearHunch);
 
-    // Flowing pleated navy school skirt
-    const skirtFlare = Math.abs(stride) * 4;
-    ctx.fillStyle = '#1e293b';
+    // Flowing pleated navy school skirt with cloth shading
+    const skirtFlare = Math.abs(stride) * 4.5;
+    const skirtGrad = ctx.createLinearGradient(-14, -36, 14, 4);
+    skirtGrad.addColorStop(0, '#1e293b');
+    skirtGrad.addColorStop(0.65, '#172554');
+    skirtGrad.addColorStop(1, '#0f172a');
+    ctx.fillStyle = skirtGrad;
     ctx.beginPath();
     ctx.moveTo(-11, -36);
     ctx.lineTo(11, -36);
     ctx.quadraticCurveTo(18 + skirtFlare, -16, 17 + skirtFlare, 3);
-    ctx.quadraticCurveTo(0, 7, -18 - skirtFlare, 3);
+    ctx.quadraticCurveTo(0, 7.5, -18 - skirtFlare, 3);
     ctx.quadraticCurveTo(-16, -16, -11, -36);
     ctx.closePath();
     ctx.fill();
 
-    // Pleat shading lines
-    ctx.strokeStyle = 'rgba(15, 23, 42, 0.7)';
+    // Pleat shading lines + hem trim
+    ctx.strokeStyle = 'rgba(2, 6, 23, 0.72)';
     ctx.lineWidth = 1.2;
-    for (const px of [-6, 0, 6]) {
+    for (const px of [-6.5, 0, 6.5]) {
       ctx.beginPath();
       ctx.moveTo(px * 0.7, -34);
-      ctx.lineTo(px * 1.4, 3);
+      ctx.lineTo(px * 1.45, 3.5);
       ctx.stroke();
     }
 
-    // 1960s Collared White/Slate Student Blouse
-    ctx.fillStyle = '#cbd5e1';
+    // 1960s Collared Cream-Slate Student Blouse with soft gradient shading
+    const blouseGrad = ctx.createLinearGradient(-12, -72, 12, -36);
+    blouseGrad.addColorStop(0, '#e2e8f0');
+    blouseGrad.addColorStop(0.6, '#cbd5e1');
+    blouseGrad.addColorStop(1, '#94a3b8');
+    ctx.fillStyle = blouseGrad;
     ctx.beginPath();
     ctx.moveTo(-12, -36);
     ctx.quadraticCurveTo(-14, -56, -10, -72);
@@ -1852,67 +2496,115 @@ export class ThanhMinhCanvasRenderer {
     ctx.closePath();
     ctx.fill();
 
-    // Subtle navy collar flap & red scarf detail
-    ctx.fillStyle = '#334155';
+    // Sculpted navy sailor collar flap, crimson neck tie & tiny Cô Sơn school badge
+    ctx.fillStyle = '#1e293b';
     ctx.beginPath();
     ctx.moveTo(-10, -72);
-    ctx.lineTo(0, -58);
+    ctx.lineTo(0, -56);
     ctx.lineTo(10, -72);
     ctx.closePath();
     ctx.fill();
+    ctx.fillStyle = '#b91c1c';
+    ctx.beginPath();
+    ctx.moveTo(0, -57);
+    ctx.lineTo(-4, -49);
+    ctx.lineTo(2, -48);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(4, -56, 5, 2.5);
 
-    // 3. Expressive Head, Eyes & Multi-segment Flowing Hair Braids
+    // 3. Expressive Face, Eyelashes, Tracking Eye & Twin Swaying Braids with Red Ribbons
     ctx.save();
     ctx.translate(1, -85);
     ctx.rotate(state.holdingBreath ? 0.08 : -0.02);
 
     // Neck
-    ctx.fillStyle = '#dfc8b7';
+    ctx.fillStyle = '#d7bca8';
     ctx.fillRect(-3.5, 8, 7, 9);
 
-    // Back flowing twin hair braid with velocity trail
-    const hairSwing = Math.sin(timeSec * 4.5 + state.walkPhase * 2) * (isWalking ? 5.5 : 1.5);
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 6;
+    // Back flowing braided pigtail with crimson ribbon & velocity trail
+    const hairSwing = Math.sin(timeSec * 4.5 + state.walkPhase * 2) * (isWalking ? 6 : 1.6);
+    ctx.strokeStyle = '#09090b';
+    ctx.lineWidth = 6.2;
     ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(-9, -4);
     ctx.quadraticCurveTo(-15 - hairSwing * 0.6, 12, -14 - hairSwing, 28);
     ctx.stroke();
+    ctx.fillStyle = '#dc2626';
+    ctx.fillRect(-17 - hairSwing * 0.85, 21, 5.5, 2.6);
 
-    // Face oval
-    ctx.fillStyle = '#ecd8c7';
+    // Shaded Face Oval with subtle cheek chill blush
+    const faceGrad = ctx.createRadialGradient(3, -2, 2, 0, 0, 14);
+    faceGrad.addColorStop(0, '#f5e2d3');
+    faceGrad.addColorStop(0.75, '#e2c4ae');
+    faceGrad.addColorStop(1, '#bd9d86');
+    ctx.fillStyle = faceGrad;
     ctx.beginPath();
     ctx.ellipse(0, 0, 12, 13.5, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Expressive Eye tracking nearest danger
+    // Soft pale cheek tint & delicate mouth line
+    ctx.fillStyle = 'rgba(225, 135, 135, 0.22)';
+    ctx.beginPath();
+    ctx.ellipse(4.5, 4.5, 3, 1.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(130, 75, 65, 0.65)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(4.5, 8);
+    ctx.lineTo(7.2, 7.6);
+    ctx.stroke();
+
+    // Expressive Eye (sclera, iris tracking nearest ghost, upper eyelash & specular glint)
     const ghostBehind =
       nearestGhost &&
       Math.abs(nearestGhost.x - state.playerX) < 260 &&
       (nearestGhost.x - state.playerX) * state.playerFacing < 0;
-    ctx.fillStyle = '#0f172a';
+    const irisX = ghostBehind ? 4.2 : 6.4;
+    ctx.fillStyle = '#f8fafc';
     ctx.beginPath();
-    ctx.arc(ghostBehind ? 3.5 : 6.2, -1, 1.8, 0, Math.PI * 2);
+    ctx.ellipse(5.8, -1, 2.8, 2.1, 0, 0, Math.PI * 2);
     ctx.fill();
-
-    // Subtle brow tension when terrified
-    if (state.holdingBreath || state.gazeExposure > 25) {
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 1.3;
-      ctx.beginPath();
-      ctx.moveTo(3, -5);
-      ctx.lineTo(8, -6.5);
-      ctx.stroke();
-    }
-
-    // Bobbed bangs & crown hair
-    ctx.fillStyle = '#0f172a';
+    ctx.fillStyle = '#09090b';
     ctx.beginPath();
-    ctx.arc(-1.5, -2.5, 13, Math.PI * 0.68, Math.PI * 2.04);
+    ctx.arc(irisX, -1, 1.75, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(irisX + 0.3, -1.9, 0.9, 0.9);
+    // Upper eyelash arc
+    ctx.strokeStyle = '#09090b';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.arc(5.8, -1.2, 3, Math.PI * 1.08, Math.PI * 1.92);
+    ctx.stroke();
+
+    // Subtle brow tension when terrified or holding breath
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    if (state.holdingBreath || state.gazeExposure > 25) {
+      ctx.moveTo(2.8, -5.2);
+      ctx.lineTo(8.2, -6.8);
+    } else {
+      ctx.moveTo(3, -5.8);
+      ctx.lineTo(8, -5.5);
+    }
+    ctx.stroke();
+
+    // Glossy indigo bangs & crown hair
+    ctx.fillStyle = '#09090b';
+    ctx.beginPath();
+    ctx.arc(-1.5, -2.5, 13.2, Math.PI * 0.68, Math.PI * 2.04);
     ctx.quadraticCurveTo(9, -6, 3, -9);
     ctx.closePath();
     ctx.fill();
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.22)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(-1, -4, 10, Math.PI * 1.15, Math.PI * 1.65);
+    ctx.stroke();
 
     ctx.restore();
 
@@ -1944,20 +2636,27 @@ export class ThanhMinhCanvasRenderer {
       ctx.lineTo(20, -45 + armSwing * 0.3);
       ctx.stroke();
 
-      // Ornate swaying brass oil lantern
+      ctx.fillStyle = '#ecd8c7';
+      ctx.beginPath();
+      ctx.arc(20, -44 + armSwing * 0.3, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Ornate swaying brass & glass oil lantern
       const lanternX = 21 + Math.sin(timeSec * 4) * 2.2;
       const lanternY = -44;
-      const halo = ctx.createRadialGradient(lanternX, lanternY + 8, 2, lanternX, lanternY + 8, 32);
-      halo.addColorStop(0, 'rgba(251, 191, 36, 0.92)');
+      const halo = ctx.createRadialGradient(lanternX, lanternY + 8, 2, lanternX, lanternY + 8, 34);
+      halo.addColorStop(0, 'rgba(251, 191, 36, 0.94)');
       halo.addColorStop(1, 'rgba(251, 191, 36, 0)');
       ctx.fillStyle = halo;
-      ctx.fillRect(lanternX - 32, lanternY - 24, 64, 64);
+      ctx.fillRect(lanternX - 34, lanternY - 26, 68, 68);
 
-      ctx.strokeStyle = '#78350f';
+      ctx.fillStyle = '#78350f';
+      ctx.fillRect(lanternX - 5, lanternY, 10, 3);
+      ctx.strokeStyle = '#92400e';
       ctx.lineWidth = 1.8;
-      ctx.strokeRect(lanternX - 4.5, lanternY + 2, 9, 13);
-      ctx.fillStyle = '#fde68a';
-      ctx.fillRect(lanternX - 3, lanternY + 4, 6, 9);
+      ctx.strokeRect(lanternX - 4.5, lanternY + 3, 9, 12);
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(lanternX - 3, lanternY + 4.5, 6, 9);
 
       // Cold air breath puff
       const puff = (timeSec * 1.1) % 1;
@@ -2036,6 +2735,10 @@ export class ThanhMinhCanvasRenderer {
     ctx.fillRect(0, floorY, width, height - floorY);
 
     if (state.ending === 'ending_2_ashes') {
+      // Charred ruined pillars + Lâm Tĩnh kneeling among rising crimson embers
+      ctx.fillStyle = '#090404';
+      ctx.fillRect(width * 0.22, floorY - 210, 24, 210);
+      ctx.fillRect(width * 0.76, floorY - 220, 26, 220);
       for (const p of this.ashParticles) {
         p.x += p.vx * dt;
         p.y += p.vy * 1.6 * dt;
@@ -2046,28 +2749,75 @@ export class ThanhMinhCanvasRenderer {
         ctx.fillStyle = `rgba(249, 115, 22, ${p.alpha})`;
         ctx.fillRect(p.x, p.y, p.size * 1.4, p.size * 1.4);
       }
-      ctx.fillStyle = '#090505';
-      ctx.fillRect(width * 0.48, floorY - 120, 26, 120);
+      this.drawDetailedHuman(ctx, width * 0.5, floorY, 1.15, {
+        role: 'linjing',
+        facing: 1,
+        timeSec,
+        kneeling: true,
+      });
     } else if (state.ending === 'ending_3_late_qingming') {
-      for (const gx of [width * 0.42, width * 0.58]) {
+      // Two pine-shaded Qingming graves + wooden spirit tablets + burning brazier + kneeling Lâm Tĩnh
+      for (const [idx, gx] of [width * 0.41, width * 0.59].entries()) {
         ctx.fillStyle = '#1e2420';
         ctx.beginPath();
         ctx.arc(gx, floorY, 44, Math.PI, 0);
         ctx.fill();
+        ctx.fillStyle = '#3b2d22';
+        ctx.fillRect(gx - 8, floorY - 76, 16, 40);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.font = '9px serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(idx === 0 ? 'Trần Mặc' : 'Tô Dao', gx, floorY - 52);
       }
-      ctx.fillStyle = 'rgba(251, 146, 60, 0.78)';
-      ctx.beginPath();
-      ctx.arc(width * 0.5, floorY - 6 + Math.sin(timeSec * 5) * 2, 10, 0, Math.PI * 2);
-      ctx.fill();
+      const fireGlow = ctx.createRadialGradient(
+        width * 0.5,
+        floorY - 8,
+        2,
+        width * 0.5,
+        floorY - 8,
+        42
+      );
+      fireGlow.addColorStop(0, 'rgba(251, 146, 60, 0.86)');
+      fireGlow.addColorStop(1, 'rgba(251, 146, 60, 0)');
+      ctx.fillStyle = fireGlow;
+      ctx.fillRect(width * 0.5 - 42, floorY - 50, 84, 52);
+
+      this.drawDetailedHuman(ctx, width * 0.5, floorY, 1.1, {
+        role: 'linjing',
+        facing: -1,
+        timeSec,
+        kneeling: true,
+      });
     } else if (state.ending === 'ending_4_dawn_coson') {
+      // Warm Golden Dawn Halo behind Thầy Trần Mặc (left), Lâm Tĩnh (center), and Tô Dao (right)
       const cx = width * 0.5;
-      for (const offset of [-58, 0, 58]) {
-        ctx.fillStyle = offset === 0 ? '#1e293b' : 'rgba(254, 243, 199, 0.58)';
-        ctx.fillRect(cx + offset - 12, floorY - 110, 24, 110);
-        ctx.beginPath();
-        ctx.arc(cx + offset, floorY - 124, 12, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      const dawnHalo = ctx.createRadialGradient(cx, floorY - 95, 16, cx, floorY - 95, 220);
+      dawnHalo.addColorStop(0, 'rgba(254, 240, 138, 0.34)');
+      dawnHalo.addColorStop(0.55, 'rgba(245, 158, 11, 0.14)');
+      dawnHalo.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = dawnHalo;
+      ctx.fillRect(cx - 220, floorY - 315, 440, 320);
+
+      // Gentle forgiving spirits of Thầy Trần Mặc & Tô Dao flanking Lâm Tĩnh
+      this.drawDetailedHuman(ctx, cx - 72, floorY, 1.12, {
+        role: 'tranmac',
+        facing: 1,
+        timeSec,
+        alpha: 0.78,
+      });
+      this.drawDetailedHuman(ctx, cx + 72, floorY, 1.1, {
+        role: 'todao',
+        facing: -1,
+        timeSec,
+        alpha: 0.78,
+      });
+      this.drawDetailedHuman(ctx, cx, floorY, 1.15, {
+        role: 'linjing',
+        facing: 1,
+        timeSec,
+        alpha: 1,
+      });
+
       for (const p of this.ashParticles) {
         p.x += p.vx * dt;
         p.y += p.vy * dt;

@@ -32,20 +32,15 @@ export interface CellarSceneController {
   dispose: () => void;
 }
 
-function detectSoftwareWebGL(): boolean {
-  if (typeof document === 'undefined') return false;
+function isSoftwareRendererContext(gl: WebGLRenderingContext | WebGL2RenderingContext | null): boolean {
+  if (!gl) return true;
   try {
-    const probe = document.createElement('canvas');
-    const gl = probe.getContext('webgl2') || probe.getContext('webgl');
-    if (!gl) return true;
     const dbg = gl.getExtension('WEBGL_debug_renderer_info');
-    const rendererStr = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '';
-    const isSoft = /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(rendererStr);
-    const loseExt = gl.getExtension('WEBGL_lose_context');
-    loseExt?.loseContext();
-    return isSoft;
+    if (!dbg) return false;
+    const rendererStr = String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '');
+    return /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(rendererStr);
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -289,21 +284,31 @@ export function mountCellarScene(
   mountEl: HTMLDivElement,
   callbacks: CellarSceneCallbacks
 ): CellarSceneController {
-  const isSoftwareGl = detectSoftwareWebGL();
   let renderer: THREE.WebGLRenderer;
   try {
     renderer = new THREE.WebGLRenderer({
-      antialias: !isSoftwareGl,
-      powerPreference: isSoftwareGl ? 'low-power' : 'high-performance',
+      antialias: true,
+      powerPreference: 'default',
+      failIfMajorPerformanceCaveat: false,
     });
-  } catch (err) {
-    callbacks.onWebglError?.(err instanceof Error ? err.message : 'WebGL initialization failed');
-    return {
-      syncState: () => {},
-      triggerFX: () => {},
-      dispose: () => {},
-    };
+  } catch {
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: false,
+        powerPreference: 'low-power',
+        failIfMajorPerformanceCaveat: false,
+      });
+    } catch (err) {
+      callbacks.onWebglError?.(err instanceof Error ? err.message : 'WebGL initialization failed');
+      return {
+        syncState: () => {},
+        triggerFX: () => {},
+        dispose: () => {},
+      };
+    }
   }
+
+  const isSoftwareGl = isSoftwareRendererContext(renderer.getContext());
 
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2));
@@ -333,11 +338,18 @@ export function mountCellarScene(
   const fog = new THREE.FogExp2(0x050405, 0.128);
   scene.fog = fog;
 
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environment = envTex;
-  scene.environmentIntensity = 0.26;
-  pmrem.dispose();
+  let envTex: THREE.Texture | null = null;
+  try {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const roomEnv = new RoomEnvironment();
+    envTex = pmrem.fromScene(roomEnv, 0.04).texture;
+    roomEnv.dispose();
+    scene.environment = envTex;
+    scene.environmentIntensity = 0.26;
+    pmrem.dispose();
+  } catch {
+    envTex = null;
+  }
 
   const camera = new THREE.PerspectiveCamera(
     55,
@@ -1202,13 +1214,34 @@ export function mountCellarScene(
     renderer.setSize(w, h);
   };
 
+  let disposed = false;
+  let contextLost = false;
+  let rafId = 0;
+  let timeoutId: number | null = null;
+  let prevTime = performance.now();
+  let elapsed = 0;
+
   const onContextLost = (e: Event) => {
     e.preventDefault();
+    contextLost = true;
+    cancelAnimationFrame(rafId);
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  };
+
+  const onContextRestored = () => {
+    if (disposed) return;
+    contextLost = false;
+    prevTime = performance.now();
+    rafId = requestAnimationFrame(tick);
   };
 
   renderer.domElement.addEventListener('pointermove', onPointerMove);
   renderer.domElement.addEventListener('pointerdown', onPointerDown);
   renderer.domElement.addEventListener('webglcontextlost', onContextLost);
+  renderer.domElement.addEventListener('webglcontextrestored', onContextRestored);
   window.addEventListener('resize', onResize);
 
   const resizeObserver = new ResizeObserver(onResize);
@@ -1218,21 +1251,15 @@ export function mountCellarScene(
     renderer.compile(scene, camera);
   }
 
-  let disposed = false;
-  let rafId = 0;
-  let timeoutId: number | null = null;
-  let prevTime = performance.now();
-  let elapsed = 0;
-
   const afterDraw = (fn: () => void) => {
-    if (disposed) return;
+    if (disposed || contextLost) return;
     const gl = renderer.getContext();
     const gl2 = typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext ? gl : null;
     if (gl2) {
       const sync = gl2.fenceSync(gl2.SYNC_GPU_COMMANDS_COMPLETE, 0);
       gl2.flush();
       const poll = () => {
-        if (disposed) return;
+        if (disposed || contextLost) return;
         const status = sync ? gl2.clientWaitSync(sync, 0, 0) : gl2.ALREADY_SIGNALED;
         if (status === gl2.TIMEOUT_EXPIRED) {
           timeoutId = window.setTimeout(poll, 16);
@@ -1240,19 +1267,19 @@ export function mountCellarScene(
         }
         if (sync) gl2.deleteSync(sync);
         timeoutId = window.setTimeout(() => {
-          if (!disposed) rafId = requestAnimationFrame(fn);
+          if (!disposed && !contextLost) rafId = requestAnimationFrame(fn);
         }, 80);
       };
       poll();
     } else {
       timeoutId = window.setTimeout(() => {
-        if (!disposed) rafId = requestAnimationFrame(fn);
+        if (!disposed && !contextLost) rafId = requestAnimationFrame(fn);
       }, 80);
     }
   };
 
   const tick = () => {
-    if (disposed) return;
+    if (disposed || contextLost) return;
     const now = performance.now();
     const dt = Math.min(0.05, Math.max(0.001, (now - prevTime) / 1000));
     prevTime = now;
@@ -1475,10 +1502,11 @@ export function mountCellarScene(
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       renderer.domElement.removeEventListener('webglcontextlost', onContextLost);
+      renderer.domElement.removeEventListener('webglcontextrestored', onContextRestored);
       disposables.geometries.forEach((g) => g.dispose());
       disposables.materials.forEach((m) => m.dispose());
       disposables.textures.forEach((t) => t.dispose());
-      envTex.dispose();
+      envTex?.dispose();
       renderer.dispose();
     },
   };

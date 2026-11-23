@@ -46,9 +46,23 @@ export interface KeepsakeDef {
   diaryText: string;
 }
 
+export interface StoryLoreEntry {
+  id: string;
+  act: ActNumber;
+  title: string;
+  location: string;
+  speaker: string;
+  quote: string;
+  body: string;
+  secretBody?: string; // Unlocks when holding darkroom_key or offered_qingming_tribute
+}
+
+export type GhostVariant = 'paper_hat' | 'tongue_warden' | 'auditor_specter';
+
 export interface GhostEntity {
   id: string;
   kind: 'paper_hat' | 'tongue_warden';
+  variant?: GhostVariant;
   name: string;
   placardText: string;
   scene: SceneId;
@@ -71,6 +85,8 @@ export interface HotspotDef {
     | 'door'
     | 'pickup'
     | 'keepsake'
+    | 'lore'
+    | 'memorial_1986'
     | 'wuxing_altar'
     | 'flagpole_corpse'
     | 'radio'
@@ -86,12 +102,14 @@ export interface HotspotDef {
   blockedHint?: string;
   itemReward?: InventoryItem;
   keepsakeId?: string;
+  loreId?: string;
   dialogueText?: string;
 }
 
 export type ActiveModalType =
   | 'none'
   | 'journal'
+  | 'memory_echo'
   | 'wuxing_puzzle'
   | 'radio_tuner'
   | 'darkroom_reveal'
@@ -108,6 +126,7 @@ export type EndingId =
 export interface DeathCutsceneState {
   active: boolean;
   killerKind: 'paper_hat' | 'tongue_warden';
+  killerVariant?: GhostVariant;
   killerName: string;
   timer: number;
   duration: number;
@@ -134,6 +153,8 @@ export interface ThanhMinhState {
   // Inventory & Hidden Story Variables
   inventory: OfferingItemId[];
   collectedKeepsakeIds: string[]; // 6 total -> 100%
+  collectedLoreIds: string[]; // 10 environmental memory echoes
+  activeLoreId: string | null;
   flags: Record<string, boolean>;
 
   // Interactive Puzzles
@@ -336,16 +357,122 @@ export const TRUTH_KEEPSAKES: readonly KeepsakeDef[] = [
   },
 ];
 
+export const STORY_LORE_ENTRIES: readonly StoryLoreEntry[] = [
+  {
+    id: 'lore-1-blackboard',
+    act: 1,
+    title: 'Nét Phấn Của Tô Dao Trên Bảng Đen',
+    location: 'Lớp Học 12B · Mùa mưa 1967',
+    speaker: 'Ký ức của Lâm Tĩnh',
+    quote: '“Dẫu đêm dài che khuất đỉnh Cô Sơn, trang thơ vẫn nhớ tên người đọc.”',
+    body: 'Giữa những dòng khẩu hiệu sơn đỏ gạch chéo nham nhở, góc dưới bảng đen vẫn còn nét phấn nghiêng thanh mảnh của Tô Dao. Trước khi cơn bão cắt đứt cây cầu dưới chân núi, cô ấy luôn chừa chỗ bên cạnh bàn mình cho Lâm Tĩnh mỗi giờ tan học.',
+  },
+  {
+    id: 'lore-2-tranmac-margin',
+    act: 1,
+    title: 'Lời Phê Bên Lề Bài Luận Văn',
+    location: 'Hành Lang Tầng 2 · Sổ ghi chép rơi',
+    speaker: 'Thầy Trần Mặc',
+    quote: '“Tĩnh viết câu chữ rất có hồn, chỉ đừng để nỗi sợ khiến em thu mình vào bóng tối.”',
+    body: 'Tờ giấy kiểm tra bị vò nát dưới chân tường còn in dấu mực xanh quen thuộc của Thầy Trần Mặc. Thầy vốn biết gia cảnh Lâm Tĩnh đang bị cô lập dưới thị trấn nên thường nán lại sau giờ học, lặng lẽ để lại sách văn học ngoại quốc trong ngăn bàn em — điều mà trong cơn tự ti, Lâm Tĩnh lại tưởng thầy chỉ thiên vị Tô Dao.',
+  },
+  {
+    id: 'lore-3-courtyard-glass',
+    act: 1,
+    title: 'Mảnh Thủy Tinh Dính Máu Dưới Mưa',
+    location: 'Sân Trường Ngập Lũ · Bục cột cờ',
+    speaker: 'Hồi ức Đêm Đấu Tố',
+    quote: '“Ai ném đá trước, người đó sẽ được xóa tên khỏi bảng đen.”',
+    body: 'Dưới lớp bùn đỏ trước cột cờ còn lấp ló những mảnh chai vỡ. Đêm ấy, Trương Vệ Quốc bắt Thầy Trần Mặc quỳ gối trên đống thủy tinh dưới mưa tầm tã để buộc tội “truyền bá tư tưởng đồi trụy”. Khi dòng lũ đỏ tràn qua núi, chính sự cuồng tín của đội tự vệ đã quay sang xé xác kẻ đứng đầu.',
+  },
+  {
+    id: 'lore-4-todao-scarf',
+    act: 2,
+    title: 'Chiếc Khăn Len Hoa Mai Đan Dở',
+    location: 'Ký Túc Xá Nữ · Giường tầng sát cửa sổ',
+    speaker: 'Tô Dao',
+    quote: '“Tháng tư trên núi lạnh lắm, sinh nhật Tĩnh tớ sẽ đan xong kịp cho cậu.”',
+    body: 'Trên chiếc gối ẩm mục nằm gọn cuộn len đỏ thẫm kẹp chiếc kim đan bằng tre và mẩu giấy gấp hình cánh hoa mai. Hóa ra tờ giấy thầy Trần Mặc chuẩn bị cho Tô Dao trốn về quê còn chừa sẵn một dòng trống viết tên “Lâm Tĩnh” bằng bút chì mờ — Tô Dao chưa bao giờ định bỏ bạn lại một mình.',
+  },
+  {
+    id: 'lore-5-yin-draft',
+    act: 2,
+    title: 'Bốn Tờ Giấy Tố Cáo Bị Vò Nát',
+    location: 'Ký Túc Xá Nữ (Âm Giới)',
+    speaker: 'Tiếng nói trong bóng tối',
+    quote: '“Nét chữ run rẩy gạch đi viết lại bốn lần, nhưng cuối cùng vẫn ký tên giao nộp.”',
+    body: 'Trong sắc đỏ thẫm của Âm Giới, bốn tờ giấy nháp lơ lửng quanh hành lang. Tờ thứ nhất chỉ ghi tên thầy Trần, tờ thứ hai gạch tên Tô Dao đi... nhưng đến tờ cuối cùng, nỗi ghen tuông và cơn hoảng loạn khi nghe tin cha mẹ bị bắt đã khiến ngòi bút điền trọn cả nhóm đọc sách.',
+  },
+  {
+    id: 'lore-6-forbidden-list',
+    act: 2,
+    title: 'Tro Sách Cấm Sau Tủ Phát Thanh',
+    location: 'Phòng Phát Thanh · Góc kho sách cũ',
+    speaker: 'Nhóm Đọc Sách Cô Sơn',
+    quote: '“Khi người ta đốt sách, tro bụi vẫn giữ nguyên hơi ấm của những đêm thức trắng.”',
+    body: 'Lẫn trong đống tro đen sau tủ băng cối là bìa cháy sém của những cuốn “Truyện Kiều”, tập thơ Tagore và sổ tay dịch thuật viết tay. Mỗi đêm thứ Bảy, bốn thầy trò từng chong ngọn đèn dầu nhỏ ở đây, truyền tai nhau nghe đài sóng ngắn phát nhạc cổ điển giữa núi rừng tịch mịch.',
+  },
+  {
+    id: 'lore-7-darkroom-ledger',
+    act: 2,
+    title: 'Hồ Sơ Ngầm Của Trương Vệ Quốc',
+    location: 'Phòng Rửa Ảnh Tối · Ngăn tủ khóa đồng',
+    speaker: 'Hồ sơ mật Đội Tự Vệ',
+    quote: '“Dù con bé họ Lâm có khai hay không, lệnh bắt nhà nó đã ký từ tuần trước rồi.”',
+    body: 'Bức thư lệnh úa vàng trong ngăn kéo phòng rửa ảnh phơi bày sự thật tàn nhẫn nhất: lời hứa “tha cho gia đình” của Trương Vệ Quốc ngay từ đầu chỉ là cái bẫy.',
+    secretBody:
+      'NHỜ MỞ KHÓA BẰNG CHÌA ĐỒNG: Bạn rút ra tờ công văn đóng dấu đỏ dưới đáy ngăn kéo. Gia đình Lâm Tĩnh thực chất đã bị định tội trước đêm mưa bão — sự phản bội của Lâm Tĩnh không hề cứu được cha mẹ, mà chỉ tự tay đẩy người thầy và người bạn thân nhất xuống vực thẳm.',
+  },
+  {
+    id: 'lore-8-auditorium-slap',
+    act: 3,
+    title: 'Sự Im Lặng Của Thầy Trần Mặc Trên Bục',
+    location: 'Hội Trường Lớn · Dưới chân khán đài',
+    speaker: 'Thầy Trần Mặc',
+    quote: '“Không sao đâu, Tĩnh... Đừng để hận thù biến em thành giống bọn họ.”',
+    body: 'Giữa tiếng gào thét của hàng trăm học sinh trong hội trường, Trương Vệ Quốc dí chiếc loa sắt vào mặt Lâm Tĩnh, bắt cô tát thầy giáo mình để chứng minh “đã đoạn tuyệt với trí thức phản động”. Cái tát giáng xuống trong nước mắt, còn thầy Trần Mặc chỉ lặng lẽ nhặt cặp kính vỡ và khẽ gật đầu tha thứ.',
+  },
+  {
+    id: 'lore-9-prison-scratches',
+    act: 3,
+    title: 'Bài Thơ Khắc Bằng Móng Tay Trên Tường Giam',
+    location: 'Khu Biệt Giam · Bức tường rêu ẩm',
+    speaker: 'Tô Dao & Thầy Trần Mặc',
+    quote: '“Thanh Minh mưa bụi rơi đầy lối / Nếu còn ngày mai, xin nhớ tên nhau.”',
+    body: 'Những vết cào rỉ máu trên gạch lạnh ghép thành hai câu thơ viết dở của Thầy Trần Mặc và nét chữ trả lời của Tô Dao bên dưới. Họ biết mình khó lòng qua khỏi đêm ấy, nhưng đến hơi thở cuối cùng vẫn không một lời oán trách cô bạn cùng lớp.',
+  },
+  {
+    id: 'lore-10-to-vien-1986',
+    act: 4,
+    title: 'Lời Kể Của Tô Viễn Năm 1986',
+    location: 'Bia Đá Rêu Phong · Cô Sơn 20 Năm Sau',
+    speaker: 'Tô Viễn (Em trai Tô Dao)',
+    quote: '“Chị tôi dặn nếu có một ngày sương tan, hãy mang giúp chị bó hoa cúc trắng lên sân thượng.”',
+    body: 'Hai mươi năm sau biến cố (1986), Tô Viễn — cậu em trai nhỏ năm nào của Tô Dao — vẫn đều đặn mỗi tiết Thanh Minh trèo lên ngôi trường đổ nát trên đỉnh Cô Sơn. Anh đặt hoa cúc trắng trước tấm bia đá dựng tạm cho chị và Thầy Trần Mặc.',
+    secretBody:
+      'SAU KHI DÂNG CHÉN RƯỢU TẾ & VÀNG MÃ: Tô Viễn lặng lẽ cúi đầu giữa làn khói hương. Anh kể rằng năm 1979 chính quyền đã phục hồi danh dự cho Thầy Trần Mặc, nhưng bức thư cuối cùng của chị Tô Dao vẫn còn thiếu một trang sự thật — chỉ chờ linh hồn Lâm Tĩnh tự mình bước ra khỏi vòng lặp mặc cảm.',
+  },
+];
+
 export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
   // HỒI 1
   {
     id: 'hs-12b-ks1',
     scene: 'classroom_12b',
-    x: 230,
+    x: 215,
     label: 'Bàn học của Lâm Tĩnh — Thẻ học sinh & Nhật ký',
     realm: 'both',
     kind: 'keepsake',
     keepsakeId: 'ks-1-linjing-badge',
+  },
+  {
+    id: 'hs-12b-lore1',
+    scene: 'classroom_12b',
+    x: 405,
+    label: 'Bảng đen Lớp 12B — Nét phấn của Tô Dao',
+    realm: 'both',
+    kind: 'lore',
+    loreId: 'lore-1-blackboard',
   },
   {
     id: 'hs-12b-incense',
@@ -379,6 +506,15 @@ export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
     targetX: 840,
   },
   {
+    id: 'hs-cor1-lore2',
+    scene: 'corridor_act1',
+    x: 320,
+    label: 'Trang sổ điểm rơi — Lời phê của Thầy Trần Mặc',
+    realm: 'both',
+    kind: 'lore',
+    loreId: 'lore-2-tranmac-margin',
+  },
+  {
     id: 'hs-cor1-altar',
     scene: 'corridor_act1',
     x: 540,
@@ -409,6 +545,25 @@ export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
     kind: 'door',
     targetScene: 'corridor_act1',
     targetX: 1050,
+  },
+  {
+    id: 'hs-court-money',
+    scene: 'flooded_courtyard',
+    x: 225,
+    label: 'Chậu đồng cạnh hiên — Xấp Tiền Vàng Mã Cháy Dở',
+    realm: 'both',
+    kind: 'pickup',
+    itemReward: INVENTORY_ITEMS.spirit_money,
+    dialogueText: 'Bạn nhặt lại xấp tiền vàng mã còn nguyên vẹn dưới mái hiên ngập nước.',
+  },
+  {
+    id: 'hs-court-lore3',
+    scene: 'flooded_courtyard',
+    x: 380,
+    label: 'Mảnh thủy tinh vỡ dưới mưa bão',
+    realm: 'both',
+    kind: 'lore',
+    loreId: 'lore-3-courtyard-glass',
   },
   {
     id: 'hs-court-flagpole',
@@ -456,6 +611,15 @@ export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
     targetX: 880,
   },
   {
+    id: 'hs-dorm-lore4',
+    scene: 'dorm_hall',
+    x: 245,
+    label: 'Giường tầng của Tô Dao — Khăn len hoa mai đan dở',
+    realm: 'both',
+    kind: 'lore',
+    loreId: 'lore-4-todao-scarf',
+  },
+  {
     id: 'hs-dorm-illogical',
     scene: 'dorm_hall',
     x: 420,
@@ -465,6 +629,15 @@ export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
     targetScene: 'broadcast_room',
     targetX: 110,
     dialogueText: 'Bạn mở cửa phòng ngủ nữ sinh... nhưng phía sau lại là Phòng Phát Thanh tối om.',
+  },
+  {
+    id: 'hs-dorm-lore5',
+    scene: 'dorm_hall',
+    x: 600,
+    label: 'Bốn tờ giấy tố cáo vò nát (Âm Giới)',
+    realm: 'yin',
+    kind: 'lore',
+    loreId: 'lore-5-yin-draft',
   },
   {
     id: 'hs-dorm-sealed-passage',
@@ -499,6 +672,15 @@ export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
     targetX: 420,
   },
   {
+    id: 'hs-broad-lore6',
+    scene: 'broadcast_room',
+    x: 300,
+    label: 'Đống tro sách cấm sau tủ phát thanh',
+    realm: 'both',
+    kind: 'lore',
+    loreId: 'lore-6-forbidden-list',
+  },
+  {
     id: 'hs-broad-radio',
     scene: 'broadcast_room',
     x: 490,
@@ -510,11 +692,11 @@ export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
     id: 'hs-broad-key',
     scene: 'broadcast_room',
     x: 760,
-    label: 'Ngăn kéo bàn phát thanh',
+    label: 'Ngăn kéo bàn phát thanh — Chìa khóa Phòng Rửa Ảnh',
     realm: 'yin',
     kind: 'pickup',
     itemReward: INVENTORY_ITEMS.darkroom_key,
-    dialogueText: 'Trong Âm giới, bạn tìm thấy chìa khóa Phòng Rửa Ảnh nằm dưới cuộn băng.',
+    dialogueText: 'Trong Âm giới, bạn tìm thấy chìa khóa đồng Phòng Rửa Ảnh nằm dưới cuộn băng.',
   },
 
   {
@@ -526,6 +708,15 @@ export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
     kind: 'door',
     targetScene: 'dorm_hall',
     targetX: 1010,
+  },
+  {
+    id: 'hs-dark-lore7',
+    scene: 'darkroom',
+    x: 305,
+    label: 'Ngăn tủ hồ sơ mật Đội Tự Vệ',
+    realm: 'both',
+    kind: 'lore',
+    loreId: 'lore-7-darkroom-ledger',
   },
   {
     id: 'hs-dark-tray',
@@ -563,15 +754,24 @@ export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
   {
     id: 'hs-aud-radio-secret',
     scene: 'auditorium',
-    x: 340,
+    x: 300,
     label: 'Máy thu sóng dự phòng góc sân khấu (Giải mã bí mật Hồi 3)',
     realm: 'both',
     kind: 'radio',
   },
   {
+    id: 'hs-aud-lore8',
+    scene: 'auditorium',
+    x: 495,
+    label: 'Chân bục đấu tố — Ký ức cái tát trong mưa',
+    realm: 'both',
+    kind: 'lore',
+    loreId: 'lore-8-auditorium-slap',
+  },
+  {
     id: 'hs-aud-puppets',
     scene: 'auditorium',
-    x: 680,
+    x: 700,
     label: 'Sân Khấu Bì Ảnh Hí Khổng Lồ',
     realm: 'both',
     kind: 'puppet_stage',
@@ -598,6 +798,15 @@ export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
     kind: 'door',
     targetScene: 'auditorium',
     targetX: 980,
+  },
+  {
+    id: 'hs-pris-lore9',
+    scene: 'prison_cells',
+    x: 300,
+    label: 'Vết cào thơ trên bức tường gạch ẩm',
+    realm: 'both',
+    kind: 'lore',
+    loreId: 'lore-9-prison-scratches',
   },
   {
     id: 'hs-pris-crack',
@@ -633,18 +842,37 @@ export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
     targetX: 830,
   },
   {
+    id: 'hs-1986-wine',
+    scene: 'ruined_hall_1986',
+    x: 225,
+    label: 'Bệ cửa sổ rêu — Chén Rượu Tế Thanh Minh',
+    realm: 'both',
+    kind: 'pickup',
+    itemReward: INVENTORY_ITEMS.wine_cup,
+    dialogueText: 'Bạn nhặt được chén rượu trắng Thanh Minh để tưởng nhớ người đã khuất.',
+  },
+  {
     id: 'hs-1986-pen',
     scene: 'ruined_hall_1986',
-    x: 420,
+    x: 395,
     label: 'Bàn học phủ rêu — Cây bút máy & Áo đồng phục cũ',
     realm: 'both',
     kind: 'keepsake',
     keepsakeId: 'ks-6-tranmac-pen',
   },
   {
+    id: 'hs-1986-memorial',
+    scene: 'ruined_hall_1986',
+    x: 555,
+    label: 'Bia đá Thanh Minh (1986) — Tô Viễn, em trai Tô Dao',
+    realm: 'both',
+    kind: 'memorial_1986',
+    loreId: 'lore-10-to-vien-1986',
+  },
+  {
     id: 'hs-1986-mirror',
     scene: 'ruined_hall_1986',
-    x: 680,
+    x: 725,
     label: 'Tấm gương nứt vỡ (Ngôi trường sau 20 năm)',
     realm: 'both',
     kind: 'mirror_1980',
@@ -689,6 +917,8 @@ export function createInitialThanhMinhState(loopCount = 1): ThanhMinhState {
 
     inventory: [],
     collectedKeepsakeIds: [],
+    collectedLoreIds: [],
+    activeLoreId: null,
     flags: {},
 
     wuxingSequence: [],
@@ -705,6 +935,7 @@ export function createInitialThanhMinhState(loopCount = 1): ThanhMinhState {
       {
         id: 'ghost-act1-paperhat',
         kind: 'paper_hat',
+        variant: 'paper_hat',
         name: 'Vong Hồn Mũ Giấy',
         placardText: 'PHẢN ĐỘNG',
         scene: 'corridor_act1',
@@ -718,6 +949,7 @@ export function createInitialThanhMinhState(loopCount = 1): ThanhMinhState {
       {
         id: 'ghost-act2-tonguewarden',
         kind: 'tongue_warden',
+        variant: 'tongue_warden',
         name: 'Quỷ Sai Cắt Lưỡi',
         placardText: 'VU KHỐNG',
         scene: 'dorm_hall',
@@ -725,6 +957,20 @@ export function createInitialThanhMinhState(loopCount = 1): ThanhMinhState {
         minX: 220,
         maxX: 980,
         vx: -54,
+        facing: -1,
+        pacified: false,
+      },
+      {
+        id: 'ghost-act3-auditor',
+        kind: 'tongue_warden',
+        variant: 'auditor_specter',
+        name: 'Ác Linh Tự Vệ — Trương Vệ Quốc',
+        placardText: 'ĐẤU TỐ',
+        scene: 'auditorium',
+        x: 840,
+        minX: 380,
+        maxX: 980,
+        vx: -50,
         facing: -1,
         pacified: false,
       },
@@ -836,6 +1082,51 @@ export function interactWithHotspot(state: ThanhMinhState): ThanhMinhState {
       activeHotspotId: hs.id,
       subtitleText: ks ? `Thu thập ${ks.title}` : '',
       subtitleTimer: 4.0,
+    };
+  }
+
+  if (hs.kind === 'lore' && hs.loreId) {
+    const entry = STORY_LORE_ENTRIES.find((l) => l.id === hs.loreId);
+    const already = state.collectedLoreIds.includes(hs.loreId);
+    const unlockedDrawer =
+      hs.loreId === 'lore-7-darkroom-ledger' && state.inventory.includes('darkroom_key');
+    return {
+      ...state,
+      collectedLoreIds: already ? state.collectedLoreIds : [...state.collectedLoreIds, hs.loreId],
+      activeLoreId: hs.loreId,
+      flags: unlockedDrawer
+        ? { ...state.flags, darkroom_drawer_opened: true }
+        : state.flags,
+      activeModal: 'memory_echo',
+      activeHotspotId: hs.id,
+      subtitleText: entry
+        ? unlockedDrawer
+          ? `Mở khóa bằng Chìa Đồng: ${entry.title}`
+          : `Mảnh ký ức: ${entry.title}`
+        : '',
+      subtitleTimer: 4.5,
+    };
+  }
+
+  if (hs.kind === 'memorial_1986' && hs.loreId) {
+    const already = state.collectedLoreIds.includes(hs.loreId);
+    const hasOfferings =
+      state.inventory.includes('wine_cup') || state.inventory.includes('spirit_money');
+    const didTributeNow = hasOfferings && !state.flags.offered_qingming_tribute;
+    return {
+      ...state,
+      collectedLoreIds: already ? state.collectedLoreIds : [...state.collectedLoreIds, hs.loreId],
+      activeLoreId: hs.loreId,
+      flags: didTributeNow
+        ? { ...state.flags, offered_qingming_tribute: true }
+        : state.flags,
+      sanity: didTributeNow ? Math.min(100, state.sanity + 18) : state.sanity,
+      activeModal: 'memory_echo',
+      activeHotspotId: hs.id,
+      subtitleText: didTributeNow
+        ? 'Bạn dâng chén rượu Thanh Minh & vàng mã. Tô Viễn khẽ gật đầu — tâm trí dịu lại (+18 Tỉnh táo).'
+        : 'Tô Viễn (1986) lặng lẽ đặt nhành cúc trắng bên bia đá rêu phong trên đỉnh Cô Sơn.',
+      subtitleTimer: 5.5,
     };
   }
 
@@ -1053,8 +1344,11 @@ export function swapPuppetSlots(state: ThanhMinhState, idxA: number, idxB: numbe
     puppetOrder: nextOrder,
     puppetsSolved: solved || state.puppetsSolved,
     flags: solved ? { ...state.flags, puppets_solved: true } : state.flags,
+    ghosts: solved
+      ? state.ghosts.map((g) => (g.scene === 'auditorium' ? { ...g, pacified: true } : g))
+      : state.ghosts,
     subtitleText: solved
-      ? 'Toàn bộ bi kịch đêm đấu tố đã hiện rõ sau màn rối Bì Ảnh Hí. Cửa Khu Biệt Giam đã mở.'
+      ? 'Toàn bộ bi kịch đêm đấu tố đã hiện rõ sau màn rối Bì Ảnh Hí. Ác Linh Tự Vệ tan biến, cửa Khu Biệt Giam đã mở.'
       : 'Sắp xếp 4 màn rối da lừa theo đúng trình tự đêm phản bội.',
     subtitleTimer: 4.5,
   };
@@ -1233,8 +1527,10 @@ export function tickThanhMinhSimulation(
   let staringAtGhost = false;
   let caughtByGhost = false;
   let caughtKind: 'paper_hat' | 'tongue_warden' | null = null;
+  let caughtVariant: GhostVariant | undefined;
   let caughtName: string | null = null;
   let nearestKind: 'paper_hat' | 'tongue_warden' | null = null;
+  let nearestVariant: GhostVariant | undefined;
   let nearestName: string | null = null;
   let nearestDist = Infinity;
 
@@ -1280,6 +1576,7 @@ export function tickThanhMinhSimulation(
     if (dist < nearestDist) {
       nearestDist = dist;
       nearestKind = g.kind;
+      nearestVariant = g.variant;
       nearestName = g.name;
     }
     const looking = (nx > playerX && playerFacing === 1) || (nx < playerX && playerFacing === -1);
@@ -1287,6 +1584,7 @@ export function tickThanhMinhSimulation(
     if (dist < 48 && playerAudible) {
       caughtByGhost = true;
       caughtKind = g.kind;
+      caughtVariant = g.variant;
       caughtName = g.name;
       events.ghostAlerted = true;
     }
@@ -1310,23 +1608,32 @@ export function tickThanhMinhSimulation(
     sanityBottomCount += 1;
     const killerKind: 'paper_hat' | 'tongue_warden' =
       caughtKind ?? nearestKind ?? (prev.act >= 2 ? 'tongue_warden' : 'paper_hat');
+    const killerVariant: GhostVariant =
+      caughtVariant ?? nearestVariant ?? (prev.scene === 'auditorium' ? 'auditor_specter' : killerKind);
     const killerName: string =
       caughtName ??
       nearestName ??
-      (killerKind === 'tongue_warden' ? 'Quỷ Sai Cắt Lưỡi' : 'Vong Hồn Mũ Giấy');
+      (killerVariant === 'auditor_specter'
+        ? 'Ác Linh Tự Vệ — Trương Vệ Quốc'
+        : killerKind === 'tongue_warden'
+          ? 'Quỷ Sai Cắt Lưỡi'
+          : 'Vong Hồn Mũ Giấy');
 
     events.sanityCollapsed = true;
     events.killedByGhostKind = killerKind;
 
     const respawnX = Math.max(meta.minX + 30, Math.min(meta.maxX - 30, meta.minX + 55));
     const storyWhisper =
-      killerKind === 'tongue_warden'
-        ? '“Mượn lời dối trá để sống sót... thì chiếc lưỡi kia còn giữ lại để làm gì?”'
-        : '“Tờ danh sách năm ấy nhuốm máu thầy và bạn — ngươi nghĩ nhắm mắt lại là trốn được sao?”';
+      killerVariant === 'auditor_specter'
+        ? '“Chính mày giao nộp danh sách ấy, sao giờ lại giả vờ quên tiếng loa trên bục?”'
+        : killerKind === 'tongue_warden'
+          ? '“Mượn lời dối trá để sống sót... thì chiếc lưỡi kia còn giữ lại để làm gì?”'
+          : '“Tờ danh sách năm ấy nhuốm máu thầy và bạn — ngươi nghĩ nhắm mắt lại là trốn được sao?”';
 
     deathCutscene = {
       active: true,
       killerKind,
+      killerVariant,
       killerName,
       timer: 0,
       duration: 3.4,
