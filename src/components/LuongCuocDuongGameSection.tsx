@@ -31,11 +31,15 @@ import {
   CellarGameState,
   clearScaleWeights,
   computeAbacusValue,
+  computeRodValue,
   computeScaleWeightsTotal,
   COUNTERWEIGHTS,
   createInitialGameState,
+  decomposeToAbacus,
   dipSealInInk,
   getDayScript,
+  getDiscoveredKeepsakes,
+  getGuidedNextStep,
   getPhaseTitle,
   HISTORICAL_CHRONICLE_QUOTE,
   inspectPulleyParcel,
@@ -147,6 +151,7 @@ export function LuongCuocDuongGameSection({
     createInitialGameState(initialQuery.startDay)
   );
   const [activeDrawer, setActiveDrawer] = useState<ActiveDrawer>('none');
+  const [ledgerTab, setLedgerTab] = useState<'work' | 'chronicle'>('work');
   const [hoveredProp, setHoveredProp] = useState<CellarPropId | null>(null);
   const [muted, setMuted] = useState<boolean>(false);
   const [webglError, setWebglError] = useState<string | null>(null);
@@ -173,6 +178,9 @@ export function LuongCuocDuongGameSection({
   );
   const balanced = useMemo(() => isScaleBalanced(gameState), [gameState]);
   const abacusMatch = useMemo(() => isAbacusMatched(gameState), [gameState]);
+  const guidedStep = useMemo(() => getGuidedNextStep(gameState), [gameState]);
+  const discoveredKeepsakes = useMemo(() => getDiscoveredKeepsakes(gameState), [gameState]);
+  const scaleDelta = scaleWeightsVal - dayScript.actualLiang;
 
   // Mirror screen state to document.body.dataset.state per game shell spec
   useEffect(() => {
@@ -662,10 +670,27 @@ export function LuongCuocDuongGameSection({
             </div>
 
             <p className="text-xs sm:text-sm leading-relaxed text-[#C7BBA4] max-w-[54ch]">
-              Bị khóa dưới hầm lương thành cô lập suốt 30 ngày vây hãm. Cân đong khẩu phần, gảy bàn tính,
-              chấm mực chu sa — cho tới khi trên ròng rọc thả xuống những bao tải rỉ máu mang theo kỷ vật
-              của chính những người dân từng trò chuyện với bạn qua lỗ thông hơi.
+              Bị khóa dưới hầm lương thành Tuy Dương suốt 30 ngày vây hãm. Mỗi ngày hãy thực hiện đúng 4 bước:
+              hạ ròng rọc kiểm bao, xếp quả cân cho thăng bằng, gảy bàn tính khớp số thực, rồi chấm mực son đóng dấu —
+              cho tới khi trên ròng rọc thả xuống những bao tải rỉ máu mang theo kỷ vật của chính những người dân
+              bạn từng trò chuyện qua lỗ thông hơi.
             </p>
+
+            {/* Quick 4-step workflow primer */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 max-w-lg text-[11px] font-mono">
+              <div className="px-2.5 py-1.5 border border-[#453126] bg-[#120B09]/85 text-[#DFCEB2]">
+                1. Hạ Ròng Rọc
+              </div>
+              <div className="px-2.5 py-1.5 border border-[#453126] bg-[#120B09]/85 text-[#DFCEB2]">
+                2. Cân Tiểu Ly
+              </div>
+              <div className="px-2.5 py-1.5 border border-[#453126] bg-[#120B09]/85 text-[#DFCEB2]">
+                3. Gảy Bàn Tính
+              </div>
+              <div className="px-2.5 py-1.5 border border-[#6E2A25] bg-[#1D0C0B]/85 text-[#F2CCC8]">
+                4. Chấm Mực & Ký
+              </div>
+            </div>
 
             {/* Chapter / Phase Quick Selector */}
             <div className="space-y-1.5">
@@ -855,7 +880,7 @@ export function LuongCuocDuongGameSection({
             </div>
           </div>
 
-          {/* Center-Top Subtle Narrative / Hovered Prop Cue */}
+          {/* Center-Top Guided Workflow & Narrative Cue */}
           <div className="flex flex-col items-center gap-1.5 my-1">
             {!gameState.lampLit && (
               <button
@@ -868,17 +893,25 @@ export function LuongCuocDuongGameSection({
             )}
 
             {hoveredProp ? (
-              <div className="px-3 py-1 bg-[#140C0A]/92 border border-[#735139] text-center">
+              <div className="px-3.5 py-1 bg-[#140C0A]/94 border border-[#8A6142] text-center shadow-lg">
                 <span className="text-xs font-serif font-bold text-[#F2DFBA]">
                   {PROP_LABELS[hoveredProp].title}
                 </span>
                 <span className="mx-2 text-[#6B503C]">·</span>
-                <span className="text-[11px] font-mono text-[#C7B393]">
+                <span className="text-[11px] font-mono text-[#D6C3A3]">
                   {PROP_LABELS[hoveredProp].hint}
                 </span>
               </div>
             ) : (
-              <div className="max-w-xl px-3.5 py-1 bg-[#120B09]/88 border border-[#3B291F] text-center">
+              <div
+                data-testid="lcd-guided-banner"
+                className="pointer-events-auto max-w-2xl px-3.5 py-1.5 bg-[#120B09]/90 border border-[#4D3628] text-center shadow-lg space-y-0.5"
+              >
+                <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] font-mono">
+                  <span className="text-[#E8B25C] font-bold">{guidedStep.title}</span>
+                  <span className="text-[#5E4535]">·</span>
+                  <span className="text-[#C7B69B]">{guidedStep.hint}</span>
+                </div>
                 <p
                   data-testid="lcd-event-log"
                   className="text-xs font-serif text-[#DDD0B6] leading-snug"
@@ -894,7 +927,7 @@ export function LuongCuocDuongGameSection({
             {activeDrawer === 'ledger' && (
               <div
                 data-testid="lcd-ledger-drawer"
-                className="pointer-events-auto w-full max-w-[360px] max-h-full overflow-y-auto bg-[#1D1510]/96 border border-[#7A593E] p-3.5 shadow-2xl space-y-3"
+                className="pointer-events-auto w-full max-w-[380px] max-h-full overflow-y-auto bg-[#1B130F]/96 border border-[#856143] p-3.5 shadow-2xl space-y-2.5"
               >
                 <div className="flex items-start justify-between gap-2 border-b border-[#473325] pb-2">
                   <div>
@@ -915,265 +948,463 @@ export function LuongCuocDuongGameSection({
                   </button>
                 </div>
 
-                {dayScript.generalDecree && (
-                  <div className="p-2 border border-[#A62822] bg-[#360E0D] text-[11px] font-serif text-[#FADAD6]">
-                    {dayScript.generalDecree}
-                  </div>
-                )}
-
-                {/* Step 1: Pulley & Parcel */}
-                <div className="space-y-1.5 p-2.5 bg-[#140E0B] border border-[#3D2B20]">
-                  <div className="flex items-center justify-between text-[11px] font-mono text-[#C7B497]">
-                    <span>1. KIỂM TRA HÀNG RÒNG RỌC</span>
-                    <span className="tabular-nums text-[#E8B872]">
-                      Lệnh: {dayScript.targetLiang} lượng
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {!gameState.pulleyLowered ? (
-                      <button
-                        type="button"
-                        data-testid="lcd-lower-pulley-btn"
-                        onClick={() => handlePropInteraction('pulley')}
-                        className="w-full py-1.5 px-3 bg-[#362419] hover:bg-[#4A3223] border border-[#8A6546] text-xs font-mono text-[#F4E6CC] cursor-pointer"
-                      >
-                        Kéo Ròng Rọc Hạ Hàng
-                      </button>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          data-testid="lcd-inspect-btn"
-                          onClick={() => {
-                            if (!gameState.parcelInspected) {
-                              if (dayScript.keepsake) audioRef.current?.playRattleSound();
-                              setGameState((prev) => inspectPulleyParcel(prev));
-                            }
-                            if (dayScript.keepsake) setActiveDrawer('keepsake');
-                          }}
-                          className={`flex-1 py-1.5 px-2 border text-[11px] font-mono cursor-pointer ${
-                            gameState.parcelInspected
-                              ? 'border-[#546B48] bg-[#1C2618] text-[#CFE0C5]'
-                              : 'border-[#8C6444] bg-[#2D1D14] text-[#F5E5C7] hover:bg-[#3E281C]'
-                          }`}
-                        >
-                          {gameState.parcelInspected ? 'Đã Lục Kiểm' : 'Mở Bao Kiểm Tra'}
-                        </button>
-                        <button
-                          type="button"
-                          data-testid="lcd-place-scale-btn"
-                          disabled={gameState.parcelOnScale}
-                          onClick={() => {
-                            audioRef.current?.playScaleClink(true);
-                            setGameState((prev) => placeParcelOnScale(prev));
-                          }}
-                          className={`flex-1 py-1.5 px-2 border text-[11px] font-mono ${
-                            gameState.parcelOnScale
-                              ? 'border-[#546B48] bg-[#1C2618] text-[#CFE0C5] cursor-default'
-                              : 'border-[#A67841] bg-[#362317] text-[#F5E5C7] hover:bg-[#4B3120] cursor-pointer'
-                          }`}
-                        >
-                          {gameState.parcelOnScale ? 'Đã Đặt Lên Cân' : 'Đặt Lên Cân'}
-                        </button>
-                      </>
-                    )}
-                  </div>
+                {/* Drawer Tabs: Workstation vs Story/Keepsake Chronicle */}
+                <div className="grid grid-cols-2 gap-1 text-[11px] font-mono">
+                  <button
+                    type="button"
+                    onClick={() => setLedgerTab('work')}
+                    className={`py-1.5 border cursor-pointer transition-colors ${
+                      ledgerTab === 'work'
+                        ? 'border-[#C89A58] bg-[#332014] text-[#FAF0DC] font-bold'
+                        : 'border-[#3D2B20] bg-[#140E0B] text-[#9E8B72] hover:text-[#E6D6BA]'
+                    }`}
+                  >
+                    Kiểm Kho Hôm Nay
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLedgerTab('chronicle')}
+                    className={`py-1.5 border cursor-pointer transition-colors tabular-nums ${
+                      ledgerTab === 'chronicle'
+                        ? 'border-[#C89A58] bg-[#332014] text-[#FAF0DC] font-bold'
+                        : 'border-[#3D2B20] bg-[#140E0B] text-[#9E8B72] hover:text-[#E6D6BA]'
+                    }`}
+                  >
+                    Hồ Sơ & Kỷ Vật ({discoveredKeepsakes.length})
+                  </button>
                 </div>
 
-                {/* Step 2: Balance Scale Counterweights */}
-                <div className="space-y-1.5 p-2.5 bg-[#140E0B] border border-[#3D2B20]">
-                  <div className="flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-[#C7B497]">2. QUẢ CÂN TIỂU LY</span>
-                    <span
-                      className={`tabular-nums font-bold ${
-                        balanced ? 'text-[#9ED485]' : 'text-[#E3A857]'
-                      }`}
-                    >
-                      {scaleWeightsVal} lượng {balanced ? '· CÂN BẰNG' : ''}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-6 gap-1">
-                    {COUNTERWEIGHTS.map((w) => (
-                      <button
-                        key={w}
-                        type="button"
-                        data-testid={`lcd-weight-${w}`}
-                        onClick={() => {
-                          audioRef.current?.playScaleClink(w >= 20);
-                          setGameState((prev) => addScaleWeight(prev, w));
-                        }}
-                        className="py-1.5 border border-[#6E5038] bg-[#261912] hover:border-[#D4A259] text-[11px] font-mono text-[#F0DFBE] tabular-nums cursor-pointer"
-                      >
-                        +{w}
-                      </button>
-                    ))}
-                  </div>
-                  {gameState.scaleWeights.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1 pt-1">
-                      {gameState.scaleWeights.map((w, idx) => (
-                        <button
-                          key={`${w}-${idx}`}
-                          type="button"
-                          onClick={() => {
-                            audioRef.current?.playScaleClink(false);
-                            setGameState((prev) => removeScaleWeightAt(prev, idx));
-                          }}
-                          className="px-1.5 py-0.5 bg-[#3B291C] border border-[#7A593C] text-[10px] font-mono text-[#EAD7B3] hover:bg-[#571F1B] cursor-pointer"
-                        >
-                          {w}×
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => setGameState((prev) => clearScaleWeights(prev))}
-                        className="ml-auto text-[10px] font-mono text-[#B89074] hover:text-[#F5E6C8] cursor-pointer"
-                      >
-                        Gỡ hết
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Step 3: Interactive 3-Rod Suanpan Abacus */}
-                <div className="space-y-1.5 p-2.5 bg-[#140E0B] border border-[#3D2B20]">
-                  <div className="flex items-center justify-between text-[11px] font-mono">
-                    <span className="text-[#C7B497]">3. BÀN TÍNH GẢY</span>
-                    <span
-                      data-testid="lcd-abacus-val"
-                      className={`tabular-nums font-bold ${
-                        abacusMatch ? 'text-[#9ED485]' : 'text-[#E3A857]'
-                      }`}
-                    >
-                      {abacusVal} lượng {abacusMatch ? '· KHỚP SỐ' : ''}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['Trăm', 'Chục', 'Đơn'] as const).map((label, rIdx) => {
-                      const rodIdx = rIdx as 0 | 1 | 2;
-                      const rod = gameState.abacus[rodIdx];
-                      return (
-                        <div
-                          key={label}
-                          className="p-1.5 bg-[#1D130E] border border-[#4D3626] flex flex-col items-center gap-1"
-                        >
-                          <span className="text-[10px] font-mono text-[#A69277]">{label}</span>
-                          <button
-                            type="button"
-                            data-testid={`lcd-abacus-heaven-${rodIdx}`}
-                            onClick={() => {
-                              audioRef.current?.playAbacusClack(1.12);
-                              setGameState((prev) => ({
-                                ...prev,
-                                abacus: toggleAbacusHeaven(prev.abacus, rodIdx),
-                              }));
-                            }}
-                            className={`w-full py-1 text-[10px] font-mono border cursor-pointer ${
-                              rod.heaven
-                                ? 'border-[#D99F4E] bg-[#6E3B1D] text-[#FFF0D4]'
-                                : 'border-[#4D3626] bg-[#281B14] text-[#9E8B73]'
-                            }`}
-                          >
-                            +5 {rod.heaven ? '▼' : '▲'}
-                          </button>
-                          <div className="w-full h-px bg-[#694B36]" />
-                          <div className="grid grid-cols-4 gap-0.5 w-full">
-                            {[1, 2, 3, 4].map((beadNum) => {
-                              const active = rod.earth >= beadNum;
-                              return (
-                                <button
-                                  key={beadNum}
-                                  type="button"
-                                  data-testid={`lcd-abacus-earth-${rodIdx}-${beadNum}`}
-                                  aria-label={`Cột ${label} ${beadNum} hạt dưới`}
-                                  onClick={() => {
-                                    audioRef.current?.playAbacusClack(0.95 + beadNum * 0.04);
-                                    setGameState((prev) => ({
-                                      ...prev,
-                                      abacus: setAbacusEarth(prev.abacus, rodIdx, beadNum),
-                                    }));
-                                  }}
-                                  className={`h-5 text-[10px] font-mono border cursor-pointer ${
-                                    active
-                                      ? 'border-[#C88D48] bg-[#6B3E21] text-[#FFF0D4]'
-                                      : 'border-[#3D2B1F] bg-[#160F0B] text-[#7D6C58]'
-                                  }`}
-                                >
-                                  1
-                                </button>
-                              );
-                            })}
-                          </div>
+                {ledgerTab === 'chronicle' ? (
+                  <div className="space-y-2.5">
+                    <div className="p-2.5 bg-[#140E0B] border border-[#3D2B20] space-y-1.5">
+                      <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#C89A58]">
+                        Dân Thành Qua Lỗ Thông Hơi
+                      </div>
+                      <div className="space-y-1 text-xs font-serif text-[#DFCEB2]">
+                        <div className="flex items-center justify-between">
+                          <span>Lão Trương (Thợ bánh phố Đông)</span>
+                          <span className="font-mono text-[10px] text-[#B89F7D] tabular-nums">
+                            Gắn kết: {gameState.npcBonds.baker}
+                          </span>
                         </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Step 4: Ink Dip & Seal Stamp */}
-                <div className="space-y-1.5 p-2.5 bg-[#140E0B] border border-[#3D2B20]">
-                  <div className="flex items-center justify-between text-[11px] font-mono text-[#C7B497]">
-                    <span>4. MỰC CHU SA & CON DẤU</span>
-                    <span className={gameState.sealInked ? 'text-[#E3544B]' : 'text-[#8C7B65]'}>
-                      {gameState.sealInked ? 'Đã Thấm Son' : 'Chưa Chấm Mực'}
-                    </span>
-                  </div>
-
-                  {gameState.stampedDecision === null ? (
-                    <div className="space-y-1.5">
-                      <button
-                        type="button"
-                        data-testid="lcd-dip-ink-btn"
-                        disabled={gameState.sealInked}
-                        onClick={() => handlePropInteraction('inkpad')}
-                        className={`w-full py-1.5 px-3 border text-xs font-mono ${
-                          gameState.sealInked
-                            ? 'border-[#73231F] bg-[#2D100E] text-[#D48A84] cursor-default'
-                            : 'border-[#B33930] bg-[#451310] hover:bg-[#5E1A16] text-[#FADAD6] cursor-pointer'
-                        }`}
-                      >
-                        {gameState.sealInked ? 'Con Dấu Đã Thấm Đỏ' : 'Chấm Mực Chu Sa'}
-                      </button>
-
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <button
-                          type="button"
-                          data-testid="lcd-stamp-approve-btn"
-                          disabled={!gameState.sealInked || !gameState.pulleyLowered}
-                          onClick={() => handleStamp('approved')}
-                          className={`py-2 px-2 border text-xs font-serif font-bold ${
-                            gameState.sealInked && gameState.pulleyLowered
-                              ? 'border-[#D44840] bg-[#821512] hover:bg-[#9E1C18] text-[#FFF1EC] cursor-pointer'
-                              : 'border-[#3B2A22] bg-[#1A120E] text-[#6B5B4E] cursor-not-allowed'
-                          }`}
-                        >
-                          Duyệt Xuất Kho
-                        </button>
-                        <button
-                          type="button"
-                          data-testid="lcd-stamp-reject-btn"
-                          disabled={!gameState.sealInked || !gameState.pulleyLowered}
-                          onClick={() => handleStamp('rejected')}
-                          className={`py-2 px-2 border text-xs font-serif font-bold ${
-                            gameState.sealInked && gameState.pulleyLowered
-                              ? 'border-[#6E6459] bg-[#2B2622] hover:bg-[#3B342E] text-[#EBE2D3] cursor-pointer'
-                              : 'border-[#3B2A22] bg-[#1A120E] text-[#6B5B4E] cursor-not-allowed'
-                          }`}
-                        >
-                          Từ Chối / Giấu
-                        </button>
+                        <div className="flex items-center justify-between">
+                          <span>Thị Mai & Bé An (Ngõ Hòe)</span>
+                          <span className="font-mono text-[10px] text-[#B89F7D] tabular-nums">
+                            Gắn kết: {gameState.npcBonds.mother}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span>Thư Sinh Tống Văn</span>
+                          <span className="font-mono text-[10px] text-[#B89F7D] tabular-nums">
+                            Gắn kết: {gameState.npcBonds.scholar}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  ) : (
-                    <button
-                      type="button"
-                      data-testid="lcd-next-day-btn"
-                      onClick={handleNextDay}
-                      className="w-full py-2 px-3 bg-[#7D572D] hover:bg-[#996B38] border border-[#D4A460] text-[#FFF4DE] font-serif font-bold text-xs tracking-wider uppercase cursor-pointer"
+
+                    <div className="p-2.5 bg-[#140E0B] border border-[#3D2B20] space-y-2">
+                      <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#D97A73]">
+                        Kỷ Vật Đã Tìm Thấy Trong Bao Hàng
+                      </div>
+                      {discoveredKeepsakes.length === 0 ? (
+                        <p className="text-xs font-serif italic text-[#8F7E68]">
+                          Chưa phát hiện kỷ vật nào. Hãy luôn chọn "Mở Bao Kiểm Tra" sau khi hạ ròng rọc.
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {discoveredKeepsakes.map((entry) => (
+                            <div
+                              key={entry.day}
+                              className="p-2 border border-[#5C2420] bg-[#1F100F] space-y-1"
+                            >
+                              <div className="flex items-center justify-between gap-2 text-[10px] font-mono">
+                                <span className="text-[#E08A84]">
+                                  Ngày {entry.day} · {entry.keepsake.hanTag}
+                                </span>
+                                <span
+                                  className={
+                                    entry.decision === 'rejected'
+                                      ? 'text-[#9ED485]'
+                                      : entry.decision === 'approved'
+                                        ? 'text-[#E36C64]'
+                                        : 'text-[#E8B25C]'
+                                  }
+                                >
+                                  {entry.decision === 'rejected'
+                                    ? 'Đã giữ lại'
+                                    : entry.decision === 'approved'
+                                      ? 'Đã đẩy ra cửa'
+                                      : 'Đang chờ quyết định'}
+                                </span>
+                              </div>
+                              <div className="text-xs font-serif font-bold text-[#F5DFDC]">
+                                {entry.keepsake.title}
+                              </div>
+                              <p className="text-[11px] font-serif leading-relaxed text-[#D1B2AE]">
+                                {entry.keepsake.description}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {gameState.history.length > 0 && (
+                      <div className="p-2.5 bg-[#140E0B] border border-[#3D2B20] space-y-1">
+                        <div className="text-[10px] font-mono uppercase tracking-[0.14em] text-[#9E8B72]">
+                          Nhật Ký Đóng Dấu Gần Nhất
+                        </div>
+                        <div className="space-y-1 max-h-36 overflow-y-auto">
+                          {[...gameState.history]
+                            .reverse()
+                            .slice(0, 6)
+                            .map((h) => (
+                              <div
+                                key={h.day}
+                                className="flex items-center justify-between text-[11px] font-mono text-[#C7B497]"
+                              >
+                                <span className="tabular-nums">
+                                  Ngày {h.day} · {h.ledgerCode}
+                                </span>
+                                <span
+                                  className={
+                                    h.decision === 'approved' ? 'text-[#E3A857]' : 'text-[#97B4D4]'
+                                  }
+                                >
+                                  {h.decision === 'approved' ? 'Duyệt' : 'Từ chối'}
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {dayScript.generalDecree && (
+                      <div className="p-2 border border-[#A62822] bg-[#360E0D] text-[11px] font-serif text-[#FADAD6]">
+                        {dayScript.generalDecree}
+                      </div>
+                    )}
+
+                    {/* Phase Rule & Story Sensory Context */}
+                    <div className="p-2 bg-[#140E0B] border border-[#3B291E] space-y-1">
+                      <p className="text-[11px] font-serif italic text-[#C9BA9F] leading-snug">
+                        {gameState.parcelInspected && dayScript.inspectDetail
+                          ? dayScript.inspectDetail
+                          : dayScript.atmosphereNote}
+                      </p>
+                      <p className="text-[10px] font-mono text-[#D9A760]">{guidedStep.ruleSummary}</p>
+                    </div>
+
+                    {/* Step 1: Pulley & Parcel */}
+                    <div
+                      className={`space-y-1.5 p-2.5 bg-[#140E0B] border ${
+                        guidedStep.stepNumber === 1 ? 'border-[#C89A58]' : 'border-[#3D2B20]'
+                      }`}
                     >
-                      {gameState.day >= 30 ? 'Kết Thúc Ca Trực Ngày 30 →' : `Kết Sổ · Sang Ngày ${gameState.day + 1} →`}
-                    </button>
-                  )}
-                </div>
+                      <div className="flex items-center justify-between text-[11px] font-mono text-[#C7B497]">
+                        <span>1. KIỂM TRA HÀNG RÒNG RỌC</span>
+                        <span className="tabular-nums text-[#E8B872]">
+                          Lệnh xuất: {dayScript.targetLiang} lượng
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {!gameState.pulleyLowered ? (
+                          <button
+                            type="button"
+                            data-testid="lcd-lower-pulley-btn"
+                            onClick={() => handlePropInteraction('pulley')}
+                            className="w-full py-1.5 px-3 bg-[#362419] hover:bg-[#4A3223] border border-[#8A6546] text-xs font-mono text-[#F4E6CC] cursor-pointer"
+                          >
+                            Kéo Ròng Rọc Hạ Hàng
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              data-testid="lcd-inspect-btn"
+                              onClick={() => {
+                                if (!gameState.parcelInspected) {
+                                  if (dayScript.keepsake) audioRef.current?.playRattleSound();
+                                  setGameState((prev) => inspectPulleyParcel(prev));
+                                }
+                                if (dayScript.keepsake) setActiveDrawer('keepsake');
+                              }}
+                              className={`flex-1 py-1.5 px-2 border text-[11px] font-mono cursor-pointer ${
+                                gameState.parcelInspected
+                                  ? 'border-[#546B48] bg-[#1C2618] text-[#CFE0C5]'
+                                  : 'border-[#C89A58] bg-[#2D1D14] text-[#F5E5C7] hover:bg-[#3E281C]'
+                              }`}
+                            >
+                              {gameState.parcelInspected ? '✓ Đã Mở Bao' : 'Mở Bao Kiểm Tra'}
+                            </button>
+                            <button
+                              type="button"
+                              data-testid="lcd-place-scale-btn"
+                              disabled={gameState.parcelOnScale}
+                              onClick={() => {
+                                audioRef.current?.playScaleClink(true);
+                                setGameState((prev) => placeParcelOnScale(prev));
+                              }}
+                              className={`flex-1 py-1.5 px-2 border text-[11px] font-mono ${
+                                gameState.parcelOnScale
+                                  ? 'border-[#546B48] bg-[#1C2618] text-[#CFE0C5] cursor-default'
+                                  : 'border-[#C89A58] bg-[#362317] text-[#F5E5C7] hover:bg-[#4B3120] cursor-pointer'
+                              }`}
+                            >
+                              {gameState.parcelOnScale ? '✓ Đã Lên Cân' : 'Đặt Lên Cân'}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Step 2: Balance Scale Counterweights */}
+                    <div
+                      className={`space-y-1.5 p-2.5 bg-[#140E0B] border ${
+                        guidedStep.stepNumber === 2 ? 'border-[#C89A58]' : 'border-[#3D2B20]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-[11px] font-mono">
+                        <span className="text-[#C7B497]">2. QUẢ CÂN TIỂU LY</span>
+                        <span
+                          className={`tabular-nums font-bold ${
+                            balanced ? 'text-[#9ED485]' : 'text-[#E3A857]'
+                          }`}
+                        >
+                          {!gameState.parcelOnScale
+                            ? 'Chưa đặt hàng'
+                            : balanced
+                              ? `${scaleWeightsVal} lượng · CÂN BẰNG`
+                              : scaleDelta < 0
+                                ? `${scaleWeightsVal} lượng · Thiếu ${Math.abs(scaleDelta)}`
+                                : `${scaleWeightsVal} lượng · Dư ${scaleDelta}`}
+                        </span>
+                      </div>
+
+                      {balanced && dayScript.actualLiang < dayScript.targetLiang && (
+                        <div className="px-2 py-1 border border-[#9E4E2E] bg-[#2D140D] text-[11px] font-mono text-[#FFD5B8] tabular-nums">
+                          Phát hiện hao hụt {dayScript.targetLiang - dayScript.actualLiang} lượng ({dayScript.actualLiang}/{dayScript.targetLiang})!
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-6 gap-1">
+                        {COUNTERWEIGHTS.map((w) => (
+                          <button
+                            key={w}
+                            type="button"
+                            data-testid={`lcd-weight-${w}`}
+                            onClick={() => {
+                              audioRef.current?.playScaleClink(w >= 20);
+                              setGameState((prev) => addScaleWeight(prev, w));
+                            }}
+                            className="py-1.5 border border-[#6E5038] bg-[#261912] hover:border-[#D4A259] text-[11px] font-mono text-[#F0DFBE] tabular-nums cursor-pointer"
+                          >
+                            +{w}
+                          </button>
+                        ))}
+                      </div>
+                      {gameState.scaleWeights.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1 pt-1">
+                          {gameState.scaleWeights.map((w, idx) => (
+                            <button
+                              key={`${w}-${idx}`}
+                              type="button"
+                              onClick={() => {
+                                audioRef.current?.playScaleClink(false);
+                                setGameState((prev) => removeScaleWeightAt(prev, idx));
+                              }}
+                              className="px-1.5 py-0.5 bg-[#3B291C] border border-[#7A593C] text-[10px] font-mono text-[#EAD7B3] hover:bg-[#571F1B] cursor-pointer"
+                            >
+                              {w}×
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => setGameState((prev) => clearScaleWeights(prev))}
+                            className="ml-auto text-[10px] font-mono text-[#B89074] hover:text-[#F5E6C8] cursor-pointer"
+                          >
+                            Gỡ hết
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Step 3: Interactive 3-Rod Suanpan Abacus */}
+                    <div
+                      className={`space-y-1.5 p-2.5 bg-[#140E0B] border ${
+                        guidedStep.stepNumber === 3 ? 'border-[#C89A58]' : 'border-[#3D2B20]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
+                        <span className="text-[#C7B497]">3. BÀN TÍNH GẢY</span>
+                        <div className="flex items-center gap-2">
+                          {balanced && !abacusMatch && (
+                            <button
+                              type="button"
+                              data-testid="lcd-abacus-automatch-btn"
+                              onClick={() => {
+                                audioRef.current?.playAbacusClack(1.06);
+                                setGameState((prev) => ({
+                                  ...prev,
+                                  abacus: decomposeToAbacus(dayScript.actualLiang),
+                                }));
+                              }}
+                              className="px-1.5 py-0.5 border border-[#8E6A44] bg-[#2D1E13] hover:bg-[#422B1A] text-[10px] text-[#F2D9AA] cursor-pointer"
+                            >
+                              Khớp {dayScript.actualLiang}
+                            </button>
+                          )}
+                          <span
+                            data-testid="lcd-abacus-val"
+                            className={`tabular-nums font-bold ${
+                              abacusMatch ? 'text-[#9ED485]' : 'text-[#E3A857]'
+                            }`}
+                          >
+                            {abacusVal} lượng {abacusMatch ? '· KHỚP SỐ' : ''}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['Trăm', 'Chục', 'Đơn'] as const).map((label, rIdx) => {
+                          const rodIdx = rIdx as 0 | 1 | 2;
+                          const rod = gameState.abacus[rodIdx];
+                          const rodDigit = computeRodValue(rod);
+                          return (
+                            <div
+                              key={label}
+                              className="p-1.5 bg-[#1D130E] border border-[#4D3626] flex flex-col items-center gap-1"
+                            >
+                              <div className="w-full flex items-center justify-between px-0.5 text-[10px] font-mono">
+                                <span className="text-[#A69277]">{label}</span>
+                                <span className="font-bold text-[#F2DFBA] tabular-nums">{rodDigit}</span>
+                              </div>
+                              <button
+                                type="button"
+                                data-testid={`lcd-abacus-heaven-${rodIdx}`}
+                                onClick={() => {
+                                  audioRef.current?.playAbacusClack(1.12);
+                                  setGameState((prev) => ({
+                                    ...prev,
+                                    abacus: toggleAbacusHeaven(prev.abacus, rodIdx),
+                                  }));
+                                }}
+                                className={`w-full py-1 text-[10px] font-mono border cursor-pointer ${
+                                  rod.heaven
+                                    ? 'border-[#D99F4E] bg-[#6E3B1D] text-[#FFF0D4]'
+                                    : 'border-[#4D3626] bg-[#281B14] text-[#9E8B73]'
+                                }`}
+                              >
+                                +5 {rod.heaven ? '▼' : '▲'}
+                              </button>
+                              <div className="w-full h-px bg-[#694B36]" />
+                              <div className="grid grid-cols-4 gap-0.5 w-full">
+                                {[1, 2, 3, 4].map((beadNum) => {
+                                  const active = rod.earth >= beadNum;
+                                  return (
+                                    <button
+                                      key={beadNum}
+                                      type="button"
+                                      data-testid={`lcd-abacus-earth-${rodIdx}-${beadNum}`}
+                                      aria-label={`Cột ${label} ${beadNum} hạt dưới`}
+                                      onClick={() => {
+                                        audioRef.current?.playAbacusClack(0.95 + beadNum * 0.04);
+                                        setGameState((prev) => ({
+                                          ...prev,
+                                          abacus: setAbacusEarth(prev.abacus, rodIdx, beadNum),
+                                        }));
+                                      }}
+                                      className={`h-5 text-[10px] font-mono border cursor-pointer ${
+                                        active
+                                          ? 'border-[#C88D48] bg-[#6B3E21] text-[#FFF0D4]'
+                                          : 'border-[#3D2B1F] bg-[#160F0B] text-[#7D6C58]'
+                                      }`}
+                                    >
+                                      1
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Step 4: Ink Dip & Seal Stamp */}
+                    <div
+                      className={`space-y-1.5 p-2.5 bg-[#140E0B] border ${
+                        guidedStep.stepNumber === 4 && gameState.stampedDecision === null
+                          ? 'border-[#C89A58]'
+                          : 'border-[#3D2B20]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between text-[11px] font-mono text-[#C7B497]">
+                        <span>4. MỰC CHU SA & CON DẤU</span>
+                        <span className={gameState.sealInked ? 'text-[#E3544B]' : 'text-[#8C7B65]'}>
+                          {gameState.sealInked ? 'Đã Thấm Son' : 'Chưa Chấm Mực'}
+                        </span>
+                      </div>
+
+                      {gameState.stampedDecision === null ? (
+                        <div className="space-y-1.5">
+                          <button
+                            type="button"
+                            data-testid="lcd-dip-ink-btn"
+                            disabled={gameState.sealInked}
+                            onClick={() => handlePropInteraction('inkpad')}
+                            className={`w-full py-1.5 px-3 border text-xs font-mono ${
+                              gameState.sealInked
+                                ? 'border-[#73231F] bg-[#2D100E] text-[#D48A84] cursor-default'
+                                : 'border-[#B33930] bg-[#451310] hover:bg-[#5E1A16] text-[#FADAD6] cursor-pointer'
+                            }`}
+                          >
+                            {gameState.sealInked ? '✓ Con Dấu Đã Thấm Đỏ' : 'Chấm Mực Chu Sa'}
+                          </button>
+
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <button
+                              type="button"
+                              data-testid="lcd-stamp-approve-btn"
+                              disabled={!gameState.sealInked || !gameState.pulleyLowered}
+                              onClick={() => handleStamp('approved')}
+                              className={`py-2 px-2 border text-xs font-serif font-bold ${
+                                gameState.sealInked && gameState.pulleyLowered
+                                  ? 'border-[#D44840] bg-[#821512] hover:bg-[#9E1C18] text-[#FFF1EC] cursor-pointer'
+                                  : 'border-[#3B2A22] bg-[#1A120E] text-[#6B5B4E] cursor-not-allowed'
+                              }`}
+                            >
+                              Duyệt Xuất Kho
+                            </button>
+                            <button
+                              type="button"
+                              data-testid="lcd-stamp-reject-btn"
+                              disabled={!gameState.sealInked || !gameState.pulleyLowered}
+                              onClick={() => handleStamp('rejected')}
+                              className={`py-2 px-2 border text-xs font-serif font-bold ${
+                                gameState.sealInked && gameState.pulleyLowered
+                                  ? 'border-[#6E6459] bg-[#2B2622] hover:bg-[#3B342E] text-[#EBE2D3] cursor-pointer'
+                                  : 'border-[#3B2A22] bg-[#1A120E] text-[#6B5B4E] cursor-not-allowed'
+                              }`}
+                            >
+                              Từ Chối / Giấu
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          data-testid="lcd-next-day-btn"
+                          onClick={handleNextDay}
+                          className="w-full py-2 px-3 bg-[#7D572D] hover:bg-[#996B38] border border-[#D4A460] text-[#FFF4DE] font-serif font-bold text-xs tracking-wider uppercase cursor-pointer"
+                        >
+                          {gameState.day >= 30 ? 'Kết Thúc Ca Trực Ngày 30 →' : `Kết Sổ · Sang Ngày ${gameState.day + 1} →`}
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -1291,7 +1522,7 @@ export function LuongCuocDuongGameSection({
               data-testid="dock-lamp-btn"
               onClick={() => handlePropInteraction('lamp')}
               className={`min-h-[36px] px-2.5 py-1.5 border text-[11px] font-mono inline-flex items-center gap-1.5 cursor-pointer ${
-                !gameState.lampLit || gameState.lampOil < 30
+                !gameState.lampLit || gameState.lampOil < 30 || guidedStep.focusProp === 'lamp'
                   ? 'border-[#D9534F] bg-[#451412] text-[#FFE0DB]'
                   : 'border-[#543B2C] bg-[#140D0A]/94 text-[#E6D2B2] hover:border-[#C28D4E]'
               }`}
@@ -1303,16 +1534,27 @@ export function LuongCuocDuongGameSection({
             <button
               type="button"
               data-testid="dock-pulley-btn"
-              onClick={() => handlePropInteraction('pulley')}
-              className="min-h-[36px] px-2.5 py-1.5 border border-[#543B2C] bg-[#140D0A]/94 hover:border-[#C28D4E] text-[11px] font-mono text-[#E6D2B2] inline-flex items-center gap-1.5 cursor-pointer"
+              onClick={() => {
+                setLedgerTab('work');
+                handlePropInteraction('pulley');
+              }}
+              className={`min-h-[36px] px-2.5 py-1.5 border text-[11px] font-mono inline-flex items-center gap-1.5 cursor-pointer ${
+                guidedStep.focusProp === 'pulley' ||
+                guidedStep.focusProp === 'scale' ||
+                guidedStep.focusProp === 'abacus'
+                  ? 'border-[#E8B25C] bg-[#362214] text-[#FFF0D1]'
+                  : 'border-[#543B2C] bg-[#140D0A]/94 hover:border-[#C28D4E] text-[#E6D2B2]'
+              }`}
             >
               <Scale className="w-3.5 h-3.5 text-[#C89A58]" aria-hidden="true" />
               <span>
                 {!gameState.pulleyLowered
-                  ? 'Hạ Ròng Rọc'
-                  : !gameState.parcelOnScale
-                    ? 'Cân Hàng'
-                    : 'Bàn Cân'}
+                  ? '1. Hạ Ròng Rọc'
+                  : !gameState.parcelInspected
+                    ? '2. Mở Bao'
+                    : !gameState.parcelOnScale
+                      ? '2. Đặt Lên Cân'
+                      : '2–3. Cân & Bàn Tính'}
               </span>
             </button>
 
@@ -1320,16 +1562,21 @@ export function LuongCuocDuongGameSection({
               type="button"
               data-testid="dock-seal-btn"
               onClick={() => {
+                setLedgerTab('work');
                 if (!gameState.sealInked) {
                   handlePropInteraction('inkpad');
                 } else {
                   setActiveDrawer('ledger');
                 }
               }}
-              className="min-h-[36px] px-2.5 py-1.5 border border-[#7D2822] bg-[#29100E]/94 hover:border-[#D44E46] text-[11px] font-mono text-[#F7D7D4] inline-flex items-center gap-1.5 cursor-pointer"
+              className={`min-h-[36px] px-2.5 py-1.5 border text-[11px] font-mono inline-flex items-center gap-1.5 cursor-pointer ${
+                guidedStep.focusProp === 'inkpad' || guidedStep.focusProp === 'seal'
+                  ? 'border-[#E8665E] bg-[#4A1714] text-[#FFE8E6]'
+                  : 'border-[#7D2822] bg-[#29100E]/94 hover:border-[#D44E46] text-[#F7D7D4]'
+              }`}
             >
               <Stamp className="w-3.5 h-3.5 text-[#D94E45]" aria-hidden="true" />
-              <span>{gameState.sealInked ? 'Mở Sổ Đóng Dấu' : 'Chấm Mực Son'}</span>
+              <span>{gameState.sealInked ? '4. Mở Sổ Ký' : '4. Chấm Mực Son'}</span>
             </button>
 
             <button
@@ -1443,7 +1690,7 @@ export function LuongCuocDuongGameSection({
                   </p>
                 </div>
 
-                <blockquote className="p-4 border-l-2 border-[#A62822] bg-[#160B0B] space-y-2">
+                <blockquote className="p-4 border border-[#6E231F] bg-[#160B0B] space-y-2">
                   <p className="text-xs sm:text-sm font-serif italic leading-relaxed text-[#EBD6D2]">
                     "{HISTORICAL_CHRONICLE_QUOTE.excerpt}"
                   </p>
@@ -1451,6 +1698,12 @@ export function LuongCuocDuongGameSection({
                     — {HISTORICAL_CHRONICLE_QUOTE.source}
                   </footer>
                 </blockquote>
+
+                <p className="text-xs font-serif text-[#C9B79C] leading-relaxed">
+                  {discoveredKeepsakes.filter((k) => k.decision === 'rejected').length > 0
+                    ? `Trong túi áo bạn vẫn giữ lại ${discoveredKeepsakes.filter((k) => k.decision === 'rejected').length} kỷ vật của những người dân ngõ Hòe và phố Đông — chứng tích cuối cùng rằng họ từng tồn tại như những con người.`
+                    : 'Sổ kiểm kê của bạn ngay ngắn không một vết tẩy xóa, nhưng trang giấy trắng tinh ấy lại là chứng từ lạnh lẽo nhất cho những ngày cuối cùng của thành Tuy Dương.'}
+                </p>
               </>
             ) : (
               <div className="space-y-2 border-b border-[#4D1E1B] pb-4">

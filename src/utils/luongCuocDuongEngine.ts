@@ -58,11 +58,21 @@ export interface DayScript {
   targetLiang: number;       // Requisition demand in 'lượng' (1..150)
   actualLiang: number;       // Actual weight in parcel
   discrepancyNote?: string;
+  inspectDetail?: string;    // Sensory & story detail revealed upon inspecting parcel
   generalDecree?: string;    // Special sealed order (e.g. Day 21)
   atmosphereNote: string;
   ventEncounter?: VentEncounter;
   keepsake?: KeepsakeDetail;
   doorKnockingLevel: number; // 0..3 intensity
+}
+
+export interface GuidedStepInfo {
+  stepNumber: 1 | 2 | 3 | 4;
+  focusProp: 'lamp' | 'pulley' | 'scale' | 'abacus' | 'inkpad' | 'seal' | 'ledger';
+  title: string;
+  hint: string;
+  ruleSummary: string;
+  ventPending: boolean;
 }
 
 export interface LedgerMark {
@@ -408,7 +418,18 @@ const PHASE_2_DAYS: DayScript[] = [
     ledgerCode: 'MỘC-11 · 皮',
     targetLiang: 45,
     actualLiang: 45,
+    inspectDetail: 'Bột vỏ cây khô khốc trộn lẫn vụn đá mài. Chỉ cần nuốt vào cũng rát buốt cuống họng.',
     atmosphereNote: 'Kho lương thực sự đã trống rỗng. Ròng rọc thả xuống thứ bột xám xịt nồng mùi nhựa đắng.',
+    ventEncounter: {
+      npcId: 'scholar',
+      npcName: 'Thư Sinh Tống Văn',
+      npcRole: 'Nho sinh bị kẹt trong thành',
+      dialogue:
+        'Sáng nay cả phố Đông không còn ai nhóm bếp nữa. Người ta lột sạch vỏ cây du ven hồ, đến cả rễ sen thối dưới bùn cũng bị moi lên sạch sẽ...',
+      canShareCrumbs: false,
+      withholdLabel: 'Ghi chép tình hình ngoài thành (+1 Tâm trí)',
+      withholdReply: 'Tôi vẫn giữ chút giấy bút trong tay áo để chép lại ngày tháng vây thành...',
+    },
     doorKnockingLevel: 2,
   },
   {
@@ -421,6 +442,7 @@ const PHASE_2_DAYS: DayScript[] = [
     ledgerCode: 'CÁCH-12 · 革',
     targetLiang: 36,
     actualLiang: 36,
+    inspectDetail: 'Miếng da giáp dày còn hằn dấu mũi tên gãy và mảng lông ngựa cháy sém.',
     atmosphereNote: 'Tiếng ngựa hí tắt hẳn trên thành. Miếng da thuộc hầm nhừ nhầy nhụa bốc hơi tanh nồng.',
     ventEncounter: {
       npcId: 'mother',
@@ -429,7 +451,7 @@ const PHASE_2_DAYS: DayScript[] = [
       dialogue:
         'Quan ơi... thằng An không khóc nổi nữa rồi. Ngoài đường người ta bắt đầu nhìn nhau bằng ánh mắt đói khát... Em sợ lắm.',
       canShareCrumbs: false,
-      withholdLabel: 'Dặn cô khóa chặt cửa nhà (-4 Tâm trí)',
+      withholdLabel: 'Dặn cô khóa chặt cửa nhà (-2 Tâm trí)',
       withholdReply: 'Em ôm con trốn vào góc bếp đây... mong trời mau sáng.',
     },
     doorKnockingLevel: 2,
@@ -444,6 +466,7 @@ const PHASE_2_DAYS: DayScript[] = [
     ledgerCode: 'THỬ-13 · 鼠',
     targetLiang: 19,
     actualLiang: 19,
+    inspectDetail: 'Mấy con chuột cống đen đúa bị xỏ dây thép qua mũi. Một con vẫn còn kẹp mẩu vải áo lính trong răng.',
     atmosphereNote: 'Cái rọ sắt thả xuống kêu lách cách. Mấy con chuột cống cứng đơ vẫn còn nguyên râu mép.',
     doorKnockingLevel: 2,
   },
@@ -458,7 +481,18 @@ const PHASE_2_DAYS: DayScript[] = [
     targetLiang: 24,
     actualLiang: 22,
     discrepancyNote: 'Xác quạ gầy trơ xương, thiếu 2 lượng so với sổ kê.',
+    inspectDetail: 'Lông quạ bết máu khô trên gò má chiến hào. Chúng chết vì ăn phải xác binh sĩ ngoài hào thành.',
     atmosphereNote: 'Tiếng đập cửa sắt dội vang khiến bụi trần rơi lả tả xuống bàn tính.',
+    ventEncounter: {
+      npcId: 'baker',
+      npcName: 'Lão Trương',
+      npcRole: 'Tiếng thì thào ngoài ngõ',
+      dialogue:
+        'Khụ... Quan ơi... Lính tuần vừa mang thùng gỗ tới đầu ngõ Hòe. Lão nghe tiếng họ bảo hết sạch chuột với quạ rồi... Họ đang gõ cửa từng nhà...',
+      canShareCrumbs: false,
+      withholdLabel: 'Nín thở nghe tiếng bước chân xa dần',
+      withholdReply: 'Lão... lão cất cái hộp thiếc bánh mè vào gầm giường rồi... Quan bảo trọng...',
+    },
     doorKnockingLevel: 3,
   },
   {
@@ -471,6 +505,7 @@ const PHASE_2_DAYS: DayScript[] = [
     ledgerCode: 'AN-15 · 鞍',
     targetLiang: 52,
     actualLiang: 52,
+    inspectDetail: 'Khớp đồng trên yên ngựa chưa kịp tháo, ngấm vị mặn chát của mồ hôi và máu chiến mã.',
     atmosphereNote: 'Không khí trong hầm đặc quánh, ngọn đèn dầu yếu đi rõ rệt vì thiếu dưỡng khí.',
     ventEncounter: {
       npcId: 'scholar',
@@ -479,7 +514,7 @@ const PHASE_2_DAYS: DayScript[] = [
       dialogue:
         'Hôm nay tôi thấy toán lính đi vào khu nhà dân tay cầm dây thừng và dao bầu... Họ bảo đi thu gom "lương dự trữ". Quan có biết đó là gì không?',
       canShareCrumbs: false,
-      withholdLabel: 'Im lặng né ánh mắt qua khe (-5 Tâm trí)',
+      withholdLabel: 'Im lặng né ánh mắt qua khe (-3 Tâm trí)',
       withholdReply: 'Sao Quan không trả lời tôi...? Trời ơi...',
     },
     doorKnockingLevel: 2,
@@ -546,7 +581,18 @@ const PHASE_2_DAYS: DayScript[] = [
     ledgerCode: 'NÊ-20 · 泥',
     targetLiang: 21,
     actualLiang: 21,
-    atmosphereNote: 'Đêm thứ hai mươi. Trên trại lính bỗng im bặt một cách rùng rợn. Có người đang xuống cầu thang...',
+    inspectDetail: 'Nắm bùn đen lẫn rễ cỏ mục. Từ khe cửa sắt, mùi khói lửa và mùi thịt nướng lạ lùng bắt đầu len vào hầm.',
+    atmosphereNote: 'Đêm thứ hai mươi. Trên trại lính bỗng im bặt một cách rùng rợn. Có tiếng xích sắt lê dọc cầu thang đá...',
+    ventEncounter: {
+      npcId: 'mother',
+      npcName: 'Tiếng Khóc Ngõ Hòe',
+      npcRole: 'Âm thanh vọng từ phố trên',
+      dialogue:
+        'Đừng bắt con tôi! Xin các ông... nó mới ba tuổi thôi... Quan ơi mở cửa hầm cho mẹ con em trốn với...!!',
+      canShareCrumbs: false,
+      withholdLabel: 'Bịt tai nhìn chằm chằm vào ngọn đèn (-2 Tâm trí)',
+      withholdReply: 'Tiếng thét bị cắt ngang bởi tiếng cửa gỗ sập mạnh. Ngoài khe gió chỉ còn tiếng trống cầm canh lạnh lẽo.',
+    },
     doorKnockingLevel: 1,
   },
 ];
@@ -582,6 +628,7 @@ const PHASE_3_DAYS: DayScript[] = [
     ledgerCode: 'DƯƠNG-22 · 二',
     targetLiang: 58,
     actualLiang: 58,
+    inspectDetail: 'Vải bao tải thô cứng lại vì máu đông. Bên mép dây buộc có viết nguệch ngoạc chữ "Đông Nhai".',
     atmosphereNote: 'Nước máu nhỏ tong tỏng lên mặt bàn gỗ, hòa vào vết mực chu sa cũ.',
     doorKnockingLevel: 2,
   },
@@ -653,6 +700,7 @@ const PHASE_3_DAYS: DayScript[] = [
     targetLiang: 67,
     actualLiang: 63,
     discrepancyNote: 'Bao rỉ máu mất 4 lượng trên đường vận chuyển. Quân lính đang gầm gừ sau cửa.',
+    inspectDetail: 'Trọng lượng hụt mất 4 lượng nhưng miệng bao bị xé toạc từ trước. Máu loang đỏ dọc thanh cân.',
     atmosphereNote: 'Bóng người trong chậu nước rửa tay dường như đứng sát sau lưng bạn hơn một bước.',
     doorKnockingLevel: 3,
   },
@@ -666,6 +714,7 @@ const PHASE_3_DAYS: DayScript[] = [
     ledgerCode: 'DƯƠNG-27 · 殘',
     targetLiang: 55,
     actualLiang: 55,
+    inspectDetail: 'Bên trong chỉ còn những phần gân xơ vụn nát. Lính gác không còn gọi bằng tên người nữa — họ chỉ gọi mã số.',
     atmosphereNote: 'Trên trần hầm có tiếng nhai sột soạt khe khẽ dù không có ai ở đó.',
     doorKnockingLevel: 3,
   },
@@ -679,6 +728,7 @@ const PHASE_3_DAYS: DayScript[] = [
     ledgerCode: 'DƯƠNG-28 · 窮',
     targetLiang: 49,
     actualLiang: 49,
+    inspectDetail: 'Một mảnh tay áo đồng phục quân nhu rách nát kẹt dưới đáy bao — ngay cả lính ốm yếu cũng bị đưa lên thớt.',
     atmosphereNote: 'Thành Tuy Dương lặng như tờ. Chỉ còn tiếng thở dốc của những kẻ còn sống.',
     doorKnockingLevel: 3,
   },
@@ -692,6 +742,7 @@ const PHASE_3_DAYS: DayScript[] = [
     ledgerCode: 'DƯƠNG-29 · 末',
     targetLiang: 76,
     actualLiang: 76,
+    inspectDetail: 'Dây thừng ròng rọc run lên theo từng hồi trống xung phong dội từ xa ngoài thành.',
     atmosphereNote: 'Ngày thứ hai mươi chín. Phía xa chân trời bỗng vang lên tiếng tù và viện binh nhà Đường.',
     doorKnockingLevel: 2,
   },
@@ -705,6 +756,7 @@ const PHASE_3_DAYS: DayScript[] = [
     ledgerCode: 'DƯƠNG-30 · 終',
     targetLiang: 42,
     actualLiang: 42,
+    inspectDetail: 'Tờ phiếu cuối cùng run rẩy dưới ánh đèn dầu sắp cạn. Cánh cửa sắt bắt đầu rung lên không phải vì lính đói — mà vì quân giải vây.',
     generalDecree: 'PHIÊN TRỰC CUỐI CÙNG: VIỆN QUÂN ĐANG PHÁ CỔNG THÀNH.',
     atmosphereNote: 'Ánh sáng chói lòa bắt đầu lọt qua khe cửa sắt. Tiếng chân chạy dồn dập ngoài hành lang.',
     doorKnockingLevel: 1,
@@ -867,7 +919,9 @@ export function inspectPulleyParcel(state: CellarGameState): CellarGameState {
     parcelInspected: true,
     lastEventMessage: script.discrepancyNote
       ? `Kiểm tra thực tế: ${script.discrepancyNote}`
-      : `Đã mở bao kiểm tra: ${script.rationName}. Trọng lượng cần đối chiếu trên cân và bàn tính.`,
+      : script.inspectDetail
+        ? `Mở bao kiểm tra: ${script.inspectDetail}`
+        : `Đã mở bao kiểm tra: ${script.rationName}. Trọng lượng cần đối chiếu trên cân và bàn tính.`,
   };
 }
 
@@ -1125,3 +1179,147 @@ export function advanceToNextDay(state: CellarGameState): CellarGameState {
     lastEventMessage: nextScript.generalDecree || nextScript.atmosphereNote,
   };
 }
+
+export function getGuidedNextStep(state: CellarGameState): GuidedStepInfo {
+  const script = getDayScript(state.day);
+  const ventPending = Boolean(script.ventEncounter && !state.ventHandled);
+  const scaleTotal = computeScaleWeightsTotal(state.scaleWeights);
+  const diff = scaleTotal - script.actualLiang;
+  const ruleSummary =
+    state.phase === 1
+      ? 'Đủ cân -> Duyệt Xuất Kho · Phát hiện bao hụt cân -> Từ Chối lập biên bản'
+      : state.phase === 2
+        ? 'Trại lính đang mất kiểm soát — từ chối sẽ giảm mạnh điểm Tuân Thủ'
+        : 'Bao máu Phase 3: Duyệt sẽ bào mòn Tâm Trí, Từ Chối / Giấu kỷ vật khiến Trại Lính nổi điên';
+
+  if (!state.lampLit || state.lampOil < 18) {
+    return {
+      stepNumber: 1,
+      focusProp: 'lamp',
+      title: !state.lampLit ? 'Khẩn cấp: Thắp lại Ngọn Đèn Dầu [L]' : 'Cảnh báo: Đèn sắp cạn dầu [L]',
+      hint: 'Click Ngọn Đèn Dầu bên trái bàn hoặc bấm phím [L] để châm dầu ngay.',
+      ruleSummary,
+      ventPending,
+    };
+  }
+
+  if (!state.pulleyLowered) {
+    return {
+      stepNumber: 1,
+      focusProp: 'pulley',
+      title: 'Bước 1/4 · Hạ ròng rọc nhận bao hàng',
+      hint: 'Click vào Ròng Rọc phía trên bàn (hoặc nút "1. Hạ Hàng") để kéo khẩu phần xuống.',
+      ruleSummary,
+      ventPending,
+    };
+  }
+
+  if (!state.parcelInspected) {
+    return {
+      stepNumber: 2,
+      focusProp: 'pulley',
+      title: 'Bước 2/4 · Mở bao kiểm tra bên trong',
+      hint: 'Click lại bao hàng trên ròng rọc (hoặc bấm "Mở Bao Kiểm Tra") để xem tình trạng thực tế.',
+      ruleSummary,
+      ventPending,
+    };
+  }
+
+  if (!state.parcelOnScale) {
+    return {
+      stepNumber: 2,
+      focusProp: 'scale',
+      title: 'Bước 2/4 · Đặt hàng lên Cân Tiểu Ly',
+      hint: 'Click Cân Tiểu Ly hoặc bấm "Đặt Lên Cân" để bắt đầu cân trọng lượng thực.',
+      ruleSummary,
+      ventPending,
+    };
+  }
+
+  if (!isScaleBalanced(state)) {
+    return {
+      stepNumber: 2,
+      focusProp: 'scale',
+      title: `Bước 2/4 · Xếp quả cân cho thăng bằng (Đang có ${scaleTotal} lượng)`,
+      hint:
+        diff < 0
+          ? `Đĩa trái nặng hơn — mở Sổ Kiểm Kê thêm +${Math.abs(diff)} lượng quả cân vào đĩa phải.`
+          : `Đĩa phải đang dư ${diff} lượng — bấm vào quả cân đã xếp để gỡ bớt.`,
+      ruleSummary,
+      ventPending,
+    };
+  }
+
+  if (!isAbacusMatched(state)) {
+    return {
+      stepNumber: 3,
+      focusProp: 'abacus',
+      title: `Bước 3/4 · Gảy Bàn Tính khớp ${script.actualLiang} lượng`,
+      hint: `Cân đã thăng bằng! Hãy gảy Bàn Tính (hoặc bấm "Khớp Nhanh") về đúng ${script.actualLiang} lượng.`,
+      ruleSummary,
+      ventPending,
+    };
+  }
+
+  if (state.stampedDecision === null) {
+    if (!state.sealInked) {
+      return {
+        stepNumber: 4,
+        focusProp: 'inkpad',
+        title: 'Bước 4/4 · Chấm Mực Chu Sa',
+        hint: 'Click Hộp Mực Đỏ bên phải bàn (hoặc nút "Chấm Mực Son") trước khi đóng dấu.',
+        ruleSummary,
+        ventPending,
+      };
+    }
+    return {
+      stepNumber: 4,
+      focusProp: 'seal',
+      title: 'Bước 4/4 · Đóng Dấu Quyết Định',
+      hint:
+        script.actualLiang < script.targetLiang && state.phase === 1
+          ? `Phát hiện hao hụt (${script.actualLiang}/${script.targetLiang} lượng)! Mở Sổ chọn [Từ Chối / Giấu].`
+          : 'Mở Sổ Kiểm Kê chọn [Duyệt Xuất Kho] hoặc [Từ Chối / Giấu] để hoàn tất phiếu.',
+      ruleSummary,
+      ventPending,
+    };
+  }
+
+  return {
+    stepNumber: 4,
+    focusProp: 'ledger',
+    title: `Đã ký xong phiếu Ngày ${state.day}/30`,
+    hint:
+      ventPending && script.ventEncounter
+        ? `Bạn có thể ghé Lỗ Thông Hơi gặp ${script.ventEncounter.npcName}, hoặc bấm Sang Ngày ${state.day + 1}.`
+        : state.day >= 30
+          ? 'Bấm "Kết Thúc Ngày 30" để đón viện quân phá cửa hầm.'
+          : `Bấm "Sang Ngày ${state.day + 1}" ở thanh dưới để tiếp tục ca trực.`,
+    ruleSummary,
+    ventPending,
+  };
+}
+
+export interface DiscoveredKeepsakeEntry {
+  day: number;
+  keepsake: KeepsakeDetail;
+  decision: 'approved' | 'rejected' | 'pending';
+}
+
+export function getDiscoveredKeepsakes(state: CellarGameState): DiscoveredKeepsakeEntry[] {
+  const entries: DiscoveredKeepsakeEntry[] = [];
+  for (const dayScript of ALL_DAYS) {
+    if (!dayScript.keepsake) continue;
+    const mark = state.history.find((h) => h.day === dayScript.day);
+    const inspectedToday = state.day === dayScript.day && state.parcelInspected;
+    if (mark || inspectedToday) {
+      entries.push({
+        day: dayScript.day,
+        keepsake: dayScript.keepsake,
+        decision: mark ? mark.decision : 'pending',
+      });
+    }
+  }
+  return entries;
+}
+

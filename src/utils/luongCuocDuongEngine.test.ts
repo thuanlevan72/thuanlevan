@@ -13,6 +13,8 @@ import {
   decomposeToAbacus,
   dipSealInInk,
   getDayScript,
+  getDiscoveredKeepsakes,
+  getGuidedNextStep,
   getPhaseForDay,
   inspectPulleyParcel,
   isAbacusMatched,
@@ -164,4 +166,40 @@ test('Repeatedly rejecting rations triggers iron door breach ending', () => {
   state = dipSealInInk(state);
   state = stampDailyRequisition(state, 'rejected');
   assert.equal(state.ending, 'iron_door_breached');
+});
+
+test('Guided next-step hints and keepsake chronicle progress cleanly across daily actions', () => {
+  let state = createInitialGameState(21); // Day 21 has Lão Trương's keepsake
+  assert.equal(getGuidedNextStep(state).stepNumber, 1);
+  assert.equal(getGuidedNextStep(state).focusProp, 'pulley');
+
+  state = lowerPulleyParcel(state);
+  assert.equal(getGuidedNextStep(state).stepNumber, 2);
+
+  state = inspectPulleyParcel(state);
+  assert.equal(getDiscoveredKeepsakes(state).length, 1);
+  assert.equal(getDiscoveredKeepsakes(state)[0].decision, 'pending');
+
+  state = placeParcelOnScale(state);
+  const actual = getDayScript(21).actualLiang;
+  let remaining = actual;
+  for (const w of [50, 20, 10, 5, 2, 1]) {
+    while (remaining >= w) {
+      state = addScaleWeight(state, w);
+      remaining -= w;
+    }
+  }
+  assert.equal(getGuidedNextStep(state).stepNumber, 3);
+  assert.equal(getGuidedNextStep(state).focusProp, 'abacus');
+
+  state = { ...state, abacus: decomposeToAbacus(actual) };
+  assert.equal(getGuidedNextStep(state).stepNumber, 4);
+  assert.equal(getGuidedNextStep(state).focusProp, 'inkpad');
+
+  state = dipSealInInk(state);
+  assert.equal(getGuidedNextStep(state).focusProp, 'seal');
+
+  state = stampDailyRequisition(state, 'rejected');
+  assert.equal(getGuidedNextStep(state).focusProp, 'ledger');
+  assert.equal(getDiscoveredKeepsakes(state)[0].decision, 'rejected');
 });
