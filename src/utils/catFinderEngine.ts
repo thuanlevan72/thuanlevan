@@ -13,7 +13,7 @@ export type CatWorldTheme =
   | 'night_market'
   | 'fireworks';
 
-export type CatDifficultyId = 'hard_5x' | 'nightmare_8x' | 'eagle_10x';
+export type CatDifficultyId = 'hard_5x' | 'nightmare_8x' | 'eagle_10x' | 'god_ray_20x';
 
 export interface CatDifficultyConfig {
   id: CatDifficultyId;
@@ -95,6 +95,26 @@ export const CAT_DIFFICULTIES: Record<CatDifficultyId, CatDifficultyConfig> = {
     spotlightRadius: 215,
     spotlightOpacity: 0.74,
     camoOpacity: 0.74,
+    decoyDensityMult: 1,
+  },
+  god_ray_20x: {
+    id: 'god_ray_20x',
+    label: 'Siêu Thần Ánh Xạ ×20',
+    multiplierBadge: '×20',
+    tagline: 'Thần Nhãn 165px · 1 món/lượt · Nắp đóng 5.5s · 2 Tim · Sai -18s · 0 Gợi ý',
+    itemScaleMult: 0.42,
+    hitboxScale: 0.5,
+    timeLimitSec: 90,
+    maxHearts: 2,
+    misclickPenaltySec: 18,
+    maxHints: 0,
+    hintRadius: 205,
+    hintCostSec: 18,
+    activeQueueLimit: 1,
+    coverAutoCloseSec: 5.5,
+    spotlightRadius: 165,
+    spotlightOpacity: 0.86,
+    camoOpacity: 0.64,
     decoyDensityMult: 1,
   },
 };
@@ -891,10 +911,11 @@ export function clampCatPanZoom(
   panX: number,
   panY: number,
   viewportW: number,
-  viewportH: number
+  viewportH: number,
+  customStageDisplayW?: number
 ): CatPanZoom {
   const clampedScale = Math.min(CAT_MAX_ZOOM, Math.max(CAT_MIN_ZOOM, Number(scale.toFixed(2))));
-  const stageDisplayW = Math.max(viewportW, 1080);
+  const stageDisplayW = Math.max(viewportW, customStageDisplayW ?? 1080);
   const stageDisplayH = stageDisplayW * (CAT_SCENE_H / CAT_SCENE_W);
   const maxPanX = Math.max(0, (stageDisplayW * clampedScale - viewportW) / 2);
   const maxPanY = Math.max(0, (stageDisplayH * clampedScale - viewportH) / 2);
@@ -965,7 +986,8 @@ export function parseCatFinderSave(raw: string | null): CatFinderSaveData {
     const validDiff: CatDifficultyId =
       parsed.difficultyId === 'hard_5x' ||
       parsed.difficultyId === 'nightmare_8x' ||
-      parsed.difficultyId === 'eagle_10x'
+      parsed.difficultyId === 'eagle_10x' ||
+      parsed.difficultyId === 'god_ray_20x'
         ? parsed.difficultyId
         : 'hard_5x';
 

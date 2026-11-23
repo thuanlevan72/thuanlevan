@@ -743,7 +743,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
             : 'relative overscroll-none'
         }
       >
-        {isFullscreen && activeGame !== 'prism_td' && activeGame !== 'traffic_router' && (
+        {isFullscreen && activeGame !== 'prism_td' && activeGame !== 'traffic_router' && activeGame !== 'cat_finder' && (
           <button
             type="button"
             data-testid="hub-exit-fullscreen-btn"
@@ -766,7 +766,13 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
             <AntiqueShopGameSection theme={theme} onToggleTheme={onToggleTheme} />
           )}
           {activeGame === 'cat_finder' && (
-            <CatFinderGameSection theme={theme} onToggleTheme={onToggleTheme} />
+            <CatFinderGameSection
+              theme={theme}
+              onToggleTheme={onToggleTheme}
+              isFullscreen={isFullscreen}
+              onToggleFullscreen={toggleFullscreen}
+              onExitFullscreen={exitFullscreen}
+            />
           )}
           {activeGame === 'anomaly' && <AnomalyGameSection theme={theme} onToggleTheme={onToggleTheme} />}
           {activeGame === 'asmr_organizer' && (

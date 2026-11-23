@@ -62,24 +62,30 @@ test('CAT_STAGES includes 5 stages with dense 24-28 items, >=40 decoys, latched/
   }
 });
 
-test('Difficulty configs scale 5x -> 8x -> 10x challenge strictly across time, hearts, scale, hints, and queue caps', () => {
+test('Difficulty configs scale 5x -> 8x -> 10x -> 20x challenge strictly across time, hearts, scale, hints, and queue caps', () => {
   const d5 = getCatDifficultyConfig('hard_5x');
   const d8 = getCatDifficultyConfig('nightmare_8x');
   const d10 = getCatDifficultyConfig('eagle_10x');
+  const d20 = getCatDifficultyConfig('god_ray_20x');
 
   assert.equal(CAT_DIFFICULTIES.hard_5x.multiplierBadge, '×5');
-  assert.ok(d5.timeLimitSec > d8.timeLimitSec && d8.timeLimitSec > d10.timeLimitSec);
-  assert.ok(d5.maxHearts > d8.maxHearts && d8.maxHearts > d10.maxHearts);
-  assert.ok(d5.itemScaleMult > d8.itemScaleMult && d8.itemScaleMult > d10.itemScaleMult);
-  assert.ok(d5.misclickPenaltySec < d8.misclickPenaltySec && d8.misclickPenaltySec < d10.misclickPenaltySec);
+  assert.equal(d20.multiplierBadge, '×20');
+  assert.equal(d20.label, 'Siêu Thần Ánh Xạ ×20');
+  assert.ok(d5.timeLimitSec > d8.timeLimitSec && d8.timeLimitSec > d10.timeLimitSec && d10.timeLimitSec > d20.timeLimitSec);
+  assert.ok(d5.maxHearts > d8.maxHearts && d8.maxHearts > d10.maxHearts && d10.maxHearts > d20.maxHearts);
+  assert.ok(d5.itemScaleMult > d8.itemScaleMult && d8.itemScaleMult > d10.itemScaleMult && d10.itemScaleMult > d20.itemScaleMult);
+  assert.ok(d5.misclickPenaltySec < d8.misclickPenaltySec && d8.misclickPenaltySec < d10.misclickPenaltySec && d10.misclickPenaltySec < d20.misclickPenaltySec);
   assert.equal(d5.activeQueueLimit, null);
   assert.equal(d8.activeQueueLimit, 5);
   assert.equal(d10.activeQueueLimit, 3);
+  assert.equal(d20.activeQueueLimit, 1);
   assert.equal(d10.maxHints, 0);
-  assert.ok(d10.spotlightRadius !== null && d10.spotlightRadius < (d8.spotlightRadius ?? 999));
+  assert.equal(d20.maxHints, 0);
+  assert.ok(d20.spotlightRadius !== null && d20.spotlightRadius < (d10.spotlightRadius ?? 999));
+  assert.ok((d20.coverAutoCloseSec ?? 99) < (d10.coverAutoCloseSec ?? 99));
 
   const sampleItem = CAT_STAGES[0].items[0];
-  assert.ok(getEffectiveItemScale(sampleItem, d10) < getEffectiveItemScale(sampleItem, d5));
+  assert.ok(getEffectiveItemScale(sampleItem, d20) < getEffectiveItemScale(sampleItem, d10));
 });
 
 test('Multi-tap latched cover requires 2 taps, active queue limits eligible items, and misclick penalty triggers defeat', () => {
@@ -175,6 +181,20 @@ test('Town map unlocks stages sequentially, computes stars under stricter thresh
   const pzHigh = clampCatPanZoom(5, 9999, -9999, 800, 440);
   assert.equal(pzHigh.scale, CAT_MAX_ZOOM);
   assert.equal(CAT_MAX_ZOOM, 3.6);
+
+  // Mobile responsive stageDisplayW clamping
+  const pzMobile = clampCatPanZoom(1, 9999, 9999, 390, 340, 680);
+  assert.equal(pzMobile.panX, (680 - 390) / 2);
+  assert.equal(pzMobile.panY, (340 - 340) / 2);
+
+  const sanitized20 = parseCatFinderSave(
+    JSON.stringify({
+      activeStageId: 'flower-alley',
+      difficultyId: 'god_ray_20x',
+      stages: {},
+    })
+  );
+  assert.equal(sanitized20.difficultyId, 'god_ray_20x');
 
   const sanitized = parseCatFinderSave(
     JSON.stringify({
