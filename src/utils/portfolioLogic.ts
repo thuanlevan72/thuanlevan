@@ -1,6 +1,6 @@
 export type ThemeMode = 'light' | 'dark';
 
-export type AppRoute = 'profile' | 'gallery' | 'cv' | 'game' | 'studio';
+export type AppRoute = 'profile' | 'gallery' | 'cv' | 'game' | 'studio' | 'chronos';
 
 export type GalleryCategory = 'all' | 'imperial' | 'poetic' | 'portrait' | 'moments';
 
@@ -199,6 +199,14 @@ export function parseAppRoute(pathname: string, hash = ''): AppRoute {
   ) {
     return 'studio';
   }
+  if (
+    cleanPath === '/chronos' ||
+    cleanPath === '/chronosflow' ||
+    cleanHash === 'chronos' ||
+    cleanHash === 'chronosflow'
+  ) {
+    return 'chronos';
+  }
   return 'profile';
 }
 
@@ -207,10 +215,23 @@ export function getRoutePath(route: AppRoute): string {
   if (route === 'cv') return '/cv';
   if (route === 'game') return '/game';
   if (route === 'studio') return '/studio';
+  if (route === 'chronos') return '/chronos';
   return '/';
 }
 
 export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
+  if (route === 'chronos') {
+    return {
+      title: 'ChronosFlow — Hệ Điều Hành Thời Gian, Năng Lượng & AI Time-Blocking',
+      description:
+        'ChronosFlow kết hợp Smart Time-Blocking kéo-thả, Quản trị Năng lượng Sinh học, Deep Work Studio, AI Auto-Rescheduler và JSON DB cục bộ.',
+      keywords:
+        'ChronosFlow, Time-blocking, Energy Management, AI Auto-Rescheduler, Deep Work, Pomodoro, Ultradian Rhythm',
+      ogType: 'website',
+      ogImageAlt: 'ChronosFlow — Hệ Điều Hành Thời Gian, Năng Lượng & AI Time-Blocking',
+      path: '/chronos',
+    };
+  }
   if (route === 'studio') {
     return {
       title: 'Lyric & Groove Sketchpad — Bàn Nháp Sáng Tác Nhạc',
@@ -251,7 +272,7 @@ export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
     return {
       title: 'Khu Trò Chơi 2D & 3D — Cờ Tướng, Pháo Đài & Kinh Dị',
       description:
-        'Chơi 11 game web: Cờ Tướng AI, Pháo Đài, Tìm Mèo, Hồ Sơ Dị Biệt, Lưỡng Cước Dương 3D, Thanh Minh: Học Viện Cô Sơn 2.5D, Chuẩn OCD, Túi Mù, Ubuntu CLI & Học Viện FE.',
+        'Chơi 11 game web: Cờ Tướng AI, Pháo Đài, Tìm Mèo, Hồ Sơ Dị Biệt, Lưỡng Cước Dương 3D, Học Viện Cô Sơn 2.5D, Chuẩn OCD, Túi Mù, Ubuntu CLI & FE.',
       keywords:
         'Game Web, Cờ Tướng AI, Thủ Thành Pháo Đài, Tìm Mèo, Lưỡng Cước Dương 3D, Thanh Minh Học Viện Cô Sơn, Hồ Sơ Dị Biệt, Sắp Xếp OCD, Tiệm Xé Túi Mù, Ubuntu CLI, Thiết Kế Kiến Trúc, Thuận Lê',
       ogType: 'website',

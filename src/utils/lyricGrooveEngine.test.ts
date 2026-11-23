@@ -15,6 +15,7 @@ import {
   getDiatonicChordForPianoKey,
   getScaleNotes,
   parseChordsFromLine,
+  parseSectionKaraokeLines,
   PROGRESSION_PRESETS,
   quantizePitchFramesToNotes,
   reorderSongSections,
@@ -275,3 +276,181 @@ test('SONG_IDEA_TEMPLATES provide 4 complete style starters with valid chords', 
     }
   }
 });
+
+test('Tone Am song draft-khoang-cach-hai-ta-am resolves all 8 sections, lofi-chill groove, and authentic notes', () => {
+  const starters = createStarterDrafts();
+  const amSong = starters.find((d) => d.id === 'draft-khoang-cach-hai-ta-am');
+  assert.ok(amSong, 'draft-khoang-cach-hai-ta-am must exist in createStarterDrafts');
+  assert.equal(amSong.keyRoot, 'A');
+  assert.equal(amSong.scaleMode, 'minor');
+  assert.equal(amSong.mood, 'lofi-chill');
+  assert.equal(amSong.bpm, 74);
+  assert.equal(amSong.drumPattern, 'lofi');
+  assert.equal(amSong.backingPattern, 'auto-song');
+  assert.equal(amSong.sections.length, 8);
+  assert.equal(amSong.sections[7].kind, 'Interlude');
+
+  const timeline = buildChordTimeline(amSong.sections, {
+    backingPattern: amSong.backingPattern,
+    chordArpStyles: amSong.chordArpStyles,
+    songMood: amSong.mood,
+  });
+  assert.equal(timeline.totalBeats, 144);
+  assert.ok(timeline.events.some((e) => e.symbol === 'Fmaj13'));
+  assert.ok(timeline.events.some((e) => e.symbol === 'Cmaj13'));
+  assert.ok(timeline.events.some((e) => e.symbol === 'Asus4'));
+
+  // Auto-song uses multiple distinct arpeggio patterns across the song
+  const distinctArps = new Set(timeline.events.map((e) => e.arpPattern));
+  assert.ok(distinctArps.size >= 4, `Expected >= 4 distinct arp patterns, got ${distinctArps.size}`);
+
+  // Every single section in draft-khoang-cach-hai-ta-am must carry full syllable-level melody notes
+  for (const sec of amSong.sections) {
+    const secNotes = amSong.melodyNotes.filter((n) => n.sectionId === sec.id);
+    assert.ok(secNotes.length >= 20, `Expected >= 20 melody notes in ${sec.id}, got ${secNotes.length}`);
+  }
+  // Verse 1 opening motif: E4-A4-A4-C5-B4-A4 ("Dường như khoảng cách hai ta")
+  const v1Notes = amSong.melodyNotes.filter((n) => n.sectionId === 'sec-kcht-verse-1');
+  assert.deepEqual(
+    v1Notes.slice(0, 6).map((n) => n.midi),
+    [64, 69, 69, 72, 71, 69]
+  );
+
+  // Karaoke teleprompter parser extracts chord-aligned segments per line using chordSchedule
+  const chorusLines = parseSectionKaraokeLines(amSong.sections[5]);
+  assert.ok(chorusLines.length >= 3);
+  assert.ok(chorusLines[0].segments.some((s) => s.chordSymbol === 'Fmaj7'));
+  assert.ok(chorusLines[0].endBeat > chorusLines[0].startBeat);
+  assert.equal(chorusLines[0].startBeat, 0);
+});
+
+test('Tone C song draft-thang-tu-la-loi-noi-doi-cua-em resolves all 192 beats, chords, and authentic vocal registers', () => {
+  const starters = createStarterDrafts();
+  const thangTu = starters.find((d) => d.id === 'draft-thang-tu-la-loi-noi-doi-cua-em');
+  assert.ok(thangTu, 'draft-thang-tu-la-loi-noi-doi-cua-em must exist');
+  assert.equal(thangTu.keyRoot, 'C');
+  assert.equal(thangTu.scaleMode, 'major');
+  assert.equal(thangTu.bpm, 67);
+  assert.equal(thangTu.drumPattern, 'none');
+  assert.equal(thangTu.backingPattern, 'auto-song');
+  assert.equal(thangTu.sections.length, 7);
+
+  const timeline = buildChordTimeline(thangTu.sections, {
+    backingPattern: thangTu.backingPattern,
+    chordArpStyles: thangTu.chordArpStyles,
+    songMood: thangTu.mood,
+  });
+  assert.equal(timeline.totalBeats, 192);
+  for (const ch of ['Fmaj7', 'Fm', 'C/E', 'F#dim', 'Fm6', 'Ebdim', 'Asus4', 'A']) {
+    assert.ok(timeline.events.some((e) => e.symbol === ch), `Missing chord ${ch}`);
+    assert.equal(resolveChordVoicingNotes(ch).valid, true, `Chord ${ch} failed voicing`);
+  }
+
+  for (const sec of thangTu.sections) {
+    const secNotes = thangTu.melodyNotes.filter((n) => n.sectionId === sec.id);
+    assert.ok(secNotes.length >= 10, `Expected >= 10 notes in ${sec.id}, got ${secNotes.length}`);
+  }
+
+  // Verse 1 opening: "Mùa xuân có em như chưa bắt đầu" = A4 B4 C5 B4 A4 G4 A4 E4
+  const v1 = thangTu.melodyNotes.filter((n) => n.sectionId === 'sec-tt-verse-1');
+  assert.deepEqual(
+    v1.slice(0, 8).map((n) => n.midi),
+    [69, 71, 72, 71, 69, 67, 69, 64]
+  );
+
+  // Verse 2 warm chest register <= E5 (76)
+  const v2 = thangTu.melodyNotes.filter((n) => n.sectionId === 'sec-tt-verse-2');
+  assert.ok(v2.every((n) => n.midi <= 76), 'Verse 2 notes should stay in chest register <= E5(76)');
+
+  // Chorus 1 ends on sustained A5(81) hold
+  const c1 = thangTu.melodyNotes.filter((n) => n.sectionId === 'sec-tt-chorus-1');
+  assert.equal(c1[c1.length - 1].midi, 81);
+  assert.ok(c1[c1.length - 1].durationBeats >= 2.5);
+
+  // Chorus 2 ends on B4(71) -> C#5(73) Picardy cadence
+  const c2 = thangTu.melodyNotes.filter((n) => n.sectionId === 'sec-tt-chorus-2');
+  assert.deepEqual(
+    c2.slice(-2).map((n) => n.midi),
+    [71, 73]
+  );
+});
+
+test('Multi-pattern arpeggio resolution supports auto-song variety and per-chord overrides', () => {
+  const plainSection = {
+    id: 'sec-arp-test',
+    kind: 'Verse' as const,
+    label: 'Verse',
+    bars: 4 as const,
+    text:
+      '[Fmaj7]Câu một [G]đây\n' +
+      '[Fmaj7]Câu hai [Am]này\n' +
+      '[Fmaj7]Câu ba [Dm7]ơi\n' +
+      '[Fmaj7]Câu bốn [G]xong',
+  };
+
+  // Same chord [Fmaj7] gets varied arpeggio styles across different bars under 'auto-song'
+  const autoTimeline = buildChordTimeline([plainSection], {
+    backingPattern: 'auto-song',
+    songMood: 'pop-ballad',
+  });
+  const fmaj7Arps = autoTimeline.events
+    .filter((e) => e.symbol === 'Fmaj7')
+    .map((e) => e.arpPattern);
+  assert.equal(fmaj7Arps.length, 4);
+  assert.ok(new Set(fmaj7Arps).size >= 2, 'Same chord Fmaj7 should vary arpeggio styles in auto-song mode');
+
+  // Per-chord override in chordArpStyles takes highest precedence over both auto-song and explicit global pattern
+  const overrideMap = { 'sec-arp-test:2': 'pinch-plucked' as const };
+  const overriddenTimeline = buildChordTimeline([plainSection], {
+    backingPattern: 'rich-block',
+    chordArpStyles: overrideMap,
+    songMood: 'pop-ballad',
+  });
+  assert.equal(overriddenTimeline.events[0].arpPattern, 'rich-block');
+  assert.equal(overriddenTimeline.events[2].arpPattern, 'pinch-plucked');
+
+  const slots = extractSectionBarSlots(plainSection, 'Cmaj7', {
+    backingPattern: 'rich-block',
+    chordArpStyles: overrideMap,
+    songMood: 'pop-ballad',
+  });
+  assert.equal(slots[1].arpPattern, 'pinch-plucked');
+});
+
+test('Chord accompaniment register stays cleanly below melody register (~1 octave separation)', () => {
+  const starters = createStarterDrafts();
+  for (const draft of starters) {
+    const { events } = buildChordTimeline(draft.sections, {
+      backingPattern: draft.backingPattern,
+      chordArpStyles: draft.chordArpStyles,
+      songMood: draft.mood,
+      melodyNotes: draft.melodyNotes,
+    });
+    for (const ev of events) {
+      const rhMax = Math.max(...(ev.rightHandMidis ?? [0]));
+      const bassMax = Math.max(...(ev.bassMidis ?? [0]));
+      assert.ok(
+        rhMax <= 62,
+        `Backing chord ${ev.symbol} top note ${rhMax} crept into melody octave in ${draft.id}`
+      );
+      assert.ok(
+        bassMax <= 55,
+        `Backing bass ${ev.symbol} fifth ${bassMax} crept too high in ${draft.id}`
+      );
+    }
+
+    // Verify average backing pitch is well below average melody pitch (~1 octave separation)
+    if (draft.melodyNotes.length > 0 && events.length > 0) {
+      const avgMelody =
+        draft.melodyNotes.reduce((s, n) => s + n.midi, 0) / draft.melodyNotes.length;
+      const allBacking = events.flatMap((e) => e.rightHandMidis ?? []);
+      const avgBacking = allBacking.reduce((s, m) => s + m, 0) / allBacking.length;
+      assert.ok(
+        avgMelody - avgBacking >= 10,
+        `Expected >= 10 semitones separation between melody (${avgMelody.toFixed(1)}) and chords (${avgBacking.toFixed(1)}) in ${draft.id}`
+      );
+    }
+  }
+});
+
+

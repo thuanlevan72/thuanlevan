@@ -20,6 +20,9 @@ interface GrandPianoKeyboardProps {
   onToggleRecordToRoll: () => void;
   onNoteTrigger: (midi: number) => void;
   onAuditionActiveChord?: () => void;
+  liveChordMidis?: number[];
+  liveMelodyMidis?: number[];
+  liveChordSymbol?: string | null;
 }
 
 interface PianoKeySpec {
@@ -68,6 +71,13 @@ function buildPianoKeys(startMidi = 48, endMidi = 72): {
   return { whiteKeys, blackKeys };
 }
 
+function projectMidiToVisibleRange(midi: number): number {
+  let mapped = midi;
+  while (mapped < 48) mapped += 12;
+  while (mapped > 72) mapped -= 12;
+  return mapped;
+}
+
 export function GrandPianoKeyboard({
   keyRoot,
   scaleMode,
@@ -80,6 +90,9 @@ export function GrandPianoKeyboard({
   onToggleRecordToRoll,
   onNoteTrigger,
   onAuditionActiveChord,
+  liveChordMidis = [],
+  liveMelodyMidis = [],
+  liveChordSymbol = null,
 }: GrandPianoKeyboardProps) {
   const [pressedMidis, setPressedMidis] = useState<number[]>([]);
   const pressTimersRef = useRef<Map<number, number>>(new Map());
@@ -93,11 +106,30 @@ export function GrandPianoKeyboard({
     );
   }, [keyRoot, scaleMode]);
 
+  const effectiveChordSymbol = liveChordSymbol ?? highlightedChordSymbol;
+
   const activeVoicing = useMemo(() => {
-    if (!highlightedChordSymbol) return null;
-    const resolved = resolvePianistVoicing(highlightedChordSymbol, voicingShift);
+    if (!effectiveChordSymbol) return null;
+    const resolved = resolvePianistVoicing(effectiveChordSymbol, voicingShift);
     return resolved.valid ? resolved : null;
-  }, [highlightedChordSymbol, voicingShift]);
+  }, [effectiveChordSymbol, voicingShift]);
+
+  const liveMelodyVisibleSet = useMemo(() => {
+    const set = new Set<number>();
+    liveMelodyMidis.forEach((m) => set.add(projectMidiToVisibleRange(m)));
+    return set;
+  }, [liveMelodyMidis]);
+
+  const liveChordVisibleSet = useMemo(() => {
+    const set = new Set<number>();
+    liveChordMidis.forEach((m) => set.add(projectMidiToVisibleRange(m)));
+    return set;
+  }, [liveChordMidis]);
+
+  const liveMelodyNoteLabels = useMemo(
+    () => liveMelodyMidis.map((m) => midiToNoteName(m)),
+    [liveMelodyMidis]
+  );
 
   // Map chord notes onto visible C3..C5 keys (projecting C2 bass into C3 octave badge)
   const { chordBassVisibleMidis, chordRightMidis } = useMemo(() => {
@@ -112,10 +144,7 @@ export function GrandPianoKeyboard({
       if (mapped <= 72) bassSet.add(mapped);
     });
     activeVoicing.rightHandMidis.forEach((m) => {
-      let mapped = m;
-      while (mapped < 48) mapped += 12;
-      while (mapped > 72) mapped -= 12;
-      rhSet.add(mapped);
+      rhSet.add(projectMidiToVisibleRange(m));
     });
     return { chordBassVisibleMidis: bassSet, chordRightMidis: rhSet };
   }, [activeVoicing]);
@@ -199,6 +228,12 @@ export function GrandPianoKeyboard({
               Bấm phím đàn hoặc gõ Z–M / Q–I
             </span>
           )}
+
+          {liveMelodyNoteLabels.length > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-500/40 bg-emerald-500/12 text-[11px] font-mono font-bold text-emerald-700 dark:text-emerald-300">
+              ♪ {liveMelodyNoteLabels.join(' ')}
+            </span>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
@@ -256,6 +291,8 @@ export function GrandPianoKeyboard({
           {/* White Ivory Keys */}
           {whiteKeys.map((k) => {
             const isPressed = pressedMidis.includes(k.midi);
+            const isLiveMel = liveMelodyVisibleSet.has(k.midi);
+            const isLiveChd = liveChordVisibleSet.has(k.midi);
             const isChordRh = chordRightMidis.has(k.midi);
             const isChordBass = chordBassVisibleMidis.has(k.midi);
             const chroma = ((k.midi % 12) + 12) % 12;
@@ -263,7 +300,10 @@ export function GrandPianoKeyboard({
 
             let bgClass =
               'bg-gradient-to-b from-[#FFFFFF] to-[#F1F5F9] hover:from-[#F8FAFC] hover:to-[#E2E8F0] text-[#334155]';
-            if (isPressed) {
+            if (isPressed || isLiveMel) {
+              bgClass =
+                'bg-gradient-to-b from-[#A7F3D0] to-[#34D399] text-[#064E3B] translate-y-[1.5px]';
+            } else if (isLiveChd) {
               bgClass =
                 'bg-gradient-to-b from-[#BAE6FD] to-[#38BDF8] text-[#082F49] translate-y-[1px]';
             } else if (isChordRh) {
@@ -286,18 +326,22 @@ export function GrandPianoKeyboard({
                 }}
                 className={`relative flex-1 h-full border-r border-[#CBD5E1] last:border-r-0 rounded-b-[4px] flex flex-col items-center justify-end pb-1.5 transition-all cursor-pointer ${bgClass}`}
               >
-                {/* Scale tone dot */}
-                {inScale && !isChordRh && !isChordBass && (
+                {/* Scale tone / live indicator dot */}
+                {inScale && !isChordRh && !isChordBass && !isLiveMel && !isLiveChd && (
                   <span
                     aria-hidden="true"
                     className="w-1 h-1 rounded-full bg-[#0284C7]/45 mb-1"
                   />
                 )}
-                {(isChordRh || isChordBass) && (
+                {(isChordRh || isChordBass || isLiveMel || isLiveChd) && (
                   <span
                     aria-hidden="true"
                     className={`w-1.5 h-1.5 rounded-full mb-1 ${
-                      isChordBass ? 'bg-amber-600' : 'bg-[#0284C7]'
+                      isLiveMel
+                        ? 'bg-emerald-800'
+                        : isChordBass
+                        ? 'bg-amber-600'
+                        : 'bg-[#0284C7]'
                     }`}
                   />
                 )}
@@ -316,6 +360,8 @@ export function GrandPianoKeyboard({
           {/* Black Ebony Keys Overlay */}
           {blackKeys.map((k) => {
             const isPressed = pressedMidis.includes(k.midi);
+            const isLiveMel = liveMelodyVisibleSet.has(k.midi);
+            const isLiveChd = liveChordVisibleSet.has(k.midi);
             const isChordRh = chordRightMidis.has(k.midi);
             const isChordBass = chordBassVisibleMidis.has(k.midi);
             const leftPercent = ((k.whiteIndex + 1) / totalWhite) * 100;
@@ -323,7 +369,10 @@ export function GrandPianoKeyboard({
 
             let bgClass =
               'bg-gradient-to-b from-[#334155] via-[#1E293B] to-[#0F172A] border-[#090D16] text-[#CBD5E1]';
-            if (isPressed) {
+            if (isPressed || isLiveMel) {
+              bgClass =
+                'bg-gradient-to-b from-[#10B981] to-[#047857] border-[#6EE7B7] text-white translate-y-[1.5px]';
+            } else if (isLiveChd) {
               bgClass =
                 'bg-gradient-to-b from-[#0284C7] to-[#0369A1] border-[#38BDF8] text-white translate-y-[1px]';
             } else if (isChordRh) {
@@ -351,10 +400,10 @@ export function GrandPianoKeyboard({
                 }}
                 className={`absolute top-0 h-[62%] z-10 rounded-b-[3px] border border-t-0 shadow-md flex flex-col items-center justify-end pb-1 transition-all cursor-pointer ${bgClass}`}
               >
-                {(isChordRh || isChordBass) && (
+                {(isChordRh || isChordBass || isLiveMel || isLiveChd) && (
                   <span
                     aria-hidden="true"
-                    className="w-1.5 h-1.5 rounded-full bg-white/90 mb-0.5"
+                    className="w-1.5 h-1.5 rounded-full bg-white/95 mb-0.5"
                   />
                 )}
                 {k.shortcutLabel && (

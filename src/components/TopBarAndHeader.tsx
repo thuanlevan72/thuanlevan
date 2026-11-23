@@ -101,6 +101,19 @@ export function TopBarAndHeader({ activeRoute, onNavigate }: TopBarAndHeaderProp
           </a>
 
           <a
+            href="/chronos"
+            aria-current={activeRoute === 'chronos' ? 'page' : undefined}
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('chronos');
+            }}
+            className={navLinkClass(activeRoute === 'chronos')}
+          >
+            <span className="sm:hidden">Chronos</span>
+            <span className="hidden sm:inline">ChronosFlow</span>
+          </a>
+
+          <a
             href="/game"
             aria-current={activeRoute === 'game' ? 'page' : undefined}
             onClick={(e) => {

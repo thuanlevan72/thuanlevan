@@ -27,6 +27,16 @@ const LyricGrooveSketchpadSection = lazyWithRetry(() =>
     default: m.LyricGrooveSketchpadSection,
   }))
 );
+const ChronosAppView = lazyWithRetry(() =>
+  import('./components/chronos/ChronosAppView.tsx').then((m) => ({
+    default: m.ChronosAppView,
+  }))
+);
+const ProfileLofiPlayer = lazyWithRetry(() =>
+  import('./components/ProfileLofiPlayer.tsx').then((m) => ({
+    default: m.ProfileLofiPlayer,
+  }))
+);
 import { GALLERY_ARTWORKS } from './data/portfolioData.ts';
 import {
   AppRoute,
@@ -231,10 +241,12 @@ export default function App() {
       <TopBarAndHeader activeRoute={activeRoute} onNavigate={handleNavigate} />
 
       <main
-        className={`flex-1 max-w-7xl mx-auto w-full ${
-          activeRoute === 'game'
-            ? 'px-3 sm:px-6 mobile-ls:px-1.5 mobile-ls:pb-1 space-y-6 mobile-ls:space-y-0 pb-6 safe-area-x'
-            : 'px-4 sm:px-6 space-y-16 sm:space-y-20 pb-8'
+        className={`flex-1 mx-auto w-full ${
+          activeRoute === 'chronos'
+            ? 'max-w-[1440px] px-3 sm:px-6 pb-6 pt-3'
+            : activeRoute === 'game'
+            ? 'max-w-7xl px-3 sm:px-6 mobile-ls:px-1.5 mobile-ls:pb-1 space-y-6 mobile-ls:space-y-0 pb-6 safe-area-x'
+            : 'max-w-7xl px-4 sm:px-6 space-y-16 sm:space-y-20 pb-8'
         }`}
       >
         {activeRoute === 'gallery' ? (
@@ -272,6 +284,15 @@ export default function App() {
               />
             </Suspense>
           </LazyLoadErrorBoundary>
+        ) : activeRoute === 'chronos' ? (
+          <LazyLoadErrorBoundary resetKey={activeRoute} label="ChronosFlow OS">
+            <Suspense fallback={<div className="py-16 text-center text-sm text-slate-500">Đang khởi động ChronosFlow OS...</div>}>
+              <ChronosAppView
+                theme={theme}
+                onToggleTheme={handleToggleTheme}
+              />
+            </Suspense>
+          </LazyLoadErrorBoundary>
         ) : (
           <>
             <HeroSection
@@ -285,6 +306,12 @@ export default function App() {
             <SkillsSection template={profileTemplate} />
             <InteractiveTerminal />
             <FaqAndCta />
+            <Suspense fallback={null}>
+              <ProfileLofiPlayer
+                theme={theme}
+                onOpenStudio={() => handleNavigate('studio')}
+              />
+            </Suspense>
           </>
         )}
       </main>

@@ -13,6 +13,7 @@ import {
   Music2,
   Play,
   Plus,
+  Repeat,
   Sparkles,
   Square,
   Trash2,
@@ -24,7 +25,9 @@ import {
   auditionChord,
   auditionMidiNote,
   auditionProgression,
+  getLiveAudioFrame,
   type MicPitchSession,
+  seekGroovePlayback,
   startGrooveLoop,
   startMicPitchCapture,
   stopGrooveLoop,
@@ -37,8 +40,10 @@ import {
 } from '../utils/lyricGrooveDb.ts';
 import {
   analyzeSectionLyrics,
+  ARPEGGIO_PATTERN_META,
   type BackingInstrumentId,
   type BackingPatternId,
+  type ConcreteArpeggioPatternId,
   createBlankDraft,
   createStarterDrafts,
   type DrumPatternId,
@@ -52,6 +57,7 @@ import {
   midiToNoteName,
   MOOD_STYLE_OPTIONS,
   type MoodStyleId,
+  parseSectionKaraokeLines,
   type PitchFrame,
   PROGRESSION_PRESETS,
   quantizePitchFramesToNotes,
@@ -77,6 +83,7 @@ import {
 import { type ThemeMode } from '../utils/portfolioLogic.ts';
 import { GrandPianoKeyboard } from './GrandPianoKeyboard.tsx';
 import { PianoRollCanvas } from './PianoRollCanvas.tsx';
+import { SongTimelinePlayer } from './SongTimelinePlayer.tsx';
 
 interface LyricGrooveSketchpadSectionProps {
   theme: ThemeMode;
@@ -134,10 +141,22 @@ export function LyricGrooveSketchpadSection({
       createStarterDrafts()[0].sections[2]?.id ??
       createStarterDrafts()[0].sections[0].id
   );
-  const [loopScope, setLoopScope] = useState<'section' | 'song'>('section');
+  const [loopScope, setLoopScope] = useState<'section' | 'song'>('song');
+  const [repeatLoop, setRepeatLoop] = useState<boolean>(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playingSectionId, setPlayingSectionId] = useState<string | null>(null);
   const [liveBeatIndicator, setLiveBeatIndicator] = useState<string>('Ô 1 · 1');
+  const [sectionBeatLocal, setSectionBeatLocal] = useState<number>(0);
+  const [songBeatPos, setSongBeatPos] = useState<number>(0);
+  const [liveChordInfo, setLiveChordInfo] = useState<{
+    symbol: string;
+    nextSymbol: string | null;
+    midis: number[];
+  } | null>(null);
+  const [liveMelodyInfo, setLiveMelodyInfo] = useState<{
+    midi: number;
+    noteName: string;
+  } | null>(null);
 
   const [selectedBarIndex, setSelectedBarIndex] = useState<number>(0);
   const [selectedAnchorChord, setSelectedAnchorChord] = useState<string>('Am9');
@@ -178,6 +197,10 @@ export function LyricGrooveSketchpadSection({
   const micSessionRef = useRef<MicPitchSession | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const headerMenusRef = useRef<HTMLDivElement | null>(null);
+  const spectrumCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const chordClearTimerRef = useRef<number | null>(null);
+  const melodyClearTimerRef = useRef<number | null>(null);
+  const skipNextRestartRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!showExportMenu && !showIdeaMenu) return;
@@ -221,6 +244,12 @@ export function LyricGrooveSketchpadSection({
     return () => {
       mounted = false;
       stopGrooveLoop();
+      if (chordClearTimerRef.current) {
+        window.clearTimeout(chordClearTimerRef.current);
+      }
+      if (melodyClearTimerRef.current) {
+        window.clearTimeout(melodyClearTimerRef.current);
+      }
       if (micSessionRef.current) {
         micSessionRef.current.stop();
         micSessionRef.current = null;
@@ -257,7 +286,9 @@ export function LyricGrooveSketchpadSection({
   }, [activeDraft, activeSectionId]);
 
   const activeBackingPattern: BackingPatternId =
-    activeDraft.backingPattern ?? 'ballad-arpeggio';
+    activeDraft.backingPattern ?? 'auto-song';
+  const activeBackingSelectValue =
+    activeBackingPattern === 'ballad-arpeggio' ? 'ballad-wave' : activeBackingPattern;
   const activeSustainPedal = activeDraft.sustainPedal ?? true;
   const activeMetronome = activeDraft.metronomeEnabled ?? false;
 
@@ -302,9 +333,21 @@ export function LyricGrooveSketchpadSection({
     () =>
       extractSectionBarSlots(
         activeSection,
-        diatonicPalette[0] ?? `${activeDraft.keyRoot}maj7`
+        diatonicPalette[0] ?? `${activeDraft.keyRoot}maj7`,
+        {
+          backingPattern: activeBackingPattern,
+          chordArpStyles: activeDraft.chordArpStyles,
+          songMood: activeDraft.mood,
+        }
       ),
-    [activeSection, diatonicPalette, activeDraft.keyRoot]
+    [
+      activeSection,
+      diatonicPalette,
+      activeDraft.keyRoot,
+      activeBackingPattern,
+      activeDraft.chordArpStyles,
+      activeDraft.mood,
+    ]
   );
 
   const chordSuggestions = useMemo(
@@ -348,99 +391,327 @@ export function LyricGrooveSketchpadSection({
     return markers;
   }, [activeSection.bars, activeSection.text, sectionAnalysis.lines]);
 
-  // Playback control
-  const handleTogglePlayback = useCallback(async () => {
-    if (isPlaying) {
-      stopGrooveLoop();
-      setIsPlaying(false);
-      setPlayingSectionId(null);
-      playheadBeatRef.current = 0;
-      setLiveBeatIndicator('Ô 1 · 1');
-      return;
-    }
-
-    stopProgressionAudition();
-    setAuditioningPresetId(null);
-    setLiveHighlightChord(null);
-
-    const scopeSections =
-      loopScope === 'section' ? [activeSection] : activeDraft.sections;
-
-    setIsPlaying(true);
-    playheadBeatRef.current = 0;
-
-    await startGrooveLoop({
-      sections: scopeSections,
-      melodyNotes: activeDraft.melodyNotes,
-      bpm: activeDraft.bpm,
-      backingInstrument: activeDraft.backingInstrument,
-      backingPattern: activeBackingPattern,
-      sustainPedal: activeSustainPedal,
-      metronomeEnabled: activeMetronome,
-      drumPattern: activeDraft.drumPattern,
-      melodyInstrument: activeDraft.melodyInstrument,
-      onProgressBeat: (beatInLoop, _totalBeats, curSecId) => {
-        playheadBeatRef.current = beatInLoop;
-        const barNum = Math.floor(beatInLoop / 4) + 1;
-        const beatNum = Math.floor(beatInLoop % 4) + 1;
-        setLiveBeatIndicator(`Ô ${barNum} · ${beatNum}`);
-        setPlayingSectionId((prev) => (prev === curSecId ? prev : curSecId));
-      },
+  const songTimelineSpans = useMemo(() => {
+    const spans: Array<{
+      id: string;
+      label: string;
+      kind: SectionKind;
+      bars: number;
+      start: number;
+      end: number;
+    }> = [];
+    let cursor = 0;
+    activeDraft.sections.forEach((sec) => {
+      const dur = sec.bars * 4;
+      spans.push({
+        id: sec.id,
+        label: sec.label,
+        kind: sec.kind,
+        bars: sec.bars,
+        start: cursor,
+        end: cursor + dur,
+      });
+      cursor += dur;
     });
-  }, [
-    isPlaying,
-    loopScope,
-    activeSection,
-    activeDraft.sections,
-    activeDraft.melodyNotes,
-    activeDraft.bpm,
-    activeDraft.backingInstrument,
-    activeBackingPattern,
-    activeSustainPedal,
-    activeMetronome,
-    activeDraft.drumPattern,
-    activeDraft.melodyInstrument,
-  ]);
+    return { spans, totalBeats: Math.max(4, cursor) };
+  }, [activeDraft.sections]);
 
-  // Restart loop seamlessly when settings change while playing
-  useEffect(() => {
-    if (!isPlaying) return;
-    const timer = window.setTimeout(() => {
+  const activeSectionStartBeat = useMemo(() => {
+    if (loopScope === 'section') return 0;
+    return (
+      songTimelineSpans.spans.find((s) => s.id === activeSection.id)?.start ?? 0
+    );
+  }, [loopScope, songTimelineSpans.spans, activeSection.id]);
+
+  const activeKaraokeLines = useMemo(
+    () => parseSectionKaraokeLines(activeSection),
+    [activeSection]
+  );
+
+  const clearLivePlayState = useCallback(() => {
+    if (chordClearTimerRef.current) {
+      window.clearTimeout(chordClearTimerRef.current);
+      chordClearTimerRef.current = null;
+    }
+    if (melodyClearTimerRef.current) {
+      window.clearTimeout(melodyClearTimerRef.current);
+      melodyClearTimerRef.current = null;
+    }
+    setLiveChordInfo(null);
+    setLiveMelodyInfo(null);
+    setSectionBeatLocal(0);
+    setSongBeatPos(0);
+    setPlayingSectionId(null);
+    playheadBeatRef.current = 0;
+    setLiveBeatIndicator('Ô 1 · 1');
+  }, []);
+
+  const launchLoopPlayback = useCallback(
+    async (targetScope: 'section' | 'song', startBeat = 0) => {
+      stopProgressionAudition();
+      setAuditioningPresetId(null);
+      setLiveHighlightChord(null);
+
       const scopeSections =
-        loopScope === 'section' ? [activeSection] : activeDraft.sections;
-      void startGrooveLoop({
+        targetScope === 'section' ? [activeSection] : activeDraft.sections;
+
+      setIsPlaying(true);
+      playheadBeatRef.current = startBeat;
+      setSongBeatPos(startBeat);
+
+      await startGrooveLoop({
         sections: scopeSections,
         melodyNotes: activeDraft.melodyNotes,
         bpm: activeDraft.bpm,
         backingInstrument: activeDraft.backingInstrument,
         backingPattern: activeBackingPattern,
+        chordArpStyles: activeDraft.chordArpStyles,
+        songMood: activeDraft.mood,
         sustainPedal: activeSustainPedal,
         metronomeEnabled: activeMetronome,
         drumPattern: activeDraft.drumPattern,
         melodyInstrument: activeDraft.melodyInstrument,
-        onProgressBeat: (beatInLoop, _totalBeats, curSecId) => {
+        repeatLoop,
+        startBeatOffset: startBeat,
+        volumeGain: 0.9,
+        onChordTrigger: (ev) => {
+          if (!ev) {
+            setLiveChordInfo(null);
+            return;
+          }
+          setLiveChordInfo({
+            symbol: ev.symbol,
+            nextSymbol: ev.nextSymbol,
+            midis: [...ev.bassMidis, ...ev.rightHandMidis],
+          });
+          setLiveHighlightChord({ symbol: ev.symbol, shift: 0 });
+          if (chordClearTimerRef.current) {
+            window.clearTimeout(chordClearTimerRef.current);
+          }
+          const holdMs = Math.max(
+            260,
+            ev.durationBeats * (60 / Math.max(45, activeDraft.bpm)) * 1000
+          );
+          chordClearTimerRef.current = window.setTimeout(() => {
+            setLiveChordInfo(null);
+          }, holdMs);
+        },
+        onMelodyTrigger: (ev) => {
+          if (!ev) {
+            setLiveMelodyInfo(null);
+            return;
+          }
+          setLiveMelodyInfo({ midi: ev.midi, noteName: ev.noteName });
+          if (melodyClearTimerRef.current) {
+            window.clearTimeout(melodyClearTimerRef.current);
+          }
+          const holdMs = Math.max(
+            180,
+            ev.durationBeats * (60 / Math.max(45, activeDraft.bpm)) * 920
+          );
+          melodyClearTimerRef.current = window.setTimeout(() => {
+            setLiveMelodyInfo(null);
+          }, holdMs);
+        },
+        onPlaybackEnded: () => {
+          setIsPlaying(false);
+          clearLivePlayState();
+        },
+        onProgressBeat: (beatInLoop, _totalBeats, curSecId, detail) => {
           playheadBeatRef.current = beatInLoop;
-          const barNum = Math.floor(beatInLoop / 4) + 1;
-          const beatNum = Math.floor(beatInLoop % 4) + 1;
+          const localBeat = detail ? detail.beatInSection : beatInLoop;
+          const barNum = Math.floor(localBeat / 4) + 1;
+          const beatNum = Math.floor(localBeat % 4) + 1;
           setLiveBeatIndicator(`Ô ${barNum} · ${beatNum}`);
+          setSectionBeatLocal(localBeat);
+          setSongBeatPos(beatInLoop);
           setPlayingSectionId((prev) => (prev === curSecId ? prev : curSecId));
+          if (targetScope === 'song') {
+            setActiveSectionId((prev) => (prev === curSecId ? prev : curSecId));
+          }
+          if (detail?.activeChordSymbol) {
+            const sym = detail.activeChordSymbol;
+            const nextSym = detail.nextChordSymbol;
+            setLiveChordInfo((prev) =>
+              prev && prev.symbol === sym && prev.nextSymbol === nextSym
+                ? prev
+                : { symbol: sym, nextSymbol: nextSym, midis: prev?.midis ?? [] }
+            );
+          }
         },
       });
-    }, 120);
+    },
+    [
+      activeSection,
+      activeDraft.sections,
+      activeDraft.melodyNotes,
+      activeDraft.bpm,
+      activeDraft.backingInstrument,
+      activeBackingPattern,
+      activeDraft.chordArpStyles,
+      activeDraft.mood,
+      activeSustainPedal,
+      activeMetronome,
+      activeDraft.drumPattern,
+      activeDraft.melodyInstrument,
+      repeatLoop,
+      clearLivePlayState,
+    ]
+  );
+
+  // Playback toggle for active scope
+  const handleTogglePlayback = useCallback(async () => {
+    if (isPlaying) {
+      stopGrooveLoop();
+      setIsPlaying(false);
+      clearLivePlayState();
+      return;
+    }
+    skipNextRestartRef.current = true;
+    await launchLoopPlayback(loopScope, 0);
+  }, [isPlaying, clearLivePlayState, launchLoopPlayback, loopScope]);
+
+  // Dedicated "Phát Cả Bài" trigger from beat 0 or stops if already playing full song
+  const handlePlayFullSong = useCallback(async () => {
+    if (isPlaying && loopScope === 'song') {
+      stopGrooveLoop();
+      setIsPlaying(false);
+      clearLivePlayState();
+      return;
+    }
+    skipNextRestartRef.current = true;
+    setLoopScope('song');
+    if (activeDraft.sections[0]) {
+      setActiveSectionId(activeDraft.sections[0].id);
+    }
+    await launchLoopPlayback('song', 0);
+  }, [isPlaying, loopScope, clearLivePlayState, activeDraft.sections, launchLoopPlayback]);
+
+  const handleSeekTimelineBeat = useCallback(
+    (targetBeat: number, targetSectionId?: string) => {
+      const span = songTimelineSpans.spans.find(
+        (s) =>
+          (targetSectionId && s.id === targetSectionId) ||
+          (targetBeat >= s.start && targetBeat < s.end)
+      );
+      const resolvedSectionId = targetSectionId ?? span?.id;
+      const localBeat = span ? Math.max(0, targetBeat - span.start) : targetBeat;
+
+      if (resolvedSectionId) {
+        setActiveSectionId(resolvedSectionId);
+        setPlayingSectionId(resolvedSectionId);
+      }
+      playheadBeatRef.current = targetBeat;
+      setSongBeatPos(targetBeat);
+      setSectionBeatLocal(localBeat);
+      const barNum = Math.floor(localBeat / 4) + 1;
+      const beatNum = Math.floor(localBeat % 4) + 1;
+      setLiveBeatIndicator(`Ô ${barNum} · ${beatNum}`);
+
+      if (isPlaying && loopScope === 'song' && repeatLoop) {
+        seekGroovePlayback(targetBeat, activeDraft.bpm);
+      } else {
+        skipNextRestartRef.current = true;
+        setLoopScope('song');
+        void launchLoopPlayback('song', targetBeat);
+      }
+    },
+    [isPlaying, loopScope, repeatLoop, activeDraft.bpm, launchLoopPlayback, songTimelineSpans.spans]
+  );
+
+  // Live 60fps audio spectrum visualizer inside Synchronized Song Stage
+  useEffect(() => {
+    const canvas = spectrumCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let rafId = 0;
+    const drawSpectrum = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = canvas.clientWidth || 240;
+      const h = canvas.clientHeight || 40;
+      if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+      }
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, w, h);
+
+      const frame = isPlaying ? getLiveAudioFrame() : null;
+      const barCount = 28;
+      const gap = 3;
+      const barW = Math.max(2, (w - gap * (barCount - 1)) / barCount);
+
+      for (let i = 0; i < barCount; i++) {
+        let norm = 0.08;
+        if (frame && frame.spectrum.length > 0) {
+          const binIdx = Math.min(
+            frame.spectrum.length - 1,
+            Math.floor((i / barCount) * (frame.spectrum.length * 0.55))
+          );
+          norm = Math.max(0.08, frame.spectrum[binIdx] / 255);
+        }
+        const barH = Math.max(3, norm * (h - 4));
+        const x = i * (barW + gap);
+        const y = h - barH;
+        ctx.fillStyle = isPlaying
+          ? i % 2 === 0
+            ? '#10B981'
+            : '#38BDF8'
+          : theme === 'dark'
+          ? 'rgba(148, 163, 184, 0.25)'
+          : 'rgba(100, 116, 139, 0.25)';
+        ctx.beginPath();
+        ctx.roundRect(x, y, barW, barH, 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      if (isPlaying) {
+        rafId = requestAnimationFrame(drawSpectrum);
+      }
+    };
+
+    drawSpectrum();
+    if (isPlaying) {
+      rafId = requestAnimationFrame(drawSpectrum);
+    }
+    return () => cancelAnimationFrame(rafId);
+  }, [isPlaying, theme]);
+
+  // Restart loop seamlessly ONLY when musical sound/arrangement settings change while playing
+  const activeSectionIdForEffect = loopScope === 'section' ? activeSection.id : 'song';
+  const launchRef = useRef(launchLoopPlayback);
+  launchRef.current = launchLoopPlayback;
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    if (skipNextRestartRef.current) {
+      skipNextRestartRef.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const resumeBeat = loopScope === 'song' ? playheadBeatRef.current : 0;
+      void launchRef.current(loopScope, resumeBeat);
+    }, 140);
     return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    isPlaying,
     loopScope,
-    activeSection,
+    activeSectionIdForEffect,
     activeDraft.sections,
     activeDraft.melodyNotes,
     activeDraft.bpm,
     activeDraft.backingInstrument,
     activeBackingPattern,
+    activeDraft.chordArpStyles,
+    activeDraft.mood,
     activeSustainPedal,
     activeMetronome,
     activeDraft.drumPattern,
     activeDraft.melodyInstrument,
+    repeatLoop,
   ]);
 
   // Smart Spacebar shortcut
@@ -465,7 +736,7 @@ export function LyricGrooveSketchpadSection({
   }, [handleTogglePlayback]);
 
   const auditionAndHighlightChord = useCallback(
-    (symbol: string, shift = 0) => {
+    (symbol: string, shift = 0, overridePattern?: BackingPatternId) => {
       setSelectedAnchorChord(symbol);
       setLiveHighlightChord({ symbol, shift });
       void auditionChord(
@@ -473,11 +744,31 @@ export function LyricGrooveSketchpadSection({
         activeDraft.backingInstrument,
         shift,
         activeSustainPedal,
-        activeBackingPattern
+        overridePattern ?? activeBackingPattern
       );
     },
     [activeDraft.backingInstrument, activeSustainPedal, activeBackingPattern]
   );
+
+  // Cycle individual bar/chord arpeggio pattern ("1 hợp âm có nhiều cách rải khác nhau")
+  const handleCycleBarArpPattern = (
+    eventIndex: number,
+    chordSymbol: string,
+    currentArp: ConcreteArpeggioPatternId
+  ) => {
+    const idx = ARPEGGIO_PATTERN_META.findIndex((m) => m.id === currentArp);
+    const nextArp =
+      ARPEGGIO_PATTERN_META[(idx + 1) % ARPEGGIO_PATTERN_META.length].id;
+    const key = `${activeSection.id}:${eventIndex}`;
+    updateActiveDraft((d) => ({
+      ...d,
+      chordArpStyles: {
+        ...(d.chordArpStyles ?? {}),
+        [key]: nextArp,
+      },
+    }));
+    auditionAndHighlightChord(chordSymbol, 0, nextArp);
+  };
 
   // Swap selected bar chord cleanly in 1 click without touching lyrics
   const handleSetBarChord = (barIndex: number, symbol: string) => {
@@ -485,10 +776,13 @@ export function LyricGrooveSketchpadSection({
     updateActiveDraft((d) => ({
       ...d,
       sections: d.sections.map((sec) =>
-        sec.id === activeSection.id ? { ...sec, text: nextText } : sec
+        sec.id === activeSection.id
+          ? { ...sec, text: nextText, chordSchedule: undefined }
+          : sec
       ),
     }));
-    auditionAndHighlightChord(symbol, 0);
+    const slotArp = barSlots[barIndex]?.arpPattern;
+    auditionAndHighlightChord(symbol, 0, slotArp);
   };
 
   const handleInsertChordAtCursor = (symbol: string) => {
@@ -504,7 +798,9 @@ export function LyricGrooveSketchpadSection({
     updateActiveDraft((d) => ({
       ...d,
       sections: d.sections.map((sec) =>
-        sec.id === activeSection.id ? { ...sec, text: nextText } : sec
+        sec.id === activeSection.id
+          ? { ...sec, text: nextText, chordSchedule: undefined }
+          : sec
       ),
     }));
 
@@ -1173,7 +1469,7 @@ export function LyricGrooveSketchpadSection({
             )}
           </div>
 
-          {/* Transport Play + Beat Readout + Scope */}
+          {/* Transport Play + Beat Readout + Full-Song Controls */}
           <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
             <span className="px-2.5 py-1 rounded-md border border-[#DCE6F2] dark:border-[#1B2B46] bg-[#F8FAFC] dark:bg-[#08101E] font-mono text-xs font-semibold tabular-nums text-[#0369A1] dark:text-[#38BDF8] whitespace-nowrap">
               {liveBeatIndicator}
@@ -1206,9 +1502,46 @@ export function LyricGrooveSketchpadSection({
 
             <button
               type="button"
+              onClick={() => setRepeatLoop((v) => !v)}
+              title={repeatLoop ? 'Đang lặp vô hạn — bấm để phát 1 lượt' : 'Đang phát 1 lượt — bấm để lặp lại'}
+              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                repeatLoop
+                  ? 'border-[#0284C7]/60 bg-sky-50 dark:bg-sky-950/50 text-[#0369A1] dark:text-[#38BDF8]'
+                  : 'border-[#CBD8E6] dark:border-[#1F3557] text-[#475569] dark:text-[#94A3B8]'
+              }`}
+            >
+              <Repeat className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>{repeatLoop ? 'Lặp' : '1 lượt'}</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="play-full-song-btn"
+              onClick={() => void handlePlayFullSong()}
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                isPlaying && loopScope === 'song'
+                  ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+              }`}
+            >
+              {isPlaying && loopScope === 'song' ? (
+                <>
+                  <Square className="w-3.5 h-3.5 fill-current" aria-hidden="true" />
+                  <span>Dừng Bài</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-3.5 h-3.5 fill-current" aria-hidden="true" />
+                  <span>Phát Cả Bài</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
               data-testid="play-loop-btn"
               onClick={() => void handleTogglePlayback()}
-              className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                 isPlaying
                   ? 'bg-rose-600 hover:bg-rose-700'
                   : 'bg-[#0284C7] hover:bg-[#0369A1]'
@@ -1222,7 +1555,7 @@ export function LyricGrooveSketchpadSection({
               ) : (
                 <>
                   <Play className="w-3.5 h-3.5 fill-current" aria-hidden="true" />
-                  <span>Phát Loop</span>
+                  <span>{loopScope === 'song' ? 'Tiếp tục' : 'Phát Đoạn'}</span>
                 </>
               )}
             </button>
@@ -1321,33 +1654,24 @@ export function LyricGrooveSketchpadSection({
               <option value="guitar-strum">Đệm: Guitar Acoustic</option>
             </select>
 
-            <div className="flex items-center p-0.5 rounded-md bg-[#EFF4FA] dark:bg-[#08101E] border border-[#DCE6F2] dark:border-[#1B2B46]">
-              {(
-                [
-                  { id: 'ballad-arpeggio', label: 'Rải Ballad' },
-                  { id: 'rich-block', label: 'Hợp âm dày' },
-                  { id: 'pop-comp', label: 'Pop/R&B' },
-                ] as const
-              ).map((pat) => (
-                <button
-                  key={pat.id}
-                  type="button"
-                  onClick={() =>
-                    updateActiveDraft((d) => ({
-                      ...d,
-                      backingPattern: pat.id as BackingPatternId,
-                    }))
-                  }
-                  className={`px-2 py-0.5 text-[11px] font-medium rounded transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                    activeBackingPattern === pat.id
-                      ? 'bg-white dark:bg-[#162640] text-[#070B14] dark:text-white shadow-xs'
-                      : 'text-[#475569] dark:text-[#94A3B8]'
-                  }`}
-                >
-                  {pat.label}
-                </button>
+            <select
+              aria-label="Kiểu rải hợp âm"
+              value={activeBackingSelectValue}
+              onChange={(e) =>
+                updateActiveDraft((d) => ({
+                  ...d,
+                  backingPattern: e.target.value as BackingPatternId,
+                }))
+              }
+              className="rounded-md border border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] px-2 py-1 text-xs font-medium text-[#0F172A] dark:text-[#F1F5F9]"
+            >
+              <option value="auto-song">Rải: Theo bài (Đa kiểu)</option>
+              {ARPEGGIO_PATTERN_META.map((pat) => (
+                <option key={pat.id} value={pat.id}>
+                  Rải: {pat.label}
+                </option>
               ))}
-            </div>
+            </select>
 
             <select
               aria-label="Kiểu trống"
@@ -1421,6 +1745,219 @@ export function LyricGrooveSketchpadSection({
               </span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Live Synchronized Song Stage: Timeline + Active Chord/Note + Karaoke Teleprompter */}
+      <div
+        data-testid="live-song-stage"
+        className="rounded-xl border border-[#DCE6F2] dark:border-[#182740] bg-gradient-to-br from-white via-[#F8FBFF] to-[#EFF6FF] dark:from-[#0B1220] dark:via-[#0D172B] dark:to-[#0A1324] p-4 space-y-3"
+      >
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="px-3 py-1.5 rounded-lg border border-emerald-500/35 bg-emerald-500/10">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                {isPlaying ? 'Đang phát trực tiếp' : 'Sân khấu trình diễn'}
+              </div>
+              <div className="font-sans text-sm font-bold text-[#070B14] dark:text-[#F1F5F9]">
+                {activeSection.label}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="px-3 py-1.5 rounded-lg border border-[#DCE6F2] dark:border-[#1E314E] bg-white/80 dark:bg-[#08101E]">
+                <div className="text-[10px] font-medium text-[#475569] dark:text-[#94A3B8]">
+                  Hợp âm đang vang
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span
+                    data-testid="stage-active-chord"
+                    className="font-mono text-lg font-bold text-[#0284C7] dark:text-[#38BDF8]"
+                  >
+                    {liveChordInfo?.symbol ?? barSlots[0]?.primaryChord ?? '—'}
+                  </span>
+                  {liveChordInfo?.nextSymbol && (
+                    <span className="font-mono text-xs text-[#475569] dark:text-[#94A3B8]">
+                      → {liveChordInfo.nextSymbol}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="px-3 py-1.5 rounded-lg border border-[#DCE6F2] dark:border-[#1E314E] bg-white/80 dark:bg-[#08101E] min-w-[96px]">
+                <div className="text-[10px] font-medium text-[#475569] dark:text-[#94A3B8]">
+                  Nốt giai điệu
+                </div>
+                <div
+                  data-testid="stage-active-note"
+                  className="font-mono text-lg font-bold text-emerald-600 dark:text-emerald-400"
+                >
+                  {liveMelodyInfo?.noteName ?? '—'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Live Frequency Spectrum + Time Readout */}
+          <div className="flex items-center gap-3">
+            <canvas
+              ref={spectrumCanvasRef}
+              aria-label="Phổ tần âm thanh trực tiếp"
+              className="w-44 sm:w-56 h-10 rounded-lg border border-[#DCE6F2] dark:border-[#1B2B46] bg-white/85 dark:bg-[#070D19] px-1.5 py-1"
+            />
+            <div className="text-right font-mono text-xs tabular-nums text-[#0F172A] dark:text-[#E2E8F0] whitespace-nowrap">
+              <div className="font-bold">{liveBeatIndicator}</div>
+              <div className="text-[11px] text-[#475569] dark:text-[#94A3B8]">
+                {Math.floor(((loopScope === 'song' ? songBeatPos : sectionBeatLocal) * (60 / activeDraft.bpm)) / 60)}:
+                {String(
+                  Math.floor(((loopScope === 'song' ? songBeatPos : sectionBeatLocal) * (60 / activeDraft.bpm)) % 60)
+                ).padStart(2, '0')}
+                {' / '}
+                {Math.floor((songTimelineSpans.totalBeats * (60 / activeDraft.bpm)) / 60)}:
+                {String(
+                  Math.floor((songTimelineSpans.totalBeats * (60 / activeDraft.bpm)) % 60)
+                ).padStart(2, '0')}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Clickable Full-Song Section Progress Timeline */}
+        <div className="space-y-1">
+          <div className="flex items-center gap-1 w-full">
+            {songTimelineSpans.spans.map((span, idx) => {
+              const widthPct = (span.bars * 4 * 100) / songTimelineSpans.totalBeats;
+              const isActiveSec =
+                (isPlaying && playingSectionId === span.id) ||
+                (!isPlaying && activeSection.id === span.id);
+              const progressInSpan =
+                isPlaying && loopScope === 'song'
+                  ? Math.max(
+                      0,
+                      Math.min(
+                        100,
+                        ((songBeatPos - span.start) / Math.max(1, span.end - span.start)) * 100
+                      )
+                    )
+                  : isActiveSec && isPlaying
+                  ? Math.max(
+                      0,
+                      Math.min(
+                        100,
+                        (sectionBeatLocal / Math.max(1, span.end - span.start)) * 100
+                      )
+                    )
+                  : 0;
+              return (
+                <button
+                  key={span.id}
+                  type="button"
+                  onClick={() => handleSeekTimelineBeat(span.start, span.id)}
+                  style={{ width: `${widthPct}%` }}
+                  title={`Nhảy tới ${span.label} (${span.bars} ô)`}
+                  className={`relative h-7 rounded-md border text-left px-2 overflow-hidden transition-colors cursor-pointer ${
+                    isActiveSec
+                      ? 'border-[#0284C7] bg-sky-100/80 dark:bg-sky-950/60 text-[#0369A1] dark:text-[#38BDF8]'
+                      : 'border-[#DCE6F2] dark:border-[#1B2B46] bg-white/80 dark:bg-[#08101E] text-[#475569] dark:text-[#94A3B8] hover:border-[#0284C7]'
+                  }`}
+                >
+                  <div
+                    aria-hidden="true"
+                    className="absolute inset-y-0 left-0 bg-emerald-500/20 dark:bg-emerald-400/20 transition-all duration-75"
+                    style={{ width: `${progressInSpan}%` }}
+                  />
+                  <span className="relative z-10 block truncate font-mono text-[10px] font-semibold">
+                    {idx + 1}. {span.kind}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Scrolling Multi-Track DAW Timeline (Ô nhịp · Hợp âm · Nốt giai điệu · Ca từ & Sóng âm) */}
+        <SongTimelinePlayer
+          theme={theme}
+          sections={activeDraft.sections}
+          melodyNotes={activeDraft.melodyNotes}
+          bpm={activeDraft.bpm}
+          backingPattern={activeBackingPattern}
+          chordArpStyles={activeDraft.chordArpStyles}
+          songMood={activeDraft.mood}
+          loopScope={loopScope}
+          activeSectionId={activeSection.id}
+          isPlaying={isPlaying}
+          playheadBeatRef={playheadBeatRef}
+          onSeekBeat={handleSeekTimelineBeat}
+        />
+
+        {/* Synchronized Karaoke Chord & Lyric Teleprompter */}
+        <div
+          data-testid="karaoke-teleprompter"
+          className="rounded-lg border border-[#E2E8F0] dark:border-[#1B2B46] bg-white/85 dark:bg-[#070D19]/90 px-3.5 py-2 space-y-1 max-h-28 overflow-y-auto"
+        >
+          {activeKaraokeLines.length === 0 ? (
+            <div className="text-xs italic text-[#94A3B8]">
+              (Đoạn nhạc không lời — theo dõi hợp âm &amp; giai điệu trực tiếp trên Piano Roll bên phải)
+            </div>
+          ) : (
+            activeKaraokeLines.map((line) => {
+              const isCurrentLine =
+                isPlaying &&
+                sectionBeatLocal >= line.startBeat &&
+                sectionBeatLocal < line.endBeat;
+              return (
+                <div
+                  key={line.lineIndex}
+                  className={`rounded-md px-2.5 py-1.5 transition-colors flex flex-wrap items-baseline gap-x-2 gap-y-1 ${
+                    isCurrentLine
+                      ? 'bg-emerald-500/12 dark:bg-emerald-500/15 border border-emerald-500/35'
+                      : 'opacity-80 hover:opacity-100'
+                  }`}
+                >
+                  {line.segments.map((seg, sIdx) => {
+                    const isCurrentSeg =
+                      isCurrentLine &&
+                      sectionBeatLocal >= seg.startBeat &&
+                      sectionBeatLocal < seg.endBeat;
+                    return (
+                      <span
+                        key={`${line.lineIndex}-${sIdx}`}
+                        className="inline-flex flex-col items-start leading-tight"
+                      >
+                        {seg.chordSymbol && (
+                          <button
+                            type="button"
+                            onClick={() => auditionAndHighlightChord(seg.chordSymbol!, 0)}
+                            className={`font-mono text-[11px] font-bold px-1 rounded transition-colors cursor-pointer ${
+                              isCurrentSeg
+                                ? 'bg-emerald-600 text-white'
+                                : 'text-[#0284C7] dark:text-[#38BDF8] hover:bg-sky-100 dark:hover:bg-sky-900/50'
+                            }`}
+                          >
+                            [{seg.chordSymbol}]
+                          </button>
+                        )}
+                        {seg.lyricText && (
+                          <span
+                            className={`text-sm ${
+                              isCurrentSeg
+                                ? 'font-bold text-emerald-700 dark:text-emerald-300'
+                                : isCurrentLine
+                                ? 'font-semibold text-[#070B14] dark:text-[#F1F5F9]'
+                                : 'text-[#334155] dark:text-[#CBD5E1]'
+                            }`}
+                          >
+                            {seg.lyricText}
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 
@@ -1568,16 +2105,27 @@ export function LyricGrooveSketchpadSection({
           >
             {barSlots.map((slot) => {
               const isSelectedBar = selectedBarIndex === slot.barIndex;
+              const arpMeta = ARPEGGIO_PATTERN_META.find(
+                (m) => m.id === slot.arpPattern
+              );
               return (
-                <button
+                <div
                   key={slot.barIndex}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   data-testid={`bar-slot-${slot.barIndex}`}
                   onClick={() => {
                     setSelectedBarIndex(slot.barIndex);
-                    auditionAndHighlightChord(slot.primaryChord, 0);
+                    auditionAndHighlightChord(slot.primaryChord, 0, slot.arpPattern);
                   }}
-                  className={`rounded-lg border px-3 py-2 text-left transition-all cursor-pointer ${
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedBarIndex(slot.barIndex);
+                      auditionAndHighlightChord(slot.primaryChord, 0, slot.arpPattern);
+                    }
+                  }}
+                  className={`rounded-lg border px-2.5 py-2 text-left transition-all cursor-pointer flex flex-col justify-between gap-1 ${
                     isSelectedBar
                       ? 'border-[#0284C7] bg-sky-50/80 dark:bg-sky-950/45 shadow-xs'
                       : 'border-[#DCE6F2] dark:border-[#1B2B46] bg-[#FAFBFD] dark:bg-[#070D19] hover:border-[#0284C7]/60'
@@ -1591,10 +2139,27 @@ export function LyricGrooveSketchpadSection({
                       </span>
                     )}
                   </div>
-                  <div className="font-mono text-base font-bold text-[#070B14] dark:text-[#F1F5F9] mt-0.5">
+                  <div className="font-mono text-base font-bold text-[#070B14] dark:text-[#F1F5F9]">
                     {slot.primaryChord}
                   </div>
-                </button>
+                  <button
+                    type="button"
+                    data-testid={`bar-arp-cycle-${slot.barIndex}`}
+                    title={arpMeta?.desc ?? 'Đổi kiểu rải riêng cho hợp âm này'}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedBarIndex(slot.barIndex);
+                      handleCycleBarArpPattern(
+                        slot.eventIndex,
+                        slot.primaryChord,
+                        slot.arpPattern
+                      );
+                    }}
+                    className="w-full text-left px-1.5 py-0.5 rounded bg-[#EFF4FA] dark:bg-[#0D182D] hover:bg-sky-100 dark:hover:bg-sky-900/50 text-[10px] font-medium text-[#0369A1] dark:text-[#7DD3FC] border border-[#DCE6F2] dark:border-[#1F3557] transition-colors truncate cursor-pointer"
+                  >
+                    Rải: {arpMeta?.shortLabel ?? slot.arpPattern}
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -1688,7 +2253,9 @@ export function LyricGrooveSketchpadSection({
                 updateActiveDraft((d) => ({
                   ...d,
                   sections: d.sections.map((s) =>
-                    s.id === activeSection.id ? { ...s, text: val } : s
+                    s.id === activeSection.id
+                      ? { ...s, text: val, chordSchedule: undefined }
+                      : s
                   ),
                 }));
               }}
@@ -2122,6 +2689,8 @@ export function LyricGrooveSketchpadSection({
             notes={sectionMelodyNotes}
             chordMarkers={sectionChordMarkers}
             playheadBeatRef={playheadBeatRef}
+            sectionStartBeat={activeSectionStartBeat}
+            activeChordSymbol={liveChordInfo?.symbol ?? null}
             isPlaying={isPlaying}
             isRecording={isRecording}
             liveWaveformRef={liveWaveformRef}
@@ -2142,6 +2711,9 @@ export function LyricGrooveSketchpadSection({
             recordToRoll={recordKeysToRoll}
             onToggleRecordToRoll={() => setRecordKeysToRoll((v) => !v)}
             onNoteTrigger={handlePianoKeyTrigger}
+            liveChordMidis={liveChordInfo?.midis ?? []}
+            liveMelodyMidis={liveMelodyInfo ? [liveMelodyInfo.midi] : []}
+            liveChordSymbol={liveChordInfo?.symbol ?? null}
             onAuditionActiveChord={() =>
               auditionAndHighlightChord(
                 liveHighlightChord?.symbol ?? selectedAnchorChord,

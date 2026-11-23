@@ -8,7 +8,7 @@ import {
   resolvePianistVoicing,
   snapMidiToScale,
 } from '../utils/lyricGrooveEngine.ts';
-import { auditionMidiNote } from '../utils/lyricGrooveAudio.ts';
+import { auditionMidiNote, getLiveAudioFrame } from '../utils/lyricGrooveAudio.ts';
 import { type ThemeMode } from '../utils/portfolioLogic.ts';
 
 interface PianoRollCanvasProps {
@@ -23,6 +23,8 @@ interface PianoRollCanvasProps {
   notes: MelodyNote[];
   chordMarkers: Array<{ symbol: string; beatOffset: number }>;
   playheadBeatRef: React.MutableRefObject<number>;
+  sectionStartBeat?: number;
+  activeChordSymbol?: string | null;
   isPlaying: boolean;
   isRecording: boolean;
   liveWaveformRef: React.MutableRefObject<Float32Array | null>;
@@ -50,6 +52,8 @@ export function PianoRollCanvas({
   notes,
   chordMarkers,
   playheadBeatRef,
+  sectionStartBeat = 0,
+  activeChordSymbol = null,
   isPlaying,
   isRecording,
   liveWaveformRef,
@@ -128,19 +132,27 @@ export function PianoRollCanvas({
     ctx.fillStyle = isDark ? '#0A1322' : '#F8FAFC';
     ctx.fillRect(0, 0, cssWidth, HEADER_H);
 
-    // Live audio waveform / gentle ambient idle baseline
-    const wave = liveWaveformRef.current;
+    // Live audio waveform / studio playback audio analyser
+    const micWave = liveWaveformRef.current;
+    const synthWave = !isRecording && isPlaying ? getLiveAudioFrame()?.waveform ?? null : null;
+    const wave = isRecording ? micWave : synthWave;
     ctx.strokeStyle = isRecording
       ? '#EF4444'
+      : isPlaying
+      ? isDark
+        ? 'rgba(16, 185, 129, 0.85)'
+        : 'rgba(2, 132, 199, 0.72)'
       : isDark
-      ? 'rgba(56, 189, 248, 0.45)'
-      : 'rgba(2, 132, 199, 0.35)';
-    ctx.lineWidth = isRecording ? 1.8 : 1.2;
+      ? 'rgba(56, 189, 248, 0.35)'
+      : 'rgba(2, 132, 199, 0.25)';
+    ctx.lineWidth = isRecording || isPlaying ? 1.8 : 1.1;
     ctx.beginPath();
-    if (wave && wave.length > 0 && isRecording) {
-      for (let i = 0; i < wave.length; i++) {
-        const wx = KEY_GUTTER_W + (i / (wave.length - 1)) * gridW;
-        const wy = HEADER_H * 0.45 + wave[i] * 18;
+    if (wave && wave.length > 0 && (isRecording || isPlaying)) {
+      const sampleCount = Math.min(wave.length, 128);
+      for (let i = 0; i < sampleCount; i++) {
+        const wx = KEY_GUTTER_W + (i / Math.max(1, sampleCount - 1)) * gridW;
+        const amp = Math.max(-1, Math.min(1, wave[i])) * (isRecording ? 18 : 22);
+        const wy = HEADER_H * 0.45 + amp;
         if (i === 0) ctx.moveTo(wx, wy);
         else ctx.lineTo(wx, wy);
       }
@@ -160,12 +172,39 @@ export function PianoRollCanvas({
       }
     }
 
-    chordMarkers.forEach((ch) => {
+    const beatPos = playheadBeatRef.current;
+    const rawLocalBeat = beatPos - sectionStartBeat;
+    const isPlayheadInSection =
+      (isPlaying || beatPos > 0) &&
+      rawLocalBeat >= -0.05 &&
+      rawLocalBeat <= totalBeats + 0.05;
+    const localBeat = isPlayheadInSection
+      ? Math.max(0, Math.min(totalBeats, rawLocalBeat))
+      : -1;
+
+    chordMarkers.forEach((ch, idx) => {
       if (ch.beatOffset >= totalBeats) return;
+      const nextOffset =
+        idx + 1 < chordMarkers.length ? chordMarkers[idx + 1].beatOffset : totalBeats;
+      const isActiveChord =
+        isPlayheadInSection &&
+        ((localBeat >= ch.beatOffset && localBeat < nextOffset) ||
+          (activeChordSymbol !== null &&
+            ch.symbol === activeChordSymbol &&
+            Math.abs(localBeat - ch.beatOffset) < 4));
       const cx = KEY_GUTTER_W + ch.beatOffset * beatW;
-      ctx.fillStyle = isDark ? '#38BDF8' : '#0369A1';
       ctx.font = '700 11px "JetBrains Mono", monospace';
-      ctx.fillText(ch.symbol, cx + 4, 15);
+      if (isActiveChord) {
+        const labelW = ctx.measureText(ch.symbol).width + 10;
+        ctx.fillStyle = isDark ? 'rgba(16, 185, 129, 0.25)' : 'rgba(2, 132, 199, 0.14)';
+        ctx.beginPath();
+        ctx.roundRect(cx + 1, 3, labelW, 16, 4);
+        ctx.fill();
+        ctx.fillStyle = isDark ? '#34D399' : '#0284C7';
+      } else {
+        ctx.fillStyle = isDark ? '#38BDF8' : '#0369A1';
+      }
+      ctx.fillText(ch.symbol, cx + 5, 15);
     });
 
     // 2. Piano Key Gutter & Scale Rows
@@ -239,7 +278,7 @@ export function PianoRollCanvas({
       ctx.stroke();
     }
 
-    // 4. MIDI Note Bars
+    // 4. MIDI Note Bars (glowing when playhead intersects)
     notes.forEach((n) => {
       if (n.midi < MIN_MIDI || n.midi > MAX_MIDI) return;
       const r = MAX_MIDI - n.midi;
@@ -250,21 +289,39 @@ export function PianoRollCanvas({
 
       const chroma = ((n.midi % 12) + 12) % 12;
       const inScale = scaleChromas.has(chroma);
+      const isNoteSounding =
+        isPlaying &&
+        isPlayheadInSection &&
+        localBeat >= n.startBeat &&
+        localBeat < n.startBeat + n.durationBeats;
 
-      ctx.fillStyle = inScale
-        ? isDark
-          ? '#38BDF8'
-          : '#0284C7'
-        : isDark
-        ? '#F59E0B'
-        : '#D97706';
+      ctx.save();
+      if (isNoteSounding) {
+        ctx.shadowColor = isDark ? '#34D399' : '#0EA5E9';
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = isDark ? '#34D399' : '#0EA5E9';
+      } else {
+        ctx.fillStyle = inScale
+          ? isDark
+            ? '#38BDF8'
+            : '#0284C7'
+          : isDark
+          ? '#F59E0B'
+          : '#D97706';
+      }
       ctx.beginPath();
       ctx.roundRect(x, y, w, h, 3);
       ctx.fill();
+      if (isNoteSounding) {
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      }
+      ctx.restore();
 
-      if (w > 24 && h >= 9) {
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = '600 9px "JetBrains Mono", monospace';
+      if (w > 22 && h >= 8) {
+        ctx.fillStyle = isNoteSounding && isDark ? '#06281E' : '#FFFFFF';
+        ctx.font = '700 9px "JetBrains Mono", monospace';
         ctx.fillText(midiToNoteName(n.midi), x + 4, y + h - 2);
       }
     });
@@ -282,17 +339,19 @@ export function PianoRollCanvas({
       ctx.stroke();
     }
 
-    // 6. Live 60fps Playhead Line
-    const beatPos = playheadBeatRef.current;
-    if (isPlaying || beatPos > 0) {
-      const clampedBeat = Math.max(0, Math.min(totalBeats, beatPos % totalBeats));
-      const px = KEY_GUTTER_W + clampedBeat * beatW;
-      ctx.strokeStyle = isRecording ? '#EF4444' : isDark ? '#FACC15' : '#0F172A';
-      ctx.lineWidth = 2;
+    // 6. Live 60fps Playhead Line (section-local)
+    if (isPlayheadInSection) {
+      const px = KEY_GUTTER_W + localBeat * beatW;
+      ctx.save();
+      ctx.strokeStyle = isRecording ? '#EF4444' : isDark ? '#34D399' : '#0284C7';
+      ctx.lineWidth = 2.2;
+      ctx.shadowColor = isDark ? 'rgba(52, 211, 153, 0.55)' : 'rgba(2, 132, 199, 0.35)';
+      ctx.shadowBlur = 8;
       ctx.beginPath();
       ctx.moveTo(px, 0);
       ctx.lineTo(px, cssHeight);
       ctx.stroke();
+      ctx.restore();
     }
 
     // Divider between header & grid

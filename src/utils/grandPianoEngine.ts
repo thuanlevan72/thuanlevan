@@ -175,6 +175,7 @@ function createConcertHallImpulseBuffer(ctx: BaseContext): AudioBuffer {
 }
 
 interface ActiveVoiceHandle {
+  isLead: boolean;
   stopAt: (when: number) => void;
 }
 
@@ -197,7 +198,7 @@ export class GrandPianoEngine {
   private readonly waves: Map<PianoRegisterProfile['band'], PeriodicWave> = new Map();
   private readonly hammerBuffer: AudioBuffer;
   private readonly activeVoices: ActiveVoiceHandle[] = [];
-  private readonly maxPolyphony = 34;
+  private readonly maxPolyphony = 72;
 
   constructor(ctx: BaseContext, destinationNode: AudioNode) {
     this.ctx = ctx;
@@ -270,7 +271,8 @@ export class GrandPianoEngine {
     durationSec: number,
     time: number,
     velocity = 0.78,
-    sustainPedal = false
+    sustainPedal = false,
+    isLead = false
   ): void {
     const clampedMidi = Math.max(24, Math.min(108, Math.round(midi)));
     const vel = Math.max(0.1, Math.min(1, velocity));
@@ -281,13 +283,19 @@ export class GrandPianoEngine {
 
     const startTime = Math.max(this.ctx.currentTime, time);
     const holdDur = Math.max(0.09, durationSec);
-    const damperRelease = sustainPedal ? Math.min(2.1, profile.decaySec * 0.55) : 0.34;
+    const damperRelease = sustainPedal
+      ? Math.min(isLead ? 1.85 : 2.1, profile.decaySec * 0.55)
+      : isLead
+      ? 0.42
+      : 0.32;
     const stopTime = startTime + holdDur + damperRelease + 0.04;
 
-    // Polyphony management (steal oldest voice gently if saturated)
+    // Polyphony management (steal oldest non-lead voice first so lead melody never drops)
     while (this.activeVoices.length >= this.maxPolyphony) {
-      const oldest = this.activeVoices.shift();
-      oldest?.stopAt(startTime + 0.02);
+      const nonLeadIdx = this.activeVoices.findIndex((v) => !v.isLead);
+      const stealIdx = nonLeadIdx >= 0 ? nonLeadIdx : 0;
+      const [stolen] = this.activeVoices.splice(stealIdx, 1);
+      stolen?.stopAt(startTime + 0.02);
     }
 
     // Stereo panner & per-note dynamic lowpass filter
@@ -297,7 +305,7 @@ export class GrandPianoEngine {
     const noteFilter = this.ctx.createBiquadFilter();
     noteFilter.type = 'lowpass';
     noteFilter.Q.value = 0.7;
-    const fCurve = computePianoFilterCurve(freq, vel);
+    const fCurve = computePianoFilterCurve(freq, isLead ? Math.min(1, vel * 1.06) : vel);
     noteFilter.frequency.setValueAtTime(fCurve.startHz, startTime);
     noteFilter.frequency.exponentialRampToValueAtTime(
       fCurve.settleHz,
@@ -308,9 +316,10 @@ export class GrandPianoEngine {
       startTime + Math.min(holdDur + damperRelease, profile.decaySec)
     );
 
-    // Master note amplitude envelope: crisp hammer attack -> prompt drop -> natural decay (never flat organ sustain!)
+    // Master note amplitude envelope: crisp hammer attack -> prompt drop -> natural decay
     const noteGain = this.ctx.createGain();
-    const peakGain = Math.pow(vel, 1.28) * (clampedMidi < 50 ? 0.34 : 0.28);
+    const registerBoost = clampedMidi < 50 ? 0.34 : isLead ? 0.34 : 0.27;
+    const peakGain = Math.pow(vel, 1.24) * registerBoost;
     noteGain.gain.setValueAtTime(0.0001, startTime);
     noteGain.gain.linearRampToValueAtTime(peakGain, startTime + 0.003);
     noteGain.gain.exponentialRampToValueAtTime(
@@ -388,6 +397,7 @@ export class GrandPianoEngine {
     hammerSrc.stop(startTime + 0.045);
 
     const handle: ActiveVoiceHandle = {
+      isLead,
       stopAt: (when: number) => {
         try {
           noteGain.gain.cancelScheduledValues(when);
