@@ -16,6 +16,7 @@ import {
   Eye,
   Flame,
   Heart,
+  Loader2,
   Lock,
   Maximize2,
   Minimize2,
@@ -73,8 +74,8 @@ import {
   CatItemGraphic,
   CatThumbnailIcon,
   CatTownMapSvg,
+  CatWorldBackdrop,
   renderCatCoverProp,
-  renderCatWorldBackdrop,
 } from './CatFinderArt.tsx';
 
 interface CatFinderGameSectionProps {
@@ -294,7 +295,8 @@ export function CatFinderGameSection({
   const [floatingNotices, setFloatingNotices] = useState<FloatingNoticeFx[]>([]);
   const [shakeCount, setShakeCount] = useState(0);
   const [sharePreviewUrl, setSharePreviewUrl] = useState<string | null>(null);
-  const [spotlightPct, setSpotlightPct] = useState<{ x: number; y: number }>({ x: 50, y: 50 });
+  const [isStarting, setIsStarting] = useState(false);
+  const [loadingStageTitle, setLoadingStageTitle] = useState<string | null>(null);
 
   const [muted, setMuted] = useState(false);
   const [bgmOn, setBgmOn] = useState(false);
@@ -305,6 +307,9 @@ export function CatFinderGameSection({
   });
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const spotlightOverlayRef = useRef<HTMLDivElement | null>(null);
+  const godRayLensRef = useRef<HTMLDivElement | null>(null);
+  const startRafRef = useRef<number | null>(null);
   const dragRef = useRef<{
     active: boolean;
     pointerId: number | null;
@@ -481,13 +486,17 @@ export function CatFinderGameSection({
     return () => window.clearInterval(t);
   }, [screen, muted, diffConfig.coverAutoCloseSec]);
 
-  const startStage = useCallback(
-    (stageId?: string, forceReset = true, overrideDiffId?: CatDifficultyId) => {
-      const targetId = stageId ?? activeStage.id;
-      if (!isStageUnlocked(targetId, saveData)) return;
-      const targetDiff = getCatDifficultyConfig(overrideDiffId ?? saveData.difficultyId);
+  useEffect(() => {
+    return () => {
+      if (startRafRef.current !== null) {
+        window.cancelAnimationFrame(startRafRef.current);
+      }
+    };
+  }, []);
 
-      catFinderAudio.unlock();
+  const commitStartStage = useCallback(
+    (targetId: string, targetDiffId: CatDifficultyId, forceReset: boolean) => {
+      const targetDiff = getCatDifficultyConfig(targetDiffId);
       catFinderAudio.playRevealSound(muted);
 
       setSaveData((prev) => ({
@@ -522,7 +531,39 @@ export function CatFinderGameSection({
         document.activeElement.blur();
       }
     },
-    [activeStage.id, muted, saveData]
+    [muted]
+  );
+
+  const startStage = useCallback(
+    (stageId?: string, forceReset = true, overrideDiffId?: CatDifficultyId) => {
+      if (isStarting) return;
+      const targetId = stageId ?? activeStage.id;
+      if (!isStageUnlocked(targetId, saveData)) return;
+      const targetStageObj = CAT_STAGES.find((s) => s.id === targetId) ?? activeStage;
+      const targetDiffId = overrideDiffId ?? saveData.difficultyId;
+
+      // Unlock audio synchronously inside user gesture for iOS Safari
+      catFinderAudio.unlock();
+
+      // Immediately render responsive loading feedback on frame 0 before heavy SVG mount
+      setIsStarting(true);
+      setLoadingStageTitle(targetStageObj.title);
+
+      if (startRafRef.current !== null) {
+        window.cancelAnimationFrame(startRafRef.current);
+      }
+      startRafRef.current = window.requestAnimationFrame(() => {
+        startRafRef.current = window.requestAnimationFrame(() => {
+          commitStartStage(targetId, targetDiffId, forceReset);
+          startRafRef.current = window.requestAnimationFrame(() => {
+            setIsStarting(false);
+            setLoadingStageTitle(null);
+            startRafRef.current = null;
+          });
+        });
+      });
+    },
+    [isStarting, activeStage, saveData, commitStartStage]
   );
 
   // Enter / Space starts from Title Screen
@@ -869,7 +910,16 @@ export function CatFinderGameSection({
     const touchOffsetY = pointerType === 'touch' ? -34 : 0;
     const x = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
     const y = Math.max(0, Math.min(100, ((clientY + touchOffsetY - rect.top) / rect.height) * 100));
-    setSpotlightPct({ x, y });
+    const xStr = `${x.toFixed(2)}%`;
+    const yStr = `${y.toFixed(2)}%`;
+    if (spotlightOverlayRef.current) {
+      spotlightOverlayRef.current.style.setProperty('--spot-x', xStr);
+      spotlightOverlayRef.current.style.setProperty('--spot-y', yStr);
+    }
+    if (godRayLensRef.current) {
+      godRayLensRef.current.style.left = xStr;
+      godRayLensRef.current.style.top = yStr;
+    }
   };
 
   // Pointer Pan & Pinch Handlers
@@ -960,15 +1010,53 @@ export function CatFinderGameSection({
   const isGodRayMode = diffConfig.id === 'god_ray_20x';
   const isTouchViewport = viewportSize.width < 768;
 
+  const renderedDecoys = useMemo(
+    () =>
+      activeStage.decoys.map((dec) => (
+        <g
+          key={dec.id}
+          transform={`translate(${dec.x}, ${dec.y}) rotate(${dec.rotateDeg ?? 0}) scale(${dec.scale ?? 0.72})`}
+          opacity={dec.opacity ?? 0.86}
+        >
+          <CatDecoyGraphic artKey={dec.artKey} mutedTint={dec.mutedTint} />
+        </g>
+      )),
+    [activeStage]
+  );
+
   return (
     <section
       aria-label="Tìm Mèo và Đồ Xinh"
-      className={`bg-[#FFF9F2] text-[#43312B] overflow-hidden ${
+      className={`relative bg-[#FFF9F2] text-[#43312B] overflow-hidden ${
         isFullscreen
           ? 'rounded-none border-0 shadow-none h-full flex-1 flex flex-col min-h-0'
           : 'rounded-2xl border border-[#ECCFD5] shadow-[0_14px_38px_-16px_rgba(120,76,65,0.2)]'
       }`}
     >
+      {/* Non-blocking Pastel Loading Veil while preparing stage SVG */}
+      {isStarting && (
+        <div
+          data-testid="cat-loading-overlay"
+          role="status"
+          aria-live="polite"
+          className="absolute inset-0 z-50 bg-[#FFF9F2]/96 flex flex-col items-center justify-center gap-3 p-6 text-center"
+        >
+          <div className="w-14 h-14 rounded-2xl bg-[#FCE2E6] border-2 border-[#43312B] flex items-center justify-center shadow-sm">
+            <Loader2 className="w-7 h-7 text-[#D95B72] animate-spin" aria-hidden="true" />
+          </div>
+          <div>
+            <p className="font-serif text-lg sm:text-xl font-bold text-[#43312B]">
+              Đang mở {loadingStageTitle ?? activeStage.title}...
+            </p>
+            <p className="text-xs text-[#7A6258] mt-0.5">
+              Đang xếp mèo ẩn nấp &amp; đồ xinh vào khung tranh
+            </p>
+          </div>
+          <div className="w-48 h-2 rounded-full bg-[#EFE0D2] overflow-hidden border border-[#DEC9B7]">
+            <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-[#E87084] to-[#F59E0B] animate-pulse" />
+          </div>
+        </div>
+      )}
       {/* TITLE & TOWN MAP SCREEN */}
       {screen === 'TITLE' && (
         <div
@@ -1018,11 +1106,22 @@ export function CatFinderGameSection({
                 type="button"
                 data-start="true"
                 data-testid="cat-start-btn"
+                disabled={isStarting}
+                aria-busy={isStarting}
                 onClick={() => startStage()}
-                className="flex-1 sm:flex-initial min-h-[44px] px-6 py-2.5 rounded-xl bg-[#E87084] hover:bg-[#DF5C72] text-white border-2 border-[#43312B] text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-95 whitespace-nowrap"
+                className="flex-1 sm:flex-initial min-h-[44px] px-6 py-2.5 rounded-xl bg-[#E87084] hover:bg-[#DF5C72] disabled:opacity-80 disabled:cursor-wait text-white border-2 border-[#43312B] text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-95 whitespace-nowrap"
               >
-                <Sparkles className="w-4 h-4" aria-hidden="true" />
-                <span>Chơi Ngay ({diffConfig.multiplierBadge})</span>
+                {isStarting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                    <span>Đang tải màn...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" aria-hidden="true" />
+                    <span>Chơi Ngay ({diffConfig.multiplierBadge})</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -1442,18 +1541,10 @@ export function CatFinderGameSection({
                 className="w-full h-full block pointer-events-none"
                 preserveAspectRatio="none"
               >
-                {renderCatWorldBackdrop(activeStage.theme)}
+                <CatWorldBackdrop theme={activeStage.theme} />
 
-                {/* Visual Clutter / Lookalike Decoy Layer */}
-                {activeStage.decoys.map((dec) => (
-                  <g
-                    key={dec.id}
-                    transform={`translate(${dec.x}, ${dec.y}) rotate(${dec.rotateDeg ?? 0}) scale(${dec.scale ?? 0.72})`}
-                    style={{ opacity: dec.opacity ?? 0.86 }}
-                  >
-                    <CatDecoyGraphic artKey={dec.artKey} mutedTint={dec.mutedTint} />
-                  </g>
-                ))}
+                {/* Visual Clutter / Lookalike Decoy Layer (Memoized per stage) */}
+                {renderedDecoys}
 
                 {/* Target Items & Secret Golden Cat Layer */}
                 {activeStage.items.map((item) => {
@@ -1620,24 +1711,28 @@ export function CatFinderGameSection({
               ))}
             </div>
 
-            {/* Flashlight / Thần Nhãn Ánh Xạ Overlay in x8, x10, and x20 */}
+            {/* Flashlight / Thần Nhãn Ánh Xạ Overlay in x8, x10, and x20 (CSS var driven at 60fps) */}
             {diffConfig.spotlightRadius !== null && (
               <div
+                ref={spotlightOverlayRef}
                 aria-hidden="true"
                 data-testid="cat-spotlight-overlay"
-                className="pointer-events-none absolute inset-0 z-30 transition-[background] duration-75"
+                className="pointer-events-none absolute inset-0 z-30"
                 style={{
+                  ['--spot-x' as string]: '50%',
+                  ['--spot-y' as string]: '50%',
                   background: isGodRayMode
-                    ? `radial-gradient(circle ${diffConfig.spotlightRadius}px at ${spotlightPct.x}% ${spotlightPct.y}%, rgba(254, 243, 199, 0.05) 0%, rgba(25, 10, 18, 0) 42%, rgba(217, 119, 6, 0.24) 68%, rgba(16, 6, 14, ${diffConfig.spotlightOpacity}) 100%)`
-                    : `radial-gradient(circle ${diffConfig.spotlightRadius}px at ${spotlightPct.x}% ${spotlightPct.y}%, rgba(25, 16, 18, 0) 38%, rgba(25, 16, 18, ${diffConfig.spotlightOpacity}) 100%)`,
+                    ? `radial-gradient(circle ${diffConfig.spotlightRadius}px at var(--spot-x) var(--spot-y), rgba(254, 243, 199, 0.05) 0%, rgba(25, 10, 18, 0) 42%, rgba(217, 119, 6, 0.24) 68%, rgba(16, 6, 14, ${diffConfig.spotlightOpacity}) 100%)`
+                    : `radial-gradient(circle ${diffConfig.spotlightRadius}px at var(--spot-x) var(--spot-y), rgba(25, 16, 18, 0) 38%, rgba(25, 16, 18, ${diffConfig.spotlightOpacity}) 100%)`,
                 }}
               >
                 {isGodRayMode && (
                   <div
+                    ref={godRayLensRef}
                     data-testid="cat-god-ray-lens"
                     style={{
-                      left: `${spotlightPct.x}%`,
-                      top: `${spotlightPct.y}%`,
+                      left: '50%',
+                      top: '50%',
                       width: `${diffConfig.spotlightRadius * 1.48}px`,
                       height: `${diffConfig.spotlightRadius * 1.48}px`,
                     }}

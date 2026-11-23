@@ -5,6 +5,8 @@ class AntiqueShopAudioEngine {
   private musicTimer: number | null = null;
   private stepIdx = 0;
   private musicActive = false;
+  private paperBuffer: AudioBuffer | null = null;
+  private paperBufferRate = 0;
 
   private ensureContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
@@ -36,15 +38,19 @@ class AntiqueShopAudioEngine {
     const now = ctx.currentTime;
 
     if (kind === 'paper') {
-      // Soft filtered white-noise paper rustle
-      const bufferSize = Math.floor(ctx.sampleRate * 0.14);
-      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.42));
+      // Lazily build and cache filtered white-noise paper rustle once per sampleRate
+      if (!this.paperBuffer || this.paperBufferRate !== ctx.sampleRate) {
+        const bufferSize = Math.floor(ctx.sampleRate * 0.14);
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.42));
+        }
+        this.paperBuffer = buffer;
+        this.paperBufferRate = ctx.sampleRate;
       }
       const noise = ctx.createBufferSource();
-      noise.buffer = buffer;
+      noise.buffer = this.paperBuffer;
 
       const bandpass = ctx.createBiquadFilter();
       bandpass.type = 'bandpass';

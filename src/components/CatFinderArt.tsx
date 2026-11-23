@@ -1,8 +1,9 @@
+import { memo } from 'react';
 import type { CatCoverDef, CatStageDef, CatWorldTheme } from '../utils/catFinderEngine.ts';
 
 const INK = '#43312B';
 
-export function CatItemGraphic({
+export const CatItemGraphic = memo(function CatItemGraphic({
   artKey,
   monochrome = false,
   camoOpacity = 1,
@@ -13,20 +14,14 @@ export function CatItemGraphic({
 }) {
   return (
     <g
-      style={
-        monochrome
-          ? { filter: 'grayscale(1) contrast(0.75) opacity(0.55)' }
-          : camoOpacity < 0.99
-          ? { opacity: camoOpacity, filter: 'saturate(0.84) contrast(0.95)' }
-          : undefined
-      }
+      opacity={monochrome ? 0.52 : camoOpacity < 0.99 ? camoOpacity : undefined}
     >
       {renderItemShape(artKey)}
     </g>
   );
-}
+});
 
-export function CatDecoyGraphic({
+export const CatDecoyGraphic = memo(function CatDecoyGraphic({
   artKey,
   mutedTint = false,
 }: {
@@ -34,19 +29,13 @@ export function CatDecoyGraphic({
   mutedTint?: boolean;
 }) {
   return (
-    <g
-      style={
-        mutedTint
-          ? { filter: 'saturate(0.58) opacity(0.82)' }
-          : { filter: 'saturate(0.82) opacity(0.92)' }
-      }
-    >
+    <g opacity={mutedTint ? 0.68 : 0.88}>
       {renderDecoyShape(artKey)}
     </g>
   );
-}
+});
 
-export function CatThumbnailIcon({
+export const CatThumbnailIcon = memo(function CatThumbnailIcon({
   artKey,
   found,
 }: {
@@ -56,13 +45,15 @@ export function CatThumbnailIcon({
   return (
     <svg
       viewBox="-44 -44 88 88"
-      className="w-11 h-11 sm:w-12 sm:h-12 shrink-0 overflow-visible"
+      className={`w-11 h-11 sm:w-12 sm:h-12 shrink-0 overflow-visible ${
+        found ? '' : 'grayscale opacity-60'
+      }`}
       aria-hidden="true"
     >
-      <CatItemGraphic artKey={artKey} monochrome={!found} />
+      <CatItemGraphic artKey={artKey} />
     </svg>
   );
-}
+});
 
 function renderItemShape(artKey: string) {
   switch (artKey) {
@@ -1249,6 +1240,14 @@ function renderCoverBody(cover: CatCoverDef, isOpen: boolean) {
       );
   }
 }
+
+export const CatWorldBackdrop = memo(function CatWorldBackdrop({
+  theme,
+}: {
+  theme: CatWorldTheme;
+}) {
+  return renderCatWorldBackdrop(theme);
+});
 
 export function renderCatWorldBackdrop(theme: CatWorldTheme) {
   if (theme === 'bakery') {

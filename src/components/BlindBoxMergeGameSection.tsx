@@ -85,6 +85,8 @@ function saveProfile(profile: SavedBlindBoxProfile) {
 // ---------------------------------------------------------------------------
 type CuteSfx = 'drop' | 'merge' | 'crinkle' | 'reveal' | 'secret' | 'place';
 
+const crinkleBufferCache = new WeakMap<AudioContext, AudioBuffer>();
+
 function playCuteSfx(
   ctx: AudioContext | null,
   kind: CuteSfx,
@@ -128,12 +130,16 @@ function playCuteSfx(
   }
 
   if (kind === 'crinkle') {
-    // Short filtered noise burst like tearing holographic foil paper
-    const bufSize = Math.floor(ctx.sampleRate * 0.045);
-    const buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * (1 - i / bufSize);
+    // Cached filtered noise burst like tearing holographic foil paper
+    let buffer = crinkleBufferCache.get(ctx);
+    if (!buffer || buffer.sampleRate !== ctx.sampleRate) {
+      const bufSize = Math.floor(ctx.sampleRate * 0.045);
+      buffer = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / bufSize);
+      }
+      crinkleBufferCache.set(ctx, buffer);
     }
     const src = ctx.createBufferSource();
     src.buffer = buffer;

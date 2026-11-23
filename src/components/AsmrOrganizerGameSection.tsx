@@ -1178,6 +1178,7 @@ export function AsmrOrganizerGameSection({ theme }: AsmrOrganizerGameSectionProp
               <button
                 type="button"
                 data-testid="asmr-start-btn"
+                data-start="true"
                 onClick={() => startLevel(levelIdx)}
                 className="inline-flex items-center gap-2 px-6 py-3 mobile-ls:py-2 rounded-xl bg-[#6B8E78] hover:bg-[#5B7D67] text-white font-semibold text-sm sm:text-base transition-colors cursor-pointer shadow-sm"
               >
@@ -1620,7 +1621,7 @@ export function AsmrOrganizerGameSection({ theme }: AsmrOrganizerGameSectionProp
           role="dialog"
           aria-modal="true"
           aria-label="Hoàn thành sắp xếp chuẩn OCD"
-          className="absolute inset-0 z-20 rounded-2xl bg-[#1D1A18]/55 backdrop-blur-xs flex items-center justify-center p-4"
+          className="absolute inset-0 z-20 rounded-2xl bg-[#1D1A18]/85 flex items-center justify-center p-4"
         >
           <div className={`w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border p-6 text-center space-y-4 shadow-xl ${surfaceClass}`}>
             <div className="mx-auto w-12 h-12 rounded-full bg-[#6B8E78]/15 text-[#6B8E78] flex items-center justify-center">

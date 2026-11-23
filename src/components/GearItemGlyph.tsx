@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { memo, useId } from 'react';
 import type { GearItemId } from '../utils/gearArenaEngine';
 
 interface GearItemGlyphProps {
@@ -8,7 +8,12 @@ interface GearItemGlyphProps {
   className?: string;
 }
 
-export function GearItemGlyph({ itemId, color, accent, className = 'w-7 h-7' }: GearItemGlyphProps) {
+export const GearItemGlyph = memo(function GearItemGlyph({
+  itemId,
+  color,
+  accent,
+  className = 'w-7 h-7',
+}: GearItemGlyphProps) {
   const uid = useId().replace(/:/g, '');
   const steelId = `st-${uid}`;
   const brassId = `br-${uid}`;
@@ -339,4 +344,4 @@ export function GearItemGlyph({ itemId, color, accent, className = 'w-7 h-7' }: 
       )}
     </svg>
   );
-}
+});

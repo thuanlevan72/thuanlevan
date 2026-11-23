@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Cat,
   ChevronDown,
@@ -21,19 +21,44 @@ import {
   Zap,
 } from 'lucide-react';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
-import { AnomalyGameSection } from './AnomalyGameSection.tsx';
-import { AntiqueShopGameSection } from './AntiqueShopGameSection.tsx';
-import { AsmrOrganizerGameSection } from './AsmrOrganizerGameSection.tsx';
-import { BlindBoxMergeGameSection } from './BlindBoxMergeGameSection.tsx';
-import { CatFinderGameSection } from './CatFinderGameSection.tsx';
-import { FeAcademyGameSection } from './FeAcademyGameSection.tsx';
-import { FidgetCockpitGameSection } from './FidgetCockpitGameSection.tsx';
-import { GearArenaGameSection } from './GearArenaGameSection.tsx';
-import { LinuxHackerGameSection } from './LinuxHackerGameSection.tsx';
-import { PrismTdGameSection } from './PrismTdGameSection.tsx';
 import { PwaInstallButton } from './PwaInstallControls.tsx';
-import { TrafficRouterGameSection } from './TrafficRouterGameSection.tsx';
-import { XiangqiGameSection } from './XiangqiGameSection.tsx';
+
+const AnomalyGameSection = lazy(() =>
+  import('./AnomalyGameSection.tsx').then((m) => ({ default: m.AnomalyGameSection }))
+);
+const AntiqueShopGameSection = lazy(() =>
+  import('./AntiqueShopGameSection.tsx').then((m) => ({ default: m.AntiqueShopGameSection }))
+);
+const AsmrOrganizerGameSection = lazy(() =>
+  import('./AsmrOrganizerGameSection.tsx').then((m) => ({ default: m.AsmrOrganizerGameSection }))
+);
+const BlindBoxMergeGameSection = lazy(() =>
+  import('./BlindBoxMergeGameSection.tsx').then((m) => ({ default: m.BlindBoxMergeGameSection }))
+);
+const CatFinderGameSection = lazy(() =>
+  import('./CatFinderGameSection.tsx').then((m) => ({ default: m.CatFinderGameSection }))
+);
+const FeAcademyGameSection = lazy(() =>
+  import('./FeAcademyGameSection.tsx').then((m) => ({ default: m.FeAcademyGameSection }))
+);
+const FidgetCockpitGameSection = lazy(() =>
+  import('./FidgetCockpitGameSection.tsx').then((m) => ({ default: m.FidgetCockpitGameSection }))
+);
+const GearArenaGameSection = lazy(() =>
+  import('./GearArenaGameSection.tsx').then((m) => ({ default: m.GearArenaGameSection }))
+);
+const LinuxHackerGameSection = lazy(() =>
+  import('./LinuxHackerGameSection.tsx').then((m) => ({ default: m.LinuxHackerGameSection }))
+);
+const PrismTdGameSection = lazy(() =>
+  import('./PrismTdGameSection.tsx').then((m) => ({ default: m.PrismTdGameSection }))
+);
+const TrafficRouterGameSection = lazy(() =>
+  import('./TrafficRouterGameSection.tsx').then((m) => ({ default: m.TrafficRouterGameSection }))
+);
+const XiangqiGameSection = lazy(() =>
+  import('./XiangqiGameSection.tsx').then((m) => ({ default: m.XiangqiGameSection }))
+);
 
 type GameId =
   | 'xiangqi'
@@ -776,55 +801,66 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
         )}
 
         <div className={isFullscreen ? 'game-fs-inner w-full flex-1 flex flex-col min-h-0' : undefined}>
-          {activeGame === 'xiangqi' && <XiangqiGameSection theme={theme} onToggleTheme={onToggleTheme} />}
-          {activeGame === 'antique_shop' && (
-            <AntiqueShopGameSection theme={theme} onToggleTheme={onToggleTheme} />
-          )}
-          {activeGame === 'cat_finder' && (
-            <CatFinderGameSection
-              theme={theme}
-              onToggleTheme={onToggleTheme}
-              isFullscreen={isFullscreen}
-              onToggleFullscreen={toggleFullscreen}
-              onExitFullscreen={exitFullscreen}
-            />
-          )}
-          {activeGame === 'anomaly' && <AnomalyGameSection theme={theme} onToggleTheme={onToggleTheme} />}
-          {activeGame === 'asmr_organizer' && (
-            <AsmrOrganizerGameSection theme={theme} onToggleTheme={onToggleTheme} />
-          )}
-          {activeGame === 'blind_box' && (
-            <BlindBoxMergeGameSection theme={theme} onToggleTheme={onToggleTheme} />
-          )}
-          {activeGame === 'prism_td' && (
-            <PrismTdGameSection
-              theme={theme}
-              onToggleTheme={onToggleTheme}
-              isFullscreen={isFullscreen}
-              onToggleFullscreen={toggleFullscreen}
-              onExitFullscreen={exitFullscreen}
-            />
-          )}
-          {activeGame === 'linux_hacker' && (
-            <LinuxHackerGameSection theme={theme} onToggleTheme={onToggleTheme} />
-          )}
-          {activeGame === 'traffic_router' && (
-            <TrafficRouterGameSection
-              theme={theme}
-              onToggleTheme={onToggleTheme}
-              isFullscreen={isFullscreen}
-              onToggleFullscreen={toggleFullscreen}
-            />
-          )}
-          {activeGame === 'gear_arena' && (
-            <GearArenaGameSection theme={theme} onToggleTheme={onToggleTheme} />
-          )}
-          {activeGame === 'fidget_cockpit' && (
-            <FidgetCockpitGameSection theme={theme} onToggleTheme={onToggleTheme} />
-          )}
-          {activeGame === 'fe_academy' && (
-            <FeAcademyGameSection theme={theme} onToggleTheme={onToggleTheme} />
-          )}
+          <Suspense
+            fallback={
+              <div className="min-h-[340px] rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white/80 dark:bg-[#0B1222]/90 flex flex-col items-center justify-center gap-2 p-6 text-center">
+                <div className="w-8 h-8 rounded-full border-2 border-sky-500 border-t-transparent animate-spin" />
+                <p className="text-xs font-mono text-slate-600 dark:text-slate-300">
+                  Đang mở {activeGameMeta?.title ?? 'trò chơi'}...
+                </p>
+              </div>
+            }
+          >
+            {activeGame === 'xiangqi' && <XiangqiGameSection theme={theme} onToggleTheme={onToggleTheme} />}
+            {activeGame === 'antique_shop' && (
+              <AntiqueShopGameSection theme={theme} onToggleTheme={onToggleTheme} />
+            )}
+            {activeGame === 'cat_finder' && (
+              <CatFinderGameSection
+                theme={theme}
+                onToggleTheme={onToggleTheme}
+                isFullscreen={isFullscreen}
+                onToggleFullscreen={toggleFullscreen}
+                onExitFullscreen={exitFullscreen}
+              />
+            )}
+            {activeGame === 'anomaly' && <AnomalyGameSection theme={theme} onToggleTheme={onToggleTheme} />}
+            {activeGame === 'asmr_organizer' && (
+              <AsmrOrganizerGameSection theme={theme} onToggleTheme={onToggleTheme} />
+            )}
+            {activeGame === 'blind_box' && (
+              <BlindBoxMergeGameSection theme={theme} onToggleTheme={onToggleTheme} />
+            )}
+            {activeGame === 'prism_td' && (
+              <PrismTdGameSection
+                theme={theme}
+                onToggleTheme={onToggleTheme}
+                isFullscreen={isFullscreen}
+                onToggleFullscreen={toggleFullscreen}
+                onExitFullscreen={exitFullscreen}
+              />
+            )}
+            {activeGame === 'linux_hacker' && (
+              <LinuxHackerGameSection theme={theme} onToggleTheme={onToggleTheme} />
+            )}
+            {activeGame === 'traffic_router' && (
+              <TrafficRouterGameSection
+                theme={theme}
+                onToggleTheme={onToggleTheme}
+                isFullscreen={isFullscreen}
+                onToggleFullscreen={toggleFullscreen}
+              />
+            )}
+            {activeGame === 'gear_arena' && (
+              <GearArenaGameSection theme={theme} onToggleTheme={onToggleTheme} />
+            )}
+            {activeGame === 'fidget_cockpit' && (
+              <FidgetCockpitGameSection theme={theme} onToggleTheme={onToggleTheme} />
+            )}
+            {activeGame === 'fe_academy' && (
+              <FeAcademyGameSection theme={theme} onToggleTheme={onToggleTheme} />
+            )}
+          </Suspense>
         </div>
       </div>
     </div>

@@ -3,19 +3,28 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useCallback, useEffect, useState } from 'react';
-import { CvPdfSection } from './components/CvPdfSection.tsx';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { FaqAndCta, GlobalFooter } from './components/FaqAndFooter.tsx';
-import { GallerySection } from './components/GallerySection.tsx';
 import { HeroSection } from './components/HeroSection.tsx';
 import { InteractiveTerminal } from './components/InteractiveTerminal.tsx';
 import { LightboxModal } from './components/LightboxModal.tsx';
 import { ProjectsSection } from './components/ProjectsSection.tsx';
 import { SkillsSection } from './components/SkillsSection.tsx';
 import { GameHubSection } from './components/GameHubSection.tsx';
-import { LyricGrooveSketchpadSection } from './components/LyricGrooveSketchpadSection.tsx';
 import { TopBarAndHeader } from './components/TopBarAndHeader.tsx';
 import { OfflineIndicator } from './components/PwaInstallControls.tsx';
+
+const CvPdfSection = lazy(() =>
+  import('./components/CvPdfSection.tsx').then((m) => ({ default: m.CvPdfSection }))
+);
+const GallerySection = lazy(() =>
+  import('./components/GallerySection.tsx').then((m) => ({ default: m.GallerySection }))
+);
+const LyricGrooveSketchpadSection = lazy(() =>
+  import('./components/LyricGrooveSketchpadSection.tsx').then((m) => ({
+    default: m.LyricGrooveSketchpadSection,
+  }))
+);
 import { GALLERY_ARTWORKS } from './data/portfolioData.ts';
 import {
   AppRoute,
@@ -227,28 +236,34 @@ export default function App() {
         }`}
       >
         {activeRoute === 'gallery' ? (
-          <GallerySection
-            theme={theme}
-            onToggleTheme={handleToggleTheme}
-            onSelectArtwork={handleOpenArtwork}
-            onBackToProfile={() => handleNavigate('profile', 'overview')}
-          />
+          <Suspense fallback={<div className="py-16 text-center text-sm text-slate-500">Đang mở thư viện ảnh...</div>}>
+            <GallerySection
+              theme={theme}
+              onToggleTheme={handleToggleTheme}
+              onSelectArtwork={handleOpenArtwork}
+              onBackToProfile={() => handleNavigate('profile', 'overview')}
+            />
+          </Suspense>
         ) : activeRoute === 'cv' ? (
-          <CvPdfSection
-            theme={theme}
-            onToggleTheme={handleToggleTheme}
-            onNavigate={handleNavigate}
-          />
+          <Suspense fallback={<div className="py-16 text-center text-sm text-slate-500">Đang tải hồ sơ CV...</div>}>
+            <CvPdfSection
+              theme={theme}
+              onToggleTheme={handleToggleTheme}
+              onNavigate={handleNavigate}
+            />
+          </Suspense>
         ) : activeRoute === 'game' ? (
           <GameHubSection
             theme={theme}
             onToggleTheme={handleToggleTheme}
           />
         ) : activeRoute === 'studio' ? (
-          <LyricGrooveSketchpadSection
-            theme={theme}
-            onToggleTheme={handleToggleTheme}
-          />
+          <Suspense fallback={<div className="py-16 text-center text-sm text-slate-500">Đang mở Lyric &amp; Groove Sketchpad...</div>}>
+            <LyricGrooveSketchpadSection
+              theme={theme}
+              onToggleTheme={handleToggleTheme}
+            />
+          </Suspense>
         ) : (
           <>
             <HeroSection

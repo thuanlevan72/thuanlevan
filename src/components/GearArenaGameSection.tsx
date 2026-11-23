@@ -397,7 +397,12 @@ export function GearArenaGameSection(_props: GearArenaGameSectionProps) {
         `Chế độ ${modeCfg.name} · Vòng 1${modeCfg.maxRounds ? `/${modeCfg.maxRounds}` : ' (Vô Tận)'}: Lắp súng & phụ kiện vào ba lô 5×5 để kích hoạt cộng hưởng!`
       );
       setPhase('SHOP');
-      playArenaSfx(ensureAudio(), 'place', muted);
+      const audioCtx = ensureAudio();
+      if (typeof window !== 'undefined') {
+        window.requestAnimationFrame(() => {
+          playArenaSfx(audioCtx, 'place', muted);
+        });
+      }
     },
     [ensureAudio, muted, selectedMode]
   );

@@ -18,8 +18,10 @@ export function TopBarAndHeader({ activeRoute, onNavigate }: TopBarAndHeaderProp
   return (
     <header
       className={`${
-        activeRoute === 'game' ? 'sticky top-0 mobile-ls:hidden' : 'sticky top-0'
-      } z-40 border-b border-[#DCE6F2]/80 dark:border-[#182740]/85 bg-[#F5F8FC]/88 dark:bg-[#05080F]/88 backdrop-blur-xl transition-colors duration-200`}
+        activeRoute === 'game'
+          ? 'sticky top-0 mobile-ls:hidden bg-[#F5F8FC]/97 dark:bg-[#05080F]/97'
+          : 'sticky top-0 bg-[#F5F8FC]/88 dark:bg-[#05080F]/88 backdrop-blur-xl'
+      } z-40 border-b border-[#DCE6F2]/80 dark:border-[#182740]/85 transition-colors duration-200`}
     >
       <div
         className={`max-w-7xl mx-auto px-2.5 sm:px-6 ${

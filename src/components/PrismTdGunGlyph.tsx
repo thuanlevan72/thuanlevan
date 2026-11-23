@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { GunType } from '../utils/prismTdEngine.ts';
 
 interface PrismTdGunGlyphProps {
@@ -10,7 +11,11 @@ interface PrismTdGunGlyphProps {
  * Lightweight, crisp tactical SVG silhouettes for all 25 towers so mobile gun cards
  * read at a glance without cramped micro-copy.
  */
-export function PrismTdGunGlyph({ type, color, className = 'w-6 h-6' }: PrismTdGunGlyphProps) {
+export const PrismTdGunGlyph = memo(function PrismTdGunGlyph({
+  type,
+  color,
+  className = 'w-6 h-6',
+}: PrismTdGunGlyphProps) {
   switch (type) {
     case 'gatling':
       return (
@@ -248,4 +253,4 @@ export function PrismTdGunGlyph({ type, color, className = 'w-6 h-6' }: PrismTdG
         </svg>
       );
   }
-}
+});

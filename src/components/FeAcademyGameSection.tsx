@@ -255,7 +255,11 @@ export function FeAcademyGameSection({ theme: _theme }: FeAcademyGameSectionProp
     setLevelIdx(0);
     resetStationWorkspace('dom_sniper', 0);
     setPhase('playing');
-    playTone(587.33, 0.11);
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        playTone(587.33, 0.11);
+      });
+    }
   }, [playTone, resetStationWorkspace]);
 
   const grantMissionClear = useCallback(

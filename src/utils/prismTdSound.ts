@@ -78,141 +78,172 @@ function normalizeAndWindowBuffer(data: Float32Array, sampleRate: number, fadeIn
   }
 }
 
-function buildFoleyBuffers(ctx: AudioContext): FoleyBuffers {
+function buildSingleFoleyBuffer(ctx: AudioContext, key: keyof FoleyBuffers): AudioBuffer {
   const sr = ctx.sampleRate || 44100;
 
-  // 1. Dry supersonic rifle / SMG crack (160ms) with subtle concrete slapback at 22ms
-  const rifleLen = Math.floor(sr * 0.16);
-  const rifleCrack = ctx.createBuffer(1, rifleLen, sr);
-  const rd = rifleCrack.getChannelData(0);
-  let lpR = 0;
-  for (let i = 0; i < rifleLen; i++) {
-    const t = i / sr;
-    const white = Math.random() * 2 - 1;
-    lpR = lpR * 0.62 + white * 0.38;
-    const snap = Math.exp(-t / 0.008) * white * 0.95;
-    const powder = Math.exp(-t / 0.026) * lpR * 0.85;
-    const thump = Math.exp(-t / 0.02) * Math.sin(2 * Math.PI * 76 * t) * 0.45;
-    const slap = t > 0.022 ? Math.exp(-(t - 0.022) / 0.024) * lpR * 0.22 : 0;
-    rd[i] = snap + powder + thump + slap;
+  if (key === 'rifleCrack') {
+    const rifleLen = Math.floor(sr * 0.16);
+    const rifleCrack = ctx.createBuffer(1, rifleLen, sr);
+    const rd = rifleCrack.getChannelData(0);
+    let lpR = 0;
+    for (let i = 0; i < rifleLen; i++) {
+      const t = i / sr;
+      const white = Math.random() * 2 - 1;
+      lpR = lpR * 0.62 + white * 0.38;
+      const snap = Math.exp(-t / 0.008) * white * 0.95;
+      const powder = Math.exp(-t / 0.026) * lpR * 0.85;
+      const thump = Math.exp(-t / 0.02) * Math.sin(2 * Math.PI * 76 * t) * 0.45;
+      const slap = t > 0.022 ? Math.exp(-(t - 0.022) / 0.024) * lpR * 0.22 : 0;
+      rd[i] = snap + powder + thump + slap;
+    }
+    normalizeAndWindowBuffer(rd, sr, 0.0008, 0.015);
+    return rifleCrack;
   }
-  normalizeAndWindowBuffer(rd, sr, 0.0008, 0.015);
 
-  // 2. Heavy shotgun / artillery cannon blast (340ms)
-  const heavyLen = Math.floor(sr * 0.34);
-  const heavyCannon = ctx.createBuffer(1, heavyLen, sr);
-  const hd = heavyCannon.getChannelData(0);
-  let lpH1 = 0;
-  let lpH2 = 0;
-  for (let i = 0; i < heavyLen; i++) {
-    const t = i / sr;
-    const white = Math.random() * 2 - 1;
-    lpH1 = lpH1 * 0.78 + white * 0.22;
-    lpH2 = lpH2 * 0.92 + lpH1 * 0.08;
-    const crack = Math.exp(-t / 0.013) * white * 0.8;
-    const boom = Math.exp(-t / 0.075) * lpH2 * 1.3;
-    const chest = Math.exp(-t / 0.055) * Math.sin(2 * Math.PI * (54 + 24 * Math.exp(-t / 0.025)) * t) * 0.62;
-    const tail = t > 0.03 ? Math.exp(-(t - 0.03) / 0.095) * lpH1 * 0.28 : 0;
-    hd[i] = crack + boom + chest + tail;
+  if (key === 'heavyCannon') {
+    const heavyLen = Math.floor(sr * 0.34);
+    const heavyCannon = ctx.createBuffer(1, heavyLen, sr);
+    const hd = heavyCannon.getChannelData(0);
+    let lpH1 = 0;
+    let lpH2 = 0;
+    for (let i = 0; i < heavyLen; i++) {
+      const t = i / sr;
+      const white = Math.random() * 2 - 1;
+      lpH1 = lpH1 * 0.78 + white * 0.22;
+      lpH2 = lpH2 * 0.92 + lpH1 * 0.08;
+      const crack = Math.exp(-t / 0.013) * white * 0.8;
+      const boom = Math.exp(-t / 0.075) * lpH2 * 1.3;
+      const chest =
+        Math.exp(-t / 0.055) * Math.sin(2 * Math.PI * (54 + 24 * Math.exp(-t / 0.025)) * t) * 0.62;
+      const tail = t > 0.03 ? Math.exp(-(t - 0.03) / 0.095) * lpH1 * 0.28 : 0;
+      hd[i] = crack + boom + chest + tail;
+    }
+    normalizeAndWindowBuffer(hd, sr, 0.001, 0.035);
+    return heavyCannon;
   }
-  normalizeAndWindowBuffer(hd, sr, 0.001, 0.035);
 
-  // 3. Deep concussive explosion (460ms)
-  const expLen = Math.floor(sr * 0.46);
-  const explosion = ctx.createBuffer(1, expLen, sr);
-  const ed = explosion.getChannelData(0);
-  let lpE = 0;
-  for (let i = 0; i < expLen; i++) {
-    const t = i / sr;
-    const white = Math.random() * 2 - 1;
-    lpE = lpE * 0.88 + white * 0.12;
-    const front = Math.exp(-t / 0.02) * white * 0.65;
-    const rumble = Math.exp(-t / 0.14) * lpE * 1.45;
-    const sub = Math.exp(-t / 0.09) * Math.sin(2 * Math.PI * 44 * t) * 0.65;
-    ed[i] = front + rumble + sub;
+  if (key === 'explosion') {
+    const expLen = Math.floor(sr * 0.46);
+    const explosion = ctx.createBuffer(1, expLen, sr);
+    const ed = explosion.getChannelData(0);
+    let lpE = 0;
+    for (let i = 0; i < expLen; i++) {
+      const t = i / sr;
+      const white = Math.random() * 2 - 1;
+      lpE = lpE * 0.88 + white * 0.12;
+      const front = Math.exp(-t / 0.02) * white * 0.65;
+      const rumble = Math.exp(-t / 0.14) * lpE * 1.45;
+      const sub = Math.exp(-t / 0.09) * Math.sin(2 * Math.PI * 44 * t) * 0.65;
+      ed[i] = front + rumble + sub;
+    }
+    normalizeAndWindowBuffer(ed, sr, 0.0012, 0.05);
+    return explosion;
   }
-  normalizeAndWindowBuffer(ed, sr, 0.0012, 0.05);
 
-  // 4. Pressurized propane / thermal flame whoosh (260ms)
-  const flameLen = Math.floor(sr * 0.26);
-  const flame = ctx.createBuffer(1, flameLen, sr);
-  const fd = flame.getChannelData(0);
-  let lpF1 = 0;
-  let lpF2 = 0;
-  for (let i = 0; i < flameLen; i++) {
-    const t = i / sr;
-    const white = Math.random() * 2 - 1;
-    lpF1 = lpF1 * 0.84 + white * 0.16;
-    lpF2 = lpF2 * 0.91 + lpF1 * 0.09;
-    const rise = Math.min(1, t / 0.025);
-    const body = Math.exp(-t / 0.11) * (lpF2 * 1.15 + lpF1 * 0.35);
-    fd[i] = rise * body;
+  if (key === 'flame') {
+    const flameLen = Math.floor(sr * 0.26);
+    const flame = ctx.createBuffer(1, flameLen, sr);
+    const fd = flame.getChannelData(0);
+    let lpF1 = 0;
+    let lpF2 = 0;
+    for (let i = 0; i < flameLen; i++) {
+      const t = i / sr;
+      const white = Math.random() * 2 - 1;
+      lpF1 = lpF1 * 0.84 + white * 0.16;
+      lpF2 = lpF2 * 0.91 + lpF1 * 0.09;
+      const rise = Math.min(1, t / 0.025);
+      const body = Math.exp(-t / 0.11) * (lpF2 * 1.15 + lpF1 * 0.35);
+      fd[i] = rise * body;
+    }
+    normalizeAndWindowBuffer(fd, sr, 0.006, 0.04);
+    return flame;
   }
-  normalizeAndWindowBuffer(fd, sr, 0.006, 0.04);
 
-  // 5. Brittle crystalline ice fracture (220ms) — discrete micro-cracks + cold air
-  const iceLen = Math.floor(sr * 0.22);
-  const ice = ctx.createBuffer(1, iceLen, sr);
-  const id = ice.getChannelData(0);
-  let hpPrev = 0;
-  for (let i = 0; i < iceLen; i++) {
-    const t = i / sr;
-    const white = Math.random() * 2 - 1;
-    const hp = white - hpPrev * 0.72;
-    hpPrev = white;
-    const c1 = Math.exp(-t / 0.005) * hp * 0.9;
-    const c2 = t > 0.019 ? Math.exp(-(t - 0.019) / 0.006) * hp * 0.75 : 0;
-    const c3 = t > 0.041 ? Math.exp(-(t - 0.041) / 0.007) * hp * 0.55 : 0;
-    const frostMist = Math.exp(-t / 0.075) * white * 0.28;
-    id[i] = c1 + c2 + c3 + frostMist;
+  if (key === 'ice') {
+    const iceLen = Math.floor(sr * 0.22);
+    const ice = ctx.createBuffer(1, iceLen, sr);
+    const id = ice.getChannelData(0);
+    let hpPrev = 0;
+    for (let i = 0; i < iceLen; i++) {
+      const t = i / sr;
+      const white = Math.random() * 2 - 1;
+      const hp = white - hpPrev * 0.72;
+      hpPrev = white;
+      const c1 = Math.exp(-t / 0.005) * hp * 0.9;
+      const c2 = t > 0.019 ? Math.exp(-(t - 0.019) / 0.006) * hp * 0.75 : 0;
+      const c3 = t > 0.041 ? Math.exp(-(t - 0.041) / 0.007) * hp * 0.55 : 0;
+      const frostMist = Math.exp(-t / 0.075) * white * 0.28;
+      id[i] = c1 + c2 + c3 + frostMist;
+    }
+    normalizeAndWindowBuffer(id, sr, 0.0008, 0.03);
+    return ice;
   }
-  normalizeAndWindowBuffer(id, sr, 0.0008, 0.03);
 
-  // 6. Cold steel katana / saw slice (150ms)
-  const steelLen = Math.floor(sr * 0.15);
-  const steel = ctx.createBuffer(1, steelLen, sr);
-  const sd = steel.getChannelData(0);
-  for (let i = 0; i < steelLen; i++) {
-    const t = i / sr;
-    const white = Math.random() * 2 - 1;
-    const airWhip = Math.exp(-t / 0.038) * white * 0.55;
-    const ring =
-      Math.exp(-t / 0.055) *
-      (Math.sin(2 * Math.PI * 2420 * t) * 0.28 + Math.sin(2 * Math.PI * 3690 * t) * 0.2);
-    sd[i] = airWhip + ring;
+  if (key === 'steel') {
+    const steelLen = Math.floor(sr * 0.15);
+    const steel = ctx.createBuffer(1, steelLen, sr);
+    const sd = steel.getChannelData(0);
+    for (let i = 0; i < steelLen; i++) {
+      const t = i / sr;
+      const white = Math.random() * 2 - 1;
+      const airWhip = Math.exp(-t / 0.038) * white * 0.55;
+      const ring =
+        Math.exp(-t / 0.055) *
+        (Math.sin(2 * Math.PI * 2420 * t) * 0.28 + Math.sin(2 * Math.PI * 3690 * t) * 0.2);
+      sd[i] = airWhip + ring;
+    }
+    normalizeAndWindowBuffer(sd, sr, 0.001, 0.025);
+    return steel;
   }
-  normalizeAndWindowBuffer(sd, sr, 0.001, 0.025);
 
-  // 7. Generic normalized pink & white textures for secondary layers
-  const genLen = Math.floor(sr * 0.8);
-  const pinkNoise = ctx.createBuffer(1, genLen, sr);
-  const whiteNoise = ctx.createBuffer(1, genLen, sr);
-  const pd = pinkNoise.getChannelData(0);
-  const wd = whiteNoise.getChannelData(0);
-  let b0 = 0;
-  let b1 = 0;
-  let b2 = 0;
-  for (let i = 0; i < genLen; i++) {
-    const w = Math.random() * 2 - 1;
-    wd[i] = w;
-    b0 = 0.99765 * b0 + w * 0.099046;
-    b1 = 0.963 * b1 + w * 0.2965164;
-    b2 = 0.57 * b2 + w * 1.0526913;
-    pd[i] = (b0 + b1 + b2 + w * 0.42) * 0.25;
+  const genLen = Math.floor(sr * 0.45);
+  const buf = ctx.createBuffer(1, genLen, sr);
+  const dst = buf.getChannelData(0);
+  if (key === 'pinkNoise') {
+    let b0 = 0;
+    let b1 = 0;
+    let b2 = 0;
+    for (let i = 0; i < genLen; i++) {
+      const w = Math.random() * 2 - 1;
+      b0 = 0.99765 * b0 + w * 0.099046;
+      b1 = 0.963 * b1 + w * 0.2965164;
+      b2 = 0.57 * b2 + w * 1.0526913;
+      dst[i] = (b0 + b1 + b2 + w * 0.42) * 0.25;
+    }
+  } else {
+    for (let i = 0; i < genLen; i++) {
+      dst[i] = Math.random() * 2 - 1;
+    }
   }
-  normalizeAndWindowBuffer(pd, sr, 0.004, 0.02);
-  normalizeAndWindowBuffer(wd, sr, 0.004, 0.02);
+  normalizeAndWindowBuffer(dst, sr, 0.004, 0.02);
+  return buf;
+}
 
-  return {
-    rifleCrack,
-    heavyCannon,
-    explosion,
-    flame,
-    ice,
-    steel,
-    pinkNoise,
-    whiteNoise,
-  };
+function createLazyFoleyBuffers(ctx: AudioContext): FoleyBuffers {
+  const partial: Partial<FoleyBuffers> = {};
+  const obj = {} as FoleyBuffers;
+  const keys: (keyof FoleyBuffers)[] = [
+    'rifleCrack',
+    'heavyCannon',
+    'explosion',
+    'flame',
+    'ice',
+    'steel',
+    'pinkNoise',
+    'whiteNoise',
+  ];
+  for (const key of keys) {
+    Object.defineProperty(obj, key, {
+      enumerable: true,
+      get() {
+        if (!partial[key]) {
+          partial[key] = buildSingleFoleyBuffer(ctx, key);
+        }
+        return partial[key]!;
+      },
+    });
+  }
+  return obj;
 }
 
 function getSoundBus(ctx: AudioContext): SoundBus {
@@ -249,7 +280,7 @@ function getSoundBus(ctx: AudioContext): SoundBus {
   const bus: SoundBus = {
     master,
     compressor,
-    buffers: buildFoleyBuffers(ctx),
+    buffers: createLazyFoleyBuffers(ctx),
     lastTriggerMs: new Map<string, number>(),
     recentVoiceTimes: [],
     lastOverheatGlobalMs: -1e9,

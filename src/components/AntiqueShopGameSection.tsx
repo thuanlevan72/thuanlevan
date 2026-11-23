@@ -48,9 +48,9 @@ import { antiqueShopAudio } from '../utils/antiqueShopAudio.ts';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 import {
   AntiqueShopEmblem,
-  renderCoverArtwork,
-  renderItemArtwork,
-  renderSceneBackdrop,
+  MemoCoverArtwork,
+  MemoItemArtwork,
+  MemoSceneBackdrop,
   renderTeaDecorArtwork,
 } from './AntiqueShopArt.tsx';
 
@@ -211,7 +211,11 @@ export function AntiqueShopGameSection({
 
   const startLevel = useCallback((levelId?: string) => {
     antiqueShopAudio.unlock();
-    antiqueShopAudio.playSfx('paper', soundMuted);
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => {
+        antiqueShopAudio.playSfx('paper', soundMuted);
+      });
+    }
     if (levelId) {
       setSaveData((prev) => ({ ...prev, activeLevelId: levelId }));
     }
@@ -822,7 +826,7 @@ export function AntiqueShopGameSection({
           >
             {/* Transformed Stage (Exact 1000:620 box so SVG + HTML hotspots align 1:1 at every screen size) */}
             <div
-              className="relative origin-center transition-transform duration-75 ease-out rounded-lg overflow-hidden shadow-[0_14px_40px_rgba(0,0,0,0.6)]"
+              className="relative origin-center rounded-lg overflow-hidden shadow-[0_14px_40px_rgba(0,0,0,0.6)]"
               style={{
                 width: 'min(100%, 940px, calc(60dvh * 1000 / 620))',
                 aspectRatio: '1000 / 620',
@@ -834,7 +838,7 @@ export function AntiqueShopGameSection({
                 className="w-full h-full block pointer-events-none"
                 preserveAspectRatio="none"
               >
-                {renderSceneBackdrop(activeLevel.theme)}
+                <MemoSceneBackdrop theme={activeLevel.theme} />
 
                 {/* Collectible Items Layer */}
                 {activeLevel.items.map((item) => {
@@ -848,10 +852,9 @@ export function AntiqueShopGameSection({
                       transform={`translate(${item.x}, ${item.y}) rotate(${item.rotateDeg ?? 0})`}
                       style={{
                         opacity: accessible ? 1 : 0.08,
-                        transition: 'opacity 220ms ease',
                       }}
                     >
-                      {renderItemArtwork(item)}
+                      <MemoItemArtwork item={item} />
                     </g>
                   );
                 })}
@@ -868,10 +871,10 @@ export function AntiqueShopGameSection({
                       transform={`translate(${tx}, ${ty}) rotate(${rot}, ${cover.w / 2}, ${cover.h / 2})`}
                       style={{
                         opacity: isOpen ? 0.58 : 0.98,
-                        transition: 'transform 260ms cubic-bezier(0.16, 1, 0.3, 1), opacity 220ms ease',
+                        transition: 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms ease',
                       }}
                     >
-                      {renderCoverArtwork(cover, isOpen)}
+                      <MemoCoverArtwork cover={cover} isOpen={isOpen} />
                     </g>
                   );
                 })}
@@ -948,7 +951,7 @@ export function AntiqueShopGameSection({
                     }}
                     className={`group absolute ${
                       isOpen ? 'z-10' : 'z-30'
-                    } rounded-xl border cursor-pointer flex items-end justify-center pb-1.5 transition-all focus-visible:outline-2 focus-visible:outline-amber-300 ${
+                    } rounded-xl border cursor-pointer flex items-end justify-center pb-1.5 transition-colors focus-visible:outline-2 focus-visible:outline-amber-300 ${
                       isOpen
                         ? 'border-transparent hover:border-amber-200/45 bg-transparent'
                         : 'border-amber-200/20 hover:border-amber-300/75 bg-transparent'
@@ -1322,7 +1325,7 @@ export function AntiqueShopGameSection({
                           >
                             <div className="w-12 h-12 rounded-lg bg-[#14100D] border border-[#342820] flex items-center justify-center shrink-0">
                               <svg viewBox="-45 -45 90 90" className="w-10 h-10" aria-hidden="true">
-                                {renderItemArtwork(item)}
+                                <MemoItemArtwork item={item} />
                               </svg>
                             </div>
                             <div className="min-w-0 space-y-1">

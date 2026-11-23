@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type {
   AntiqueBoxTheme,
   AntiqueCoverDef,
@@ -676,3 +677,29 @@ export function renderTeaDecorArtwork(kind: 'station_lantern' | 'lavender_vase' 
     </svg>
   );
 }
+
+export const MemoSceneBackdrop = memo(function MemoSceneBackdrop({
+  theme,
+}: {
+  theme: AntiqueBoxTheme;
+}) {
+  return renderSceneBackdrop(theme);
+});
+
+export const MemoItemArtwork = memo(function MemoItemArtwork({
+  item,
+}: {
+  item: AntiqueItemDef;
+}) {
+  return renderItemArtwork(item);
+});
+
+export const MemoCoverArtwork = memo(function MemoCoverArtwork({
+  cover,
+  isOpen,
+}: {
+  cover: AntiqueCoverDef;
+  isOpen: boolean;
+}) {
+  return renderCoverArtwork(cover, isOpen);
+});

@@ -223,14 +223,15 @@ export function drawOverheatSpecialFx(
 ) {
   const safeScale = Math.max(0.35, Math.min(1, alphaScale));
   for (const fx of effects) {
-    const t = Math.max(0, Math.min(1, fx.life / fx.maxLife)) * safeScale;
+    const t = Math.max(0, Math.min(1, fx.life / Math.max(0.01, fx.maxLife))) * safeScale;
+    const fxR = Math.max(8, Number.isFinite(fx.radius) ? fx.radius : 8);
     ctx.save();
 
     if (fx.kind === 'phoenix') {
       ctx.translate(fx.x, fx.y);
       ctx.rotate(fx.angle + animTime * 7);
       ctx.globalAlpha = t * 0.85;
-      const g = ctx.createRadialGradient(0, 0, 4, 0, 0, fx.radius);
+      const g = ctx.createRadialGradient(0, 0, 4, 0, 0, fxR);
       g.addColorStop(0, '#FFFFFF');
       g.addColorStop(0.35, '#FACC15');
       g.addColorStop(0.7, '#F97316');
@@ -241,14 +242,14 @@ export function drawOverheatSpecialFx(
         ctx.beginPath();
         ctx.moveTo(0, 0);
         ctx.quadraticCurveTo(
-          Math.cos(wa + 0.5) * fx.radius * 0.7,
-          Math.sin(wa + 0.5) * fx.radius * 0.7,
-          Math.cos(wa) * fx.radius,
-          Math.sin(wa) * fx.radius
+          Math.cos(wa + 0.5) * fxR * 0.7,
+          Math.sin(wa + 0.5) * fxR * 0.7,
+          Math.cos(wa) * fxR,
+          Math.sin(wa) * fxR
         );
         ctx.quadraticCurveTo(
-          Math.cos(wa - 0.3) * fx.radius * 0.4,
-          Math.sin(wa - 0.3) * fx.radius * 0.4,
+          Math.cos(wa - 0.3) * fxR * 0.4,
+          Math.sin(wa - 0.3) * fxR * 0.4,
           0,
           0
         );
@@ -257,14 +258,14 @@ export function drawOverheatSpecialFx(
     } else if (fx.kind === 'vortex') {
       ctx.translate(fx.x, fx.y);
       ctx.globalAlpha = t * 0.92;
-      const halo = ctx.createRadialGradient(0, 0, 6, 0, 0, fx.radius);
+      const halo = ctx.createRadialGradient(0, 0, 4, 0, 0, fxR);
       halo.addColorStop(0, '#020617');
       halo.addColorStop(0.32, '#581C87');
       halo.addColorStop(0.65, 'rgba(192, 132, 252, 0.55)');
       halo.addColorStop(1, 'rgba(192, 132, 252, 0)');
       ctx.fillStyle = halo;
       ctx.beginPath();
-      ctx.arc(0, 0, fx.radius, 0, Math.PI * 2);
+      ctx.arc(0, 0, fxR, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.strokeStyle = '#E879F9';
@@ -272,7 +273,7 @@ export function drawOverheatSpecialFx(
       for (let arm = 0; arm < 3; arm++) {
         const baseA = animTime * 9 + (arm * Math.PI * 2) / 3;
         ctx.beginPath();
-        ctx.arc(0, 0, fx.radius * 0.52, baseA, baseA + 1.5);
+        ctx.arc(0, 0, fxR * 0.52, baseA, baseA + 1.5);
         ctx.stroke();
       }
       ctx.fillStyle = '#030014';
@@ -285,13 +286,13 @@ export function drawOverheatSpecialFx(
     } else if (fx.kind === 'cyclone') {
       ctx.translate(fx.x, fx.y);
       ctx.globalAlpha = t * 0.88;
-      const cg = ctx.createRadialGradient(0, 0, 4, 0, 0, fx.radius);
+      const cg = ctx.createRadialGradient(0, 0, 4, 0, 0, fxR);
       cg.addColorStop(0, 'rgba(224, 231, 255, 0.5)');
       cg.addColorStop(0.5, 'rgba(129, 140, 248, 0.45)');
       cg.addColorStop(1, 'rgba(56, 189, 248, 0)');
       ctx.fillStyle = cg;
       ctx.beginPath();
-      ctx.arc(0, 0, fx.radius, 0, Math.PI * 2);
+      ctx.arc(0, 0, fxR, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.rotate(-animTime * 11);
@@ -300,29 +301,30 @@ export function drawOverheatSpecialFx(
       for (let i = 0; i < 5; i++) {
         const a = (i * Math.PI * 2) / 5;
         ctx.beginPath();
-        ctx.arc(0, 0, fx.radius * (0.35 + i * 0.11), a, a + 2.1);
+        ctx.arc(0, 0, fxR * (0.35 + i * 0.11), a, a + 2.1);
         ctx.stroke();
       }
     } else if (fx.kind === 'emp_ring') {
       ctx.translate(fx.x, fx.y);
       const expand = 0.28 + (1 - t) * 0.72;
+      const ringR = Math.max(2, fxR * expand);
       ctx.globalAlpha = t * 0.9;
       ctx.strokeStyle = '#38BDF8';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(0, 0, fx.radius * expand, 0, Math.PI * 2);
+      ctx.arc(0, 0, ringR, 0, Math.PI * 2);
       ctx.stroke();
       ctx.strokeStyle = '#E0E7FF';
       ctx.lineWidth = 1.6;
       for (let b = 0; b < 8; b++) {
         const ba = (b * Math.PI) / 4 + animTime * 8;
         ctx.beginPath();
-        ctx.moveTo(Math.cos(ba) * fx.radius * expand * 0.55, Math.sin(ba) * fx.radius * expand * 0.55);
-        ctx.lineTo(Math.cos(ba + 0.18) * fx.radius * expand, Math.sin(ba + 0.18) * fx.radius * expand);
+        ctx.moveTo(Math.cos(ba) * ringR * 0.55, Math.sin(ba) * ringR * 0.55);
+        ctx.lineTo(Math.cos(ba + 0.18) * ringR, Math.sin(ba + 0.18) * ringR);
         ctx.stroke();
       }
     } else if (fx.kind === 'hex_lattice') {
-      const grow = (1 - t * 0.72) * fx.radius;
+      const grow = Math.max(2, (1 - t * 0.72) * fxR);
       ctx.translate(fx.x, fx.y);
       ctx.globalAlpha = t * 0.9;
       ctx.strokeStyle = '#E0F2FE';
@@ -375,36 +377,37 @@ export function drawOverheatSpecialFx(
       ctx.fillStyle = 'rgba(34, 211, 238, 0.24)';
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.arc(0, 0, fx.radius, sweepAng - 0.55, sweepAng + 0.55);
+      ctx.arc(0, 0, fxR, sweepAng - 0.55, sweepAng + 0.55);
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = '#67E8F9';
       ctx.lineWidth = 2.4;
       ctx.beginPath();
-      ctx.arc(0, 0, fx.radius * (0.35 + (1 - t) * 0.65), 0, Math.PI * 2);
+      ctx.arc(0, 0, Math.max(2, fxR * (0.35 + (1 - t) * 0.65)), 0, Math.PI * 2);
       ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.lineTo(Math.cos(sweepAng) * fx.radius, Math.sin(sweepAng) * fx.radius);
+      ctx.lineTo(Math.cos(sweepAng) * fxR, Math.sin(sweepAng) * fxR);
       ctx.stroke();
     } else if (fx.kind === 'supernova_nova') {
       ctx.translate(fx.x, fx.y);
       const expand = 0.22 + (1 - t) * 0.78;
+      const curR = Math.max(8, fxR * expand);
       ctx.globalAlpha = t * 0.92;
-      const ng = ctx.createRadialGradient(0, 0, 6, 0, 0, fx.radius * expand);
+      const ng = ctx.createRadialGradient(0, 0, 4, 0, 0, curR);
       ng.addColorStop(0, '#FFFFFF');
       ng.addColorStop(0.28, '#FEF08A');
       ng.addColorStop(0.65, 'rgba(250, 204, 21, 0.42)');
       ng.addColorStop(1, 'rgba(56, 189, 248, 0)');
       ctx.fillStyle = ng;
       ctx.beginPath();
-      ctx.arc(0, 0, fx.radius * expand, 0, Math.PI * 2);
+      ctx.arc(0, 0, curR, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.strokeStyle = '#FEF08A';
       ctx.lineWidth = 3.2;
       ctx.beginPath();
-      ctx.arc(0, 0, fx.radius * expand, 0, Math.PI * 2);
+      ctx.arc(0, 0, curR, 0, Math.PI * 2);
       ctx.stroke();
 
       ctx.strokeStyle = '#38BDF8';
@@ -412,28 +415,29 @@ export function drawOverheatSpecialFx(
       for (let r = 0; r < 10; r++) {
         const ra = (r * Math.PI * 2) / 10 + animTime * 3.5;
         ctx.beginPath();
-        ctx.moveTo(Math.cos(ra) * 14, Math.sin(ra) * 14);
-        ctx.lineTo(Math.cos(ra) * fx.radius * expand, Math.sin(ra) * fx.radius * expand);
+        ctx.moveTo(Math.cos(ra) * Math.min(14, curR * 0.5), Math.sin(ra) * Math.min(14, curR * 0.5));
+        ctx.lineTo(Math.cos(ra) * curR, Math.sin(ra) * curR);
         ctx.stroke();
       }
     } else if (fx.kind === 'chrono_collapse') {
       ctx.translate(fx.x, fx.y);
       const expand = 0.25 + (1 - t) * 0.75;
+      const curR = Math.max(10, fxR * expand);
       ctx.globalAlpha = t * 0.92;
-      const cg = ctx.createRadialGradient(0, 0, 8, 0, 0, fx.radius * expand);
+      const cg = ctx.createRadialGradient(0, 0, 5, 0, 0, curR);
       cg.addColorStop(0, '#FFFFFF');
       cg.addColorStop(0.25, '#67E8F9');
       cg.addColorStop(0.65, 'rgba(192, 132, 252, 0.35)');
       cg.addColorStop(1, 'rgba(34, 211, 238, 0)');
       ctx.fillStyle = cg;
       ctx.beginPath();
-      ctx.arc(0, 0, fx.radius * expand, 0, Math.PI * 2);
+      ctx.arc(0, 0, curR, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.strokeStyle = '#67E8F9';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(0, 0, fx.radius * expand, 0, Math.PI * 2);
+      ctx.arc(0, 0, curR, 0, Math.PI * 2);
       ctx.stroke();
 
       ctx.strokeStyle = '#C084FC';
@@ -441,16 +445,16 @@ export function drawOverheatSpecialFx(
       for (let h = 0; h < 12; h++) {
         const ha = (h * Math.PI * 2) / 12 - animTime * 2.4;
         ctx.beginPath();
-        ctx.moveTo(Math.cos(ha) * fx.radius * expand * 0.76, Math.sin(ha) * fx.radius * expand * 0.76);
-        ctx.lineTo(Math.cos(ha) * fx.radius * expand, Math.sin(ha) * fx.radius * expand);
+        ctx.moveTo(Math.cos(ha) * curR * 0.76, Math.sin(ha) * curR * 0.76);
+        ctx.lineTo(Math.cos(ha) * curR, Math.sin(ha) * curR);
         ctx.stroke();
       }
     } else if (fx.kind === 'overdrive_apex') {
       ctx.translate(fx.x, fx.y);
       const expand = 0.18 + (1 - t) * 0.85;
-      const curR = fx.radius * expand;
+      const curR = Math.max(12, fxR * expand);
       ctx.globalAlpha = Math.min(0.95, t * 1.15);
-      const og = ctx.createRadialGradient(0, 0, 10, 0, 0, curR);
+      const og = ctx.createRadialGradient(0, 0, 6, 0, 0, curR);
       og.addColorStop(0, '#FFFFFF');
       og.addColorStop(0.22, '#FDE047');
       og.addColorStop(0.55, 'rgba(244, 63, 94, 0.38)');
@@ -480,16 +484,16 @@ export function drawOverheatSpecialFx(
         ctx.strokeStyle = ray % 2 === 0 ? '#FEF08A' : '#67E8F9';
         ctx.lineWidth = ray % 2 === 0 ? 2.4 : 1.5;
         ctx.beginPath();
-        ctx.moveTo(Math.cos(ra) * 18, Math.sin(ra) * 18);
+        ctx.moveTo(Math.cos(ra) * Math.min(18, curR * 0.4), Math.sin(ra) * Math.min(18, curR * 0.4));
         ctx.lineTo(Math.cos(ra) * curR * 1.05, Math.sin(ra) * curR * 1.05);
         ctx.stroke();
       }
     } else if (fx.kind === 'void_cataclysm') {
       ctx.translate(fx.x, fx.y);
       const expand = 0.25 + (1 - t) * 0.75;
-      const curR = fx.radius * expand;
+      const curR = Math.max(10, fxR * expand);
       ctx.globalAlpha = t * 0.88;
-      const vg = ctx.createRadialGradient(0, 0, 8, 0, 0, curR);
+      const vg = ctx.createRadialGradient(0, 0, 5, 0, 0, curR);
       vg.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
       vg.addColorStop(0.28, 'rgba(240, 171, 252, 0.45)');
       vg.addColorStop(0.68, 'rgba(168, 85, 247, 0.22)');
@@ -510,7 +514,7 @@ export function drawOverheatSpecialFx(
     } else if (fx.kind === 'quantum_singularity') {
       ctx.translate(fx.x, fx.y);
       const expand = 0.3 + (1 - t) * 0.7;
-      const curR = fx.radius * expand;
+      const curR = Math.max(4, fxR * expand);
       ctx.globalAlpha = t * 0.86;
       ctx.strokeStyle = '#34D399';
       ctx.lineWidth = 2.4;
@@ -528,7 +532,7 @@ export function drawOverheatSpecialFx(
     } else if (fx.kind === 'prism_web') {
       ctx.translate(fx.x, fx.y);
       const expand = 0.25 + (1 - t) * 0.75;
-      const curR = fx.radius * expand;
+      const curR = Math.max(4, fxR * expand);
       ctx.globalAlpha = t * 0.9;
       const hues = ['#38BDF8', '#FDE047', '#E879F9', '#34D399', '#FB7185', '#67E8F9'];
       for (let i = 0; i < 6; i++) {
@@ -547,9 +551,9 @@ export function drawOverheatSpecialFx(
     } else if (fx.kind === 'doomsday_blast' || fx.kind === 'phase2_surge') {
       ctx.translate(fx.x, fx.y);
       const expand = 0.2 + (1 - t) * 0.85;
-      const curR = fx.radius * expand;
+      const curR = Math.max(8, fxR * expand);
       ctx.globalAlpha = t * 0.92;
-      const dg = ctx.createRadialGradient(0, 0, 6, 0, 0, curR);
+      const dg = ctx.createRadialGradient(0, 0, 4, 0, 0, curR);
       dg.addColorStop(0, '#FFFFFF');
       dg.addColorStop(0.28, fx.kind === 'phase2_surge' ? '#FDE047' : '#FB7185');
       dg.addColorStop(0.66, fx.kind === 'phase2_surge' ? 'rgba(239, 68, 68, 0.42)' : 'rgba(225, 29, 72, 0.36)');
@@ -566,9 +570,9 @@ export function drawOverheatSpecialFx(
     } else if (fx.kind === 'aegis_nova') {
       ctx.translate(fx.x, fx.y);
       const expand = 0.24 + (1 - t) * 0.78;
-      const curR = fx.radius * expand;
+      const curR = Math.max(10, fxR * expand);
       ctx.globalAlpha = t * 0.92;
-      const ag = ctx.createRadialGradient(0, 0, 8, 0, 0, curR);
+      const ag = ctx.createRadialGradient(0, 0, 5, 0, 0, curR);
       ag.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
       ag.addColorStop(0.28, 'rgba(56, 189, 248, 0.44)');
       ag.addColorStop(0.66, 'rgba(250, 204, 21, 0.22)');
@@ -588,7 +592,7 @@ export function drawOverheatSpecialFx(
     } else if (fx.kind === 'aurora_storm') {
       ctx.translate(fx.x, fx.y);
       const expand = 0.3 + (1 - t) * 0.7;
-      const curR = fx.radius * expand;
+      const curR = Math.max(4, fxR * expand);
       ctx.globalAlpha = t * 0.88;
       ctx.strokeStyle = '#2DD4BF';
       ctx.lineWidth = 2.6;
@@ -602,21 +606,21 @@ export function drawOverheatSpecialFx(
     } else if (fx.kind === 'solar_bounty') {
       ctx.translate(fx.x, fx.y);
       const expand = 0.25 + (1 - t) * 0.75;
-      const curR = fx.radius * expand;
+      const curR = Math.max(4, fxR * expand);
       ctx.globalAlpha = t * 0.9;
       ctx.strokeStyle = '#FACC15';
       ctx.lineWidth = 2.6;
       for (let i = 0; i < 8; i++) {
         const a = (i * Math.PI) / 4 + animTime * 2.8;
         ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * 10, Math.sin(a) * 10);
+        ctx.moveTo(Math.cos(a) * Math.min(10, curR * 0.4), Math.sin(a) * Math.min(10, curR * 0.4));
         ctx.lineTo(Math.cos(a) * curR, Math.sin(a) * curR);
         ctx.stroke();
       }
     } else if (fx.kind === 'paradox_rift') {
       ctx.translate(fx.x, fx.y);
       const expand = 0.25 + (1 - t) * 0.75;
-      const curR = fx.radius * expand;
+      const curR = Math.max(4, fxR * expand);
       ctx.globalAlpha = t * 0.9;
       ctx.strokeStyle = '#67E8F9';
       ctx.lineWidth = 2.4;
@@ -630,9 +634,9 @@ export function drawOverheatSpecialFx(
     } else if (fx.kind === 'nebula_swarm') {
       ctx.translate(fx.x, fx.y);
       const expand = 0.22 + (1 - t) * 0.8;
-      const curR = fx.radius * expand;
+      const curR = Math.max(8, fxR * expand);
       ctx.globalAlpha = t * 0.9;
-      const ng = ctx.createRadialGradient(0, 0, 6, 0, 0, curR);
+      const ng = ctx.createRadialGradient(0, 0, 4, 0, 0, curR);
       ng.addColorStop(0, '#FFFFFF');
       ng.addColorStop(0.32, '#F0ABFC');
       ng.addColorStop(0.7, 'rgba(56, 189, 248, 0.28)');
@@ -2637,16 +2641,17 @@ export function drawOrbitalBeamsAndZones(
   const safeScale = Math.max(0.42, Math.min(1, alphaScale));
   for (const z of zones) {
     const fade = Math.max(0.12, Math.min(1, z.life / Math.max(0.4, z.maxLife)));
+    const zr = Math.max(8, Number.isFinite(z.radius) ? z.radius : 8);
     ctx.save();
     ctx.globalAlpha = fade * 0.62 * safeScale;
-    const grad = ctx.createRadialGradient(z.x, z.y, 4, z.x, z.y, z.radius);
+    const grad = ctx.createRadialGradient(z.x, z.y, 4, z.x, z.y, zr);
     grad.addColorStop(0, 'rgba(254, 240, 138, 0.58)');
     grad.addColorStop(0.45, 'rgba(249, 115, 22, 0.42)');
     grad.addColorStop(0.82, 'rgba(220, 38, 38, 0.22)');
     grad.addColorStop(1, 'rgba(127, 29, 29, 0)');
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(z.x, z.y, z.radius, 0, Math.PI * 2);
+    ctx.arc(z.x, z.y, zr, 0, Math.PI * 2);
     ctx.fill();
 
     // Bubbling radiation crust perimeter
@@ -2655,13 +2660,14 @@ export function drawOrbitalBeamsAndZones(
     ctx.setLineDash([6, 5]);
     ctx.lineDashOffset = -animTime * 18;
     ctx.beginPath();
-    ctx.arc(z.x, z.y, z.radius * 0.88, 0, Math.PI * 2);
+    ctx.arc(z.x, z.y, zr * 0.88, 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
   }
 
   for (const bm of beams) {
     const t = Math.max(0, Math.min(1, bm.alpha)) * safeScale;
+    const br = Math.max(6, Number.isFinite(bm.radius) ? bm.radius : 6);
     ctx.save();
     const beamHalfW = (14 + bm.visualTier * 3) * (0.6 + t * 0.4);
     const skyTop = -40;
@@ -2686,14 +2692,14 @@ export function drawOrbitalBeamsAndZones(
     ctx.fillRect(bm.x - beamHalfW * 0.24, skyTop, beamHalfW * 0.48, bm.y - skyTop);
 
     // Ground flare disc
-    const hitGrad = ctx.createRadialGradient(bm.x, bm.y, 2, bm.x, bm.y, bm.radius * 1.05);
+    const hitGrad = ctx.createRadialGradient(bm.x, bm.y, 2, bm.x, bm.y, br * 1.05);
     hitGrad.addColorStop(0, '#FFFFFF');
     hitGrad.addColorStop(0.35, '#FDE047');
     hitGrad.addColorStop(0.7, bm.color);
     hitGrad.addColorStop(1, 'rgba(249, 115, 22, 0)');
     ctx.fillStyle = hitGrad;
     ctx.beginPath();
-    ctx.ellipse(bm.x, bm.y, bm.radius * 1.05, bm.radius * 0.65, 0, 0, Math.PI * 2);
+    ctx.ellipse(bm.x, bm.y, br * 1.05, br * 0.65, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -2712,23 +2718,24 @@ export function drawSingularityHoles(
   for (const hole of holes) {
     const fadeIn = Math.min(1, (hole.maxLife - hole.life) * 5 + 0.25);
     const fadeOut = Math.min(1, hole.life * 2.2);
-    const visAlpha = Math.min(fadeIn, fadeOut) * safeScale;
-    const growthFactor = hole.currentRadius / Math.max(1, hole.baseRadius);
-    const coreRadius = 11 * Math.min(1.85, 0.9 + (growthFactor - 1) * 1.4);
+    const visAlpha = Math.max(0, Math.min(fadeIn, fadeOut) * safeScale);
+    const hr = Math.max(14, Number.isFinite(hole.currentRadius) ? hole.currentRadius : 14);
+    const growthFactor = hr / Math.max(1, hole.baseRadius);
+    const coreRadius = Math.max(4, Math.min(hr * 0.7, 11 * Math.min(1.85, 0.9 + (growthFactor - 1) * 1.4)));
 
     ctx.save();
     ctx.translate(hole.x, hole.y);
 
     // Gravitational pull field boundary
     ctx.globalAlpha = visAlpha * 0.46;
-    const wellGrad = ctx.createRadialGradient(0, 0, coreRadius, 0, 0, hole.currentRadius);
+    const wellGrad = ctx.createRadialGradient(0, 0, coreRadius * 0.6, 0, 0, hr);
     wellGrad.addColorStop(0, 'rgba(2, 6, 23, 0.96)');
     wellGrad.addColorStop(0.32, 'rgba(88, 28, 135, 0.56)');
     wellGrad.addColorStop(0.72, 'rgba(168, 85, 247, 0.22)');
     wellGrad.addColorStop(1, 'rgba(168, 85, 247, 0)');
     ctx.fillStyle = wellGrad;
     ctx.beginPath();
-    ctx.arc(0, 0, hole.currentRadius, 0, Math.PI * 2);
+    ctx.arc(0, 0, hr, 0, Math.PI * 2);
     ctx.fill();
 
     // Swirling accretion spiral arms
@@ -2738,10 +2745,10 @@ export function drawSingularityHoles(
     for (let arm = 0; arm < 4; arm++) {
       const baseA = -animTime * (6.2 + (growthFactor - 1) * 3) + (arm * Math.PI) / 2;
       ctx.beginPath();
-      ctx.arc(0, 0, hole.currentRadius * 0.45, baseA, baseA + 1.35);
+      ctx.arc(0, 0, hr * 0.45, baseA, baseA + 1.35);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(0, 0, hole.currentRadius * 0.72, baseA + 0.45, baseA + 1.25);
+      ctx.arc(0, 0, hr * 0.72, baseA + 0.45, baseA + 1.25);
       ctx.stroke();
     }
 
@@ -2843,21 +2850,22 @@ export function drawChronoFieldsAndSlashes(
   for (const field of fields) {
     const fadeIn = Math.min(1, (field.maxLife - field.life) * 5 + 0.25);
     const fadeOut = Math.min(1, field.life * 2.2);
-    const visAlpha = Math.min(fadeIn, fadeOut) * safeScale;
+    const visAlpha = Math.max(0, Math.min(fadeIn, fadeOut) * safeScale);
     const isOmega = field.variant === 'omega';
+    const fr = Math.max(16, Number.isFinite(field.radius) ? field.radius : 16);
 
     ctx.save();
     ctx.translate(field.x, field.y);
 
     // Subtle translucent time-dilation dome (kept transparent so road & enemies remain crisp)
     ctx.globalAlpha = visAlpha * 0.42;
-    const grad = ctx.createRadialGradient(0, 0, 12, 0, 0, field.radius);
+    const grad = ctx.createRadialGradient(0, 0, 8, 0, 0, fr);
     grad.addColorStop(0, isOmega ? 'rgba(192, 132, 252, 0.24)' : 'rgba(34, 211, 238, 0.22)');
     grad.addColorStop(0.68, 'rgba(56, 189, 248, 0.14)');
     grad.addColorStop(1, 'rgba(34, 211, 238, 0)');
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(0, 0, field.radius, 0, Math.PI * 2);
+    ctx.arc(0, 0, fr, 0, Math.PI * 2);
     ctx.fill();
 
     // Outer astral dial ring + 12 clock ticks
@@ -2867,15 +2875,15 @@ export function drawChronoFieldsAndSlashes(
     ctx.setLineDash([8, 5]);
     ctx.lineDashOffset = -animTime * 22;
     ctx.beginPath();
-    ctx.arc(0, 0, field.radius * 0.96, 0, Math.PI * 2);
+    ctx.arc(0, 0, fr * 0.96, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
 
     for (let h = 0; h < 12; h++) {
       const ha = (h * Math.PI * 2) / 12 + animTime * 0.45;
       ctx.beginPath();
-      ctx.moveTo(Math.cos(ha) * field.radius * 0.86, Math.sin(ha) * field.radius * 0.86);
-      ctx.lineTo(Math.cos(ha) * field.radius * 0.96, Math.sin(ha) * field.radius * 0.96);
+      ctx.moveTo(Math.cos(ha) * fr * 0.86, Math.sin(ha) * fr * 0.86);
+      ctx.lineTo(Math.cos(ha) * fr * 0.96, Math.sin(ha) * fr * 0.96);
       ctx.stroke();
     }
 
@@ -2886,9 +2894,9 @@ export function drawChronoFieldsAndSlashes(
     const slowHand = animTime * 1.1;
     ctx.beginPath();
     ctx.moveTo(0, 0);
-    ctx.lineTo(Math.cos(fastHand) * field.radius * 0.46, Math.sin(fastHand) * field.radius * 0.46);
+    ctx.lineTo(Math.cos(fastHand) * fr * 0.46, Math.sin(fastHand) * fr * 0.46);
     ctx.moveTo(0, 0);
-    ctx.lineTo(Math.cos(slowHand) * field.radius * 0.28, Math.sin(slowHand) * field.radius * 0.28);
+    ctx.lineTo(Math.cos(slowHand) * fr * 0.28, Math.sin(slowHand) * fr * 0.28);
     ctx.stroke();
 
     if (field.recordedDamage > 0) {
@@ -2896,7 +2904,7 @@ export function drawChronoFieldsAndSlashes(
       ctx.font = 'bold 9px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(`⏳ ECHO ${Math.round(field.recordedDamage)}`, 0, -field.radius * 0.56);
+      ctx.fillText(`⏳ ECHO ${Math.round(field.recordedDamage)}`, 0, -fr * 0.56);
     }
 
     ctx.restore();
@@ -2946,33 +2954,34 @@ export function drawVoidRifts(
   for (const r of rifts) {
     const fadeIn = Math.min(1, (r.maxLife - r.life) * 5 + 0.25);
     const fadeOut = Math.min(1, r.life * 2.2);
-    const visAlpha = Math.min(fadeIn, fadeOut) * safeScale;
+    const visAlpha = Math.max(0, Math.min(fadeIn, fadeOut) * safeScale);
     const isOmega = r.variant === 'omega';
+    const rr = Math.max(12, Number.isFinite(r.radius) ? r.radius : 12);
 
     ctx.save();
     ctx.translate(r.x, r.y);
 
     // Subtle void fissure floor field so roads & enemies stay crisp
     ctx.globalAlpha = visAlpha * 0.34;
-    const vg = ctx.createRadialGradient(0, 0, 8, 0, 0, r.radius);
+    const vg = ctx.createRadialGradient(0, 0, 5, 0, 0, rr);
     vg.addColorStop(0, isOmega ? 'rgba(244, 63, 94, 0.42)' : 'rgba(232, 121, 249, 0.36)');
     vg.addColorStop(0.65, 'rgba(139, 92, 246, 0.16)');
     vg.addColorStop(1, 'rgba(88, 28, 135, 0)');
     ctx.fillStyle = vg;
     ctx.beginPath();
-    ctx.arc(0, 0, r.radius, 0, Math.PI * 2);
+    ctx.arc(0, 0, rr, 0, Math.PI * 2);
     ctx.fill();
 
     // Crisp spinning tri-prism perimeter + fracture rays
     ctx.globalAlpha = visAlpha * 0.88;
     ctx.strokeStyle = isOmega ? '#FB7185' : '#F0ABFC';
     ctx.lineWidth = r.isOverdrive ? 2.4 : 1.9;
-    drawPolygon(ctx, 0, 0, 6, r.radius * 0.9, animTime * 1.3);
+    drawPolygon(ctx, 0, 0, 6, rr * 0.9, animTime * 1.3);
     ctx.stroke();
 
     ctx.strokeStyle = '#67E8F9';
     ctx.lineWidth = 1.4;
-    drawPolygon(ctx, 0, 0, 3, r.radius * 0.46, -animTime * 2.6);
+    drawPolygon(ctx, 0, 0, 3, rr * 0.46, -animTime * 2.6);
     ctx.stroke();
 
     ctx.restore();
@@ -3017,21 +3026,22 @@ export function drawAuroraPylons(
     const p = pylons[i];
     const fadeIn = Math.min(1, (p.maxLife - p.life) * 5 + 0.3);
     const fadeOut = Math.min(1, p.life * 2.2);
-    const visAlpha = Math.min(fadeIn, fadeOut) * safeScale;
+    const visAlpha = Math.max(0, Math.min(fadeIn, fadeOut) * safeScale);
     const isOmega = p.variant === 'omega';
+    const pr = Math.max(10, Number.isFinite(p.radius) ? p.radius : 10);
 
     ctx.save();
     ctx.translate(p.x, p.y);
 
     // Subtle electromagnetic storm aura
     ctx.globalAlpha = visAlpha * 0.34;
-    const ag = ctx.createRadialGradient(0, 0, 6, 0, 0, p.radius);
+    const ag = ctx.createRadialGradient(0, 0, 4, 0, 0, pr);
     ag.addColorStop(0, isOmega ? 'rgba(56, 189, 248, 0.35)' : 'rgba(45, 212, 191, 0.32)');
     ag.addColorStop(0.68, 'rgba(34, 211, 238, 0.14)');
     ag.addColorStop(1, 'rgba(45, 212, 191, 0)');
     ctx.fillStyle = ag;
     ctx.beginPath();
-    ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
+    ctx.arc(0, 0, pr, 0, Math.PI * 2);
     ctx.fill();
 
     // Pulsing magnetic perimeter ring
@@ -3041,7 +3051,7 @@ export function drawAuroraPylons(
     ctx.setLineDash([7, 5]);
     ctx.lineDashOffset = -animTime * 26;
     ctx.beginPath();
-    ctx.arc(0, 0, p.radius * 0.92, 0, Math.PI * 2);
+    ctx.arc(0, 0, pr * 0.92, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
 

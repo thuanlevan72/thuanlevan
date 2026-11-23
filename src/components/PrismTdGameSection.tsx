@@ -833,7 +833,9 @@ export function PrismTdGameSection({
       syncHudFromSim();
       setGameState('playing');
       unlockPrismAudio(audioCtxRef);
-      playSynthFx('wave', soundEnabled, audioCtxRef);
+      window.requestAnimationFrame(() => {
+        playSynthFx('wave', soundEnabled, audioCtxRef);
+      });
 
       if (document.activeElement instanceof HTMLElement) {
         document.activeElement.blur();
@@ -1314,6 +1316,7 @@ export function PrismTdGameSection({
     }
 
     if (activePointersRef.current.size === 1) {
+      suppressNextCanvasClickRef.current = false;
       pinchGestureRef.current = {
         startDist: 0,
         startZoom: mapZoomRef.current,
@@ -1661,12 +1664,13 @@ export function PrismTdGameSection({
   useEffect(() => {
     if (gameState !== 'title') return;
     let rafId = 0;
-    let lastTs = performance.now();
+    let lastTs: number | null = null;
     let t = 0;
 
     const renderTitlePreview = (now: number) => {
-      const dt = Math.min((now - lastTs) / 1000, 0.05);
+      const rawDt = lastTs === null ? 0.016 : (now - lastTs) / 1000;
       lastTs = now;
+      const dt = Math.max(0, Math.min(Number.isFinite(rawDt) ? rawDt : 0, 0.05));
       t += dt;
 
       const canvas = titleCanvasRef.current;
@@ -1862,7 +1866,8 @@ export function PrismTdGameSection({
   useEffect(() => {
     if (gameState !== 'playing' && gameState !== 'paused') return;
     let rafId = 0;
-    let lastTs = performance.now();
+    let cancelled = false;
+    let lastTs: number | null = null;
     let hudSyncAccum = 0;
     let cachedStaticBg: HTMLCanvasElement | null = null;
     let cachedStaticKey = '';
@@ -2018,20 +2023,21 @@ export function PrismTdGameSection({
       }
     };
 
-    const tickAndDraw = (now: number) => {
-      const rawDt = (now - lastTs) / 1000;
-      lastTs = now;
-      const dt = Math.min(rawDt, 0.05);
-      const s = simRef.current;
+    const tickAndDraw = (now: number, drawOnly = false) => {
+      try {
+        const rawDt = drawOnly || lastTs === null ? 0 : (now - lastTs) / 1000;
+        lastTs = now;
+        const dt = Math.max(0, Math.min(Number.isFinite(rawDt) ? rawDt : 0, 0.05));
+        const s = simRef.current;
 
-      const mapW = s.map.cols * TILE_SIZE;
-      const mapH = s.map.rows * TILE_SIZE;
-      const mapDiag = Math.hypot(mapW, mapH) + 80;
+        const mapW = s.map.cols * TILE_SIZE;
+        const mapH = s.map.rows * TILE_SIZE;
+        const mapDiag = Math.hypot(mapW, mapH) + 80;
 
-      if (gameState === 'playing') {
-        const simDt = dt * s.speedMult;
-        s.animTime += simDt;
-        s.visualTime += dt;
+        if (gameState === 'playing' && !drawOnly) {
+          const simDt = dt * s.speedMult;
+          s.animTime = Math.max(0, s.animTime + simDt);
+          s.visualTime = Math.max(0, s.visualTime + dt);
 
         // Minimum 30s real active-battle time to charge Overdrive (independent of 2x/3x fast-forward)
         if (s.waveActive && !s.outcome && s.overdriveTimer <= 0 && s.overdriveCharge < 100) {
@@ -6382,9 +6388,14 @@ export function PrismTdGameSection({
           p.vy *= 0.92;
         }
         s.shockwaves = s.shockwaves.filter((sw) => {
-          sw.radius += (sw.maxRadius - sw.radius) * Math.min(1, fxDt * 11) + (sw.maxRadius > sw.radius ? 55 : -55) * fxDt;
+          const shrinking = sw.maxRadius < sw.radius;
+          const nextR =
+            sw.radius +
+            (sw.maxRadius - sw.radius) * Math.min(1, fxDt * 11) +
+            (shrinking ? -55 : 55) * fxDt;
+          sw.radius = Math.max(0.5, shrinking ? Math.max(sw.maxRadius, nextR) : nextR);
           sw.alpha -= fxDt * 4.5;
-          return sw.alpha > 0.02;
+          return sw.alpha > 0.02 && Number.isFinite(sw.radius) && sw.radius > 0;
         });
         s.lightningArcs = s.lightningArcs.filter((arc) => {
           arc.alpha -= fxDt * 5.2;
@@ -6654,10 +6665,10 @@ export function PrismTdGameSection({
           ctx.lineWidth = 1.4;
           for (const wz of s.map.wetZones) {
             const wPt = gridToWorldCenter(wz.col, wz.row);
-            const ripple = ((s.visualTime * 0.65 + (wz.col + wz.row) * 0.23) % 1);
-            ctx.globalAlpha = (1 - ripple) * 0.45;
+            const ripple = (((s.visualTime * 0.65 + (wz.col + wz.row) * 0.23) % 1) + 1) % 1;
+            ctx.globalAlpha = Math.max(0, (1 - ripple) * 0.45);
             ctx.beginPath();
-            ctx.arc(wPt.x, wPt.y, 6 + ripple * (TILE_SIZE * 0.34), 0, Math.PI * 2);
+            ctx.arc(wPt.x, wPt.y, Math.max(1, 6 + ripple * (TILE_SIZE * 0.34)), 0, Math.PI * 2);
             ctx.stroke();
           }
           ctx.restore();
@@ -6780,7 +6791,7 @@ export function PrismTdGameSection({
               ctx.lineWidth = isActiveTouchPreview ? 1.8 : 1.4;
               ctx.setLineDash([6, 5]);
               ctx.beginPath();
-              ctx.arc(hx + TILE_SIZE / 2, hy + TILE_SIZE / 2, hoverProfile.rangePx, 0, Math.PI * 2);
+              ctx.arc(hx + TILE_SIZE / 2, hy + TILE_SIZE / 2, Math.max(1, hoverProfile.rangePx), 0, Math.PI * 2);
               ctx.stroke();
               ctx.restore();
 
@@ -6870,12 +6881,13 @@ export function PrismTdGameSection({
 
           // 6. Shockwaves (capped & crisp hairline pulse so road & enemies remain readable)
           for (const sw of s.shockwaves.slice(-clutterBudget.maxShockwaves)) {
+            if (!Number.isFinite(sw.radius) || sw.radius <= 0) continue;
             ctx.save();
             ctx.globalAlpha = sw.alpha * 0.16 * areaAlpha;
             ctx.strokeStyle = sw.color;
             ctx.lineWidth = Math.min(1.2, sw.lineWidth * 0.4);
             ctx.beginPath();
-            ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+            ctx.arc(sw.x, sw.y, Math.max(0.5, sw.radius), 0, Math.PI * 2);
             ctx.stroke();
             ctx.restore();
           }
@@ -6919,12 +6931,13 @@ export function PrismTdGameSection({
 
           for (const fc of s.flameCones) {
             const fTier = fc.visualTier;
+            const safeRange = Math.max(10, Number.isFinite(fc.range) ? fc.range : 10);
             ctx.save();
             ctx.translate(fc.x, fc.y);
             if (fc.isNova360) {
               // Lv10 360° Swirling Blue-White Plasma Nova Petals
               ctx.globalAlpha = fc.alpha * 0.44 * vfxDamp.effectAlphaScale;
-              const novaGrad = ctx.createRadialGradient(0, 0, 8, 0, 0, fc.range);
+              const novaGrad = ctx.createRadialGradient(0, 0, 8, 0, 0, safeRange);
               novaGrad.addColorStop(0, '#FFFFFF');
               novaGrad.addColorStop(0.35, '#38BDF8');
               novaGrad.addColorStop(0.7, 'rgba(56, 189, 248, 0.35)');
@@ -6934,7 +6947,7 @@ export function PrismTdGameSection({
                 const pa = fc.angle + (p * Math.PI) / 3 + s.animTime * 2.5;
                 ctx.beginPath();
                 ctx.moveTo(0, 0);
-                ctx.arc(0, 0, fc.range, pa - 0.38, pa + 0.38);
+                ctx.arc(0, 0, safeRange, pa - 0.38, pa + 0.38);
                 ctx.closePath();
                 ctx.fill();
               }
@@ -6943,7 +6956,7 @@ export function PrismTdGameSection({
             }
             ctx.rotate(fc.angle);
             ctx.globalAlpha = fc.alpha * 0.52 * vfxDamp.effectAlphaScale;
-            const outerGrad = ctx.createRadialGradient(0, 0, 6, 0, 0, fc.range);
+            const outerGrad = ctx.createRadialGradient(0, 0, 6, 0, 0, safeRange);
             if (fTier >= 3) {
               outerGrad.addColorStop(0, '#E0F2FE');
               outerGrad.addColorStop(0.45, '#38BDF8');
@@ -6956,19 +6969,19 @@ export function PrismTdGameSection({
             ctx.fillStyle = outerGrad;
             ctx.beginPath();
             ctx.moveTo(0, 0);
-            ctx.arc(0, 0, fc.range, -fc.halfArc, fc.halfArc);
+            ctx.arc(0, 0, safeRange, -fc.halfArc, fc.halfArc);
             ctx.closePath();
             ctx.fill();
 
             ctx.globalAlpha = fc.alpha * 0.78 * vfxDamp.effectAlphaScale;
-            const innerGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, fc.range * 0.68);
+            const innerGrad = ctx.createRadialGradient(0, 0, 2, 0, 0, safeRange * 0.68);
             innerGrad.addColorStop(0, '#FFFFFF');
             innerGrad.addColorStop(0.45, fTier >= 3 ? '#7DD3FC' : '#FEF08A');
             innerGrad.addColorStop(1, fTier >= 3 ? 'rgba(56, 189, 248, 0)' : 'rgba(249, 115, 22, 0)');
             ctx.fillStyle = innerGrad;
             ctx.beginPath();
             ctx.moveTo(0, 0);
-            ctx.arc(0, 0, fc.range * 0.68, -fc.halfArc * 0.5, fc.halfArc * 0.5);
+            ctx.arc(0, 0, safeRange * 0.68, -fc.halfArc * 0.5, fc.halfArc * 0.5);
             ctx.closePath();
             ctx.fill();
             ctx.restore();
@@ -7000,7 +7013,7 @@ export function PrismTdGameSection({
             ctx.lineWidth = sup.id === s.selectedGunId ? 1.8 : 1;
             ctx.setLineDash([6, 6]);
             ctx.beginPath();
-            ctx.arc(sPt.x, sPt.y, sProfile.rangePx, 0, Math.PI * 2);
+            ctx.arc(sPt.x, sPt.y, Math.max(1, sProfile.rangePx), 0, Math.PI * 2);
             ctx.stroke();
             if (drawAllTethers || sup.id === s.selectedGunId) {
               for (const ally of s.guns) {
@@ -7059,16 +7072,17 @@ export function PrismTdGameSection({
               const cornerLen = 11;
 
               // Clear translucent firing range coverage + crisp perimeter ring
+              const clampedRangePx = Math.max(1, effectiveRangePx);
               ctx.fillStyle = 'rgba(251, 191, 36, 0.08)';
               ctx.beginPath();
-              ctx.arc(0, 0, effectiveRangePx, 0, Math.PI * 2);
+              ctx.arc(0, 0, clampedRangePx, 0, Math.PI * 2);
               ctx.fill();
 
               ctx.strokeStyle = 'rgba(251, 191, 36, 0.68)';
               ctx.lineWidth = 2;
               ctx.setLineDash([7, 5]);
               ctx.beginPath();
-              ctx.arc(0, 0, effectiveRangePx, 0, Math.PI * 2);
+              ctx.arc(0, 0, clampedRangePx, 0, Math.PI * 2);
               ctx.stroke();
               ctx.setLineDash([]);
 
@@ -7120,7 +7134,7 @@ export function PrismTdGameSection({
               ctx.strokeStyle = 'rgba(251, 113, 133, 0.78)';
               ctx.lineWidth = 2;
               ctx.beginPath();
-              ctx.arc(0, 0, 25 + Math.sin(s.animTime * 10) * 1.6, 0, Math.PI * 2);
+              ctx.arc(0, 0, Math.max(1, 25 + Math.sin(s.animTime * 10) * 1.6), 0, Math.PI * 2);
               ctx.stroke();
             }
 
@@ -7160,23 +7174,24 @@ export function PrismTdGameSection({
 
           // 11. Muzzle Flashes & Starburst Impact Blooms (damped during dense barrages to keep grid sharp)
           for (const mf of s.muzzleFlashes.slice(-16)) {
+            const safeMfR = Math.max(1, Number.isFinite(mf.radius) ? mf.radius : 1);
             ctx.save();
             ctx.globalAlpha = mf.alpha * vfxDamp.flashAlphaScale;
             ctx.translate(mf.x, mf.y);
             ctx.rotate(mf.angle);
             ctx.fillStyle = mf.color;
             ctx.beginPath();
-            ctx.moveTo(mf.radius * 1.4, 0);
-            ctx.lineTo(2, -mf.radius * 0.45);
-            ctx.lineTo(0, -mf.radius * 0.9);
+            ctx.moveTo(safeMfR * 1.4, 0);
+            ctx.lineTo(2, -safeMfR * 0.45);
+            ctx.lineTo(0, -safeMfR * 0.9);
             ctx.lineTo(-3, 0);
-            ctx.lineTo(0, mf.radius * 0.9);
-            ctx.lineTo(2, mf.radius * 0.45);
+            ctx.lineTo(0, safeMfR * 0.9);
+            ctx.lineTo(2, safeMfR * 0.45);
             ctx.closePath();
             ctx.fill();
             ctx.fillStyle = '#FFFFFF';
             ctx.beginPath();
-            ctx.arc(2, 0, mf.radius * 0.35, 0, Math.PI * 2);
+            ctx.arc(2, 0, Math.max(0.5, safeMfR * 0.35), 0, Math.PI * 2);
             ctx.fill();
             ctx.restore();
           }
@@ -7184,6 +7199,7 @@ export function PrismTdGameSection({
           const useFastImpactBloom =
             s.impactFlashes.length > 8 || s.speedMult >= 2 || isCompactViewportRef.current;
           for (const im of s.impactFlashes.slice(-20)) {
+            const safeImR = Math.max(2, Number.isFinite(im.radius) ? im.radius : 2);
             ctx.save();
             ctx.globalAlpha = im.alpha * 0.8 * vfxDamp.flashAlphaScale;
             ctx.translate(im.x, im.y);
@@ -7192,17 +7208,17 @@ export function PrismTdGameSection({
               ctx.fillStyle = im.color;
               ctx.globalAlpha = im.alpha * 0.36 * vfxDamp.flashAlphaScale;
               ctx.beginPath();
-              ctx.arc(0, 0, im.radius, 0, Math.PI * 2);
+              ctx.arc(0, 0, safeImR, 0, Math.PI * 2);
               ctx.fill();
               ctx.globalAlpha = im.alpha * 0.85 * vfxDamp.flashAlphaScale;
             } else {
-              const bloom = ctx.createRadialGradient(0, 0, 1, 0, 0, im.radius);
+              const bloom = ctx.createRadialGradient(0, 0, 1, 0, 0, safeImR);
               bloom.addColorStop(0, '#FFFFFF');
               bloom.addColorStop(0.35, im.color);
               bloom.addColorStop(1, 'rgba(0, 0, 0, 0)');
               ctx.fillStyle = bloom;
               ctx.beginPath();
-              ctx.arc(0, 0, im.radius, 0, Math.PI * 2);
+              ctx.arc(0, 0, safeImR, 0, Math.PI * 2);
               ctx.fill();
             }
 
@@ -7211,7 +7227,7 @@ export function PrismTdGameSection({
             const pts = im.spikes * 2;
             for (let k = 0; k < pts; k++) {
               const ka = (k * Math.PI * 2) / pts;
-              const kr = k % 2 === 0 ? im.radius * 0.92 : im.radius * 0.22;
+              const kr = k % 2 === 0 ? safeImR * 0.92 : safeImR * 0.22;
               const px = Math.cos(ka) * kr;
               const py = Math.sin(ka) * kr;
               if (k === 0) ctx.moveTo(px, py);
@@ -7229,12 +7245,12 @@ export function PrismTdGameSection({
 
           // 13. Particles
           for (const p of s.particles) {
-            if (!p.active) continue;
+            if (!p.active || !Number.isFinite(p.size) || p.size <= 0) continue;
             ctx.save();
             ctx.globalAlpha = Math.max(0, p.life / p.maxLife) * Math.max(0.48, vfxDamp.effectAlphaScale);
             ctx.fillStyle = p.color;
             ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, Math.max(0.5, p.size), 0, Math.PI * 2);
             ctx.fill();
             ctx.restore();
           }
@@ -7264,17 +7280,19 @@ export function PrismTdGameSection({
             ctx.strokeRect(7, 7, mapW - 14, mapH - 14);
             ctx.restore();
           }
+          }
         }
-      }
-
-      if (gameState === 'playing') {
-        rafId = window.requestAnimationFrame(tickAndDraw);
+      } finally {
+        if (!cancelled && !drawOnly && gameState === 'playing') {
+          rafId = window.requestAnimationFrame((nextNow) => tickAndDraw(nextNow, false));
+        }
       }
     };
 
-    drawCanvasFrameRef.current = () => tickAndDraw(performance.now());
-    rafId = window.requestAnimationFrame(tickAndDraw);
+    drawCanvasFrameRef.current = () => tickAndDraw(performance.now(), true);
+    rafId = window.requestAnimationFrame((nextNow) => tickAndDraw(nextNow, false));
     return () => {
+      cancelled = true;
       window.cancelAnimationFrame(rafId);
       drawCanvasFrameRef.current = null;
     };
@@ -7695,7 +7713,7 @@ export function PrismTdGameSection({
 
               <div
                 data-testid="td-stat-energy"
-                className={`flex items-center gap-1 whitespace-nowrap shrink-0 rounded-md px-1 py-0.5 transition-all duration-200 ${
+                className={`flex items-center gap-1 whitespace-nowrap shrink-0 rounded-md px-1 py-0.5 transition-colors duration-200 ${
                   feedbackPulse === 'error'
                     ? 'bg-rose-500/20 ring-1 ring-rose-400/80'
                     : feedbackPulse === 'place' || feedbackPulse === 'upgrade' || feedbackPulse === 'sell'
@@ -7932,7 +7950,7 @@ export function PrismTdGameSection({
                 <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex justify-center">
                   <div
                     data-testid="td-boss-hud"
-                    className="w-full max-w-[320px] rounded-xl border bg-[#090F1D]/90 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.68)] backdrop-blur-sm space-y-1"
+                    className="w-full max-w-[320px] rounded-xl border bg-[#090F1D]/95 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.68)] space-y-1"
                     style={{ borderColor: `${hud.activeBoss.color}99` }}
                   >
                     <div className="flex items-center justify-between gap-2 text-[10px] font-mono font-bold">
@@ -7970,7 +7988,7 @@ export function PrismTdGameSection({
               {/* Subtle Bottom-Right Map Zoom Controls (never collides with top Pause/Boss banners or centered Confirm bar) */}
               <div
                 data-testid="td-zoom-controls"
-                className={`absolute ${pendingBuildTile ? 'bottom-14' : 'bottom-2'} right-2 z-20 flex items-center gap-0.5 rounded-lg border border-slate-700/80 bg-[#0B1222]/90 p-0.5 shadow-lg backdrop-blur-sm transition-all`}
+                className={`absolute ${pendingBuildTile ? 'bottom-14' : 'bottom-2'} right-2 z-20 flex items-center gap-0.5 rounded-lg border border-slate-700/80 bg-[#0B1222]/96 p-0.5 shadow-lg transition-colors`}
               >
                 <button
                   type="button"
@@ -8002,7 +8020,7 @@ export function PrismTdGameSection({
 
               <div
                 ref={mapContainerRef}
-                className={`relative overflow-hidden touch-none overscroll-none rounded-xl border transition-all duration-200 ${
+                className={`relative overflow-hidden touch-none overscroll-none rounded-xl border transition-colors duration-200 ${
                   feedbackPulse === 'place'
                     ? 'border-emerald-400 ring-2 ring-emerald-400/70'
                     : feedbackPulse === 'upgrade'
@@ -8036,11 +8054,15 @@ export function PrismTdGameSection({
                 }
               >
                 <div
-                  className="w-full will-change-transform"
-                  style={{
-                    transform: `translate3d(${mapPan.x}px, ${mapPan.y}px, 0) scale(${mapZoom})`,
-                    transformOrigin: 'center center',
-                  }}
+                  className={mapZoom > 1.01 ? 'w-full will-change-transform' : 'w-full'}
+                  style={
+                    mapZoom > 1.01
+                      ? {
+                          transform: `translate3d(${mapPan.x}px, ${mapPan.y}px, 0) scale(${mapZoom})`,
+                          transformOrigin: 'center center',
+                        }
+                      : undefined
+                  }
                 >
                   <canvas
                     ref={canvasRef}
@@ -8065,7 +8087,7 @@ export function PrismTdGameSection({
               {pendingBuildTile && (
                 <div
                   data-testid="td-touch-confirm-bar"
-                  className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 rounded-xl border border-emerald-400/70 bg-[#0B1222]/95 px-2.5 py-1.5 shadow-[0_10px_28px_rgba(0,0,0,0.72)] backdrop-blur-sm max-w-[95%]"
+                  className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 rounded-xl border border-emerald-400/70 bg-[#0B1222]/98 px-2.5 py-1.5 shadow-[0_10px_28px_rgba(0,0,0,0.72)] max-w-[95%]"
                 >
                   <PrismTdGunGlyph
                     type={selectedTool}

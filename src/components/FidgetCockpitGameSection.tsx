@@ -517,9 +517,14 @@ export function FidgetCockpitGameSection({ theme: _theme }: FidgetCockpitGameSec
       setPhase('playing');
 
       spawnTaskState(0, null, activeMode, activeDiff);
-      playComboSuccessSfx(1);
+      ensureAudio();
+      if (typeof window !== 'undefined') {
+        window.requestAnimationFrame(() => {
+          playComboSuccessSfx(1);
+        });
+      }
     },
-    [playComboSuccessSfx, spawnTaskState]
+    [ensureAudio, playComboSuccessSfx, spawnTaskState]
   );
 
   // Honor ?autostart=1 if present

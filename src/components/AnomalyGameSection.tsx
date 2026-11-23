@@ -256,7 +256,11 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
       setLastEvaluation(null);
       setPendingTransition(null);
       setScreenState('playing');
-      playAnomalyFx('stamp', soundEnabled, audioCtxRef);
+      if (typeof window !== 'undefined') {
+        window.requestAnimationFrame(() => {
+          playAnomalyFx('stamp', soundEnabled, audioCtxRef);
+        });
+      }
     },
     [resetCaseDeductionTools, selectedDifficulty, soundEnabled, unlockAllDays]
   );
@@ -1493,7 +1497,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
 
           {/* PAUSED OVERLAY */}
           {screenState === 'paused' && (
-            <div className="absolute inset-0 z-20 bg-[#0A192F]/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="absolute inset-0 z-20 bg-[#0A192F]/92 flex items-center justify-center p-4">
               <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-2xl border border-[#243454] bg-white dark:bg-[#0F172A] p-6 text-center space-y-4 shadow-2xl">
                 <h2 className="font-serif text-xl font-bold text-[#0A192F] dark:text-white">
                   Ca Trực Đang Tạm Dừng
@@ -1524,7 +1528,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
 
           {/* DAY COMPLETE OVERLAY */}
           {screenState === 'day_complete' && (
-            <div className="absolute inset-0 z-20 bg-[#0A192F]/85 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="absolute inset-0 z-20 bg-[#0A192F]/94 flex items-center justify-center p-4">
               <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl border border-emerald-500/40 bg-white dark:bg-[#0F172A] p-6 text-center space-y-4 shadow-2xl">
                 <div className="w-12 h-12 mx-auto rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
                   <Sparkles className="w-6 h-6" />

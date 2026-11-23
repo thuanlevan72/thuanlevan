@@ -358,7 +358,11 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
       setSideTab('mission');
       lastAlarmBucketRef.current = 0;
       setScreenState('playing');
-      playTerminalFx('link', soundEnabled, audioCtxRef);
+      if (typeof window !== 'undefined') {
+        window.requestAnimationFrame(() => {
+          playTerminalFx('link', soundEnabled, audioCtxRef);
+        });
+      }
     },
     [soundEnabled]
   );
