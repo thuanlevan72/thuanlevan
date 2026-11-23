@@ -44,8 +44,8 @@ function writeFallbackDrafts(drafts: SketchpadDraft[]): void {
 }
 
 const PIANO_SEED_KEY = 'lyric-groove-grand-piano-seed-v2';
-const AM_BALLAD_SEED_KEY = 'lyric-groove-am-ballad-seed-v5';
-const THANG_TU_SEED_KEY = 'lyric-groove-thang-tu-seed-v3';
+const AM_BALLAD_SEED_KEY = 'lyric-groove-am-ballad-seed-v6';
+const THANG_TU_SEED_KEY = 'lyric-groove-thang-tu-seed-v4';
 
 function normalizeDraftDefaults(draft: SketchpadDraft): SketchpadDraft {
   return {

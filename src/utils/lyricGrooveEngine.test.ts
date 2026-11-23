@@ -277,14 +277,14 @@ test('SONG_IDEA_TEMPLATES provide 4 complete style starters with valid chords', 
   }
 });
 
-test('Tone Am song draft-khoang-cach-hai-ta-am resolves all 8 sections, lofi-chill groove, and authentic notes', () => {
+test('Tone Am song draft-khoang-cach-hai-ta-am resolves all 8 sections, 256 beats, lofi-chill groove, and authentic notes', () => {
   const starters = createStarterDrafts();
   const amSong = starters.find((d) => d.id === 'draft-khoang-cach-hai-ta-am');
   assert.ok(amSong, 'draft-khoang-cach-hai-ta-am must exist in createStarterDrafts');
   assert.equal(amSong.keyRoot, 'A');
   assert.equal(amSong.scaleMode, 'minor');
   assert.equal(amSong.mood, 'lofi-chill');
-  assert.equal(amSong.bpm, 74);
+  assert.equal(amSong.bpm, 86);
   assert.equal(amSong.drumPattern, 'lofi');
   assert.equal(amSong.backingPattern, 'auto-song');
   assert.equal(amSong.sections.length, 8);
@@ -295,7 +295,7 @@ test('Tone Am song draft-khoang-cach-hai-ta-am resolves all 8 sections, lofi-chi
     chordArpStyles: amSong.chordArpStyles,
     songMood: amSong.mood,
   });
-  assert.equal(timeline.totalBeats, 144);
+  assert.equal(timeline.totalBeats, 256);
   assert.ok(timeline.events.some((e) => e.symbol === 'Fmaj13'));
   assert.ok(timeline.events.some((e) => e.symbol === 'Cmaj13'));
   assert.ok(timeline.events.some((e) => e.symbol === 'Asus4'));
@@ -330,7 +330,7 @@ test('Tone C song draft-thang-tu-la-loi-noi-doi-cua-em resolves all 192 beats, c
   assert.ok(thangTu, 'draft-thang-tu-la-loi-noi-doi-cua-em must exist');
   assert.equal(thangTu.keyRoot, 'C');
   assert.equal(thangTu.scaleMode, 'major');
-  assert.equal(thangTu.bpm, 67);
+  assert.equal(thangTu.bpm, 72);
   assert.equal(thangTu.drumPattern, 'none');
   assert.equal(thangTu.backingPattern, 'auto-song');
   assert.equal(thangTu.sections.length, 7);
@@ -373,6 +373,56 @@ test('Tone C song draft-thang-tu-la-loi-noi-doi-cua-em resolves all 192 beats, c
     c2.slice(-2).map((n) => n.midi),
     [71, 73]
   );
+});
+
+test('Both new songs maintain 1:1 chord-to-syllable synchronization and unhurried note durations', () => {
+  const starters = createStarterDrafts();
+  const targets = ['draft-khoang-cach-hai-ta-am', 'draft-thang-tu-la-loi-noi-doi-cua-em'];
+  for (const id of targets) {
+    const draft = starters.find((d) => d.id === id);
+    assert.ok(draft, `Missing starter ${id}`);
+    for (const sec of draft.sections) {
+      if (sec.kind === 'Intro') continue;
+      const sectionBeats = sec.bars * 4;
+      const sched = sec.chordSchedule ?? [];
+      const tagMatches = Array.from(sec.text.matchAll(/\[([^\]]+)\]([^\s[\n]*)/g));
+      assert.equal(
+        sched.length,
+        tagMatches.length,
+        `${id}/${sec.id}: chordSchedule length (${sched.length}) must match [Chord] tag count (${tagMatches.length})`
+      );
+
+      const secNotes = draft.melodyNotes.filter((n) => n.sectionId === sec.id);
+      for (const note of secNotes) {
+        assert.ok(
+          note.startBeat >= 0 && note.startBeat + note.durationBeats <= sectionBeats + 0.05,
+          `${id}/${sec.id}: note ${note.id} spills past ${sectionBeats} beats`
+        );
+        assert.ok(
+          note.durationBeats >= 0.35,
+          `${id}/${sec.id}: note ${note.id} too rushed (${note.durationBeats} beats)`
+        );
+      }
+
+      tagMatches.forEach((m, idx) => {
+        const chordItem = sched[idx];
+        assert.ok(
+          chordItem.startBeat >= 0 && chordItem.startBeat < sectionBeats,
+          `${id}/${sec.id}: chord ${chordItem.symbol} out of bounds`
+        );
+        const attachedSyllable = m[2].trim();
+        if (attachedSyllable.length > 0) {
+          const matchingNote = secNotes.find(
+            (n) => Math.abs(n.startBeat - chordItem.startBeat) <= 0.05
+          );
+          assert.ok(
+            matchingNote,
+            `${id}/${sec.id}: [${chordItem.symbol}]${attachedSyllable} at beat ${chordItem.startBeat} does not align with a vocal melodyNote`
+          );
+        }
+      });
+    }
+  }
 });
 
 test('Multi-pattern arpeggio resolution supports auto-song variety and per-chord overrides', () => {
