@@ -15,20 +15,24 @@ export type ActNumber = 1 | 2 | 3 | 4;
 export type SceneId =
   | 'classroom_12b'
   | 'corridor_act1'
+  | 'teachers_office'
   | 'flooded_courtyard'
   | 'dorm_hall'
   | 'broadcast_room'
   | 'darkroom'
   | 'auditorium'
   | 'prison_cells'
+  | 'roof_belltower'
   | 'ruined_hall_1986'
   | 'final_interrogation';
 
 export type OfferingItemId =
   | 'incense_bundle'
+  | 'teachers_key'
   | 'spirit_money'
   | 'radio_battery'
   | 'darkroom_key'
+  | 'bell_mallet'
   | 'wine_cup';
 
 export interface InventoryItem {
@@ -94,11 +98,14 @@ export interface HotspotDef {
     | 'darkroom_tray'
     | 'puppet_stage'
     | 'prison_crack'
+    | 'cipher_box'
+    | 'bronze_bell'
     | 'mirror_1980'
     | 'interrogation_chair';
   targetScene?: SceneId;
   targetX?: number;
   requiredFlag?: string;
+  requiredItem?: OfferingItemId;
   blockedHint?: string;
   itemReward?: InventoryItem;
   keepsakeId?: string;
@@ -111,6 +118,7 @@ export type ActiveModalType =
   | 'journal'
   | 'memory_echo'
   | 'wuxing_puzzle'
+  | 'cipher_lock'
   | 'radio_tuner'
   | 'darkroom_reveal'
   | 'puppet_theatre'
@@ -142,10 +150,14 @@ export interface ThanhMinhState {
   playerFacing: 1 | -1;
   walkPhase: number;
 
-  // Stealth & Sanity
+  // Stealth, Run Stamina & Sanity
   holdingBreath: boolean;
   breathStamina: number; // 0..100
   gaspPenaltyTimer: number;
+  runStamina: number; // 0..100 (sức bền chạy)
+  isRunning: boolean;
+  isMoving: boolean;
+  exhausted: boolean; // True when runStamina reaches 0 until recovered >= 35
   sanity: number; // 0..100
   sanityBottomCount: number; // hidden variable tracking how many times Sanity bottomed out
   gazeExposure: number; // 0..100 red bleed warning when staring at ghost face
@@ -159,15 +171,24 @@ export interface ThanhMinhState {
 
   // Interactive Puzzles
   wuxingSequence: string[]; // Ngũ hành altar order: Kim -> Thủy -> Hỏa
+  cipherDigits: [number, number, number]; // Teachers' Office 3-digit Thanh Minh lock (4-0-5)
+  cipherSolved: boolean;
   radioFrequency: number; // Act 2: 104.7 MHz | Act 3 secret: 109.2 MHz
   radioTunedAct2: boolean;
   radioSecretAct3Solved: boolean;
   puppetOrder: [number, number, number, number]; // 4 acts of tragedy -> target [0, 1, 2, 3]
   puppetsSolved: boolean;
+  bellRings: number; // 0..3 strikes on Rooftop Bronze Bell
 
-  // Hồi 4 Interrogation branching answers
-  interrogationStep: 0 | 1 | 2;
+  // Hồi 4 Interrogation branching answers (4 acts of reckoning)
+  interrogationStep: 0 | 1 | 2 | 3;
   confessionAnswers: boolean[]; // true = honest/admits guilt, false = denies/blames others
+
+  // Restrained Peripheral Horror System
+  horrorPulseTimer: number;
+  activePhantomX: number | null;
+  activePhantomTimer: number;
+  activePhantomKind: 'peeker' | 'shadow_child' | null;
 
   // Entities & UI
   ghosts: GhostEntity[];
@@ -185,14 +206,17 @@ export interface ThanhMinhInput {
   dt: number;
   moveDir: -1 | 0 | 1;
   holdingBreath: boolean;
+  sprinting?: boolean;
 }
 
 export interface ThanhMinhEvents {
   footstep: boolean;
   gasped: boolean;
+  exhaustedNow?: boolean;
   sanityCollapsed: boolean;
   ghostAlerted: boolean;
   killedByGhostKind: 'paper_hat' | 'tongue_warden' | null;
+  horrorEvent?: 'knock' | 'sting' | 'whisper' | null;
 }
 
 export const SCENE_META: Record<
@@ -212,6 +236,13 @@ export const SCENE_META: Record<
     act: 1,
     title: 'Hành Lang Tầng 2 — Vong Hồn Mũ Giấy',
     subtitle: 'Hồi 1 · Bóng Tối & Bùa Trắng',
+  },
+  teachers_office: {
+    minX: 65,
+    maxX: 900,
+    act: 1,
+    title: 'Văn Phòng Thầy Trần Mặc — Mảnh Giấy Còn Thiếu',
+    subtitle: 'Hồi 1 · Lời Hẹn Bị Hiểu Lầm',
   },
   flooded_courtyard: {
     minX: 60,
@@ -252,8 +283,15 @@ export const SCENE_META: Record<
     minX: 60,
     maxX: 940,
     act: 3,
-    title: 'Khu Biệt Giam & Rừng Thông Sau Núi',
-    subtitle: 'Cao Trào Hồi 3 · Lời Nhắn Của Tô Dao',
+    title: 'Khu Biệt Giam & Hành Lang Lạnh',
+    subtitle: 'Hồi 3 · Lời Nhắn Của Tô Dao',
+  },
+  roof_belltower: {
+    minX: 60,
+    maxX: 960,
+    act: 3,
+    title: 'Sân Thượng & Tháp Chuông Đổ Nát',
+    subtitle: 'Cao Trào Hồi 3 · Tiếng Chuông Tiết Thanh Minh',
   },
   ruined_hall_1986: {
     minX: 60,
@@ -264,7 +302,7 @@ export const SCENE_META: Record<
   },
   final_interrogation: {
     minX: 65,
-    maxX: 840,
+    maxX: 880,
     act: 4,
     title: 'Phòng Thẩm Vấn Cuối Cùng',
     subtitle: 'Hồi 4 · Đối Diện Chính Mình',
@@ -276,6 +314,11 @@ export const INVENTORY_ITEMS: Record<OfferingItemId, InventoryItem> = {
     id: 'incense_bundle',
     name: 'Bó Nhang Trầm & Vàng Mã',
     description: 'Dùng cho nghi lễ Ngũ Hành tại bàn thờ hành lang tầng 2.',
+  },
+  teachers_key: {
+    id: 'teachers_key',
+    name: 'Chìa Khóa Văn Phòng Thầy Trần Mặc',
+    description: 'Chìa đồng có móc thẻ gỗ ghi chữ “Tổ Văn 1967”.',
   },
   spirit_money: {
     id: 'spirit_money',
@@ -292,6 +335,11 @@ export const INVENTORY_ITEMS: Record<OfferingItemId, InventoryItem> = {
     name: 'Chìa Khóa Phòng Rửa Ảnh',
     description: 'Chìa đồng dính vết thuốc rửa ảnh đỏ sẫm.',
   },
+  bell_mallet: {
+    id: 'bell_mallet',
+    name: 'Vồ Gỗ Tháp Chuông Cô Sơn',
+    description: 'Chiếc vồ gỗ sồi dùng để thỉnh chiếc chuông đồng nứt trên sân thượng.',
+  },
   wine_cup: {
     id: 'wine_cup',
     name: 'Chén Rượu Tế Thanh Minh',
@@ -299,7 +347,7 @@ export const INVENTORY_ITEMS: Record<OfferingItemId, InventoryItem> = {
   },
 };
 
-// 6 Truth Keepsakes (Kỷ vật sự thật) -> determines Ending percentage (0%, 17%, 33%, 50%, 67%, 83%, 100%)
+// 8 Truth Keepsakes (Kỷ vật sự thật) -> determines Ending percentage (0%..100%)
 export const TRUTH_KEEPSAKES: readonly KeepsakeDef[] = [
   {
     id: 'ks-1-linjing-badge',
@@ -349,11 +397,29 @@ export const TRUTH_KEEPSAKES: readonly KeepsakeDef[] = [
   {
     id: 'ks-6-tranmac-pen',
     act: 4,
-    title: 'Kỷ vật 6/6 — Cây Bút Máy & Chiếc Áo Đồng Phục Cũ',
+    title: 'Kỷ vật 6/8 — Cây Bút Máy & Chiếc Áo Đồng Phục Cũ',
     subtitle: 'Đống đổ nát Cô Sơn 20 năm sau · Hồi 4',
     description: 'Cây bút máy gãy ngòi của thầy Trần Mặc cùng cuốn sổ ghi sự thật còn nguyên vẹn trên bàn học.',
     diaryText:
       '20 năm trôi qua (1986), em trai Tô Dao vẫn lặn lội lên núi tìm hài cốt chị. Chỉ khi đối diện trọn vẹn tội lỗi, sự thật mới có thể minh oan cho thầy Trần Mặc và Tô Dao.',
+  },
+  {
+    id: 'ks-7-tranmac-pass',
+    act: 1,
+    title: 'Kỷ vật 7/8 — Tấm Giấy Thông Hành Có Tên Lâm Tĩnh',
+    subtitle: 'Hộp Khóa Số Bàn Làm Việc Thầy Trần Mặc · Hồi 1',
+    description: 'Tờ giấy thông hành thứ hai cất kỹ trong hộp khóa 4-0-5 của thầy Trần Mặc — nét mực chưa ráo.',
+    diaryText:
+      'Hóa ra đêm đó thầy Trần không hề bỏ rơi mình! Thầy đã chuẩn bị sẵn một tấm vé rời khỏi núi mang tên “Lâm Tĩnh”, định chờ tan cuộc họp tự vệ sẽ lén trao cho cả hai đứa... Vậy mà cơn ghen tuông mù quáng đã đẩy thầy vào chỗ chết.',
+  },
+  {
+    id: 'ks-8-rooftop-letter',
+    act: 3,
+    title: 'Kỷ vật 8/8 — Bức Thư Chưa Kịp Gửi Trên Sân Thượng',
+    subtitle: 'Chân Tháp Chuông Cô Sơn · Cao trào Hồi 3',
+    description: 'Phong thư ố vàng đặt dưới chân chuông đồng, mặt sau vẽ nhành hoa mai năm cánh.',
+    diaryText:
+      'Trên sân thượng gió bão, tiếng chuông đồng vang lên đánh thức trang thư cuối của Tô Dao gửi cha mẹ: “Nếu con không về kịp tiết Thanh Minh năm nay, xin hãy coi Tĩnh như con gái nhỏ trong nhà — bạn ấy cô độc hơn con rất nhiều.”',
   },
 ];
 
@@ -452,6 +518,42 @@ export const STORY_LORE_ENTRIES: readonly StoryLoreEntry[] = [
     secretBody:
       'SAU KHI DÂNG CHÉN RƯỢU TẾ & VÀNG MÃ: Tô Viễn lặng lẽ cúi đầu giữa làn khói hương. Anh kể rằng năm 1979 chính quyền đã phục hồi danh dự cho Thầy Trần Mặc, nhưng bức thư cuối cùng của chị Tô Dao vẫn còn thiếu một trang sự thật — chỉ chờ linh hồn Lâm Tĩnh tự mình bước ra khỏi vòng lặp mặc cảm.',
   },
+  {
+    id: 'lore-11-teachers-desk',
+    act: 1,
+    title: 'Nhật Ký Công Tác Tổ Văn Năm 1967',
+    location: 'Văn Phòng Thầy Trần Mặc · Góc bàn đèn dầu',
+    speaker: 'Thầy Trần Mặc',
+    quote: '“Mật mã hộp gỗ: Ngày Tiết Thanh Minh 04/05 (4 - 0 - 5) — ngày bốn thầy trò lập Nhóm Đọc Sách Cô Sơn.”',
+    body: 'Trang đầu cuốn sổ bọc vải xanh bị xé mất một góc nhưng vẫn rõ dòng ghi chú bằng bút chì kim. Thầy Trần Mặc cẩn thận ghi tên từng học trò cùng những cuốn thơ chép tay thầy định giữ lại trước kỳ thanh trừng.',
+  },
+  {
+    id: 'lore-12-rooftop-storm',
+    act: 3,
+    title: 'Tiếng Chuông Đứt Quãng Trong Đêm Bão',
+    location: 'Sân Thượng Cô Sơn · Lan can hướng vực thẳm',
+    speaker: 'Ký ức đêm 04/05/1967',
+    quote: '“Ba hồi chuông tiễn biệt — đừng để oan hồn lạc lối giữa màn mưa Cô Sơn.”',
+    body: 'Cây chuông đồng cổ trên sân thượng vốn chỉ gióng lên mỗi sáng khai giảng và tiết Thanh Minh. Đêm cơn lũ đỏ tràn qua cây cầu độc mộc, người gác chuông bỏ chạy trước, chỉ còn những học sinh bị giam cầm vọng nghe tiếng kim loại rên xiết trong gió.',
+  },
+  {
+    id: 'lore-13-bell-echo',
+    act: 3,
+    title: 'Dấu Giày Nhỏ Dưới Chân Tháp Chuông',
+    location: 'Tháp Chuông Đổ Nát · Bậc thềm đá',
+    speaker: 'Tô Dao & Lâm Tĩnh',
+    quote: '“Sợ hãi không có tội, nhưng đổ máu người khác để giữ bình yên cho riêng mình thì có.”',
+    body: 'Trước khi bị đội tự vệ giải đi, Tô Dao từng lén chạy lên sân thượng cột dải ruy-băng đỏ lên quai chuông để làm dấu cho Lâm Tĩnh trốn theo đường mòn sau núi. Nhưng cô bạn đã đứng dưới chân cầu thang không dám bước lên.',
+  },
+  {
+    id: 'lore-14-threshold-silence',
+    act: 4,
+    title: 'Bốn Bước Chân Cuối Trước Ngưỡng Cửa',
+    location: 'Phòng Thẩm Vấn Cuối Cùng · Ngưỡng cửa gỗ đen',
+    speaker: 'Bóng Ma Trong Gương',
+    quote: '“Suốt hai mươi năm qua, em chưa từng bước ra khỏi căn phòng đêm hôm ấy.”',
+    body: 'Trên mặt bàn gỗ chỉ đặt một ngọn đèn dầu sắp cạn, một tờ giấy trắng và chiếc ghế trống. Phiên tòa lần này không có Trương Vệ Quốc hay bất kỳ họng súng nào — chỉ có Lâm Tĩnh đứng trước tòa án lương tâm của chính mình.',
+  },
 ];
 
 export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
@@ -509,19 +611,41 @@ export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
     id: 'hs-cor1-lore2',
     scene: 'corridor_act1',
     x: 320,
-    label: 'Trang sổ điểm rơi — Lời phê của Thầy Trần Mặc',
+    label: 'Trang sổ điểm rơi — Lời phê & Chìa Khóa Văn Phòng Thầy Trần',
     realm: 'both',
     kind: 'lore',
     loreId: 'lore-2-tranmac-margin',
   },
   {
+    id: 'hs-cor1-teacher-key',
+    scene: 'corridor_act1',
+    x: 430,
+    label: 'Hốc tủ giáo án — Chìa Khóa Văn Phòng Thầy Trần Mặc',
+    realm: 'both',
+    kind: 'pickup',
+    itemReward: INVENTORY_ITEMS.teachers_key,
+    dialogueText: 'Bạn nhặt được Chìa Khóa Văn Phòng Thầy Trần Mặc giấu dưới tập bài văn cũ.',
+  },
+  {
     id: 'hs-cor1-altar',
     scene: 'corridor_act1',
-    x: 540,
+    x: 560,
     label: 'Bàn Thờ Ngũ Hành (Bùa trắng phủ kín)',
     realm: 'both',
     kind: 'wuxing_altar',
     dialogueText: 'Cần đốt vàng mã và thắp nhang theo đúng thứ tự Ngũ Hành: Kim → Thủy → Hỏa.',
+  },
+  {
+    id: 'hs-cor1-to-office',
+    scene: 'corridor_act1',
+    x: 840,
+    label: 'Cửa Văn Phòng Thầy Trần Mặc',
+    realm: 'both',
+    kind: 'door',
+    targetScene: 'teachers_office',
+    targetX: 110,
+    requiredItem: 'teachers_key',
+    blockedHint: 'Cửa Văn Phòng Thầy Trần bị khóa. Hãy tìm Chìa Khóa ở hốc tủ giáo án hành lang tầng 2.',
   },
   {
     id: 'hs-cor1-gate',
@@ -534,6 +658,36 @@ export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
     targetX: 110,
     requiredFlag: 'wuxing_solved',
     blockedHint: 'Bùa tang phong tỏa cổng sắt. Hãy hoàn thành nghi lễ Ngũ Hành tại bàn thờ hành lang.',
+  },
+
+  // PHÒNG GIÁO VIÊN (HỒI 1 MỞ RỘNG)
+  {
+    id: 'hs-office-back',
+    scene: 'teachers_office',
+    x: 85,
+    label: 'Quay ra Hành Lang Tầng 2',
+    realm: 'both',
+    kind: 'door',
+    targetScene: 'corridor_act1',
+    targetX: 840,
+  },
+  {
+    id: 'hs-office-lore11',
+    scene: 'teachers_office',
+    x: 340,
+    label: 'Sổ công tác Tổ Văn 1967 — Gợi ý mật mã hộp gỗ',
+    realm: 'both',
+    kind: 'lore',
+    loreId: 'lore-11-teachers-desk',
+  },
+  {
+    id: 'hs-office-cipher',
+    scene: 'teachers_office',
+    x: 640,
+    label: 'Hộp Khóa Số 3 Chữ Số trên Bàn Thầy Trần Mặc',
+    realm: 'both',
+    kind: 'cipher_box',
+    keepsakeId: 'ks-7-tranmac-pass',
   },
 
   {
@@ -811,23 +965,84 @@ export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
   {
     id: 'hs-pris-crack',
     scene: 'prison_cells',
-    x: 520,
+    x: 470,
     label: 'Khe gạch phòng biệt giam của Tô Dao',
     realm: 'both',
     kind: 'prison_crack',
     keepsakeId: 'ks-5-todao-note',
   },
   {
-    id: 'hs-pris-to-1986',
+    id: 'hs-pris-mallet',
+    scene: 'prison_cells',
+    x: 685,
+    label: 'Góc phòng gác — Vồ Gỗ Tháp Chuông Cô Sơn',
+    realm: 'both',
+    kind: 'pickup',
+    itemReward: INVENTORY_ITEMS.bell_mallet,
+    dialogueText: 'Bạn nhặt được Vồ Gỗ sồi nặng trịch để thỉnh chiếc chuông đồng trên sân thượng.',
+  },
+  {
+    id: 'hs-pris-to-rooftop',
     scene: 'prison_cells',
     x: 885,
-    label: 'Bước vào 20 Năm Sau (Hồi 4)',
+    label: 'Cầu thang sắt lên Sân Thượng & Tháp Chuông (Cao trào Hồi 3)',
+    realm: 'both',
+    kind: 'door',
+    targetScene: 'roof_belltower',
+    targetX: 110,
+    requiredFlag: 'act3_climax_seen',
+    blockedHint: 'Hãy tìm mẩu giấy Tô Dao giấu trong khe gạch phòng giam trước khi lên sân thượng.',
+  },
+
+  // SÂN THƯỢNG & THÁP CHUÔNG CÔ SƠN (HỒI 3 CLIMAX)
+  {
+    id: 'hs-roof-back',
+    scene: 'roof_belltower',
+    x: 85,
+    label: 'Quay xuống Khu Biệt Giam',
+    realm: 'both',
+    kind: 'door',
+    targetScene: 'prison_cells',
+    targetX: 830,
+  },
+  {
+    id: 'hs-roof-lore12',
+    scene: 'roof_belltower',
+    x: 270,
+    label: 'Lan can sân thượng nhìn xuống vực lũ đỏ',
+    realm: 'both',
+    kind: 'lore',
+    loreId: 'lore-12-rooftop-storm',
+  },
+  {
+    id: 'hs-roof-bell',
+    scene: 'roof_belltower',
+    x: 520,
+    label: 'Chuông Đồng Cô Sơn (Thỉnh 3 hồi chuông Thanh Minh)',
+    realm: 'both',
+    kind: 'bronze_bell',
+    keepsakeId: 'ks-8-rooftop-letter',
+  },
+  {
+    id: 'hs-roof-lore13',
+    scene: 'roof_belltower',
+    x: 720,
+    label: 'Dải ruy-băng đỏ trên bậc đá tháp chuông',
+    realm: 'both',
+    kind: 'lore',
+    loreId: 'lore-13-bell-echo',
+  },
+  {
+    id: 'hs-roof-to-1986',
+    scene: 'roof_belltower',
+    x: 905,
+    label: 'Bước qua Màn Sương 20 Năm Sau (Hồi 4)',
     realm: 'both',
     kind: 'door',
     targetScene: 'ruined_hall_1986',
     targetX: 110,
-    requiredFlag: 'act3_climax_seen',
-    blockedHint: 'Hãy tìm mẩu giấy Tô Dao giấu trong khe gạch phòng giam.',
+    requiredFlag: 'bell_ritual_done',
+    blockedHint: 'Hãy dùng Vồ Gỗ (tìm ở Khu Biệt Giam) thỉnh đủ 3 hồi Chuông Đồng để tan màn sương năm 1967.',
   },
 
   // HỒI 4
@@ -835,11 +1050,11 @@ export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
     id: 'hs-1986-back',
     scene: 'ruined_hall_1986',
     x: 85,
-    label: 'Quay lại Khu Biệt Giam',
+    label: 'Quay lại Sân Thượng Cô Sơn',
     realm: 'both',
     kind: 'door',
-    targetScene: 'prison_cells',
-    targetX: 830,
+    targetScene: 'roof_belltower',
+    targetX: 840,
   },
   {
     id: 'hs-1986-wine',
@@ -886,13 +1101,22 @@ export const SCENE_HOTSPOTS: readonly HotspotDef[] = [
     realm: 'both',
     kind: 'door',
     targetScene: 'final_interrogation',
-    targetX: 130,
+    targetX: 110,
   },
 
   {
+    id: 'hs-trial-lore14',
+    scene: 'final_interrogation',
+    x: 310,
+    label: 'Ngưỡng cửa đen — Nhật ký cuối cùng của Lâm Tĩnh',
+    realm: 'both',
+    kind: 'lore',
+    loreId: 'lore-14-threshold-silence',
+  },
+  {
     id: 'hs-trial-chair',
     scene: 'final_interrogation',
-    x: 600,
+    x: 620,
     label: 'Ngồi vào ghế đối diện Bóng Ma Lâm Tĩnh',
     realm: 'both',
     kind: 'interrogation_chair',
@@ -911,6 +1135,10 @@ export function createInitialThanhMinhState(loopCount = 1): ThanhMinhState {
     holdingBreath: false,
     breathStamina: 100,
     gaspPenaltyTimer: 0,
+    runStamina: 100,
+    isRunning: false,
+    isMoving: false,
+    exhausted: false,
     sanity: 100,
     sanityBottomCount: 0,
     gazeExposure: 0,
@@ -922,14 +1150,22 @@ export function createInitialThanhMinhState(loopCount = 1): ThanhMinhState {
     flags: {},
 
     wuxingSequence: [],
+    cipherDigits: [0, 0, 0],
+    cipherSolved: false,
     radioFrequency: 88.5,
     radioTunedAct2: false,
     radioSecretAct3Solved: false,
     puppetOrder: [2, 0, 3, 1], // Scrambled 4 acts -> true order is [0, 1, 2, 3]
     puppetsSolved: false,
+    bellRings: 0,
 
     interrogationStep: 0,
     confessionAnswers: [],
+
+    horrorPulseTimer: 7.5,
+    activePhantomX: null,
+    activePhantomTimer: 0,
+    activePhantomKind: null,
 
     ghosts: [
       {
@@ -971,6 +1207,20 @@ export function createInitialThanhMinhState(loopCount = 1): ThanhMinhState {
         minX: 380,
         maxX: 980,
         vx: -50,
+        facing: -1,
+        pacified: false,
+      },
+      {
+        id: 'ghost-act3-rooftop',
+        kind: 'paper_hat',
+        variant: 'paper_hat',
+        name: 'Oan Hồn Tháp Chuông',
+        placardText: 'CÁO GIÁC',
+        scene: 'roof_belltower',
+        x: 650,
+        minX: 310,
+        maxX: 840,
+        vx: -46,
         facing: -1,
         pacified: false,
       },
@@ -1040,6 +1290,13 @@ export function interactWithHotspot(state: ThanhMinhState): ThanhMinhState {
   if (!hs) return state;
 
   if ((hs.kind === 'door' || hs.kind === 'illogical_door') && hs.targetScene) {
+    if (hs.requiredItem && !state.inventory.includes(hs.requiredItem)) {
+      return {
+        ...state,
+        subtitleText: hs.blockedHint ?? 'Cánh cửa bị khóa.',
+        subtitleTimer: 4.4,
+      };
+    }
     if (hs.requiredFlag && !state.flags[hs.requiredFlag]) {
       return {
         ...state,
@@ -1053,6 +1310,8 @@ export function interactWithHotspot(state: ThanhMinhState): ThanhMinhState {
       scene: hs.targetScene,
       act: targetMeta.act,
       playerX: hs.targetX ?? 110,
+      activePhantomX: null,
+      activePhantomTimer: 0,
       subtitleText: hs.dialogueText ?? `Bước vào ${targetMeta.title}.`,
       subtitleTimer: 3.8,
     };
@@ -1211,6 +1470,64 @@ export function interactWithHotspot(state: ThanhMinhState): ThanhMinhState {
     };
   }
 
+  if (hs.kind === 'cipher_box') {
+    if (state.cipherSolved) {
+      return {
+        ...state,
+        activeModal: 'journal',
+        activeHotspotId: hs.id,
+        subtitleText: 'Hộp khóa gỗ 4-0-5 đã mở. Tấm giấy thông hành mang tên Lâm Tĩnh nằm trong sổ kỷ vật.',
+        subtitleTimer: 4.0,
+      };
+    }
+    return {
+      ...state,
+      activeModal: 'cipher_lock',
+      activeHotspotId: hs.id,
+    };
+  }
+
+  if (hs.kind === 'bronze_bell') {
+    if (state.flags.bell_ritual_done) {
+      return {
+        ...state,
+        subtitleText: 'Ba hồi chuông Thanh Minh đã ngân vang — lối sang Cô Sơn năm 1986 đã mở.',
+        subtitleTimer: 3.6,
+      };
+    }
+    if (!state.inventory.includes('bell_mallet')) {
+      return {
+        ...state,
+        subtitleText: 'Chiếc chuông đồng nứt quá nặng để đánh bằng tay. Cần tìm Vồ Gỗ Tháp Chuông ở Khu Biệt Giam.',
+        subtitleTimer: 4.4,
+      };
+    }
+    const nextRings = Math.min(3, state.bellRings + 1);
+    const completed = nextRings >= 3;
+    const nextKs =
+      completed && !state.collectedKeepsakeIds.includes('ks-8-rooftop-letter')
+        ? [...state.collectedKeepsakeIds, 'ks-8-rooftop-letter']
+        : state.collectedKeepsakeIds;
+    const ringMessages = [
+      'HỒI CHUÔNG THỨ NHẤT (1/3): Tiếng đồng rạn ngân dài giữa màn mưa — gió bỗng lặng đi một nhịp...',
+      'HỒI CHUÔNG THỨ HAI (2/3): Tiếng bước chân khẽ lướt sau lưng. Giọng Tô Dao thoảng qua: “Tĩnh ơi...”',
+      'HỒI CHUÔNG THỨ BA (3/3): Oan hồn tan vào màn sương. Một bức thư úa vàng rơi ra dưới chân chuông đồng!',
+    ];
+    return {
+      ...state,
+      bellRings: nextRings,
+      collectedKeepsakeIds: nextKs,
+      flags: completed ? { ...state.flags, bell_ritual_done: true } : state.flags,
+      ghosts: completed
+        ? state.ghosts.map((g) => (g.scene === 'roof_belltower' ? { ...g, pacified: true } : g))
+        : state.ghosts,
+      activeModal: completed ? 'journal' : 'none',
+      activeHotspotId: completed ? hs.id : null,
+      subtitleText: ringMessages[nextRings - 1],
+      subtitleTimer: 5.5,
+    };
+  }
+
   if (hs.kind === 'mirror_1980') {
     return {
       ...state,
@@ -1231,6 +1548,45 @@ export function interactWithHotspot(state: ThanhMinhState): ThanhMinhState {
   }
 
   return state;
+}
+
+export function setCipherDigit(
+  state: ThanhMinhState,
+  slot: 0 | 1 | 2,
+  digit: number
+): { next: ThanhMinhState; solved: boolean } {
+  const cleanDigit = ((Math.round(digit) % 10) + 10) % 10;
+  const nextDigits = [...state.cipherDigits] as [number, number, number];
+  nextDigits[slot] = cleanDigit;
+  const solved = nextDigits[0] === 4 && nextDigits[1] === 0 && nextDigits[2] === 5;
+
+  if (solved) {
+    const nextKs = state.collectedKeepsakeIds.includes('ks-7-tranmac-pass')
+      ? state.collectedKeepsakeIds
+      : [...state.collectedKeepsakeIds, 'ks-7-tranmac-pass'];
+    return {
+      next: {
+        ...state,
+        cipherDigits: nextDigits,
+        cipherSolved: true,
+        collectedKeepsakeIds: nextKs,
+        flags: { ...state.flags, teachers_cipher_solved: true },
+        activeModal: 'journal',
+        subtitleText:
+          'Mở khóa 4-0-5 thành công! Bên trong là tấm giấy thông hành có tên Lâm Tĩnh do thầy Trần viết sẵn...',
+        subtitleTimer: 5.5,
+      },
+      solved: true,
+    };
+  }
+
+  return {
+    next: {
+      ...state,
+      cipherDigits: nextDigits,
+    },
+    solved: false,
+  };
 }
 
 export function submitWuxingElement(
@@ -1388,10 +1744,10 @@ export function answerInterrogationStep(
   admitGuilt: boolean
 ): ThanhMinhState {
   const nextAnswers = [...state.confessionAnswers, admitGuilt];
-  if (state.interrogationStep < 2) {
+  if (state.interrogationStep < 3) {
     return {
       ...state,
-      interrogationStep: (state.interrogationStep + 1) as 0 | 1 | 2,
+      interrogationStep: (state.interrogationStep + 1) as 0 | 1 | 2 | 3,
       confessionAnswers: nextAnswers,
     };
   }
@@ -1439,6 +1795,7 @@ export function tickThanhMinhSimulation(
     sanityCollapsed: false,
     ghostAlerted: false,
     killedByGhostKind: null,
+    horrorEvent: null,
   };
 
   if (prev.ending !== 'none') {
@@ -1459,6 +1816,10 @@ export function tickThanhMinhSimulation(
           playerX: prev.deathCutscene.respawnX,
           sanity: 52,
           breathStamina: 85,
+          runStamina: 90,
+          isRunning: false,
+          isMoving: false,
+          exhausted: false,
           gazeExposure: 0,
           gaspPenaltyTimer: 0,
           holdingBreath: false,
@@ -1478,7 +1839,7 @@ export function tickThanhMinhSimulation(
   }
 
   if (prev.activeModal !== 'none') {
-    return { next: prev, events };
+    return { next: { ...prev, isRunning: false, isMoving: false }, events };
   }
 
   const meta = SCENE_META[prev.scene];
@@ -1489,9 +1850,17 @@ export function tickThanhMinhSimulation(
     holdingBreath,
     breathStamina,
     gaspPenaltyTimer,
+    runStamina,
+    isRunning,
+    isMoving,
+    exhausted,
     sanity,
     sanityBottomCount,
     gazeExposure,
+    horrorPulseTimer,
+    activePhantomX,
+    activePhantomTimer,
+    activePhantomKind,
     subtitleText,
     subtitleTimer,
   } = prev;
@@ -1499,6 +1868,48 @@ export function tickThanhMinhSimulation(
   subtitleTimer = Math.max(0, subtitleTimer - dt);
   if (subtitleTimer <= 0) subtitleText = '';
   gaspPenaltyTimer = Math.max(0, gaspPenaltyTimer - dt);
+
+  // Restrained Peripheral Psychological Horror Pulses (no cheap spam)
+  if (activePhantomTimer > 0 && activePhantomX !== null) {
+    activePhantomTimer = Math.max(0, activePhantomTimer - dt);
+    const effectiveFacing: 1 | -1 =
+      input.moveDir !== 0 ? (input.moveDir > 0 ? 1 : -1) : playerFacing;
+    const lookingAtPhantom =
+      (activePhantomX > playerX && effectiveFacing === 1) ||
+      (activePhantomX < playerX && effectiveFacing === -1);
+    const distPhantom = Math.abs(activePhantomX - playerX);
+    if ((lookingAtPhantom && distPhantom < 230) || distPhantom < 85 || activePhantomTimer <= 0) {
+      if (lookingAtPhantom && distPhantom < 230 && activePhantomTimer > 0.2) {
+        events.horrorEvent = 'sting';
+      }
+      activePhantomX = null;
+      activePhantomTimer = 0;
+      activePhantomKind = null;
+    }
+  }
+
+  horrorPulseTimer -= dt;
+  if (horrorPulseTimer <= 0 && prev.scene !== 'final_interrogation') {
+    const isUnsafeScene = prev.scene !== 'classroom_12b' || subtitleTimer <= 0;
+    if (isUnsafeScene && activePhantomX === null) {
+      const behindOffset = -playerFacing * (195 + ((Math.round(prev.walkPhase * 17) % 5) * 14));
+      const candidateX = Math.max(meta.minX + 30, Math.min(meta.maxX - 30, playerX + behindOffset));
+      if (Math.abs(candidateX - playerX) > 130) {
+        activePhantomX = candidateX;
+        activePhantomTimer = 3.2;
+        activePhantomKind = prev.act >= 2 ? 'shadow_child' : 'peeker';
+        events.horrorEvent = prev.realm === 'yin' ? 'whisper' : 'knock';
+        if (!subtitleText) {
+          subtitleText =
+            prev.realm === 'yin'
+              ? 'Có tiếng thì thầm lạnh buốt ngay phía sau ánh đèn dầu...'
+              : 'Cộc... cộc... Tiếng gõ khe khẽ vang lên từ góc tối phía sau.';
+          subtitleTimer = 3.0;
+        }
+      }
+    }
+    horrorPulseTimer = prev.realm === 'yin' || sanity < 65 ? 9.5 : 14.5;
+  }
 
   if (input.holdingBreath && gaspPenaltyTimer <= 0) {
     holdingBreath = true;
@@ -1515,12 +1926,37 @@ export function tickThanhMinhSimulation(
     breathStamina = Math.min(100, breathStamina + 28 * dt);
   }
 
-  if (input.moveDir !== 0) {
-    playerFacing = input.moveDir;
-    const speed = holdingBreath ? 96 : 168;
+  // Run Stamina & Exhaustion system: running consumes runStamina; hitting 0 locks running & forces slow exhausted walk
+  isMoving = input.moveDir !== 0;
+  const wantsRun =
+    Boolean(input.sprinting) && isMoving && !holdingBreath && !exhausted && runStamina > 0;
+  if (wantsRun) {
+    isRunning = true;
+    runStamina = Math.max(0, runStamina - 28 * dt);
+    if (runStamina <= 0) {
+      isRunning = false;
+      exhausted = true;
+      events.exhaustedNow = true;
+      subtitleText =
+        'Hết sức bền! Lâm Tĩnh thở dốc kiệt sức, không thể chạy tiếp — buộc phải đi bộ chậm.';
+      subtitleTimer = 3.4;
+    }
+  } else {
+    isRunning = false;
+    const regenRate = !isMoving ? 18 : exhausted ? 9.5 : holdingBreath ? 6.5 : 12;
+    runStamina = Math.min(100, runStamina + regenRate * dt);
+    if (exhausted && runStamina >= 35) {
+      exhausted = false;
+    }
+  }
+
+  if (isMoving) {
+    playerFacing = input.moveDir > 0 ? 1 : -1;
+    const speed = holdingBreath ? 92 : exhausted ? 88 : isRunning ? 248 : 154;
     playerX = Math.max(meta.minX, Math.min(meta.maxX, playerX + input.moveDir * speed * dt));
     const prevCycle = Math.floor(walkPhase);
-    walkPhase += (holdingBreath ? 2.6 : 4.2) * dt;
+    const phaseRate = holdingBreath ? 2.5 : exhausted ? 2.2 : isRunning ? 6.6 : 4.0;
+    walkPhase += phaseRate * dt;
     if (Math.floor(walkPhase) > prevCycle) events.footstep = true;
   }
 
@@ -1539,7 +1975,8 @@ export function tickThanhMinhSimulation(
     const baseSpeed = g.kind === 'tongue_warden' ? 54 : 44;
     const distBefore = Math.abs(g.x - playerX);
     const playerAudible = !holdingBreath || gaspPenaltyTimer > 0;
-    const isAlerted = playerAudible && distBefore < 135;
+    const alertRadius = isRunning ? 185 : 135;
+    const isAlerted = playerAudible && distBefore < alertRadius;
 
     let nx = g.x;
     let nvx = g.vx;
@@ -1656,9 +2093,17 @@ export function tickThanhMinhSimulation(
       holdingBreath,
       breathStamina,
       gaspPenaltyTimer,
+      runStamina,
+      isRunning,
+      isMoving,
+      exhausted,
       sanity,
       sanityBottomCount,
       gazeExposure,
+      horrorPulseTimer,
+      activePhantomX,
+      activePhantomTimer,
+      activePhantomKind,
       ghosts,
       deathCutscene,
       subtitleText,
@@ -1673,8 +2118,11 @@ export function getCurrentObjectiveHint(state: ThanhMinhState): string {
     if (!state.inventory.includes('incense_bundle')) {
       return 'Tìm Bó Nhang & Vàng Mã trong tủ gỗ Lớp 12B trước khi bước ra hành lang.';
     }
+    if (!state.flags.teachers_cipher_solved && state.scene === 'teachers_office') {
+      return 'Đọc sổ công tác trong Văn Phòng Thầy Trần Mặc và mở hộp khóa 3 chữ số (4-0-5).';
+    }
     if (!state.flags.wuxing_solved) {
-      return 'Nín thở [Space] qua Vong Hồn Mũ Giấy, hóa vàng theo thứ tự Ngũ Hành tại bàn thờ hành lang.';
+      return 'Tìm chìa khóa Văn Phòng Thầy Trần trên hành lang, nín thở [Space] qua Vong Hồn Mũ Giấy và hoàn thành bàn thờ Ngũ Hành.';
     }
     if (!state.flags.act1_climax_seen) {
       return 'Xuống Sân Trường ngập lũ, kiểm tra cột cờ giữa sân và nhặt pin đài dưới trạm loa.';
@@ -1695,12 +2143,15 @@ export function getCurrentObjectiveHint(state: ThanhMinhState): string {
   }
   if (state.act === 3) {
     if (!state.puppetsSolved) {
-      return 'Sắp xếp 4 màn rối Bì Ảnh Hí đúng trình tự (và thử giải mã máy thu sóng dự phòng cho True Ending).';
+      return 'Sắp xếp 4 màn rối Bì Ảnh Hí đúng trình tự (và thử giải mã máy thu sóng dự phòng 109.2 MHz cho True Ending).';
     }
     if (!state.flags.act3_climax_seen) {
-      return 'Vào Khu Biệt Giam tìm mẩu giấy của Tô Dao giấu trong khe gạch.';
+      return 'Vào Khu Biệt Giam tìm mẩu giấy của Tô Dao giấu trong khe gạch và nhặt Vồ Gỗ tháp chuông.';
     }
-    return 'Tiến về cuối Khu Biệt Giam để bước sang Cô Sơn 20 năm sau (Hồi 4).';
+    if (!state.flags.bell_ritual_done) {
+      return 'Lên Sân Thượng Cô Sơn, dùng Vồ Gỗ thỉnh đủ 3 hồi Chuông Đồng Thanh Minh.';
+    }
+    return 'Bước qua màn sương cuối Tháp Chuông để sang Cô Sơn 20 năm sau (Hồi 4).';
   }
   if (!state.flags.saw_20_years_ruin) {
     return 'Khám phá đống đổ nát năm 1986 và soi vào tấm gương nứt vỡ.';

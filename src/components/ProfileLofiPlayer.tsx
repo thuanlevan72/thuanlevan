@@ -5,11 +5,12 @@ import {
   Music2,
   Pause,
   Play,
+  SkipBack,
   SkipForward,
   Volume2,
   VolumeX,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Tone from 'tone';
 import {
   getLiveAudioFrame,
@@ -17,9 +18,11 @@ import {
   startGrooveLoop,
   stopGrooveLoop,
 } from '../utils/lyricGrooveAudio.ts';
+import { loadAllSketchpadDrafts } from '../utils/lyricGrooveDb.ts';
 import {
+  buildProfilePlaylist,
   createStarterDrafts,
-  type MelodyNote,
+  getDraftStyleLabel,
   type SketchpadDraft,
 } from '../utils/lyricGrooveEngine.ts';
 import { type ThemeMode } from '../utils/portfolioLogic.ts';
@@ -31,65 +34,10 @@ interface ProfileLofiPlayerProps {
 
 const SESSION_PAUSED_KEY = 'thuanle-profile-lofi-paused';
 
-function buildMidnightCafeLofiTrack(): SketchpadDraft {
-  const secId = 'sec-lofi-cafe-1';
-  const melody: MelodyNote[] = [
-    { id: 'lf-1', sectionId: secId, midi: 69, startBeat: 0.5, durationBeats: 1.5, velocity: 0.65 },
-    { id: 'lf-2', sectionId: secId, midi: 72, startBeat: 2.5, durationBeats: 1.0, velocity: 0.62 },
-    { id: 'lf-3', sectionId: secId, midi: 71, startBeat: 4.0, durationBeats: 2.0, velocity: 0.66 },
-    { id: 'lf-4', sectionId: secId, midi: 67, startBeat: 6.5, durationBeats: 1.5, velocity: 0.6 },
-    { id: 'lf-5', sectionId: secId, midi: 69, startBeat: 8.5, durationBeats: 1.5, velocity: 0.64 },
-    { id: 'lf-6', sectionId: secId, midi: 64, startBeat: 10.5, durationBeats: 1.5, velocity: 0.58 },
-    { id: 'lf-7', sectionId: secId, midi: 67, startBeat: 12.0, durationBeats: 2.5, velocity: 0.62 },
-    { id: 'lf-8', sectionId: secId, midi: 62, startBeat: 14.5, durationBeats: 1.5, velocity: 0.56 },
-  ];
-  return {
-    id: 'lofi-midnight-cafe',
-    title: 'Cà Phê Đêm 2AM (Lo-fi Rhodes)',
-    keyRoot: 'C',
-    scaleMode: 'major',
-    mood: 'lofi-chill',
-    bpm: 74,
-    backingInstrument: 'rhodes',
-    backingPattern: 'rich-block',
-    sustainPedal: true,
-    metronomeEnabled: false,
-    drumPattern: 'lofi',
-    melodyInstrument: 'piano',
-    scaleSnap: true,
-    sections: [
-      {
-        id: secId,
-        kind: 'Verse',
-        label: 'Lo-fi Chill Loop',
-        bars: 4,
-        text: '[Fmaj9]Hơi ấm tách cà phê [Em7]đêm khuya\n[Dm9]Ánh đèn vàng nhẹ rơi [Cmaj9]bên hiên',
-      },
-    ],
-    melodyNotes: melody,
-    updatedAt: Date.now(),
-  };
-}
-
 export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProps) {
-  const playlist = useMemo<SketchpadDraft[]>(() => {
-    const starters = createStarterDrafts();
-    const muaBanCong = starters.find((d) => d.id === 'draft-mua-ban-cong');
-    const balladAm = starters.find((d) => d.id === 'draft-khoang-cach-hai-ta-am');
-    const tracks: SketchpadDraft[] = [];
-    if (muaBanCong) {
-      tracks.push({ ...muaBanCong, title: 'Mưa Ban Công (Lo-fi Chill)' });
-    }
-    tracks.push(buildMidnightCafeLofiTrack());
-    if (balladAm) {
-      tracks.push({
-        ...balladAm,
-        title: 'Khoảng Cách Hai Ta (Ballad Chill)',
-      });
-    }
-    return tracks;
-  }, []);
-
+  const [playlist, setPlaylist] = useState<SketchpadDraft[]>(() =>
+    buildProfilePlaylist(createStarterDrafts())
+  );
   const [trackIndex, setTrackIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -99,6 +47,11 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
 
   const spectrumCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const userPausedRef = useRef<boolean>(false);
+  const isPlayingRef = useRef<boolean>(false);
+  const playlistRef = useRef<SketchpadDraft[]>(playlist);
+
+  playlistRef.current = playlist;
+  isPlayingRef.current = isPlaying;
 
   useEffect(() => {
     try {
@@ -108,7 +61,28 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
     }
   }, []);
 
-  const currentTrack = playlist[trackIndex % playlist.length];
+  // Sync playlist with the latest drafts from Studio / IndexedDB on mount
+  useEffect(() => {
+    let cancelled = false;
+    void loadAllSketchpadDrafts().then((loaded) => {
+      if (cancelled || !Array.isArray(loaded) || loaded.length === 0) return;
+      const nextPlaylist = buildProfilePlaylist(loaded);
+      setPlaylist(nextPlaylist);
+      setTrackIndex((prevIdx) => {
+        if (!isPlayingRef.current) return 0;
+        const current = playlistRef.current[prevIdx % Math.max(1, playlistRef.current.length)];
+        if (!current) return 0;
+        const matchIdx = nextPlaylist.findIndex((item) => item.id === current.id);
+        return matchIdx >= 0 ? matchIdx : 0;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const safeIdx = playlist.length > 0 ? trackIndex % playlist.length : 0;
+  const currentTrack = playlist[safeIdx];
 
   const startTrack = useCallback(
     async (track: SketchpadDraft, targetVol: number) => {
@@ -119,10 +93,14 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
         melodyNotes: track.melodyNotes,
         bpm: track.bpm,
         backingInstrument: track.backingInstrument,
-        backingPattern: track.backingPattern ?? 'rich-block',
+        backingPattern:
+          track.backingPattern ??
+          (track.backingInstrument === 'piano-ballad' ? 'auto-song' : 'rich-block'),
+        chordArpStyles: track.chordArpStyles,
+        songMood: track.mood,
         sustainPedal: track.sustainPedal ?? true,
         metronomeEnabled: false,
-        drumPattern: track.drumPattern === 'none' ? 'lofi' : track.drumPattern,
+        drumPattern: track.drumPattern,
         melodyInstrument: track.melodyInstrument,
         repeatLoop: true,
         volumeGain: targetVol,
@@ -134,7 +112,7 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
     []
   );
 
-  // Smart auto-arm background Lo-fi music on Profile tab
+  // Smart auto-arm background music on Profile tab
   useEffect(() => {
     if (userPausedRef.current || !currentTrack) return;
 
@@ -161,9 +139,9 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
       window.removeEventListener('pointerdown', handleFirstGesture);
       window.removeEventListener('keydown', handleFirstGesture);
     };
-    // Only run on mount / track change when armed
+    // Only re-arm on track index changes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackIndex]);
+  }, [safeIdx]);
 
   // Stop audio cleanly when leaving Profile tab
   useEffect(() => {
@@ -231,6 +209,22 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
     return () => cancelAnimationFrame(rafId);
   }, [isPlaying, theme, isCollapsed]);
 
+  const selectAndPlayIndex = async (targetIdx: number) => {
+    if (playlist.length === 0) return;
+    const normalizedIdx = ((targetIdx % playlist.length) + playlist.length) % playlist.length;
+    setTrackIndex(normalizedIdx);
+    userPausedRef.current = false;
+    try {
+      sessionStorage.removeItem(SESSION_PAUSED_KEY);
+    } catch {
+      // Ignore
+    }
+    const nextTrack = playlist[normalizedIdx];
+    if (nextTrack) {
+      await startTrack(nextTrack, volume);
+    }
+  };
+
   const handleTogglePlay = async () => {
     if (isPlaying) {
       stopGrooveLoop();
@@ -256,21 +250,6 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
     }
   };
 
-  const handleNextTrack = async () => {
-    const nextIdx = (trackIndex + 1) % playlist.length;
-    setTrackIndex(nextIdx);
-    userPausedRef.current = false;
-    try {
-      sessionStorage.removeItem(SESSION_PAUSED_KEY);
-    } catch {
-      // Ignore
-    }
-    const nextTrack = playlist[nextIdx];
-    if (nextTrack) {
-      await startTrack(nextTrack, volume);
-    }
-  };
-
   const handleVolumeChange = (nextVol: number) => {
     setVolume(nextVol);
     setMasterVolume(nextVol);
@@ -278,11 +257,13 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
 
   if (!currentTrack) return null;
 
+  const styleLabel = getDraftStyleLabel(currentTrack);
+
   return (
     <aside
       data-testid="profile-lofi-player"
-      aria-label="Trình phát nhạc Lo-fi Chill trên Hồ sơ"
-      className="fixed bottom-4 right-4 z-40 w-[300px] sm:w-[325px] rounded-xl border border-[#DCE6F2] dark:border-[#1E314E] bg-white/95 dark:bg-[#0B1220]/95 shadow-xl backdrop-blur-md overflow-hidden transition-all"
+      aria-label="Trình phát nhạc trên Hồ sơ"
+      className="fixed bottom-4 right-4 z-40 w-[300px] sm:w-[332px] rounded-xl border border-[#DCE6F2] dark:border-[#1E314E] bg-white/95 dark:bg-[#0B1220]/95 shadow-xl backdrop-blur-md overflow-hidden transition-all"
     >
       {/* Compact Header Bar */}
       <div className="px-3.5 py-2.5 flex items-center justify-between gap-2 border-b border-[#E9F0F8] dark:border-[#152339]">
@@ -294,10 +275,16 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
             aria-hidden="true"
           />
           <div className="min-w-0">
-            <div className="text-[10px] font-mono uppercase tracking-wider text-[#0369A1] dark:text-[#38BDF8] font-semibold">
-              Lo-fi Chill · {currentTrack.bpm} BPM
+            <div
+              data-testid="profile-track-meta"
+              className="text-[10px] font-mono uppercase tracking-wider text-[#0369A1] dark:text-[#38BDF8] font-semibold"
+            >
+              {styleLabel} · {currentTrack.bpm} BPM · {safeIdx + 1}/{playlist.length}
             </div>
-            <div className="text-xs font-semibold text-[#070B14] dark:text-[#F1F5F9] truncate">
+            <div
+              data-testid="profile-track-title"
+              className="text-xs font-semibold text-[#070B14] dark:text-[#F1F5F9] truncate"
+            >
               {currentTrack.title}
             </div>
           </div>
@@ -308,7 +295,7 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
             type="button"
             data-testid="lofi-toggle-btn"
             onClick={() => void handleTogglePlay()}
-            aria-label={isPlaying ? 'Tạm dừng nhạc Lo-fi' : 'Phát nhạc Lo-fi'}
+            aria-label={isPlaying ? 'Tạm dừng nhạc nền' : 'Phát nhạc nền'}
             className={`w-7 h-7 rounded-lg flex items-center justify-center text-white transition-colors cursor-pointer ${
               isPlaying
                 ? 'bg-emerald-600 hover:bg-emerald-700'
@@ -325,7 +312,7 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
           <button
             type="button"
             onClick={() => setIsCollapsed((v) => !v)}
-            aria-label={isCollapsed ? 'Mở rộng trình phát Lo-fi' : 'Thu gọn trình phát Lo-fi'}
+            aria-label={isCollapsed ? 'Mở rộng trình phát nhạc' : 'Thu gọn trình phát nhạc'}
             className="p-1.5 rounded-lg text-[#475569] dark:text-[#94A3B8] hover:bg-[#EFF4FA] dark:hover:bg-[#162640] cursor-pointer"
           >
             {isCollapsed ? (
@@ -339,7 +326,7 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
 
       {/* Expandable Player Body */}
       {!isCollapsed && (
-        <div className="px-3.5 py-2.5 space-y-2.5">
+        <div className="px-3.5 py-2.5 space-y-2">
           <div className="flex items-center justify-between gap-2">
             <canvas
               ref={spectrumCanvasRef}
@@ -355,15 +342,40 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
               ) : (
                 <span className="text-[11px] text-[#475569] dark:text-[#94A3B8]">
                   {awaitingGesture
-                    ? 'Chạm vào trang hoặc bấm Phát để bật nhạc nền'
+                    ? 'Chạm vào trang hoặc bấm Phát để bật nhạc'
                     : 'Đang tạm dừng'}
                 </span>
               )}
             </div>
           </div>
 
+          {/* Playlist Track Selector */}
+          <div>
+            <label htmlFor="profile-track-select" className="sr-only">
+              Chọn bài nhạc phát trên hồ sơ
+            </label>
+            <select
+              id="profile-track-select"
+              data-testid="profile-track-select"
+              value={currentTrack.id}
+              onChange={(e) => {
+                const nextIdx = playlist.findIndex((item) => item.id === e.target.value);
+                if (nextIdx >= 0) {
+                  void selectAndPlayIndex(nextIdx);
+                }
+              }}
+              className="w-full px-2 py-1 rounded-md border border-[#DCE6F2] dark:border-[#1E314E] bg-[#F8FAFC] dark:bg-[#0C1628] text-[11px] font-medium text-[#0F172A] dark:text-[#E2E8F0] focus:outline-none focus:border-[#0284C7] cursor-pointer truncate"
+            >
+              {playlist.map((track, idx) => (
+                <option key={track.id} value={track.id}>
+                  {idx + 1}. {track.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="flex items-center justify-between gap-2 pt-0.5">
-            <div className="flex items-center gap-1.5 flex-1">
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
               <button
                 type="button"
                 onClick={() => handleVolumeChange(volume > 0 ? 0 : 0.42)}
@@ -378,21 +390,32 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
               </button>
               <input
                 type="range"
-                aria-label="Âm lượng nhạc nền Lo-fi"
+                aria-label="Âm lượng nhạc nền"
                 min={0}
                 max={0.85}
                 step={0.02}
                 value={volume}
                 onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                className="w-24 accent-[#0284C7] cursor-pointer"
+                className="w-20 accent-[#0284C7] cursor-pointer"
               />
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
-                onClick={() => void handleNextTrack()}
-                title="Đổi bài Lo-fi tiếp theo"
+                data-testid="lofi-prev-btn"
+                onClick={() => void selectAndPlayIndex(safeIdx - 1)}
+                title="Bài trước"
+                aria-label="Bài trước"
+                className="p-1.5 rounded-md border border-[#DCE6F2] dark:border-[#1E314E] text-[#0F172A] dark:text-[#E2E8F0] hover:border-[#0284C7] cursor-pointer"
+              >
+                <SkipBack className="w-3 h-3" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                data-testid="lofi-next-btn"
+                onClick={() => void selectAndPlayIndex(safeIdx + 1)}
+                title="Đổi bài tiếp theo"
                 className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-[#DCE6F2] dark:border-[#1E314E] text-[11px] font-medium text-[#0F172A] dark:text-[#E2E8F0] hover:border-[#0284C7] cursor-pointer"
               >
                 <SkipForward className="w-3 h-3" aria-hidden="true" />

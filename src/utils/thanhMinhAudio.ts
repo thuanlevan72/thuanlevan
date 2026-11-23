@@ -21,6 +21,7 @@ export class ThanhMinhAudioEngine {
   private operaTimer = 0.8;
   private operaStep = 0;
   private heartbeatTimer = 0;
+  private pantTimer = 0;
   private thunderTimer = 6.5;
   private creakTimer = 4.2;
   private dropletTimer = 0.12;
@@ -169,7 +170,8 @@ export class ThanhMinhAudioEngine {
     gazeExposure: number,
     radioTuned: boolean,
     dt: number,
-    isOutdoor = false
+    isOutdoor = false,
+    exhausted = false
   ): void {
     if (
       !this.ctx ||
@@ -245,14 +247,50 @@ export class ThanhMinhAudioEngine {
       this.thunderTimer = 10 + Math.random() * 10;
     }
 
-    // Heavy organic heartbeat under breath-hold or ghost terror
-    if (holdingBreath || gazeExposure > 28) {
+    // Heavy organic heartbeat under breath-hold, exhaustion, or ghost terror
+    if (holdingBreath || gazeExposure > 28 || exhausted) {
       this.heartbeatTimer -= dt;
       if (this.heartbeatTimer <= 0) {
-        this.playHeartbeat(0.45 + (gazeExposure / 100) * 0.55);
-        this.heartbeatTimer = Math.max(0.42, 0.88 - (gazeExposure / 100) * 0.4);
+        const strength = Math.max(exhausted ? 0.55 : 0, 0.45 + (gazeExposure / 100) * 0.55);
+        this.playHeartbeat(strength);
+        this.heartbeatTimer = Math.max(0.4, 0.85 - (gazeExposure / 100) * 0.35 - (exhausted ? 0.12 : 0));
       }
     }
+
+    // Heavy fatigued breathing when exhausted
+    if (exhausted && !holdingBreath) {
+      this.pantTimer -= dt;
+      if (this.pantTimer <= 0) {
+        this.playExhaustedPant(0.45);
+        this.pantTimer = 0.72;
+      }
+    } else {
+      this.pantTimer = 0.15;
+    }
+  }
+
+  public playExhaustedPant(strength = 0.7): void {
+    if (this.muted || !this.ctx || !this.masterGain || !this.noiseBuffer) return;
+    const now = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(680, now);
+    bp.frequency.exponentialRampToValueAtTime(420, now + 0.24);
+    bp.Q.setValueAtTime(2.6, now);
+
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.001, now);
+    g.gain.linearRampToValueAtTime(0.11 * strength, now + 0.045);
+    g.gain.exponentialRampToValueAtTime(0.0008, now + 0.26);
+
+    src.connect(bp);
+    bp.connect(g);
+    g.connect(this.masterGain);
+    src.start(now);
+    src.stop(now + 0.28);
   }
 
   private playRainDroplet(isOutdoor: boolean): void {
@@ -696,6 +734,78 @@ export class ThanhMinhAudioEngine {
     g.connect(this.masterGain);
     src.start(now);
     src.stop(now + 0.65);
+  }
+
+  public playDistantKnock(): void {
+    if (this.muted || !this.ctx || !this.masterGain || !this.noiseBuffer) return;
+    const now = this.ctx.currentTime;
+    for (let i = 0; i < 3; i += 1) {
+      const t = now + i * 0.24;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(145 - i * 8, t);
+      osc.frequency.exponentialRampToValueAtTime(62, t + 0.08);
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.linearRampToValueAtTime(0.16, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0008, t + 0.11);
+      osc.connect(g);
+      g.connect(this.masterGain);
+      osc.start(t);
+      osc.stop(t + 0.12);
+    }
+  }
+
+  public playSubtleTensionSting(): void {
+    if (this.muted || !this.ctx || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+    for (const [freq, detune] of [
+      [311.13, 0],
+      [329.63, 7],
+    ] as const) {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(freq, now);
+      osc.detune.setValueAtTime(detune, now);
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.setValueAtTime(840, now);
+      bp.Q.setValueAtTime(3.2, now);
+
+      g.gain.setValueAtTime(0.001, now);
+      g.gain.linearRampToValueAtTime(0.055, now + 0.18);
+      g.gain.exponentialRampToValueAtTime(0.0008, now + 1.35);
+      osc.connect(bp);
+      bp.connect(g);
+      g.connect(this.masterGain);
+      osc.start(now);
+      osc.stop(now + 1.4);
+    }
+  }
+
+  public playBellToll(ringCount = 1): void {
+    if (this.muted || !this.ctx || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+    const base = 196.0;
+    for (const [ratio, amp, dur] of [
+      [1.0, 0.24, 3.6],
+      [1.503, 0.14, 2.8],
+      [2.012, 0.09, 2.2],
+      [2.756, 0.05, 1.4],
+    ] as const) {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(base * ratio * (1 - ringCount * 0.015), now);
+      g.gain.setValueAtTime(0.001, now);
+      g.gain.linearRampToValueAtTime(amp, now + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0008, now + dur);
+      osc.connect(g);
+      g.connect(this.masterGain);
+      osc.start(now);
+      osc.stop(now + dur + 0.1);
+    }
   }
 
   public dispose(): void {

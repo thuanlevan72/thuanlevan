@@ -1389,6 +1389,9 @@ export function midiToNoteName(midi: number): string {
   return `${pc}${octave}`;
 }
 
+export const PIANO_MIN_MIDI = 36; // C2
+export const PIANO_MAX_MIDI = 84; // C6 (covers C2..B5..C6)
+
 /**
  * Snaps a raw MIDI number to the nearest pitch belonging to the active Song Scale.
  */
@@ -1419,7 +1422,7 @@ export function snapMidiToScale(
       }
     }
   }
-  return Math.max(48, Math.min(84, bestMidi));
+  return Math.max(PIANO_MIN_MIDI, Math.min(PIANO_MAX_MIDI, bestMidi));
 }
 
 export function snapFrequencyToScaleMidi(
@@ -1429,7 +1432,7 @@ export function snapFrequencyToScaleMidi(
   scaleSnap: boolean
 ): number {
   const rawMidi = freqToExactMidi(freqHz);
-  const clamped = Math.max(48, Math.min(84, rawMidi));
+  const clamped = Math.max(PIANO_MIN_MIDI, Math.min(PIANO_MAX_MIDI, rawMidi));
   return scaleSnap ? snapMidiToScale(clamped, keyRoot, scaleMode) : Math.round(clamped);
 }
 
@@ -1745,7 +1748,7 @@ export function transposeDraftAll(
     })),
     melodyNotes: draft.melodyNotes.map((n) => ({
       ...n,
-      midi: Math.max(48, Math.min(84, n.midi + semitones)),
+      midi: Math.max(PIANO_MIN_MIDI, Math.min(PIANO_MAX_MIDI, n.midi + semitones)),
     })),
   };
 }
@@ -1861,7 +1864,7 @@ export const COMPUTER_KEY_TO_MIDI: Record<string, number> = {
   h: 56,
   n: 57,
   j: 58,
-  m: 59,
+  m: 59, // B3
   q: 60, // C4
   '2': 61,
   w: 62,
@@ -1873,9 +1876,42 @@ export const COMPUTER_KEY_TO_MIDI: Record<string, number> = {
   '6': 68,
   y: 69,
   '7': 70,
-  u: 71,
+  u: 71, // B4
   i: 72, // C5
+  '9': 73,
+  o: 74,
+  '0': 75,
+  p: 76, // E5
 };
+
+/**
+ * Resolves a computer keystroke into a playable MIDI note within C2 (36) .. C6 (84),
+ * shifting by octaveOffset (-1 = C2..E4, 0 = C3..E5, +1 = C4..C6).
+ */
+export function resolveComputerKeyToMidi(
+  key: string,
+  octaveOffset = 0
+): number | null {
+  const baseMidi = COMPUTER_KEY_TO_MIDI[key.toLowerCase()];
+  if (typeof baseMidi !== 'number') return null;
+  const clampedOffset = Math.max(-1, Math.min(1, Math.round(octaveOffset)));
+  const shifted = baseMidi + clampedOffset * 12;
+  if (shifted < PIANO_MIN_MIDI || shifted > PIANO_MAX_MIDI) return null;
+  return shifted;
+}
+
+export function getShortcutLabelsForOctave(
+  octaveOffset = 0
+): Record<number, string> {
+  const labels: Record<number, string> = {};
+  Object.keys(COMPUTER_KEY_TO_MIDI).forEach((key) => {
+    const midi = resolveComputerKeyToMidi(key, octaveOffset);
+    if (midi !== null && !labels[midi]) {
+      labels[midi] = key.toUpperCase();
+    }
+  });
+  return labels;
+}
 
 export interface SectionBarSlot {
   barIndex: number;
@@ -3387,3 +3423,107 @@ export function createBlankDraft(index = 1): SketchpadDraft {
     melodyNotes: [],
   };
 }
+
+export function createMidnightCafeLofiTrack(updatedAt = Date.now() - 90_000): SketchpadDraft {
+  const secId = 'sec-lofi-cafe-1';
+  const melody: MelodyNote[] = [
+    { id: 'lf-1', sectionId: secId, midi: 69, startBeat: 0.5, durationBeats: 1.5, velocity: 0.65 },
+    { id: 'lf-2', sectionId: secId, midi: 72, startBeat: 2.5, durationBeats: 1.0, velocity: 0.62 },
+    { id: 'lf-3', sectionId: secId, midi: 71, startBeat: 4.0, durationBeats: 2.0, velocity: 0.66 },
+    { id: 'lf-4', sectionId: secId, midi: 67, startBeat: 6.5, durationBeats: 1.5, velocity: 0.6 },
+    { id: 'lf-5', sectionId: secId, midi: 69, startBeat: 8.5, durationBeats: 1.5, velocity: 0.64 },
+    { id: 'lf-6', sectionId: secId, midi: 64, startBeat: 10.5, durationBeats: 1.5, velocity: 0.58 },
+    { id: 'lf-7', sectionId: secId, midi: 67, startBeat: 12.0, durationBeats: 2.5, velocity: 0.62 },
+    { id: 'lf-8', sectionId: secId, midi: 62, startBeat: 14.5, durationBeats: 1.5, velocity: 0.56 },
+  ];
+  return {
+    id: 'lofi-midnight-cafe',
+    title: 'Cà Phê Đêm 2AM (Lo-fi Rhodes)',
+    keyRoot: 'C',
+    scaleMode: 'major',
+    mood: 'lofi-chill',
+    bpm: 74,
+    backingInstrument: 'rhodes',
+    backingPattern: 'rich-block',
+    sustainPedal: true,
+    metronomeEnabled: false,
+    drumPattern: 'lofi',
+    melodyInstrument: 'piano',
+    scaleSnap: true,
+    sections: [
+      {
+        id: secId,
+        kind: 'Verse',
+        label: 'Lo-fi Chill Loop',
+        bars: 4,
+        text: '[Fmaj9]Hơi ấm tách cà phê [Em7]đêm khuya\n[Dm9]Ánh đèn vàng nhẹ rơi [Cmaj9]bên hiên',
+      },
+    ],
+    melodyNotes: melody,
+    updatedAt,
+  };
+}
+
+export function getDraftStyleLabel(draft: SketchpadDraft): string {
+  if (draft.backingInstrument === 'piano-ballad' && draft.drumPattern === 'none') {
+    return 'Grand Piano';
+  }
+  switch (draft.mood) {
+    case 'lofi-chill':
+      return 'Lo-fi Chill';
+    case 'neo-soul':
+      return 'Neo-Soul';
+    case 'rnb':
+      return 'R&B';
+    case 'acoustic':
+      return 'Acoustic';
+    case 'pop-ballad':
+    default:
+      return 'Ballad';
+  }
+}
+
+const STARTER_PLAYLIST_PRIORITY: Record<string, number> = {
+  'draft-thang-tu-la-loi-noi-doi-cua-em': 6,
+  'draft-khoang-cach-hai-ta-am': 5,
+  'draft-dem-pho-mua-piano': 4,
+  'draft-mua-ban-cong': 3,
+  'draft-anh-den-do-thi': 2,
+  'lofi-midnight-cafe': 1,
+};
+
+export function buildProfilePlaylist(studioDrafts?: SketchpadDraft[]): SketchpadDraft[] {
+  const starters = createStarterDrafts();
+  const merged = new Map<string, SketchpadDraft>();
+
+  for (const starter of starters) {
+    merged.set(starter.id, starter);
+  }
+  if (Array.isArray(studioDrafts)) {
+    for (const draft of studioDrafts) {
+      if (draft && draft.id && Array.isArray(draft.sections) && draft.sections.length > 0) {
+        merged.set(draft.id, draft);
+      }
+    }
+  }
+  if (!merged.has('lofi-midnight-cafe')) {
+    const oldestUpdated = Array.from(merged.values()).reduce(
+      (min, item) => Math.min(min, item.updatedAt || Date.now()),
+      Date.now()
+    );
+    merged.set('lofi-midnight-cafe', createMidnightCafeLofiTrack(oldestUpdated - 30_000));
+  }
+
+  return Array.from(merged.values())
+    .filter((d) => Array.isArray(d.sections) && d.sections.length > 0)
+    .sort((a, b) => {
+      const timeDiff = (b.updatedAt || 0) - (a.updatedAt || 0);
+      if (Math.abs(timeDiff) > 500) {
+        return timeDiff;
+      }
+      const priA = STARTER_PLAYLIST_PRIORITY[a.id] ?? 0;
+      const priB = STARTER_PLAYLIST_PRIORITY[b.id] ?? 0;
+      return priB - priA;
+    });
+}
+

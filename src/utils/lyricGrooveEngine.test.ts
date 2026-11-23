@@ -4,24 +4,33 @@ import {
   analyzeSectionLyrics,
   buildChordTimeline,
   buildMidiFileBytes,
+  buildProfilePlaylist,
   classifyVietnameseTone,
   COMPUTER_KEY_TO_MIDI,
   countVietnameseSyllables,
+  createBlankDraft,
   createStarterDrafts,
   encodePcmToWav,
   extractSectionBarSlots,
   extractVietnameseRhymeKey,
   generateHarmonicMelodyForSection,
   getDiatonicChordForPianoKey,
+  getDraftStyleLabel,
   getScaleNotes,
+  getShortcutLabelsForOctave,
+  midiToNoteName,
   parseChordsFromLine,
   parseSectionKaraokeLines,
+  PIANO_MAX_MIDI,
+  PIANO_MIN_MIDI,
   PROGRESSION_PRESETS,
   quantizePitchFramesToNotes,
   reorderSongSections,
   resolveChordVoicingNotes,
+  resolveComputerKeyToMidi,
   resolvePianistVoicing,
   snapFrequencyToScaleMidi,
+  snapMidiToScale,
   SONG_IDEA_TEMPLATES,
   suggestNextChords,
   transposeChordSymbol,
@@ -502,5 +511,73 @@ test('Chord accompaniment register stays cleanly below melody register (~1 octav
     }
   }
 });
+
+test('Piano range spans C2 (36) through B5 (83) and C6 (84) across keyboard shortcuts and scale clamping', () => {
+  assert.equal(PIANO_MIN_MIDI, 36);
+  assert.equal(midiToNoteName(PIANO_MIN_MIDI), 'C2');
+  assert.equal(PIANO_MAX_MIDI, 84);
+  assert.equal(midiToNoteName(83), 'B5');
+  assert.equal(midiToNoteName(PIANO_MAX_MIDI), 'C6');
+
+  // Octave shift -1 maps Z..M / Q..I starting from C2
+  assert.equal(resolveComputerKeyToMidi('z', -1), 36); // C2
+  assert.equal(resolveComputerKeyToMidi('i', -1), 60); // C4
+
+  // Octave shift 0 preserves C3..E5 default layout
+  assert.equal(resolveComputerKeyToMidi('z', 0), 48); // C3
+  assert.equal(resolveComputerKeyToMidi('q', 0), 60); // C4
+  assert.equal(resolveComputerKeyToMidi('i', 0), 72); // C5
+  assert.equal(resolveComputerKeyToMidi('p', 0), 76); // E5
+
+  // Octave shift +1 reaches B5 (83) and C6 (84) while guarding out-of-range keys above C6
+  assert.equal(resolveComputerKeyToMidi('q', 1), 72); // C5
+  assert.equal(resolveComputerKeyToMidi('u', 1), 83); // B5
+  assert.equal(resolveComputerKeyToMidi('i', 1), 84); // C6
+  assert.equal(resolveComputerKeyToMidi('o', 1), null); // Above C6
+
+  const highLabels = getShortcutLabelsForOctave(1);
+  assert.equal(highLabels[83], 'U');
+  assert.equal(highLabels[84], 'I');
+
+  // Scale snapping preserves C2 low register and B5/C6 high register
+  assert.equal(snapMidiToScale(36, 'C', 'major'), 36);
+  assert.equal(snapMidiToScale(83, 'C', 'major'), 83);
+  assert.equal(snapMidiToScale(84, 'C', 'major'), 84);
+
+  // Transposing preserves C2..C6 bounds without clamping to C3
+  const [starter] = createStarterDrafts();
+  const lowNoteDraft = {
+    ...starter,
+    melodyNotes: [{ id: 'low-c3', sectionId: starter.sections[0].id, midi: 48, startBeat: 0, durationBeats: 1, velocity: 0.8 }],
+  };
+  const downOctave = transposeDraftAll(lowNoteDraft, -12);
+  assert.equal(downOctave.melodyNotes[0].midi, 36); // C2 preserved
+});
+
+test('buildProfilePlaylist orders latest flagship tracks first and includes custom studio drafts', () => {
+  const defaultPlaylist = buildProfilePlaylist();
+  assert.ok(defaultPlaylist.length >= 6);
+  assert.equal(defaultPlaylist[0].id, 'draft-thang-tu-la-loi-noi-doi-cua-em');
+  assert.equal(defaultPlaylist[1].id, 'draft-khoang-cach-hai-ta-am');
+  assert.equal(defaultPlaylist[2].id, 'draft-dem-pho-mua-piano');
+  assert.equal(defaultPlaylist[0].drumPattern, 'none');
+  assert.equal(getDraftStyleLabel(defaultPlaylist[0]), 'Grand Piano');
+  assert.equal(getDraftStyleLabel(defaultPlaylist[1]), 'Lo-fi Chill');
+  assert.ok(defaultPlaylist.some((d) => d.id === 'lofi-midnight-cafe'));
+
+  // Custom draft saved more recently in Studio takes top spot while preserving all starters
+  const starters = createStarterDrafts();
+  const customLatest = {
+    ...createBlankDraft(9),
+    id: 'draft-custom-latest',
+    title: 'Bản Demo Mới Nhất',
+    updatedAt: starters[0].updatedAt + 120_000,
+  };
+  const syncedPlaylist = buildProfilePlaylist([...starters, customLatest]);
+  assert.equal(syncedPlaylist[0].id, 'draft-custom-latest');
+  assert.equal(syncedPlaylist[1].id, 'draft-thang-tu-la-loi-noi-doi-cua-em');
+});
+
+
 
 

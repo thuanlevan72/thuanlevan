@@ -5,6 +5,8 @@ import {
   type MelodyInstrumentId,
   type MelodyNote,
   midiToNoteName,
+  PIANO_MAX_MIDI,
+  PIANO_MIN_MIDI,
   resolvePianistVoicing,
   snapMidiToScale,
 } from '../utils/lyricGrooveEngine.ts';
@@ -34,9 +36,9 @@ interface PianoRollCanvasProps {
   onResizeNoteDuration: (noteId: string, durationBeats: number) => void;
 }
 
-const MIN_MIDI = 53; // F3
-const MAX_MIDI = 79; // G5
-const TOTAL_ROWS = MAX_MIDI - MIN_MIDI + 1;
+const MIN_MIDI = PIANO_MIN_MIDI; // C2 (36)
+const MAX_MIDI = PIANO_MAX_MIDI; // C6 (84, includes B5 = 83)
+const TOTAL_ROWS = MAX_MIDI - MIN_MIDI + 1; // 49 rows
 const KEY_GUTTER_W = 46;
 const HEADER_H = 44; // top bar: waveform + beat numbers
 
@@ -248,13 +250,13 @@ export function PianoRollCanvas({
         : '#F1F5F9';
       ctx.fillRect(0, y, KEY_GUTTER_W - 1, Math.max(1, rowH - 0.5));
 
-      if (chroma === 0 || midi === MAX_MIDI || midi === MIN_MIDI) {
+      if (chroma === 0 || midi === MAX_MIDI || midi === MIN_MIDI || midi === 83) {
         ctx.fillStyle = isBlackKey ? '#E2E8F0' : textPrimary;
-        ctx.font = '600 9.5px "JetBrains Mono", monospace';
-        ctx.fillText(midiToNoteName(midi), 6, y + rowH * 0.72);
-      } else if (inScale && rowH >= 11) {
+        ctx.font = '600 9px "JetBrains Mono", monospace';
+        ctx.fillText(midiToNoteName(midi), 6, y + rowH * 0.78);
+      } else if (inScale && rowH >= 7) {
         ctx.fillStyle = isDark ? 'rgba(56, 189, 248, 0.55)' : 'rgba(2, 132, 199, 0.5)';
-        ctx.fillRect(KEY_GUTTER_W - 4, y + rowH * 0.25, 2.5, rowH * 0.5);
+        ctx.fillRect(KEY_GUTTER_W - 4, y + rowH * 0.25, 2.5, Math.max(2, rowH * 0.5));
       }
     }
 
@@ -470,8 +472,8 @@ export function PianoRollCanvas({
             handlePointerUp();
             setHoverInfo(null);
           }}
-          className="w-full h-[320px] sm:h-[360px] block cursor-crosshair touch-none select-none"
-          aria-label="Khung Piano Roll 2D vẽ và chỉnh sửa giai điệu"
+          className="w-full h-[380px] sm:h-[430px] block cursor-crosshair touch-none select-none"
+          aria-label="Khung Piano Roll 2D vẽ và chỉnh sửa giai điệu từ C2 đến C6"
         />
       </div>
       <div className="flex items-center justify-between text-[11px] text-[#475569] dark:text-[#94A3B8] tabular-nums">

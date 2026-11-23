@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BookOpen,
+  ChevronDown,
+  ChevronUp,
   Compass,
   Eye,
   Flame,
   Ghost,
+  Lock,
   Maximize2,
   Minimize2,
   Pause,
@@ -15,6 +18,7 @@ import {
   VolumeX,
   Wind,
   X,
+  Zap,
 } from 'lucide-react';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 import { ThanhMinhAudioEngine } from '../utils/thanhMinhAudio.ts';
@@ -28,6 +32,7 @@ import {
   interactWithHotspot,
   INVENTORY_ITEMS,
   SCENE_META,
+  setCipherDigit,
   setRadioFrequency,
   STORY_LORE_ENTRIES,
   submitWuxingElement,
@@ -119,8 +124,15 @@ const INTERROGATION_PROMPTS = [
   },
   {
     step: 2,
+    echo: 'Tiếng chuông đồng Tháp Chuông Cô Sơn còn ngân vang giữa đêm mưa bão năm 1967...',
+    question: 'Hồi III — Tờ giấy thông hành thầy Trần viết sẵn cho em, và ngọn lửa Tô Dao đốt sổ trong biệt giam — ngươi hiểu gì về họ?',
+    honestLabel: 'Họ chưa từng phản bội tôi; chỉ có tôi nghi kỵ và đẩy họ xuống vực thẳm.',
+    denialLabel: 'Nếu họ không che giấu bí mật trong văn phòng, bi kịch đã không xảy ra.',
+  },
+  {
+    step: 3,
     echo: 'Tô Viễn (1986) lặng lẽ mở cuốn sổ còn thiếu trang cuối dưới ánh bình minh xa xăm...',
-    question: 'Hồi III — Đêm Tiết Thanh Minh trên tầng thượng năm 1967, sự thật cuối cùng ngươi chọn đối diện là gì?',
+    question: 'Hồi IV — Khi đứng trên đống đổ nát Cô Sơn năm 1986, sự thật cuối cùng ngươi chọn đối diện là gì?',
     honestLabel: 'Tôi thừa nhận tội phản bội thầy và bạn. Xin đừng xóa nhòa nỗi oan của họ thêm nữa.',
     denialLabel: 'Hãy cho tôi quên hết đêm mưa này và quay lại Lớp 12B như chưa từng có gì xảy ra.',
   },
@@ -195,10 +207,11 @@ export function ThanhMinhGameSection({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioRef = useRef<ThanhMinhAudioEngine | null>(null);
   const rendererRef = useRef<ThanhMinhCanvasRenderer | null>(null);
-  const keysRef = useRef<{ left: boolean; right: boolean; breath: boolean }>({
+  const keysRef = useRef<{ left: boolean; right: boolean; breath: boolean; sprint: boolean }>({
     left: false,
     right: false,
     breath: false,
+    sprint: false,
   });
 
   if (!audioRef.current) audioRef.current = new ThanhMinhAudioEngine();
@@ -237,6 +250,10 @@ export function ThanhMinhGameSection({
       audioRef.current?.playMirrorCrack();
       rendererRef.current?.triggerShake(7);
     }
+    if (next.bellRings > prev.bellRings) {
+      audioRef.current?.playBellToll(next.bellRings);
+      rendererRef.current?.triggerShake(8);
+    }
     commitState(next);
   }, [commitState]);
 
@@ -267,6 +284,8 @@ export function ThanhMinhGameSection({
         keysRef.current.left = true;
       } else if (code === 'ArrowRight' || code === 'KeyD') {
         keysRef.current.right = true;
+      } else if (code === 'ShiftLeft' || code === 'ShiftRight') {
+        keysRef.current.sprint = true;
       } else if (code === 'Space') {
         e.preventDefault();
         keysRef.current.breath = true;
@@ -294,16 +313,27 @@ export function ThanhMinhGameSection({
         keysRef.current.left = false;
       } else if (code === 'ArrowRight' || code === 'KeyD') {
         keysRef.current.right = false;
+      } else if (code === 'ShiftLeft' || code === 'ShiftRight') {
+        keysRef.current.sprint = false;
       } else if (code === 'Space') {
         keysRef.current.breath = false;
       }
     };
 
+    const clearKeys = () => {
+      keysRef.current.left = false;
+      keysRef.current.right = false;
+      keysRef.current.breath = false;
+      keysRef.current.sprint = false;
+    };
+
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', clearKeys);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', clearKeys);
     };
   }, [screenMode, isFullscreen, triggerInteract, triggerRealmShift, toggleJournal, commitState]);
 
@@ -332,6 +362,7 @@ export function ThanhMinhGameSection({
           dt,
           moveDir,
           holdingBreath: keysRef.current.breath,
+          sprinting: keysRef.current.sprint,
         });
 
         if (events.footstep) {
@@ -341,9 +372,22 @@ export function ThanhMinhGameSection({
           audioRef.current?.playGasp();
           rendererRef.current?.triggerShake(6);
         }
+        if (events.exhaustedNow) {
+          audioRef.current?.playExhaustedPant(0.95);
+          rendererRef.current?.triggerShake(4.2);
+        }
         if (events.ghostAlerted && ghostWhisperCooldown <= 0) {
           audioRef.current?.playGhostWhisper();
           rendererRef.current?.triggerShake(5);
+          ghostWhisperCooldown = 1.6;
+        }
+        if (events.horrorEvent === 'knock') {
+          audioRef.current?.playDistantKnock();
+        } else if (events.horrorEvent === 'sting') {
+          audioRef.current?.playSubtleTensionSting();
+          rendererRef.current?.triggerShake(3.2);
+        } else if (events.horrorEvent === 'whisper' && ghostWhisperCooldown <= 0) {
+          audioRef.current?.playGhostWhisper();
           ghostWhisperCooldown = 1.6;
         }
         if (events.killedByGhostKind) {
@@ -367,18 +411,29 @@ export function ThanhMinhGameSection({
 
         stateRef.current = next;
 
-        // Immediate React HUD sync on discrete state changes; throttled 85ms otherwise
-        const discreteChange =
+        // Sync React HUD only when visible HUD numbers, flags, hotspots, or discrete states actually change
+        const nearCur = findNearbyHotspot(cur)?.id ?? null;
+        const nearNext = findNearbyHotspot(next)?.id ?? null;
+        const hudChanged =
           next.scene !== cur.scene ||
           next.realm !== cur.realm ||
           next.holdingBreath !== cur.holdingBreath ||
+          next.exhausted !== cur.exhausted ||
+          next.isRunning !== cur.isRunning ||
           next.subtitleText !== cur.subtitleText ||
           next.ending !== cur.ending ||
+          next.activeModal !== cur.activeModal ||
+          nearNext !== nearCur ||
           Boolean(next.deathCutscene?.active) !== Boolean(cur.deathCutscene?.active) ||
           next.sanityBottomCount !== cur.sanityBottomCount ||
-          Math.abs(next.playerX - cur.playerX) > 22;
+          Math.round(next.sanity) !== Math.round(cur.sanity) ||
+          Math.round(next.runStamina) !== Math.round(cur.runStamina) ||
+          Math.round(next.breathStamina) !== Math.round(cur.breathStamina) ||
+          (next.gaspPenaltyTimer > 0) !== (cur.gaspPenaltyTimer > 0) ||
+          next.collectedKeepsakeIds.length !== cur.collectedKeepsakeIds.length ||
+          next.collectedLoreIds.length !== cur.collectedLoreIds.length;
 
-        if (discreteChange || now - lastHudSyncRef.current >= 85) {
+        if (hudChanged && (next.scene !== cur.scene || next.exhausted !== cur.exhausted || nearNext !== nearCur || now - lastHudSyncRef.current >= 85)) {
           lastHudSyncRef.current = now;
           setHudState(next);
         }
@@ -390,10 +445,11 @@ export function ThanhMinhGameSection({
           next.gazeExposure,
           next.radioTunedAct2,
           dt,
-          next.scene === 'flooded_courtyard'
+          next.scene === 'flooded_courtyard',
+          next.exhausted
         );
       } else {
-        audioRef.current?.update(false, cur.realm, false, 0, false, dt);
+        audioRef.current?.update(false, cur.realm, false, 0, false, dt, false, false);
       }
 
       const canvas = canvasRef.current;
@@ -505,19 +561,24 @@ export function ThanhMinhGameSection({
   return (
     <section
       aria-label="Thanh Minh: Học Viện Cô Sơn — Kinh Dị Tâm Lý 2.5D"
+      data-testid="thanh-minh-game-root"
+      data-screen={screenMode}
+      data-stamina={Math.round(hudState.runStamina)}
+      data-exhausted={String(hudState.exhausted)}
+      data-running={String(hudState.isRunning)}
       className={`rounded-2xl border border-[#2b221c] bg-[#0a0908] text-stone-100 shadow-2xl overflow-hidden flex flex-col ${
         isFullscreen ? 'flex-1 min-h-0 h-full' : ''
       }`}
     >
       {/* Top Bar: Clean 3-Zone Editorial Horror Header */}
-      <header className="flex flex-wrap items-center justify-between gap-4 px-4 py-2.5 border-b border-[#251e19] bg-[#120e0c]">
+      <header className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-[#251e19] bg-[#120e0c]">
         {/* Zone 1: Title & Act Metadata (Unboxed typographic separators) */}
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
           <div className="w-8 h-8 rounded-lg bg-red-950/75 border border-red-800/45 flex items-center justify-center text-red-300 shrink-0">
             <Ghost className="w-4 h-4" aria-hidden="true" />
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-[11px] font-mono text-stone-400 whitespace-nowrap">
+            <div className="flex items-center gap-1.5 text-[11px] font-mono text-stone-400 whitespace-nowrap">
               <span className="text-amber-400">Hồi {hudState.act}/4</span>
               <span aria-hidden="true">·</span>
               <span className={hudState.realm === 'yin' ? 'text-rose-400 font-semibold' : 'text-stone-300'}>
@@ -526,11 +587,11 @@ export function ThanhMinhGameSection({
               {hudState.loopCount > 1 && (
                 <>
                   <span aria-hidden="true">·</span>
-                  <span className="text-red-400">Vòng lặp #{hudState.loopCount}</span>
+                  <span className="text-red-400">Vòng #{hudState.loopCount}</span>
                 </>
               )}
             </div>
-            <h2 className="text-sm sm:text-base font-editorial font-bold text-stone-100 leading-tight truncate">
+            <h2 className="text-xs sm:text-sm font-editorial font-bold text-stone-100 leading-tight truncate max-w-[180px] sm:max-w-[200px]">
               {sceneMeta.title}
             </h2>
           </div>
@@ -538,11 +599,11 @@ export function ThanhMinhGameSection({
 
         {/* Zone 2: Vital Gauges (Icon + Text + Bar for non-hue accessibility) */}
         {screenMode !== 'title' && (
-          <div className="flex flex-wrap items-center gap-4 text-xs tabular-nums">
-            <div className="flex items-center gap-2" title="Độ Tỉnh Táo (Sanity)">
+          <div className="flex flex-wrap items-center gap-2.5 text-xs tabular-nums">
+            <div className="flex items-center gap-1.5" title="Độ Tỉnh Táo (Sanity)">
               <Eye className="w-3.5 h-3.5 text-rose-400 shrink-0" aria-hidden="true" />
-              <span className="text-stone-400 hidden sm:inline">Tỉnh táo</span>
-              <div className="w-16 sm:w-20 h-2 rounded-sm bg-stone-800 overflow-hidden border border-stone-700">
+              <span className="text-stone-400 hidden xl:inline">Tỉnh táo</span>
+              <div className="w-12 sm:w-14 h-2 rounded-sm bg-stone-800 overflow-hidden border border-stone-700">
                 <div
                   className={`h-full transition-colors ${
                     hudState.sanity > 50 ? 'bg-amber-400' : 'bg-rose-500'
@@ -555,12 +616,12 @@ export function ThanhMinhGameSection({
               </span>
             </div>
 
-            <div className="flex items-center gap-2" title="Hơi Thở Nín Nhịn [Space]">
+            <div className="flex items-center gap-1.5" title="Hơi Thở Nín Nhịn [Space]">
               <Wind className="w-3.5 h-3.5 text-sky-400 shrink-0" aria-hidden="true" />
-              <span className="text-stone-400 hidden sm:inline">
+              <span className="text-stone-400 hidden xl:inline">
                 {hudState.gaspPenaltyTimer > 0 ? 'Hụt hơi' : 'Hơi thở'}
               </span>
-              <div className="w-14 sm:w-16 h-2 rounded-sm bg-stone-800 overflow-hidden border border-stone-700">
+              <div className="w-12 sm:w-14 h-2 rounded-sm bg-stone-800 overflow-hidden border border-stone-700">
                 <div
                   className={`h-full transition-colors ${
                     hudState.gaspPenaltyTimer > 0 ? 'bg-red-500' : 'bg-sky-400'
@@ -570,9 +631,44 @@ export function ThanhMinhGameSection({
               </div>
             </div>
 
-            <div className="text-xs font-mono text-amber-300 whitespace-nowrap">
-              Kỷ vật {hudState.collectedKeepsakeIds.length}/{TRUTH_KEEPSAKES.length} ({keepsakePct}%)
-              <span className="mx-1.5 text-stone-600">·</span>
+            <div
+              className="flex items-center gap-1.5"
+              data-testid="thanh-minh-stamina-bar"
+              title="Sức bền chạy trốn [Giữ Shift] — Cạn kiệt sẽ kiệt sức phải đi bộ chậm"
+            >
+              <Zap
+                className={`w-3.5 h-3.5 shrink-0 ${
+                  hudState.exhausted ? 'text-red-400' : 'text-emerald-400'
+                }`}
+                aria-hidden="true"
+              />
+              <span
+                className={`hidden xl:inline ${
+                  hudState.exhausted ? 'text-red-300 font-semibold' : 'text-stone-400'
+                }`}
+              >
+                {hudState.exhausted ? 'Kiệt sức' : hudState.isRunning ? 'Đang chạy' : 'Sức bền'}
+              </span>
+              <div className="w-12 sm:w-14 h-2 rounded-sm bg-stone-800 overflow-hidden border border-stone-700">
+                <div
+                  className={`h-full transition-colors ${
+                    hudState.exhausted
+                      ? 'bg-red-500'
+                      : hudState.runStamina < 30
+                        ? 'bg-amber-400'
+                        : 'bg-emerald-400'
+                  }`}
+                  style={{ width: `${Math.round(hudState.runStamina)}%` }}
+                />
+              </div>
+              <span className="font-mono text-[11px] text-stone-200">
+                {Math.round(hudState.runStamina)}%
+              </span>
+            </div>
+
+            <div className="text-[11px] font-mono text-amber-300 whitespace-nowrap">
+              Kỷ vật {hudState.collectedKeepsakeIds.length}/{TRUTH_KEEPSAKES.length}
+              <span className="mx-1 text-stone-600">·</span>
               <span className="text-stone-300">
                 Tư liệu {hudState.collectedLoreIds.length}/{STORY_LORE_ENTRIES.length}
               </span>
@@ -668,7 +764,7 @@ export function ThanhMinhGameSection({
       </header>
 
       {/* Main 2.5D Canvas Viewport */}
-      <div className="relative flex-1 min-h-[380px] bg-black flex items-center justify-center overflow-hidden">
+      <div className="relative flex-1 min-h-[340px] bg-black flex items-center justify-center overflow-hidden">
         <canvas
           ref={canvasRef}
           width={960}
@@ -676,7 +772,9 @@ export function ThanhMinhGameSection({
           onPointerDown={handleCanvasPointerDown}
           onPointerUp={stopCanvasPointer}
           onPointerLeave={stopCanvasPointer}
-          className="w-full h-full max-h-[70vh] object-contain select-none cursor-crosshair"
+          className={`w-full h-full object-contain select-none cursor-crosshair ${
+            isFullscreen ? 'max-h-[82vh]' : 'max-h-[60vh]'
+          }`}
         />
 
         {/* Quiet Objective Helper Drawer */}
@@ -708,16 +806,16 @@ export function ThanhMinhGameSection({
 
         {/* TITLE SCREEN */}
         {screenMode === 'title' && (
-          <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-[#120b09]/92 to-black/95 overflow-y-auto p-5 sm:p-8 flex flex-col items-center justify-center">
-            <div className="max-w-3xl w-full space-y-6">
-              <div className="text-center space-y-2.5">
-                <div className="text-xs font-mono text-stone-400 tracking-wide">
+          <div className="absolute inset-0 bg-gradient-to-b from-black/82 via-[#120b09]/92 to-black/95 overflow-y-auto p-3.5 sm:p-5 flex">
+            <div className="max-w-3xl w-full m-auto space-y-3.5">
+              <div className="text-center space-y-1.5">
+                <div className="text-[11px] font-mono text-stone-400 tracking-wide">
                   Kinh Dị Tâm Lý Sinh Tồn 2.5D · Cốt Truyện 4 Hồi · 4 Kết Cục
                 </div>
-                <h1 className="text-3xl sm:text-5xl font-editorial font-bold tracking-tight text-stone-100">
+                <h1 className="text-2xl sm:text-4xl font-editorial font-bold tracking-tight text-stone-100">
                   Thanh Minh: Học Viện Cô Sơn <span className="text-red-400">清明</span>
                 </h1>
-                <p className="text-xs sm:text-sm text-stone-300 max-w-2xl mx-auto leading-relaxed">
+                <p className="text-xs text-stone-300 max-w-2xl mx-auto leading-relaxed">
                   Cuối thập niên 1960 trên đỉnh núi Cô Sơn cô lập bởi dòng lũ đỏ ngầu. Nữ sinh{' '}
                   <strong className="text-amber-200">Lâm Tĩnh</strong> tỉnh dậy giữa Lớp 12B trống
                   rỗng — nơi những tờ bùa trắng bay lả tả và sự thật đêm phản bội chỉ lộ diện khi
@@ -725,25 +823,29 @@ export function ThanhMinhGameSection({
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 text-left">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-left">
                 {CHARACTER_DOSSIER.map((ch) => (
                   <div
                     key={ch.name}
-                    className="rounded-xl border border-stone-800 bg-stone-950/80 p-3 space-y-1"
+                    className="rounded-xl border border-stone-800 bg-stone-950/80 p-2.5 space-y-0.5"
                   >
-                    <div className="flex items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center justify-between gap-2 text-[11px]">
                       <span className="font-semibold text-amber-200">{ch.name}</span>
-                      <span className="text-[11px] font-mono text-stone-400">{ch.role}</span>
+                      <span className="text-[10px] font-mono text-stone-400">{ch.role}</span>
                     </div>
-                    <p className="text-[11px] text-stone-300 leading-relaxed">{ch.desc}</p>
+                    <p className="text-[11px] text-stone-300 leading-snug">{ch.desc}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 text-xs text-stone-300 py-2 border-y border-stone-800/80">
+              <div className="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-1 text-[11px] text-stone-300 py-1.5 border-y border-stone-800/80">
                 <span>
                   <strong className="text-amber-300">A / D</strong> hoặc{' '}
-                  <strong className="text-amber-300">Chạm màn hình</strong> Di chuyển
+                  <strong className="text-amber-300">Chạm màn hình</strong> Đi bộ
+                </span>
+                <span aria-hidden="true">·</span>
+                <span>
+                  <strong className="text-emerald-300">Giữ Shift</strong> Chạy (Tốn Sức bền)
                 </span>
                 <span aria-hidden="true">·</span>
                 <span>
@@ -767,7 +869,7 @@ export function ThanhMinhGameSection({
                 <button
                   type="button"
                   onClick={() => startGame(1)}
-                  className="min-h-[44px] px-7 py-2.5 rounded-xl bg-red-800 hover:bg-red-700 text-stone-100 font-semibold text-sm inline-flex items-center gap-2 shadow-lg cursor-pointer transition-colors"
+                  className="min-h-[42px] px-6 py-2 rounded-xl bg-red-800 hover:bg-red-700 text-stone-100 font-semibold text-sm inline-flex items-center gap-2 shadow-lg cursor-pointer transition-colors"
                 >
                   <Play className="w-4 h-4" aria-hidden="true" />
                   <span>Bắt Đầu Đêm Mưa Cô Sơn</span>
@@ -783,7 +885,7 @@ export function ThanhMinhGameSection({
             <div className="max-w-sm w-full rounded-2xl border border-stone-700 bg-[#14110f] p-6 space-y-4 text-center">
               <h3 className="text-xl font-editorial font-bold text-amber-200">Tạm Dừng</h3>
               <p className="text-xs text-stone-400">
-                {sceneMeta.subtitle} · Kỷ vật {hudState.collectedKeepsakeIds.length}/6
+                {sceneMeta.subtitle} · Kỷ vật {hudState.collectedKeepsakeIds.length}/{TRUTH_KEEPSAKES.length}
               </p>
               <div className="flex flex-col gap-2.5">
                 <button
@@ -814,7 +916,7 @@ export function ThanhMinhGameSection({
                 <div className="flex items-center justify-between border-b border-stone-800 pb-3">
                   <div>
                     <h3 className="text-lg font-editorial font-bold text-amber-200">
-                      Hồ Sơ Cô Sơn · Kỷ Vật {hudState.collectedKeepsakeIds.length}/6 ({keepsakePct}%)
+                      Hồ Sơ Cô Sơn · Kỷ Vật {hudState.collectedKeepsakeIds.length}/{TRUTH_KEEPSAKES.length} ({keepsakePct}%)
                     </h3>
                     <p className="text-xs text-stone-400">{currentObjective}</p>
                   </div>
@@ -839,7 +941,7 @@ export function ThanhMinhGameSection({
                         : 'border-stone-800 bg-stone-900/70 text-stone-400 hover:text-stone-200'
                     }`}
                   >
-                    Kỷ Vật Sự Thật ({hudState.collectedKeepsakeIds.length}/6)
+                    Kỷ Vật Sự Thật ({hudState.collectedKeepsakeIds.length}/{TRUTH_KEEPSAKES.length})
                   </button>
                   <button
                     type="button"
@@ -1073,6 +1175,75 @@ export function ThanhMinhGameSection({
               </div>
             )}
 
+            {/* 2B. TEACHERS' OFFICE 3-DIGIT WOODEN CIPHER BOX (4-0-5) */}
+            {hudState.activeModal === 'cipher_lock' && (
+              <div className="max-w-md w-full rounded-2xl border border-amber-700/50 bg-[#16110e] p-5 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-amber-400" aria-hidden="true" />
+                    <h3 className="text-lg font-editorial font-bold text-amber-200">
+                      Hộp Khóa Gỗ — Văn Phòng Thầy Trần
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => commitState({ ...stateRef.current, activeModal: 'none' })}
+                    className="min-h-[36px] min-w-[36px] rounded-lg border border-stone-700 flex items-center justify-center cursor-pointer"
+                    aria-label="Đóng hộp khóa"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <p className="text-xs text-stone-300 leading-relaxed">
+                  Gợi ý khắc dưới đáy nắp hộp:{' '}
+                  <em className="text-amber-200">
+                    “Ngày Tiết Thanh Minh định ước rời khỏi Cô Sơn — tháng Tư, mùng Năm (04/05 → 3 chữ số).”
+                  </em>
+                </p>
+
+                <div className="grid grid-cols-3 gap-3 bg-black/55 p-4 rounded-xl border border-stone-800">
+                  {([0, 1, 2] as const).map((slot) => {
+                    const val = hudState.cipherDigits[slot];
+                    const adjustDigit = (delta: number) => {
+                      audioRef.current?.unlock();
+                      const res = setCipherDigit(stateRef.current, slot, val + delta);
+                      if (res.solved) {
+                        audioRef.current?.playAltarChime();
+                        rendererRef.current?.triggerShake(4.5);
+                      } else {
+                        audioRef.current?.playRadioStaticStep(0.3);
+                      }
+                      commitState(res.next);
+                    };
+                    return (
+                      <div key={slot} className="flex flex-col items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => adjustDigit(1)}
+                          aria-label={`Tăng chữ số thứ ${slot + 1}`}
+                          className="w-full min-h-[34px] rounded-lg border border-stone-700 bg-stone-900 hover:border-amber-500 flex items-center justify-center cursor-pointer"
+                        >
+                          <ChevronUp className="w-4 h-4 text-amber-300" />
+                        </button>
+                        <div className="w-full py-2.5 rounded-lg border border-amber-700/40 bg-stone-950 text-center text-2xl font-mono font-bold text-amber-200 tabular-nums">
+                          {val}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => adjustDigit(-1)}
+                          aria-label={`Giảm chữ số thứ ${slot + 1}`}
+                          className="w-full min-h-[34px] rounded-lg border border-stone-700 bg-stone-900 hover:border-amber-500 flex items-center justify-center cursor-pointer"
+                        >
+                          <ChevronDown className="w-4 h-4 text-amber-300" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* 3. VINTAGE TRANSISTOR RADIO DIAL (ACT 2: 104.7 MHz & ACT 3 SECRET: 109.2 MHz) */}
             {hudState.activeModal === 'radio_tuner' && (
               <div className="max-w-md w-full rounded-2xl border border-amber-700/40 bg-[#14110f] p-5 space-y-4">
@@ -1259,7 +1430,7 @@ export function ThanhMinhGameSection({
               <div className="max-w-xl w-full rounded-2xl border border-stone-600 bg-[#12100f] p-5 space-y-4">
                 <div className="space-y-1">
                   <div className="text-xs font-mono text-rose-400">
-                    Hồi 4 · Phiên Tòa Của Linh Hồn ({hudState.interrogationStep + 1}/3)
+                    Hồi 4 · Phiên Tòa Của Linh Hồn ({hudState.interrogationStep + 1}/{INTERROGATION_PROMPTS.length})
                   </div>
                   <h3 className="text-lg font-editorial font-bold text-stone-100">
                     Bóng Ma Lâm Tĩnh đối diện qua bàn gỗ hỏi:
@@ -1319,7 +1490,7 @@ export function ThanhMinhGameSection({
                 <div className="rounded-xl border border-stone-800 bg-stone-950 p-2.5">
                   <div className="text-stone-400 text-[11px]">Kỷ vật Sự thật</div>
                   <div className="font-mono font-bold text-amber-300">
-                    {hudState.collectedKeepsakeIds.length}/6 ({keepsakePct}%)
+                    {hudState.collectedKeepsakeIds.length}/{TRUTH_KEEPSAKES.length} ({keepsakePct}%)
                   </div>
                 </div>
                 <div className="rounded-xl border border-stone-800 bg-stone-950 p-2.5">
@@ -1357,8 +1528,8 @@ export function ThanhMinhGameSection({
 
       {/* Bottom Interactive Dock */}
       {screenMode === 'playing' && !hudState.deathCutscene?.active && (
-        <footer className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 border-t border-[#251e19] bg-[#120e0c]">
-          <div className="flex items-center gap-2">
+        <footer className="flex flex-wrap items-center justify-between gap-2 px-2.5 sm:px-4 py-2 border-t border-[#251e19] bg-[#120e0c]">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <button
               type="button"
               onPointerDown={() => {
@@ -1382,6 +1553,29 @@ export function ThanhMinhGameSection({
               aria-label="Đi sang phải"
             >
               Phải →
+            </button>
+            <button
+              type="button"
+              data-testid="thanh-minh-sprint-btn"
+              onPointerDown={() => {
+                keysRef.current.sprint = true;
+              }}
+              onPointerUp={() => {
+                keysRef.current.sprint = false;
+              }}
+              onPointerLeave={() => {
+                keysRef.current.sprint = false;
+              }}
+              className={`min-h-[40px] px-3 rounded-lg border text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer select-none whitespace-nowrap transition-colors ${
+                hudState.exhausted
+                  ? 'border-red-800/70 bg-red-950/50 text-red-300'
+                  : hudState.isRunning
+                    ? 'border-emerald-400 bg-emerald-950/70 text-emerald-200'
+                    : 'border-stone-700 bg-stone-900 text-stone-200'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>{hudState.exhausted ? 'Kiệt sức (Đi bộ)' : 'Chạy [Shift]'}</span>
             </button>
             <button
               type="button"

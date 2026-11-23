@@ -150,7 +150,7 @@ export function SongTimelinePlayer({
       noteItems,
       lyricItems,
       totalBeats: Math.max(4, totalBeats),
-      midiLow: Math.max(48, minMidi - 2),
+      midiLow: Math.max(36, minMidi - 2),
       midiHigh: Math.min(84, maxMidi + 2),
     };
   }, [sections, melodyNotes, backingPattern, chordArpStyles, songMood, loopScope, activeSectionId]);

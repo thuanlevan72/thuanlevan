@@ -2699,30 +2699,31 @@ export function LyricGrooveSketchpadSection({
             onRemoveNote={removeMelodyNote}
             onResizeNoteDuration={resizeMelodyNoteDuration}
           />
-
-          <GrandPianoKeyboard
-            keyRoot={activeDraft.keyRoot}
-            scaleMode={activeDraft.scaleMode}
-            highlightedChordSymbol={liveHighlightChord?.symbol ?? selectedAnchorChord}
-            voicingShift={liveHighlightChord?.shift ?? 0}
-            sustainPedal={activeSustainPedal}
-            playMode={pianoPlayMode}
-            onTogglePlayMode={setPianoPlayMode}
-            recordToRoll={recordKeysToRoll}
-            onToggleRecordToRoll={() => setRecordKeysToRoll((v) => !v)}
-            onNoteTrigger={handlePianoKeyTrigger}
-            liveChordMidis={liveChordInfo?.midis ?? []}
-            liveMelodyMidis={liveMelodyInfo ? [liveMelodyInfo.midi] : []}
-            liveChordSymbol={liveChordInfo?.symbol ?? null}
-            onAuditionActiveChord={() =>
-              auditionAndHighlightChord(
-                liveHighlightChord?.symbol ?? selectedAnchorChord,
-                liveHighlightChord?.shift ?? 0
-              )
-            }
-          />
         </div>
       </div>
+
+      {/* Full-Width 4-Octave Grand Piano Console (C2–C6) */}
+      <GrandPianoKeyboard
+        keyRoot={activeDraft.keyRoot}
+        scaleMode={activeDraft.scaleMode}
+        highlightedChordSymbol={liveHighlightChord?.symbol ?? selectedAnchorChord}
+        voicingShift={liveHighlightChord?.shift ?? 0}
+        sustainPedal={activeSustainPedal}
+        playMode={pianoPlayMode}
+        onTogglePlayMode={setPianoPlayMode}
+        recordToRoll={recordKeysToRoll}
+        onToggleRecordToRoll={() => setRecordKeysToRoll((v) => !v)}
+        onNoteTrigger={handlePianoKeyTrigger}
+        liveChordMidis={liveChordInfo?.midis ?? []}
+        liveMelodyMidis={liveMelodyInfo ? [liveMelodyInfo.midi] : []}
+        liveChordSymbol={liveChordInfo?.symbol ?? null}
+        onAuditionActiveChord={() =>
+          auditionAndHighlightChord(
+            liveHighlightChord?.symbol ?? selectedAnchorChord,
+            liveHighlightChord?.shift ?? 0
+          )
+        }
+      />
     </section>
   );
 }
