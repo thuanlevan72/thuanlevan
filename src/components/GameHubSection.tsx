@@ -753,7 +753,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
         className={
           isFullscreen
             ? activeGame === 'cat_finder'
-              ? 'fixed inset-0 z-50 w-full h-full max-h-[100dvh] bg-[#FFF9F2] overflow-hidden overscroll-none p-0 flex flex-col'
+              ? 'fixed inset-0 z-50 bg-[#FFF9F2] overflow-hidden overscroll-none p-0 flex flex-col'
               : 'fixed inset-0 z-50 w-full h-[100dvh] bg-[#050811] overflow-y-auto overscroll-none p-1 sm:p-2 flex flex-col'
             : 'relative overscroll-none'
         }

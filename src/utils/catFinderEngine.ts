@@ -915,7 +915,10 @@ export function clampCatPanZoom(
   customStageDisplayW?: number
 ): CatPanZoom {
   const clampedScale = Math.min(CAT_MAX_ZOOM, Math.max(CAT_MIN_ZOOM, Number(scale.toFixed(2))));
-  const stageDisplayW = Math.max(viewportW, customStageDisplayW ?? 1080);
+  const stageDisplayW =
+    customStageDisplayW !== undefined
+      ? Math.max(200, customStageDisplayW)
+      : Math.max(viewportW, 1080);
   const stageDisplayH = stageDisplayW * (CAT_SCENE_H / CAT_SCENE_W);
   const maxPanX = Math.max(0, (stageDisplayW * clampedScale - viewportW) / 2);
   const maxPanY = Math.max(0, (stageDisplayH * clampedScale - viewportH) / 2);

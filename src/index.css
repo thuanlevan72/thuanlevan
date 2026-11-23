@@ -201,6 +201,16 @@
   padding-right: max(0.25rem, env(safe-area-inset-right, 0px));
 }
 
+[data-edge-to-edge="true"]:fullscreen {
+  background-color: #FFF9F2;
+  width: 100vw;
+  height: 100dvh;
+}
+
+[data-edge-to-edge="true"]:fullscreen::backdrop {
+  background-color: #FFF9F2;
+}
+
 [data-fullscreen="true"] > .game-fs-inner > section {
   width: 100%;
   max-width: 100% !important;
