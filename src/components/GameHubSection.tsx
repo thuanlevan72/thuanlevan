@@ -6,18 +6,16 @@ import {
   Code2,
   Cpu,
   FileSearch,
+  Flame,
   Gamepad2,
-  Gauge,
   Gift,
   Grid3X3,
-  LampDesk,
   Layers,
   LayoutGrid,
   Maximize2,
   Minimize2,
   Network,
   Sparkles,
-  Swords,
   Zap,
 } from 'lucide-react';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
@@ -27,9 +25,6 @@ import { PwaInstallButton } from './PwaInstallControls.tsx';
 
 const AnomalyGameSection = lazyWithRetry(() =>
   import('./AnomalyGameSection.tsx').then((m) => ({ default: m.AnomalyGameSection }))
-);
-const AntiqueShopGameSection = lazyWithRetry(() =>
-  import('./AntiqueShopGameSection.tsx').then((m) => ({ default: m.AntiqueShopGameSection }))
 );
 const AsmrOrganizerGameSection = lazyWithRetry(() =>
   import('./AsmrOrganizerGameSection.tsx').then((m) => ({ default: m.AsmrOrganizerGameSection }))
@@ -43,12 +38,6 @@ const CatFinderGameSection = lazyWithRetry(() =>
 const FeAcademyGameSection = lazyWithRetry(() =>
   import('./FeAcademyGameSection.tsx').then((m) => ({ default: m.FeAcademyGameSection }))
 );
-const FidgetCockpitGameSection = lazyWithRetry(() =>
-  import('./FidgetCockpitGameSection.tsx').then((m) => ({ default: m.FidgetCockpitGameSection }))
-);
-const GearArenaGameSection = lazyWithRetry(() =>
-  import('./GearArenaGameSection.tsx').then((m) => ({ default: m.GearArenaGameSection }))
-);
 const LinuxHackerGameSection = lazyWithRetry(() =>
   import('./LinuxHackerGameSection.tsx').then((m) => ({ default: m.LinuxHackerGameSection }))
 );
@@ -61,19 +50,22 @@ const TrafficRouterGameSection = lazyWithRetry(() =>
 const XiangqiGameSection = lazyWithRetry(() =>
   import('./XiangqiGameSection.tsx').then((m) => ({ default: m.XiangqiGameSection }))
 );
+const LuongCuocDuongGameSection = lazyWithRetry(() =>
+  import('./LuongCuocDuongGameSection.tsx').then((m) => ({
+    default: m.LuongCuocDuongGameSection,
+  }))
+);
 
 type GameId =
   | 'xiangqi'
   | 'anomaly'
+  | 'luong_cuoc_duong'
   | 'asmr_organizer'
   | 'blind_box'
-  | 'antique_shop'
   | 'cat_finder'
   | 'prism_td'
   | 'linux_hacker'
   | 'traffic_router'
-  | 'gear_arena'
-  | 'fidget_cockpit'
   | 'fe_academy';
 
 export type GameHubCategoryId = 'all' | 'strategy' | 'casual' | 'tech' | 'arcade';
@@ -145,26 +137,6 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     gameKey: 'prism_td',
   },
   {
-    id: 'gear-arena',
-    category: 'strategy',
-    title: 'Đấu Trường Ba Lô',
-    shortTitle: 'Ba Lô Cơ Khí',
-    subtitle: 'Gear-Grid Auto Arena · 12 Súng · 14 Phụ Kiện · 4 Chế Độ · Đấu Boss & Bóng Ma PvP',
-    badge: '12 Súng · 4 Chế Độ',
-    playable: true,
-    gameKey: 'gear_arena',
-  },
-  {
-    id: 'antique-shop',
-    category: 'casual',
-    title: 'Tiệm Đồ Cũ Giờ Đóng Cửa',
-    shortTitle: 'Tiệm Đồ Cũ',
-    subtitle: 'Tìm đồ giải mã tâm sự · 3 Hộp Kỷ Niệm Đêm · Tương tác 2 lớp, Zoom/Pan & Góc Bàn Trà',
-    badge: '3 Hộp · 34 Kỷ Vật',
-    playable: true,
-    gameKey: 'antique_shop',
-  },
-  {
     id: 'cat-finder',
     category: 'casual',
     title: 'Tìm Mèo & Đồ Xinh',
@@ -183,6 +155,16 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     badge: '12 Ngày · 3 Chế Độ',
     playable: true,
     gameKey: 'anomaly',
+  },
+  {
+    id: 'luong-cuoc-duong',
+    category: 'casual',
+    title: 'Lưỡng Cước Dương (两脚羊)',
+    shortTitle: 'Lưỡng Cước Dương',
+    subtitle: '3D First-Person Horror · Cân tiểu ly, bàn tính & thành Tuy Dương 757 SCN (30 Ngày)',
+    badge: '3D Kinh Dị · 30 Ngày',
+    playable: true,
+    gameKey: 'luong_cuoc_duong',
   },
   {
     id: 'asmr-organizer',
@@ -235,16 +217,6 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     gameKey: 'linux_hacker',
   },
   {
-    id: 'fidget-cockpit',
-    category: 'arcade',
-    title: 'Buồng Lái 15s',
-    shortTitle: 'Buồng Lái 15s',
-    subtitle: '15-Second Fidget Cockpit · 15 phản xạ cơ khí · 3 chế độ · Khẩn Cấp ×1.5 & Overdrive pháo hoa',
-    badge: '15 Lệnh · 3 Chế Độ',
-    playable: true,
-    gameKey: 'fidget_cockpit',
-  },
-  {
     id: 'gomoku-planned',
     category: 'arcade',
     title: 'Cờ Caro 5 Ô',
@@ -270,16 +242,6 @@ interface GameHubSectionProps {
 }
 
 function renderGameIcon(gameKey: GameId | undefined, isSelected: boolean) {
-  if (gameKey === 'antique_shop') {
-    return (
-      <LampDesk
-        className={`w-3.5 h-3.5 shrink-0 ${
-          isSelected ? 'text-amber-300' : 'text-amber-600 dark:text-amber-400'
-        }`}
-        aria-hidden="true"
-      />
-    );
-  }
   if (gameKey === 'cat_finder') {
     return (
       <Cat
@@ -295,6 +257,16 @@ function renderGameIcon(gameKey: GameId | undefined, isSelected: boolean) {
       <FileSearch
         className={`w-3.5 h-3.5 shrink-0 ${
           isSelected ? 'text-amber-300' : 'text-rose-600 dark:text-rose-400'
+        }`}
+        aria-hidden="true"
+      />
+    );
+  }
+  if (gameKey === 'luong_cuoc_duong') {
+    return (
+      <Flame
+        className={`w-3.5 h-3.5 shrink-0 ${
+          isSelected ? 'text-amber-300' : 'text-red-600 dark:text-red-400'
         }`}
         aria-hidden="true"
       />
@@ -350,26 +322,6 @@ function renderGameIcon(gameKey: GameId | undefined, isSelected: boolean) {
       />
     );
   }
-  if (gameKey === 'gear_arena') {
-    return (
-      <Swords
-        className={`w-3.5 h-3.5 shrink-0 ${
-          isSelected ? 'text-rose-300' : 'text-rose-600 dark:text-rose-400'
-        }`}
-        aria-hidden="true"
-      />
-    );
-  }
-  if (gameKey === 'fidget_cockpit') {
-    return (
-      <Gauge
-        className={`w-3.5 h-3.5 shrink-0 ${
-          isSelected ? 'text-amber-300' : 'text-amber-600 dark:text-amber-400'
-        }`}
-        aria-hidden="true"
-      />
-    );
-  }
   if (gameKey === 'fe_academy') {
     return (
       <Cpu
@@ -388,14 +340,6 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
     if (typeof window !== 'undefined') {
       const playParam = new URLSearchParams(window.location.search).get('play');
       if (
-        playParam === 'antique' ||
-        playParam === 'tiemdocu' ||
-        playParam === 'ngankeo' ||
-        playParam === 'hidden'
-      ) {
-        return 'antique_shop';
-      }
-      if (
         playParam === 'cat' ||
         playParam === 'timmeo' ||
         playParam === 'meo' ||
@@ -405,6 +349,15 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
         return 'cat_finder';
       }
       if (playParam === 'anomaly') return 'anomaly';
+      if (
+        playParam === 'luongcuocduong' ||
+        playParam === 'luong-cuoc-duong' ||
+        playParam === 'luong_cuoc_duong' ||
+        playParam === 'suiyang' ||
+        playParam === 'tuydong'
+      ) {
+        return 'luong_cuoc_duong';
+      }
       if (playParam === 'asmr' || playParam === 'ocd' || playParam === 'organizer') {
         return 'asmr_organizer';
       }
@@ -427,12 +380,6 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       }
       if (playParam === 'traffic' || playParam === 'ddos' || playParam === 'arch' || playParam === 'architecture') {
         return 'traffic_router';
-      }
-      if (playParam === 'gear' || playParam === 'arena' || playParam === 'backpack' || playParam === 'balo') {
-        return 'gear_arena';
-      }
-      if (playParam === 'cockpit' || playParam === 'fidget' || playParam === '15s' || playParam === 'buonglai') {
-        return 'fidget_cockpit';
       }
       if (
         playParam === 'fe' ||
@@ -568,7 +515,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
             </div>
             <div className="hidden sm:block mobile-ls:hidden min-w-0 max-w-[175px]">
               <p className="text-[10px] font-mono uppercase tracking-[0.1em] text-[#0284C7] dark:text-[#38BDF8] leading-tight">
-                Game Hub · 12 Trò
+                Game Hub · 10 Trò
               </p>
               <p className="text-xs font-semibold text-[#0A192F] dark:text-[#E2E8F0] leading-tight truncate">
                 {activeGameMeta?.shortTitle ?? 'Kho Game'}
@@ -785,7 +732,11 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
             : 'relative overscroll-none'
         }
       >
-        {isFullscreen && activeGame !== 'prism_td' && activeGame !== 'traffic_router' && activeGame !== 'cat_finder' && (
+        {isFullscreen &&
+          activeGame !== 'prism_td' &&
+          activeGame !== 'traffic_router' &&
+          activeGame !== 'cat_finder' &&
+          activeGame !== 'luong_cuoc_duong' && (
           <button
             type="button"
             data-testid="hub-exit-fullscreen-btn"
@@ -815,9 +766,6 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
               }
             >
               {activeGame === 'xiangqi' && <XiangqiGameSection theme={theme} onToggleTheme={onToggleTheme} />}
-              {activeGame === 'antique_shop' && (
-                <AntiqueShopGameSection theme={theme} onToggleTheme={onToggleTheme} />
-              )}
               {activeGame === 'cat_finder' && (
                 <CatFinderGameSection
                   theme={theme}
@@ -828,6 +776,15 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
                 />
               )}
               {activeGame === 'anomaly' && <AnomalyGameSection theme={theme} onToggleTheme={onToggleTheme} />}
+              {activeGame === 'luong_cuoc_duong' && (
+                <LuongCuocDuongGameSection
+                  theme={theme}
+                  onToggleTheme={onToggleTheme}
+                  isFullscreen={isFullscreen}
+                  onToggleFullscreen={toggleFullscreen}
+                  onExitFullscreen={exitFullscreen}
+                />
+              )}
               {activeGame === 'asmr_organizer' && (
                 <AsmrOrganizerGameSection theme={theme} onToggleTheme={onToggleTheme} />
               )}
@@ -853,12 +810,6 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
                   isFullscreen={isFullscreen}
                   onToggleFullscreen={toggleFullscreen}
                 />
-              )}
-              {activeGame === 'gear_arena' && (
-                <GearArenaGameSection theme={theme} onToggleTheme={onToggleTheme} />
-              )}
-              {activeGame === 'fidget_cockpit' && (
-                <FidgetCockpitGameSection theme={theme} onToggleTheme={onToggleTheme} />
               )}
               {activeGame === 'fe_academy' && (
                 <FeAcademyGameSection theme={theme} onToggleTheme={onToggleTheme} />

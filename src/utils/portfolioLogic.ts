@@ -249,13 +249,13 @@ export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
   }
   if (route === 'game') {
     return {
-      title: 'Khu Trò Chơi 2D — 8 Game Cờ Tướng, Pháo Đài & Ba Lô',
+      title: 'Khu Trò Chơi 2D & 3D — Cờ Tướng, Pháo Đài & Kinh Dị',
       description:
-        'Chơi 8 game 2D: Cờ Tướng AI, Hồ Sơ Dị Biệt, Sắp Xếp OCD, Xé Túi Mù, Thủ Thành 16 Súng, Ubuntu CLI, Thiết Kế Kiến Trúc & Đấu Trường Ba Lô.',
+        'Chơi 10 game web: Cờ Tướng AI, Pháo Đài, Tìm Mèo, Hồ Sơ Dị Biệt, Lưỡng Cước Dương 3D, Chuẩn OCD, Túi Mù, Ubuntu CLI & Học Viện FE.',
       keywords:
-        'Game 2D, Cờ Tướng AI, Kiểm Duyệt Hồ Sơ, Sắp Xếp OCD, Tiệm Xé Túi Mù, Thủ Thành Pháo Đài Lv10, Ubuntu CLI Production, Thiết Kế Kiến Trúc, Đấu Trường Ba Lô, Thuận Lê',
+        'Game Web, Cờ Tướng AI, Thủ Thành Pháo Đài, Tìm Mèo, Lưỡng Cước Dương 3D, Hồ Sơ Dị Biệt, Sắp Xếp OCD, Tiệm Xé Túi Mù, Ubuntu CLI, Thiết Kế Kiến Trúc, Thuận Lê',
       ogType: 'website',
-      ogImageAlt: 'Khu Trò Chơi 2D gồm Cờ Tướng AI, Thủ Thành Pháo Đài 16 Súng, Ubuntu CLI và Thiết Kế Kiến Trúc',
+      ogImageAlt: 'Khu Trò Chơi 2D & 3D gồm Cờ Tướng AI, Thủ Thành Pháo Đài, Lưỡng Cước Dương và Ubuntu CLI',
       path: '/game',
     };
   }
