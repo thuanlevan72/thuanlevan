@@ -11,6 +11,7 @@ import {
   advanceCoverTapState,
   applyCatMisclickPenalty,
   clampCatPanZoom,
+  computeCatStageLayoutSignature,
   computeCatStageStars,
   countCollectedSecretCats,
   getActiveCatTargetQueue,
@@ -25,6 +26,7 @@ import {
   isStageUnlocked,
   parseCatFinderSave,
   pickCatHintTarget,
+  randomizeCatStageLayout,
   updateComboOnFind,
 } from './catFinderEngine';
 
@@ -62,7 +64,7 @@ test('CAT_STAGES includes 5 stages with dense 24-28 items, >=40 decoys, latched/
   }
 });
 
-test('Difficulty configs scale 5x -> 8x -> 10x -> 20x challenge strictly across time, hearts, scale, hints, and queue caps', () => {
+test('Difficulty configs scale 5x -> 8x -> 10x -> 20x challenge without countdown timers', () => {
   const d5 = getCatDifficultyConfig('hard_5x');
   const d8 = getCatDifficultyConfig('nightmare_8x');
   const d10 = getCatDifficultyConfig('eagle_10x');
@@ -71,10 +73,8 @@ test('Difficulty configs scale 5x -> 8x -> 10x -> 20x challenge strictly across 
   assert.equal(CAT_DIFFICULTIES.hard_5x.multiplierBadge, '×5');
   assert.equal(d20.multiplierBadge, '×20');
   assert.equal(d20.label, 'Siêu Thần Ánh Xạ ×20');
-  assert.ok(d5.timeLimitSec > d8.timeLimitSec && d8.timeLimitSec > d10.timeLimitSec && d10.timeLimitSec > d20.timeLimitSec);
   assert.ok(d5.maxHearts > d8.maxHearts && d8.maxHearts > d10.maxHearts && d10.maxHearts > d20.maxHearts);
   assert.ok(d5.itemScaleMult > d8.itemScaleMult && d8.itemScaleMult > d10.itemScaleMult && d10.itemScaleMult > d20.itemScaleMult);
-  assert.ok(d5.misclickPenaltySec < d8.misclickPenaltySec && d8.misclickPenaltySec < d10.misclickPenaltySec && d10.misclickPenaltySec < d20.misclickPenaltySec);
   assert.equal(d5.activeQueueLimit, null);
   assert.equal(d8.activeQueueLimit, 5);
   assert.equal(d10.activeQueueLimit, 3);
@@ -88,7 +88,57 @@ test('Difficulty configs scale 5x -> 8x -> 10x -> 20x challenge strictly across 
   assert.ok(getEffectiveItemScale(sampleItem, d20) < getEffectiveItemScale(sampleItem, d10));
 });
 
-test('Multi-tap latched cover requires 2 taps, active queue limits eligible items, and misclick penalty triggers defeat', () => {
+test('randomizeCatStageLayout keeps items inside bounds/covers, avoids overlap, and never repeats recent signatures', () => {
+  for (const baseStage of CAT_STAGES) {
+    const recent: string[] = [computeCatStageLayoutSignature(baseStage)];
+    const run1 = randomizeCatStageLayout(baseStage, { recentSignatures: recent });
+    recent.push(run1.signature);
+    const run2 = randomizeCatStageLayout(baseStage, { recentSignatures: recent });
+
+    assert.notEqual(run1.signature, recent[0], `${baseStage.id} run1 must differ from base stage`);
+    assert.notEqual(run2.signature, run1.signature, `${baseStage.id} run2 must differ from run1`);
+
+    for (const runStage of [run1.stage, run2.stage]) {
+      assert.equal(runStage.items.length, baseStage.items.length);
+      assert.equal(runStage.covers.length, baseStage.covers.length);
+      assert.equal(runStage.decoys.length, baseStage.decoys.length);
+
+      for (const item of runStage.items) {
+        assert.ok(item.x >= 45 && item.x <= CAT_SCENE_W - 45, `${item.id} x=${item.x}`);
+        assert.ok(item.y >= 45 && item.y <= CAT_SCENE_H - 45, `${item.id} y=${item.y}`);
+        if (item.hiddenUnderCoverId) {
+          const cov = runStage.covers.find((c) => c.id === item.hiddenUnderCoverId);
+          assert.ok(cov, `${item.id} references cover ${item.hiddenUnderCoverId}`);
+          assert.equal(Boolean(cov.isDecoy), false, `${item.id} must not hide under decoy cover`);
+          assert.ok(
+            item.x >= cov.x && item.x <= cov.x + cov.w && item.y >= cov.y && item.y <= cov.y + cov.h,
+            `${item.id} (${item.x},${item.y}) must sit inside ${cov.id} (${cov.x}..${cov.x + cov.w}, ${cov.y}..${cov.y + cov.h})`
+          );
+        }
+      }
+
+      // Open items must maintain non-overlapping separation
+      const openItems = runStage.items.filter((i) => !i.hiddenUnderCoverId);
+      for (let i = 0; i < openItems.length; i++) {
+        for (let j = i + 1; j < openItems.length; j++) {
+          const d = Math.hypot(openItems[i].x - openItems[j].x, openItems[i].y - openItems[j].y);
+          assert.ok(d >= 42, `${runStage.id} open items too close: ${d}`);
+        }
+      }
+    }
+
+    // Verify most item coordinates actually moved between run1 and run2
+    let movedCount = 0;
+    for (const it1 of run1.stage.items) {
+      const it2 = run2.stage.items.find((x) => x.id === it1.id);
+      assert.ok(it2);
+      if (Math.hypot(it1.x - it2.x, it1.y - it2.y) >= 16) movedCount += 1;
+    }
+    assert.ok(movedCount >= Math.floor(baseStage.items.length * 0.75), `${baseStage.id} moved=${movedCount}`);
+  }
+});
+
+test('Multi-tap latched cover requires 2 taps, active queue limits eligible items, and heart-only misclick penalty triggers defeat', () => {
   const bakery = CAT_STAGES[0];
   const latchedCover = bakery.covers.find((c) => c.id === 'bk-cover-tin');
   assert.ok(latchedCover);
@@ -120,13 +170,11 @@ test('Multi-tap latched cover requires 2 taps, active queue limits eligible item
   assert.ok(secretCat);
   assert.equal(isItemAllowedByQueue(secretCat, queue3), true);
 
-  // Misclick penalties reduce hearts & time and trigger game over
-  const miss1 = applyCatMisclickPenalty(3, 40, 12);
-  assert.deepEqual(miss1, { nextHearts: 2, nextRemainingSec: 28, isGameOver: false });
-  const missFatal = applyCatMisclickPenalty(1, 20, 12);
-  assert.deepEqual(missFatal, { nextHearts: 0, nextRemainingSec: 8, isGameOver: true });
-  const timeFatal = applyCatMisclickPenalty(3, 10, 12);
-  assert.deepEqual(timeFatal, { nextHearts: 2, nextRemainingSec: 0, isGameOver: true });
+  // Misclick penalties reduce hearts only and trigger game over at 0 hearts
+  const miss1 = applyCatMisclickPenalty(3);
+  assert.deepEqual(miss1, { nextHearts: 2, isGameOver: false });
+  const missFatal = applyCatMisclickPenalty(1);
+  assert.deepEqual(missFatal, { nextHearts: 0, isGameOver: true });
 });
 
 test('Smart hint points to closed cover or active item and combo resets outside tighter 3.8s window', () => {
@@ -153,7 +201,7 @@ test('Smart hint points to closed cover or active item and combo resets outside 
   assert.equal(expired.isComboBoost, false);
 });
 
-test('Town map unlocks stages sequentially, computes stars under stricter thresholds, clamps zoom to 3.6x, and sanitizes saves', () => {
+test('Town map unlocks stages sequentially, computes timer-free stars, clamps zoom to 3.6x, and sanitizes saves', () => {
   const save = parseCatFinderSave(null);
   assert.equal(save.difficultyId, 'hard_5x');
   assert.equal(isStageUnlocked('morning-bakery', save), true);
@@ -170,10 +218,10 @@ test('Town map unlocks stages sequentially, computes stars under stricter thresh
   assert.equal(countCollectedSecretCats(save), 4);
   assert.equal(isStageUnlocked('fireworks-festival', save), true);
 
-  assert.equal(computeCatStageStars(0, 80, true, 5, 7), 3);
-  assert.equal(computeCatStageStars(1, 110, false, 4, 7), 3);
-  assert.equal(computeCatStageStars(2, 130, false, 3, 7), 2);
-  assert.equal(computeCatStageStars(3, 140, false, 1, 7), 1);
+  assert.equal(computeCatStageStars(0, true, 5, 7), 3);
+  assert.equal(computeCatStageStars(1, false, 5, 7), 3);
+  assert.equal(computeCatStageStars(2, false, 3, 7), 2);
+  assert.equal(computeCatStageStars(3, false, 1, 7), 1);
 
   const pzLow = clampCatPanZoom(0.2, 9999, -9999, 800, 440);
   assert.equal(pzLow.scale, CAT_MIN_ZOOM);
@@ -216,6 +264,5 @@ test('Town map unlocks stages sequentially, computes stars under stricter thresh
   assert.equal(sanitized.difficultyId, 'eagle_10x');
   assert.deepEqual(sanitized.stages['morning-bakery'].foundItemIds, ['bk-croissant']);
   assert.equal(sanitized.stages['morning-bakery'].bestStars, 3);
-  assert.equal(sanitized.stages['morning-bakery'].bestTimeSec, 72);
   assert.equal(sanitized.stages['morning-bakery'].bestCombo, 4);
 });

@@ -22,12 +22,9 @@ export interface CatDifficultyConfig {
   tagline: string;
   itemScaleMult: number;
   hitboxScale: number;
-  timeLimitSec: number;
   maxHearts: number;
-  misclickPenaltySec: number;
   maxHints: number;
   hintRadius: number;
-  hintCostSec: number;
   activeQueueLimit: number | null;
   coverAutoCloseSec: number | null;
   spotlightRadius: number | null;
@@ -41,80 +38,68 @@ export const CAT_DIFFICULTIES: Record<CatDifficultyId, CatDifficultyConfig> = {
     id: 'hard_5x',
     label: 'Khó ×5',
     multiplierBadge: '×5',
-    tagline: '24–28 món nhỏ · +45 đồ nhiễu · 150s · 7 Tim · Sai -6s',
-    itemScaleMult: 0.72,
-    hitboxScale: 0.78,
-    timeLimitSec: 150,
+    tagline: '24–27 đồ xinh · +44 đồ giả · Không giới hạn giờ · 7 Tim · 2 Gợi ý',
+    itemScaleMult: 0.74,
+    hitboxScale: 0.82,
     maxHearts: 7,
-    misclickPenaltySec: 6,
     maxHints: 2,
     hintRadius: 118,
-    hintCostSec: 8,
     activeQueueLimit: null,
     coverAutoCloseSec: null,
     spotlightRadius: null,
     spotlightOpacity: 0,
-    camoOpacity: 0.9,
+    camoOpacity: 0.92,
     decoyDensityMult: 1,
   },
   nightmare_8x: {
     id: 'nightmare_8x',
     label: 'Ác Mộng ×8',
     multiplierBadge: '×8',
-    tagline: 'Mục tiêu thu nhỏ + ngụy trang · Chỉ hiện 5 món/lượt · 125s · 5 Tim',
-    itemScaleMult: 0.6,
-    hitboxScale: 0.68,
-    timeLimitSec: 125,
+    tagline: 'Thu nhỏ + ngụy trang · 5 món/lượt · Không giới hạn giờ · 5 Tim · 1 Gợi ý',
+    itemScaleMult: 0.62,
+    hitboxScale: 0.7,
     maxHearts: 5,
-    misclickPenaltySec: 9,
     maxHints: 1,
     hintRadius: 155,
-    hintCostSec: 12,
     activeQueueLimit: 5,
     coverAutoCloseSec: 13,
     spotlightRadius: 295,
-    spotlightOpacity: 0.44,
-    camoOpacity: 0.82,
+    spotlightOpacity: 0.42,
+    camoOpacity: 0.84,
     decoyDensityMult: 1,
   },
   eagle_10x: {
     id: 'eagle_10x',
     label: 'Mắt Đại Bàng ×10',
     multiplierBadge: '×10',
-    tagline: 'Siêu nhỏ · Đèn soi 215px · 3 món/lượt · Nắp tự đóng 8.5s · 3 Tim · 0 Gợi ý',
-    itemScaleMult: 0.5,
-    hitboxScale: 0.58,
-    timeLimitSec: 105,
+    tagline: 'Siêu nhỏ · Đèn soi 215px · 3 món/lượt · Nắp tự đóng 8.5s · 3 Tim',
+    itemScaleMult: 0.52,
+    hitboxScale: 0.6,
     maxHearts: 3,
-    misclickPenaltySec: 12,
     maxHints: 0,
     hintRadius: 185,
-    hintCostSec: 15,
     activeQueueLimit: 3,
     coverAutoCloseSec: 8.5,
     spotlightRadius: 215,
-    spotlightOpacity: 0.74,
-    camoOpacity: 0.74,
+    spotlightOpacity: 0.72,
+    camoOpacity: 0.76,
     decoyDensityMult: 1,
   },
   god_ray_20x: {
     id: 'god_ray_20x',
     label: 'Siêu Thần Ánh Xạ ×20',
     multiplierBadge: '×20',
-    tagline: 'Thần Nhãn 165px · 1 món/lượt · Nắp đóng 5.5s · 2 Tim · Sai -18s · 0 Gợi ý',
-    itemScaleMult: 0.42,
-    hitboxScale: 0.5,
-    timeLimitSec: 90,
+    tagline: 'Thần Nhãn 165px · 1 món/lượt · Nắp đóng 5.5s · 2 Tim · 0 Gợi ý',
+    itemScaleMult: 0.44,
+    hitboxScale: 0.52,
     maxHearts: 2,
-    misclickPenaltySec: 18,
     maxHints: 0,
     hintRadius: 205,
-    hintCostSec: 18,
     activeQueueLimit: 1,
     coverAutoCloseSec: 5.5,
     spotlightRadius: 165,
-    spotlightOpacity: 0.86,
-    camoOpacity: 0.64,
+    spotlightOpacity: 0.84,
+    camoOpacity: 0.68,
     decoyDensityMult: 1,
   },
 };
@@ -815,16 +800,12 @@ export function isItemAllowedByQueue(
 }
 
 export function applyCatMisclickPenalty(
-  hearts: number,
-  remainingSec: number,
-  penaltySec: number
-): { nextHearts: number; nextRemainingSec: number; isGameOver: boolean } {
+  hearts: number
+): { nextHearts: number; isGameOver: boolean } {
   const nextHearts = Math.max(0, hearts - 1);
-  const nextRemainingSec = Math.max(0, remainingSec - Math.max(0, penaltySec));
   return {
     nextHearts,
-    nextRemainingSec,
-    isGameOver: nextHearts <= 0 || nextRemainingSec <= 0,
+    isGameOver: nextHearts <= 0,
   };
 }
 
@@ -857,15 +838,14 @@ export function updateComboOnFind(
 
 export function computeCatStageStars(
   hintsUsed: number,
-  elapsedSec: number,
   foundSecretCat: boolean,
   remainingHearts = 5,
   maxHearts = 7
 ): number {
   const ratioHearts = maxHearts > 0 ? remainingHearts / maxHearts : 1;
-  if (hintsUsed === 0 && elapsedSec <= 95 && ratioHearts >= 0.5 && foundSecretCat) return 3;
-  if (hintsUsed <= 1 && elapsedSec <= 120 && ratioHearts >= 0.4) return 3;
-  if (hintsUsed <= 2 && remainingHearts >= 2) return 2;
+  if (hintsUsed === 0 && ratioHearts >= 0.5 && foundSecretCat) return 3;
+  if (hintsUsed <= 1 && ratioHearts >= 0.6) return 3;
+  if (hintsUsed <= 2 && (remainingHearts >= 2 || ratioHearts >= 0.45)) return 2;
   return 1;
 }
 
@@ -1004,9 +984,310 @@ export function parseCatFinderSave(raw: string | null): CatFinderSaveData {
   }
 }
 
-export function formatCatTimer(totalSec: number): string {
-  const safe = Math.max(0, Math.floor(totalSec));
-  const m = Math.floor(safe / 60);
-  const s = safe % 60;
-  return `${m}:${String(s).padStart(2, '0')}`;
+export function computeCatStageLayoutSignature(stage: CatStageDef): string {
+  const coverPart = stage.covers
+    .map((c) => `${c.id}:${Math.round(c.x / 10)},${Math.round(c.y / 10)}`)
+    .sort()
+    .join('|');
+  const itemPart = stage.items
+    .map(
+      (i) =>
+        `${i.id}:${Math.round(i.x / 10)},${Math.round(i.y / 10)},${i.hiddenUnderCoverId ?? ''}`
+    )
+    .sort()
+    .join('|');
+  return `${coverPart}#${itemPart}`;
+}
+
+const EXTRA_COVER_ANCHORS: readonly [number, number][] = [
+  [105, 138],
+  [345, 132],
+  [595, 126],
+  [845, 138],
+  [1105, 145],
+  [115, 345],
+  [370, 355],
+  [615, 348],
+  [865, 340],
+  [1120, 352],
+  [215, 515],
+  [465, 512],
+  [735, 518],
+  [990, 512],
+];
+
+const EXTRA_OPEN_ITEM_ANCHORS: readonly [number, number][] = [
+  [88, 118], [188, 124], [308, 118], [435, 114], [552, 118], [728, 116], [892, 118], [1028, 118], [1185, 118], [1282, 116],
+  [92, 224], [218, 228], [398, 218], [568, 224], [732, 226], [908, 218], [1062, 224], [1222, 228],
+  [118, 326], [282, 324], [448, 328], [612, 326], [774, 322], [946, 328], [1106, 324], [1268, 326],
+  [96, 424], [254, 428], [412, 424], [574, 426], [748, 424], [912, 428], [1068, 424], [1246, 426],
+  [124, 524], [298, 526], [468, 524], [634, 526], [802, 522], [964, 528], [1128, 524], [1274, 522],
+  [172, 608], [344, 612], [516, 608], [692, 612], [866, 608], [1036, 612], [1198, 608],
+];
+
+function shuffleWithRng<T>(arr: readonly T[], rng: () => number): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+function clampSceneVal(val: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, val));
+}
+
+function rectsOverlapWithPad(
+  ax: number,
+  ay: number,
+  aw: number,
+  ah: number,
+  bx: number,
+  by: number,
+  bw: number,
+  bh: number,
+  pad: number
+): boolean {
+  return (
+    ax < bx + bw + pad &&
+    ax + aw + pad > bx &&
+    ay < by + bh + pad &&
+    ay + ah + pad > by
+  );
+}
+
+function pointInsideAnyCover(
+  x: number,
+  y: number,
+  covers: readonly CatCoverDef[],
+  pad: number
+): boolean {
+  return covers.some(
+    (c) =>
+      x >= c.x - pad &&
+      x <= c.x + c.w + pad &&
+      y >= c.y - pad &&
+      y <= c.y + c.h + pad
+  );
+}
+
+function buildRandomizedAttempt(stage: CatStageDef, rng: () => number): CatStageDef {
+  // 1. Randomize cover positions across scenic cover anchors without overlapping each other
+  const coverAnchors = shuffleWithRng(
+    [
+      ...stage.covers.map((c) => [c.x, c.y] as [number, number]),
+      ...EXTRA_COVER_ANCHORS,
+    ],
+    rng
+  );
+
+  const placedCovers: CatCoverDef[] = [];
+  for (const cov of stage.covers) {
+    const maxX = CAT_SCENE_W - cov.w - 48;
+    const maxY = CAT_SCENE_H - cov.h - 48;
+    let chosenX = clampSceneVal(cov.x, 48, maxX);
+    let chosenY = clampSceneVal(cov.y, 72, maxY);
+
+    let placed = false;
+    for (const [ax, ay] of coverAnchors) {
+      const candX = Math.round(clampSceneVal(ax + (rng() - 0.5) * 26, 48, maxX));
+      const candY = Math.round(clampSceneVal(ay + (rng() - 0.5) * 22, 72, maxY));
+      if (
+        !placedCovers.some((p) =>
+          rectsOverlapWithPad(candX, candY, cov.w, cov.h, p.x, p.y, p.w, p.h, 16)
+        )
+      ) {
+        chosenX = candX;
+        chosenY = candY;
+        placed = true;
+        break;
+      }
+    }
+
+    // Fallback grid scan if random anchors collided
+    if (!placed) {
+      outer: for (let gy = 80; gy <= maxY; gy += 48) {
+        for (let gx = 54; gx <= maxX; gx += 62) {
+          if (
+            !placedCovers.some((p) =>
+              rectsOverlapWithPad(gx, gy, cov.w, cov.h, p.x, p.y, p.w, p.h, 12)
+            )
+          ) {
+            chosenX = gx;
+            chosenY = gy;
+            break outer;
+          }
+        }
+      }
+    }
+
+    placedCovers.push({
+      ...cov,
+      x: chosenX,
+      y: chosenY,
+    });
+  }
+
+  // 2. Permute which non-decoy covers hold covered items (so item-to-cover pairings vary every run)
+  const nonDecoyCovers = placedCovers.filter((c) => !c.isDecoy);
+  const shuffledNonDecoyCovers = shuffleWithRng(nonDecoyCovers, rng);
+
+  const coveredSourceItems = stage.items.filter((it) => Boolean(it.hiddenUnderCoverId));
+  const openSourceItems = stage.items.filter((it) => !it.hiddenUnderCoverId);
+
+  // Shuffle which items from open pool vs covered pool sit under covers (keep secret golden cat movable!)
+  const allShuffledItems = shuffleWithRng([...coveredSourceItems, ...openSourceItems], rng);
+  const nextCoveredCount = Math.min(coveredSourceItems.length, shuffledNonDecoyCovers.length);
+  const itemsToHide = allShuffledItems.slice(0, nextCoveredCount);
+  const itemsToLeaveOpen = allShuffledItems.slice(nextCoveredCount);
+
+  const placedItems: CatItemDef[] = [];
+
+  // Place covered items strictly inside their newly assigned cover bounding rect
+  itemsToHide.forEach((item, idx) => {
+    const cov = shuffledNonDecoyCovers[idx];
+    const padX = Math.min(24, Math.floor(cov.w * 0.25));
+    const padY = Math.min(24, Math.floor(cov.h * 0.25));
+    const x = Math.round(
+      clampSceneVal(
+        cov.x + padX + rng() * Math.max(1, cov.w - padX * 2),
+        cov.x + 8,
+        cov.x + cov.w - 8
+      )
+    );
+    const y = Math.round(
+      clampSceneVal(
+        cov.y + padY + rng() * Math.max(1, cov.h - padY * 2),
+        cov.y + 8,
+        cov.y + cov.h - 8
+      )
+    );
+    placedItems.push({
+      ...item,
+      x,
+      y,
+      hiddenUnderCoverId: cov.id,
+      rotateDeg:
+        item.soundCategory === 'cat' || item.soundCategory === 'dog'
+          ? Math.round((rng() - 0.5) * 10)
+          : Math.round((item.rotateDeg ?? 0) + (rng() - 0.5) * 28),
+    });
+  });
+
+  // 3. Place open items across scenic open points with separation & outside covers
+  const openCandidatePool = shuffleWithRng(
+    [
+      ...stage.items.filter((i) => !i.hiddenUnderCoverId).map((i) => [i.x, i.y] as [number, number]),
+      ...EXTRA_OPEN_ITEM_ANCHORS,
+    ],
+    rng
+  );
+
+  const placedOpenPositions: Array<{ x: number; y: number }> = [];
+  for (const item of itemsToLeaveOpen) {
+    let chosenX = clampSceneVal(item.x, 56, CAT_SCENE_W - 56);
+    let chosenY = clampSceneVal(item.y, 72, CAT_SCENE_H - 52);
+    let foundSpot = false;
+
+    for (const [ax, ay] of openCandidatePool) {
+      const cx = Math.round(clampSceneVal(ax + (rng() - 0.5) * 28, 56, CAT_SCENE_W - 56));
+      const cy = Math.round(clampSceneVal(ay + (rng() - 0.5) * 24, 72, CAT_SCENE_H - 52));
+      if (pointInsideAnyCover(cx, cy, placedCovers, 18)) continue;
+      if (placedOpenPositions.some((p) => Math.hypot(cx - p.x, cy - p.y) < 52)) continue;
+      chosenX = cx;
+      chosenY = cy;
+      foundSpot = true;
+      break;
+    }
+
+    if (!foundSpot) {
+      // Deterministic safe grid search guaranteeing non-overlap & outside covers
+      outerOpen: for (let gy = 76; gy <= CAT_SCENE_H - 52; gy += 46) {
+        for (let gx = 58; gx <= CAT_SCENE_W - 58; gx += 54) {
+          if (pointInsideAnyCover(gx, gy, placedCovers, 14)) continue;
+          if (placedOpenPositions.some((p) => Math.hypot(gx - p.x, gy - p.y) < 46)) continue;
+          chosenX = gx;
+          chosenY = gy;
+          foundSpot = true;
+          break outerOpen;
+        }
+      }
+    }
+
+    placedOpenPositions.push({ x: chosenX, y: chosenY });
+    placedItems.push({
+      ...item,
+      x: chosenX,
+      y: chosenY,
+      hiddenUnderCoverId: undefined,
+      rotateDeg:
+        item.soundCategory === 'cat' || item.soundCategory === 'dog'
+          ? Math.round((rng() - 0.5) * 10)
+          : Math.round((item.rotateDeg ?? 0) + (rng() - 0.5) * 32),
+    });
+  }
+
+  // Restore canonical stage item ordering for consistent queue / thumbnail rendering,
+  // or keep regular order slightly shuffled so queue order in 8x/10x/20x also feels fresh!
+  const shuffledItemList = shuffleWithRng(placedItems, rng);
+
+  // 4. Randomize decoy scatter without sitting directly on open target hitboxes
+  const decoyPool = shuffleWithRng(
+    [
+      ...stage.decoys.map((d) => [d.x, d.y] as [number, number]),
+      ...EXTRA_OPEN_ITEM_ANCHORS,
+    ],
+    rng
+  );
+  const shuffledArtKeys = shuffleWithRng(
+    stage.decoys.map((d) => d.artKey),
+    rng
+  );
+
+  const placedDecoys: CatDecoyDef[] = stage.decoys.map((dec, idx) => {
+    const base = decoyPool[idx % decoyPool.length];
+    let dx = Math.round(clampSceneVal(base[0] + (rng() - 0.5) * 34, 52, CAT_SCENE_W - 52));
+    let dy = Math.round(clampSceneVal(base[1] + (rng() - 0.5) * 30, 68, CAT_SCENE_H - 48));
+    if (placedOpenPositions.some((p) => Math.hypot(dx - p.x, dy - p.y) < 34)) {
+      dx = Math.round(clampSceneVal(dx + (rng() > 0.5 ? 42 : -42), 52, CAT_SCENE_W - 52));
+      dy = Math.round(clampSceneVal(dy + (rng() > 0.5 ? 36 : -36), 68, CAT_SCENE_H - 48));
+    }
+    return {
+      ...dec,
+      artKey: shuffledArtKeys[idx % shuffledArtKeys.length],
+      x: dx,
+      y: dy,
+      rotateDeg: Math.round((rng() - 0.5) * 68),
+      scale: Number((0.5 + rng() * 0.26).toFixed(2)),
+    };
+  });
+
+  return {
+    ...stage,
+    covers: placedCovers,
+    items: shuffledItemList,
+    decoys: placedDecoys,
+  };
+}
+
+export function randomizeCatStageLayout(
+  stage: CatStageDef,
+  options?: {
+    rng?: () => number;
+    recentSignatures?: readonly string[];
+  }
+): { stage: CatStageDef; signature: string } {
+  const rng = options?.rng ?? Math.random;
+  const recentSet = new Set(options?.recentSignatures ?? []);
+
+  let candidate = buildRandomizedAttempt(stage, rng);
+  let signature = computeCatStageLayoutSignature(candidate);
+
+  for (let attempt = 0; attempt < 8 && recentSet.has(signature); attempt++) {
+    candidate = buildRandomizedAttempt(stage, rng);
+    signature = computeCatStageLayoutSignature(candidate);
+  }
+
+  return { stage: candidate, signature };
 }

@@ -11,7 +11,6 @@ import {
   ArrowLeft,
   Cat,
   Check,
-  Clock,
   Download,
   Eye,
   Flame,
@@ -23,7 +22,6 @@ import {
   Music,
   RotateCcw,
   Search,
-  Skull,
   Sparkles,
   Star,
   Sun,
@@ -42,10 +40,10 @@ import {
   advanceCoverTapState,
   applyCatMisclickPenalty,
   clampCatPanZoom,
+  computeCatStageLayoutSignature,
   computeCatStageStars,
   countCollectedSecretCats,
   createInitialStageSave,
-  formatCatTimer,
   getActiveCatTargetQueue,
   getCatDifficultyConfig,
   getEffectiveItemScale,
@@ -59,6 +57,7 @@ import {
   isStageUnlocked,
   parseCatFinderSave,
   pickCatHintTarget,
+  randomizeCatStageLayout,
   updateComboOnFind,
   type CatDifficultyId,
   type CatFinderSaveData,
@@ -87,7 +86,6 @@ interface CatFinderGameSectionProps {
 }
 
 type CatGameScreen = 'TITLE' | 'PLAYING' | 'VICTORY' | 'GAMEOVER';
-type DefeatReason = 'hearts' | 'time';
 
 interface PopBurstFx {
   id: number;
@@ -132,7 +130,8 @@ function drawShareCardDataUrl(opts: {
   stageTitle: string;
   difficultyLabel: string;
   stars: number;
-  elapsedSec: number;
+  hearts: number;
+  maxHearts: number;
   maxCombo: number;
   foundCount: number;
   totalCount: number;
@@ -145,59 +144,59 @@ function drawShareCardDataUrl(opts: {
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
-  ctx.fillStyle = '#FFF8EF';
+  ctx.fillStyle = '#FFF7FA';
   ctx.fillRect(0, 0, 960, 540);
 
-  ctx.strokeStyle = '#F2A7B3';
+  ctx.strokeStyle = '#FFA8BE';
   ctx.lineWidth = 8;
   ctx.strokeRect(24, 24, 912, 492);
-  ctx.strokeStyle = '#43312B';
+  ctx.strokeStyle = '#5A3E44';
   ctx.lineWidth = 2.5;
   ctx.strokeRect(36, 36, 888, 468);
 
-  ctx.fillStyle = '#E07082';
+  ctx.fillStyle = '#DB527E';
   ctx.font = 'bold 20px sans-serif';
   ctx.fillText(`TÌM MÈO & ĐỒ XINH · ${opts.difficultyLabel.toUpperCase()}`, 68, 92);
 
-  ctx.fillStyle = '#43312B';
+  ctx.fillStyle = '#5A3E44';
   ctx.font = 'bold 40px Georgia, serif';
   ctx.fillText(opts.stageTitle, 68, 148);
 
   ctx.font = '44px sans-serif';
   for (let i = 0; i < 3; i++) {
-    ctx.fillStyle = i < opts.stars ? '#FBBF24' : '#E5DDD5';
+    ctx.fillStyle = i < opts.stars ? '#FBBF24' : '#F0DCE3';
     ctx.fillText('★', 68 + i * 56, 212);
   }
 
   const boxes = [
     { label: 'ĐỒ XINH', value: `${opts.foundCount}/${opts.totalCount}` },
-    { label: 'HOÀN THÀNH', value: formatCatTimer(opts.elapsedSec) },
+    { label: 'TIM CÒN LẠI', value: `${opts.hearts}/${opts.maxHearts}` },
     { label: 'COMBO MAX', value: `×${opts.maxCombo}` },
   ];
   boxes.forEach((box, idx) => {
     const bx = 68 + idx * 195;
     const by = 250;
-    ctx.fillStyle = '#FFFDF9';
+    ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(bx, by, 175, 118);
-    ctx.strokeStyle = '#E7D5C6';
+    ctx.strokeStyle = '#F3C8D8';
     ctx.lineWidth = 2;
     ctx.strokeRect(bx, by, 175, 118);
 
-    ctx.fillStyle = '#8C7466';
+    ctx.fillStyle = '#9D7782';
     ctx.font = 'bold 13px sans-serif';
     ctx.fillText(box.label, bx + 18, by + 34);
 
-    ctx.fillStyle = '#43312B';
+    ctx.fillStyle = '#5A3E44';
     ctx.font = 'bold 34px monospace';
     ctx.fillText(box.value, bx + 18, by + 88);
   });
 
-  ctx.fillStyle = opts.foundSecret ? '#FEF3C7' : '#F3ECE5';
+  ctx.fillStyle = opts.foundSecret ? '#FEF3C7' : '#FFF0F5';
   ctx.fillRect(68, 396, 565, 66);
-  ctx.strokeStyle = opts.foundSecret ? '#F59E0B' : '#D5C7BA';
+  ctx.strokeStyle = opts.foundSecret ? '#F59E0B' : '#F3C8D8';
   ctx.lineWidth = 2;
   ctx.strokeRect(68, 396, 565, 66);
-  ctx.fillStyle = '#43312B';
+  ctx.fillStyle = '#5A3E44';
   ctx.font = 'bold 20px sans-serif';
   ctx.fillText(
     opts.foundSecret
@@ -207,10 +206,11 @@ function drawShareCardDataUrl(opts: {
     436
   );
 
+  // Kawaii Golden Cat Mascot
   ctx.save();
   ctx.translate(780, 290);
-  ctx.fillStyle = '#FCD34D';
-  ctx.strokeStyle = '#43312B';
+  ctx.fillStyle = '#FDE68A';
+  ctx.strokeStyle = '#5A3E44';
   ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.arc(0, 48, 66, 0, Math.PI * 2);
@@ -234,16 +234,52 @@ function drawShareCardDataUrl(opts: {
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-  ctx.fillStyle = '#43312B';
+  // Pink inner ears
+  ctx.fillStyle = '#FFB3C6';
   ctx.beginPath();
-  ctx.arc(-18, -36, 5, 0, Math.PI * 2);
-  ctx.arc(18, -36, 5, 0, Math.PI * 2);
+  ctx.moveTo(-38, -68);
+  ctx.lineTo(-31, -94);
+  ctx.lineTo(-16, -78);
+  ctx.closePath();
   ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(38, -68);
+  ctx.lineTo(31, -94);
+  ctx.lineTo(16, -78);
+  ctx.closePath();
+  ctx.fill();
+  // Eyes + white anime catchlights
+  ctx.fillStyle = '#5A3E44';
+  ctx.beginPath();
+  ctx.arc(-18, -36, 5.5, 0, Math.PI * 2);
+  ctx.arc(18, -36, 5.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#FFFFFF';
+  ctx.beginPath();
+  ctx.arc(-19.5, -38, 2, 0, Math.PI * 2);
+  ctx.arc(16.5, -38, 2, 0, Math.PI * 2);
+  ctx.fill();
+  // Rosy cheek blushes
+  ctx.fillStyle = '#FF97B5';
+  ctx.beginPath();
+  ctx.arc(-30, -22, 8.5, 0, Math.PI * 2);
+  ctx.arc(30, -22, 8.5, 0, Math.PI * 2);
+  ctx.fill();
+  // Pink ribbon bow on collar
   ctx.fillStyle = '#F472B6';
+  ctx.strokeStyle = '#5A3E44';
+  ctx.lineWidth = 2.2;
   ctx.beginPath();
-  ctx.arc(-30, -22, 8, 0, Math.PI * 2);
-  ctx.arc(30, -22, 8, 0, Math.PI * 2);
+  ctx.moveTo(0, 12);
+  ctx.lineTo(-18, 2);
+  ctx.lineTo(-18, 22);
+  ctx.closePath();
+  ctx.moveTo(0, 12);
+  ctx.lineTo(18, 2);
+  ctx.lineTo(18, 22);
+  ctx.closePath();
   ctx.fill();
+  ctx.stroke();
   ctx.restore();
 
   return canvas.toDataURL('image/png');
@@ -284,9 +320,8 @@ export function CatFinderGameSection({
   const [coverTapCounts, setCoverTapCounts] = useState<Record<string, number>>({});
   const [coverOpenedAtMs, setCoverOpenedAtMs] = useState<Record<string, number>>({});
   const [hintsUsed, setHintsUsed] = useState(0);
-  const [remainingSec, setRemainingSec] = useState<number>(() => diffConfig.timeLimitSec);
   const [hearts, setHearts] = useState<number>(() => diffConfig.maxHearts);
-  const [defeatReason, setDefeatReason] = useState<DefeatReason>('time');
+  const heartsRef = useRef<number>(diffConfig.maxHearts);
   const [comboStreak, setComboStreak] = useState(0);
   const [maxCombo, setMaxCombo] = useState(1);
   const [lastFindAtMs, setLastFindAtMs] = useState<number | null>(null);
@@ -304,6 +339,12 @@ export function CatFinderGameSection({
   const [viewportSize, setViewportSize] = useState<{ width: number; height: number }>({
     width: 1080,
     height: 540,
+  });
+
+  const recentLayoutSigsRef = useRef<Record<string, string[]>>({});
+  const [activeRunStage, setActiveRunStage] = useState<CatStageDef>(() => {
+    const initialBase = CAT_STAGES.find((s) => s.id === saveData.activeStageId) ?? CAT_STAGES[0];
+    return randomizeCatStageLayout(initialBase).stage;
   });
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -342,10 +383,12 @@ export function CatFinderGameSection({
     wasPinching: false,
   });
 
-  const activeStage: CatStageDef = useMemo(
+  const baseStage: CatStageDef = useMemo(
     () => CAT_STAGES.find((s) => s.id === saveData.activeStageId) ?? CAT_STAGES[0],
     [saveData.activeStageId]
   );
+
+  const activeStage: CatStageDef = screen === 'TITLE' ? baseStage : activeRunStage;
 
   const stageSave = useMemo(
     () => saveData.stages[activeStage.id] ?? createInitialStageSave(),
@@ -400,7 +443,6 @@ export function CatFinderGameSection({
     return m;
   }, [saveData]);
 
-  const elapsedSec = Math.max(0, diffConfig.timeLimitSec - remainingSec);
   const hintsRemaining = Math.max(0, diffConfig.maxHints - hintsUsed);
 
   const pushFloatingNotice = useCallback(
@@ -413,6 +455,16 @@ export function CatFinderGameSection({
     },
     []
   );
+
+  // Record initial randomized run signature on mount so first replay never repeats
+  useEffect(() => {
+    const sig = computeCatStageLayoutSignature(activeRunStage);
+    const list = recentLayoutSigsRef.current[activeRunStage.id] ?? [];
+    if (!list.includes(sig)) {
+      recentLayoutSigsRef.current[activeRunStage.id] = [...list.slice(-7), sig];
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Persist save state
   useEffect(() => {
@@ -447,44 +499,29 @@ export function CatFinderGameSection({
     };
   }, [bgmOn, muted, screen]);
 
-  // Countdown timer & auto-closing covers in NIGHTMARE / EAGLE modes
+  // Auto-closing covers in x8, x10, and x20 modes (no countdown timer pressure!)
   useEffect(() => {
-    if (screen !== 'PLAYING') return;
+    if (screen !== 'PLAYING' || diffConfig.coverAutoCloseSec === null) return;
+    const ttlMs = diffConfig.coverAutoCloseSec * 1000;
     const t = window.setInterval(() => {
-      setRemainingSec((prev) => {
-        if (prev <= 1) {
-          setDefeatReason('time');
-          catFinderAudio.playGameOverSound(muted);
-          setScreen('GAMEOVER');
-          return 0;
-        }
-        if (prev <= 13) {
-          catFinderAudio.playWarningTickSound(muted);
-        }
-        return prev - 1;
-      });
-
-      if (diffConfig.coverAutoCloseSec !== null) {
-        const now = Date.now();
-        const ttlMs = diffConfig.coverAutoCloseSec * 1000;
-        setCoverOpenedAtMs((prevOpenedAt) => {
-          const expiredIds = Object.entries(prevOpenedAt)
-            .filter(([, openedAt]) => now - openedAt >= ttlMs)
-            .map(([id]) => id);
-          if (expiredIds.length === 0) return prevOpenedAt;
-          const nextOpenedAt = { ...prevOpenedAt };
-          for (const id of expiredIds) delete nextOpenedAt[id];
-          setCoverTapCounts((prevTaps) => {
-            const nextTaps = { ...prevTaps };
-            for (const id of expiredIds) delete nextTaps[id];
-            return nextTaps;
-          });
-          return nextOpenedAt;
+      const now = Date.now();
+      setCoverOpenedAtMs((prevOpenedAt) => {
+        const expiredIds = Object.entries(prevOpenedAt)
+          .filter(([, openedAt]) => now - openedAt >= ttlMs)
+          .map(([id]) => id);
+        if (expiredIds.length === 0) return prevOpenedAt;
+        const nextOpenedAt = { ...prevOpenedAt };
+        for (const id of expiredIds) delete nextOpenedAt[id];
+        setCoverTapCounts((prevTaps) => {
+          const nextTaps = { ...prevTaps };
+          for (const id of expiredIds) delete nextTaps[id];
+          return nextTaps;
         });
-      }
+        return nextOpenedAt;
+      });
     }, 1000);
     return () => window.clearInterval(t);
-  }, [screen, muted, diffConfig.coverAutoCloseSec]);
+  }, [screen, diffConfig.coverAutoCloseSec]);
 
   useEffect(() => {
     return () => {
@@ -497,6 +534,14 @@ export function CatFinderGameSection({
   const commitStartStage = useCallback(
     (targetId: string, targetDiffId: CatDifficultyId, forceReset: boolean) => {
       const targetDiff = getCatDifficultyConfig(targetDiffId);
+      const targetBaseStage = CAT_STAGES.find((s) => s.id === targetId) ?? CAT_STAGES[0];
+      const recentSigs = recentLayoutSigsRef.current[targetId] ?? [];
+      const { stage: randomizedStage, signature } = randomizeCatStageLayout(targetBaseStage, {
+        recentSignatures: recentSigs,
+      });
+      recentLayoutSigsRef.current[targetId] = [...recentSigs.slice(-7), signature];
+      setActiveRunStage(randomizedStage);
+
       catFinderAudio.playRevealSound(muted);
 
       setSaveData((prev) => ({
@@ -515,9 +560,8 @@ export function CatFinderGameSection({
       setCoverTapCounts({});
       setCoverOpenedAtMs({});
       setHintsUsed(0);
-      setRemainingSec(targetDiff.timeLimitSec);
+      heartsRef.current = targetDiff.maxHearts;
       setHearts(targetDiff.maxHearts);
-      setDefeatReason('time');
       setComboStreak(0);
       setMaxCombo(1);
       setLastFindAtMs(null);
@@ -694,28 +738,22 @@ export function CatFinderGameSection({
       catFinderAudio.unlock();
       catFinderAudio.playMissSound(muted);
 
-      const res = applyCatMisclickPenalty(hearts, remainingSec, diffConfig.misclickPenaltySec);
+      const res = applyCatMisclickPenalty(heartsRef.current);
+      heartsRef.current = res.nextHearts;
       setHearts(res.nextHearts);
-      setRemainingSec(res.nextRemainingSec);
       setComboStreak(0);
       setShakeCount((c) => c + 1);
 
-      pushFloatingNotice(
-        xPct,
-        yPct,
-        `✖ -1❤️ · -${diffConfig.misclickPenaltySec}s`,
-        'miss'
-      );
+      pushFloatingNotice(xPct, yPct, '✖ -1❤️', 'miss');
 
       if (res.isGameOver) {
-        setDefeatReason(res.nextHearts <= 0 ? 'hearts' : 'time');
         catFinderAudio.playGameOverSound(muted);
         window.setTimeout(() => {
           setScreen('GAMEOVER');
-        }, 280);
+        }, 220);
       }
     },
-    [screen, muted, hearts, remainingSec, diffConfig.misclickPenaltySec, pushFloatingNotice]
+    [screen, muted, pushFloatingNotice]
   );
 
   const handleCollectItem = useCallback(
@@ -772,7 +810,6 @@ export function CatFinderGameSection({
         const starsNow = nextRegularDone
           ? computeCatStageStars(
               hintsUsed,
-              elapsedSec,
               nextSecret,
               hearts,
               diffConfig.maxHearts
@@ -787,12 +824,7 @@ export function CatFinderGameSection({
               foundSecretCat: nextSecret,
               cleared: cur.cleared || nextRegularDone,
               bestStars: Math.max(cur.bestStars, starsNow),
-              bestTimeSec:
-                nextRegularDone
-                  ? cur.bestTimeSec === null
-                    ? elapsedSec
-                    : Math.min(cur.bestTimeSec, elapsedSec)
-                  : cur.bestTimeSec,
+              bestTimeSec: cur.bestTimeSec,
               bestCombo: Math.max(cur.bestCombo, combo.nextStreak),
             },
           },
@@ -819,7 +851,6 @@ export function CatFinderGameSection({
       regularItems,
       activeStage.id,
       hintsUsed,
-      elapsedSec,
       hearts,
       diffConfig.maxHearts,
       pushFloatingNotice,
@@ -840,12 +871,6 @@ export function CatFinderGameSection({
     setHintsUsed((prev) => prev + 1);
     setActiveHint(target);
 
-    // Hint costs remaining time to raise tension!
-    setRemainingSec((prev) => {
-      const next = Math.max(1, prev - diffConfig.hintCostSec);
-      return next;
-    });
-
     const rect = viewportRef.current?.getBoundingClientRect();
     if (rect) {
       const targetPanX = ((CAT_SCENE_W / 2 - target.x) / CAT_SCENE_W) * rect.width * panZoom.scale;
@@ -858,7 +883,6 @@ export function CatFinderGameSection({
     stageSave.foundItemIds,
     openedCoverIds,
     diffConfig.activeQueueLimit,
-    diffConfig.hintCostSec,
     muted,
     panZoom.scale,
     applyZoom,
@@ -867,7 +891,6 @@ export function CatFinderGameSection({
   const handleGenerateShareCard = useCallback(() => {
     const stars = computeCatStageStars(
       hintsUsed,
-      elapsedSec,
       stageSave.foundSecretCat,
       hearts,
       diffConfig.maxHearts
@@ -876,7 +899,8 @@ export function CatFinderGameSection({
       stageTitle: activeStage.title,
       difficultyLabel: diffConfig.label,
       stars,
-      elapsedSec,
+      hearts,
+      maxHearts: diffConfig.maxHearts,
       maxCombo,
       foundCount: regularItems.length,
       totalCount: regularItems.length,
@@ -892,7 +916,6 @@ export function CatFinderGameSection({
     document.body.removeChild(link);
   }, [
     hintsUsed,
-    elapsedSec,
     stageSave.foundSecretCat,
     hearts,
     diffConfig.maxHearts,
@@ -1027,10 +1050,10 @@ export function CatFinderGameSection({
   return (
     <section
       aria-label="Tìm Mèo và Đồ Xinh"
-      className={`relative bg-[#FFF9F2] text-[#43312B] overflow-hidden ${
+      className={`relative bg-[#FFF9FC] text-[#5A3E44] overflow-hidden ${
         isFullscreen
           ? 'rounded-none border-0 shadow-none h-full flex-1 flex flex-col min-h-0'
-          : 'rounded-2xl border border-[#ECCFD5] shadow-[0_14px_38px_-16px_rgba(120,76,65,0.2)]'
+          : 'rounded-2xl border border-[#F3C8D8] shadow-[0_14px_38px_-16px_rgba(219,82,126,0.22)]'
       }`}
     >
       {/* Non-blocking Pastel Loading Veil while preparing stage SVG */}
@@ -1039,42 +1062,42 @@ export function CatFinderGameSection({
           data-testid="cat-loading-overlay"
           role="status"
           aria-live="polite"
-          className="absolute inset-0 z-50 bg-[#FFF9F2]/96 flex flex-col items-center justify-center gap-3 p-6 text-center"
+          className="absolute inset-0 z-50 bg-[#FFF9FC]/96 flex flex-col items-center justify-center gap-3 p-6 text-center"
         >
-          <div className="w-14 h-14 rounded-2xl bg-[#FCE2E6] border-2 border-[#43312B] flex items-center justify-center shadow-sm">
-            <Loader2 className="w-7 h-7 text-[#D95B72] animate-spin" aria-hidden="true" />
+          <div className="w-14 h-14 rounded-2xl bg-[#FFE4EE] border-2 border-[#5A3E44] flex items-center justify-center shadow-sm">
+            <Loader2 className="w-7 h-7 text-[#DB527E] animate-spin" aria-hidden="true" />
           </div>
           <div>
-            <p className="font-serif text-lg sm:text-xl font-bold text-[#43312B]">
+            <p className="font-serif text-lg sm:text-xl font-bold text-[#5A3E44]">
               Đang mở {loadingStageTitle ?? activeStage.title}...
             </p>
-            <p className="text-xs text-[#7A6258] mt-0.5">
-              Đang xếp mèo ẩn nấp &amp; đồ xinh vào khung tranh
+            <p className="text-xs text-[#9D7782] mt-0.5">
+              Đang giấu ngẫu nhiên mèo xinh &amp; bánh kẹo vào góc tranh mới
             </p>
           </div>
-          <div className="w-48 h-2 rounded-full bg-[#EFE0D2] overflow-hidden border border-[#DEC9B7]">
-            <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-[#E87084] to-[#F59E0B] animate-pulse" />
+          <div className="w-48 h-2 rounded-full bg-[#FFEAF2] overflow-hidden border border-[#F3C8D8]">
+            <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-[#F06E96] to-[#FBBF24] animate-pulse" />
           </div>
         </div>
       )}
       {/* TITLE & TOWN MAP SCREEN */}
       {screen === 'TITLE' && (
         <div
-          className={`p-4 sm:p-6 mobile-ls:p-3 space-y-5 mobile-ls:space-y-3 bg-gradient-to-b from-[#FFFDF8] to-[#FFF4EA] ${
+          className={`p-4 sm:p-6 mobile-ls:p-3 space-y-5 mobile-ls:space-y-3 bg-gradient-to-b from-[#FFFDF9] via-[#FFF8FB] to-[#FFEFF5] ${
             isFullscreen ? 'flex-1 min-h-0 overflow-y-auto touch-pan-y safe-area-top safe-area-x safe-area-bottom' : ''
           }`}
         >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 border-b border-[#EFE0D2] pb-4 mobile-ls:pb-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 border-b border-[#F3D5E1] pb-4 mobile-ls:pb-2.5">
             <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-[#FCE2E6] border-2 border-[#43312B] flex items-center justify-center shrink-0">
-                <Cat className="w-6 h-6 text-[#D95B72]" aria-hidden="true" />
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#FFE4EE] to-[#FFD4E5] border-2 border-[#5A3E44] flex items-center justify-center shrink-0 shadow-[0_3px_0_#F3C8D8]">
+                <Cat className="w-6 h-6 text-[#DB527E]" aria-hidden="true" />
               </div>
               <div>
-                <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#43312B] leading-tight">
+                <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#5A3E44] leading-tight">
                   Tìm Mèo &amp; Đồ Xinh
                 </h2>
-                <p className="text-xs sm:text-sm text-[#7A6258] mt-0.5">
-                  24–27 mục tiêu ngụy trang · +44 đồ giả · Hộp khóa đôi · Phạt chạm hụt &amp; Đếm ngược · Mèo Vàng {secretCatCollectedTotal}/{getMainStages().length}
+                <p className="text-xs sm:text-sm text-[#8F6873] mt-0.5">
+                  Vị trí đồ xinh ngẫu nhiên mỗi lượt · Không giới hạn thời gian · Sưu tầm Mèo Vàng {secretCatCollectedTotal}/{getMainStages().length}
                 </p>
               </div>
             </div>
@@ -1086,7 +1109,7 @@ export function CatFinderGameSection({
                   data-testid="cat-fullscreen-btn"
                   onClick={onToggleFullscreen}
                   aria-label={isFullscreen ? 'Thu nhỏ màn hình (Esc)' : 'Mở toàn màn hình (F11)'}
-                  className="min-h-[44px] px-3.5 py-2 rounded-xl border-2 border-[#E5D5C5] bg-white hover:border-[#43312B] text-[#43312B] text-xs font-mono font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+                  className="min-h-[44px] px-3.5 py-2 rounded-xl border-2 border-[#F0C8D6] bg-white hover:border-[#5A3E44] text-[#5A3E44] text-xs font-mono font-bold inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
                 >
                   {isFullscreen ? (
                     <>
@@ -1109,7 +1132,7 @@ export function CatFinderGameSection({
                 disabled={isStarting}
                 aria-busy={isStarting}
                 onClick={() => startStage()}
-                className="flex-1 sm:flex-initial min-h-[44px] px-6 py-2.5 rounded-xl bg-[#E87084] hover:bg-[#DF5C72] disabled:opacity-80 disabled:cursor-wait text-white border-2 border-[#43312B] text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-95 whitespace-nowrap"
+                className="flex-1 sm:flex-initial min-h-[44px] px-6 py-2.5 rounded-xl bg-gradient-to-b from-[#F47BA0] to-[#DB527E] hover:from-[#EC6B93] hover:to-[#C9446F] disabled:opacity-80 disabled:cursor-wait text-white border-2 border-[#5A3E44] shadow-[0_3px_0_#5A3E44] active:translate-y-[1px] active:shadow-[0_1px_0_#5A3E44] text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer transition-all whitespace-nowrap"
               >
                 {isStarting ? (
                   <>
@@ -1143,19 +1166,19 @@ export function CatFinderGameSection({
                   className={`text-left rounded-xl border-2 p-3 transition-colors cursor-pointer flex flex-col gap-1.5 ${
                     active
                       ? diff.id === 'god_ray_20x'
-                        ? 'bg-gradient-to-br from-[#FFF4DB] via-[#FFE9E9] to-[#FCE7F3] border-[#991B1B]'
+                        ? 'bg-gradient-to-br from-[#FFF4DB] via-[#FFEBF2] to-[#FCE7F3] border-[#991B1B] shadow-xs'
                         : diff.id === 'eagle_10x'
-                        ? 'bg-[#FFF0F3] border-[#BE123C]'
+                        ? 'bg-[#FFF0F5] border-[#BE123C] shadow-xs'
                         : diff.id === 'nightmare_8x'
-                        ? 'bg-[#FFF6E6] border-[#D97706]'
-                        : 'bg-[#FFF0F2] border-[#D95B72]'
+                        ? 'bg-[#FFF7E6] border-[#D97706] shadow-xs'
+                        : 'bg-[#FFF0F6] border-[#DB527E] shadow-xs'
                       : diff.id === 'god_ray_20x'
-                      ? 'bg-[#FFFBF2] border-[#F3D2A2] hover:border-[#991B1B]'
-                      : 'bg-white border-[#E5D5C5] hover:border-[#D95B72]'
+                      ? 'bg-[#FFFDF6] border-[#F3D2A2] hover:border-[#991B1B]'
+                      : 'bg-white border-[#F0D3DF] hover:border-[#DB527E]'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-sm text-[#43312B] flex items-center gap-1.5">
+                    <span className="font-bold text-sm text-[#5A3E44] flex items-center gap-1.5">
                       {diff.id === 'god_ray_20x' ? (
                         <Sun className="w-4 h-4 text-[#B45309]" />
                       ) : diff.id === 'eagle_10x' ? (
@@ -1163,7 +1186,7 @@ export function CatFinderGameSection({
                       ) : diff.id === 'nightmare_8x' ? (
                         <Flame className="w-4 h-4 text-[#D97706]" />
                       ) : (
-                        <Sparkles className="w-4 h-4 text-[#D95B72]" />
+                        <Sparkles className="w-4 h-4 text-[#DB527E]" />
                       )}
                       {diff.label}
                     </span>
@@ -1175,20 +1198,20 @@ export function CatFinderGameSection({
                           ? 'bg-[#BE123C] text-white'
                           : diff.id === 'nightmare_8x'
                           ? 'bg-[#D97706] text-white'
-                          : 'bg-[#FCE7EA] text-[#B84158]'
+                          : 'bg-[#FFE4EE] text-[#C03E6B]'
                       }`}
                     >
                       {diff.multiplierBadge}
                     </span>
                   </div>
-                  <p className="text-[11px] text-[#7A6258] leading-snug">{diff.tagline}</p>
+                  <p className="text-[11px] text-[#8A6470] leading-snug">{diff.tagline}</p>
                 </button>
               );
             })}
           </div>
 
           {/* Interactive Pastel Town Map */}
-          <div className="rounded-xl overflow-hidden border-2 border-[#E6D4C4] bg-[#FFFDF8]">
+          <div className="rounded-xl overflow-hidden border-2 border-[#F0C8D6] bg-[#FFFDFB]">
             <CatTownMapSvg
               stages={CAT_STAGES}
               unlockedIds={unlockedSet}
@@ -1224,10 +1247,10 @@ export function CatFinderGameSection({
                   }}
                   className={`text-left rounded-xl border-2 p-3 transition-colors flex flex-col justify-between gap-2 min-h-[104px] ${
                     !unlocked
-                      ? 'bg-[#F4EDE6] border-[#DFD2C5] text-[#8E7B70] cursor-not-allowed'
+                      ? 'bg-[#F8EEF3] border-[#E8D5DF] text-[#9B7F89] cursor-not-allowed'
                       : isSelected
-                      ? 'bg-[#FFF0F2] border-[#D95B72] cursor-pointer'
-                      : 'bg-white border-[#E5D5C5] hover:border-[#E87084] cursor-pointer'
+                      ? 'bg-[#FFF0F6] border-[#DB527E] cursor-pointer shadow-xs'
+                      : 'bg-white border-[#F0D3DF] hover:border-[#F06E96] cursor-pointer'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-1.5 text-xs font-mono font-bold">
@@ -1235,13 +1258,13 @@ export function CatFinderGameSection({
                     {!unlocked ? (
                       <Lock className="w-3.5 h-3.5" aria-hidden="true" />
                     ) : (
-                      <span className="tabular-nums text-[#C45368]">
-                        {regTotal} món · {st.covers.length} nắp
+                      <span className="tabular-nums text-[#C94772]">
+                        {regTotal} món · {st.covers.length} hộp
                       </span>
                     )}
                   </div>
 
-                  <div className="font-bold text-sm leading-snug text-[#43312B]">
+                  <div className="font-bold text-sm leading-snug text-[#5A3E44]">
                     {st.title}
                   </div>
 
@@ -1253,12 +1276,12 @@ export function CatFinderGameSection({
                           className={`w-3.5 h-3.5 ${
                             s <= prog.bestStars
                               ? 'text-amber-400 fill-amber-400'
-                              : 'text-[#DECFC2]'
+                              : 'text-[#EAD3DC]'
                           }`}
                         />
                       ))}
                     </span>
-                    <span className={prog.foundSecretCat ? 'text-amber-600 font-bold' : 'text-[#9B8579]'}>
+                    <span className={prog.foundSecretCat ? 'text-amber-600 font-bold' : 'text-[#9F7B87]'}>
                       {st.isSecretStage && !unlocked
                         ? `${secretCatCollectedTotal}/4 ★`
                         : prog.foundSecretCat
@@ -1271,8 +1294,8 @@ export function CatFinderGameSection({
             })}
           </div>
 
-          <p className="text-center text-xs text-[#836C61]">
-            Phóng to (tới {CAT_MAX_ZOOM}×) &amp; kéo tranh để soi đồ tí hon · Chạm 2 lần với nắp có khóa vàng · Tránh click nhầm đồ giả kẻo mất Tim &amp; Giờ!
+          <p className="text-center text-xs text-[#8F6873]">
+            Phóng to (tới {CAT_MAX_ZOOM}×) &amp; kéo tranh soi đồ tí hon · Chạm 2 lần với hộp khóa vàng · Vị trí đồ xinh ngẫu nhiên không lặp lại mỗi lượt chơi!
           </p>
         </div>
       )}
@@ -1280,14 +1303,14 @@ export function CatFinderGameSection({
       {/* ACTIVE PLAY SCREEN */}
       {screen === 'PLAYING' && (
         <div
-          className={`flex flex-col bg-[#FFF7EE] ${
+          className={`flex flex-col bg-[#FFF6FA] ${
             isFullscreen ? 'flex-1 min-h-0 h-full overflow-hidden' : ''
           }`}
         >
-          {/* Single-Row Slim Pastel HUD with Clear Visual Hierarchy */}
+          {/* Single-Row Slim Kawaii Pastel HUD */}
           <div
             data-testid="cat-hud-bar"
-            className={`shrink-0 flex flex-nowrap items-center justify-between gap-1 sm:gap-2 px-1.5 sm:px-3 py-1.5 bg-[#FFFDF8] border-b border-[#EEDFD2] overflow-x-auto no-scrollbar ${
+            className={`shrink-0 flex flex-nowrap items-center justify-between gap-1 sm:gap-2 px-1.5 sm:px-3 py-1.5 bg-[#FFFDFB] border-b border-[#F3C8D8] overflow-x-auto no-scrollbar ${
               isFullscreen ? 'safe-area-top safe-area-x' : ''
             }`}
           >
@@ -1296,13 +1319,13 @@ export function CatFinderGameSection({
                 type="button"
                 aria-label="Quay về bản đồ thị trấn"
                 onClick={() => setScreen('TITLE')}
-                className="w-7 h-7 sm:w-auto sm:min-h-[34px] sm:px-2 rounded-lg border border-[#E2D3C4] bg-white hover:border-[#D95B72] inline-flex items-center justify-center gap-1 text-xs font-semibold text-[#43312B] cursor-pointer shrink-0"
+                className="w-7 h-7 sm:w-auto sm:min-h-[34px] sm:px-2 rounded-lg border border-[#F0C8D6] bg-white hover:border-[#DB527E] inline-flex items-center justify-center gap-1 text-xs font-semibold text-[#5A3E44] cursor-pointer shrink-0"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 <span className="hidden xl:inline">Thị Trấn</span>
               </button>
 
-              <span className="hidden md:inline font-bold text-xs text-[#43312B] truncate max-w-[110px] lg:max-w-[170px]">
+              <span className="hidden md:inline font-bold text-xs text-[#5A3E44] truncate max-w-[110px] lg:max-w-[170px]">
                 {activeStage.title}
               </span>
 
@@ -1315,7 +1338,7 @@ export function CatFinderGameSection({
                     ? 'bg-[#BE123C] text-white'
                     : diffConfig.id === 'nightmare_8x'
                     ? 'bg-[#D97706] text-white'
-                    : 'bg-[#FCE7EA] text-[#B84158]'
+                    : 'bg-[#FFE4EE] text-[#C03E6B]'
                 }`}
               >
                 {diffConfig.multiplierBadge}
@@ -1323,7 +1346,7 @@ export function CatFinderGameSection({
 
               <span
                 data-testid="cat-progress-count"
-                className="px-1 sm:px-1.5 py-0.5 rounded-md bg-[#FCE7EA] text-[#B84158] text-[10px] sm:text-[11px] font-mono font-bold leading-tight tabular-nums shrink-0"
+                className="px-1 sm:px-1.5 py-0.5 rounded-md bg-[#FFE4EE] text-[#C03E6B] text-[10px] sm:text-[11px] font-mono font-bold leading-tight tabular-nums shrink-0"
               >
                 {regularFoundCount}/{regularItems.length}
               </span>
@@ -1335,7 +1358,7 @@ export function CatFinderGameSection({
                 className={`px-1 sm:px-1.5 py-0.5 rounded-md text-[10px] sm:text-[11px] font-mono font-bold leading-tight tabular-nums inline-flex items-center gap-0.5 sm:gap-1 shrink-0 ${
                   hearts <= 2
                     ? 'bg-rose-100 text-rose-700 animate-pulse'
-                    : 'bg-[#FFF0F2] text-[#C83E58]'
+                    : 'bg-[#FFF0F6] text-[#DB527E]'
                 }`}
               >
                 <Heart className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-current" />
@@ -1343,19 +1366,6 @@ export function CatFinderGameSection({
                   {hearts}
                   <span className="hidden min-[460px]:inline">/{diffConfig.maxHearts}</span>
                 </span>
-              </span>
-
-              {/* Countdown Timer */}
-              <span
-                data-testid="cat-timer"
-                className={`px-1 sm:px-1.5 py-0.5 rounded-md text-[10px] sm:text-[11px] font-mono font-bold leading-tight tabular-nums inline-flex items-center gap-1 shrink-0 ${
-                  remainingSec <= 20
-                    ? 'bg-rose-600 text-white animate-pulse'
-                    : 'bg-[#F4EBE2] text-[#43312B]'
-                }`}
-              >
-                <Clock className="hidden sm:inline w-3 h-3" />
-                {formatCatTimer(remainingSec)}
               </span>
 
               {/* Secret Golden Cat Bonus Objective Pill */}
@@ -1383,7 +1393,7 @@ export function CatFinderGameSection({
               {comboStreak >= 2 && (
                 <span
                   data-testid="cat-combo-badge"
-                  className="px-1 sm:px-1.5 py-0.5 rounded-md bg-amber-300 text-[#43312B] text-[10px] sm:text-[11px] font-mono font-extrabold leading-tight tabular-nums shrink-0"
+                  className="px-1 sm:px-1.5 py-0.5 rounded-md bg-amber-300 text-[#5A3E44] text-[10px] sm:text-[11px] font-mono font-extrabold leading-tight tabular-nums shrink-0"
                 >
                   ×{comboStreak}
                 </span>
@@ -1396,7 +1406,7 @@ export function CatFinderGameSection({
                 data-testid="cat-hint-btn"
                 disabled={hintsRemaining <= 0}
                 onClick={handleUseHint}
-                aria-label={`Gợi ý vùng tìm (còn ${hintsRemaining}, tốn ${diffConfig.hintCostSec} giây)`}
+                aria-label={`Gợi ý vùng tìm (còn ${hintsRemaining})`}
                 className="h-7 sm:min-h-[34px] px-1.5 sm:px-2.5 rounded-lg border-2 border-[#D98A14] bg-gradient-to-b from-[#FFE68E] to-[#F9CB50] hover:from-[#FFDF70] hover:to-[#F6BE2D] disabled:opacity-45 disabled:cursor-not-allowed text-[#432805] text-[11px] sm:text-xs font-extrabold inline-flex items-center gap-0.5 sm:gap-1 shadow-xs cursor-pointer shrink-0"
               >
                 <Search className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.4]" />
@@ -1404,14 +1414,14 @@ export function CatFinderGameSection({
                 <span className="tabular-nums">({hintsRemaining})</span>
               </button>
 
-              <div className="flex items-center rounded-lg border border-[#D8C5B3] bg-white overflow-hidden shrink-0">
+              <div className="flex items-center rounded-lg border border-[#F0C8D6] bg-white overflow-hidden shrink-0">
                 <button
                   type="button"
                   data-testid="cat-zoom-out-btn"
                   aria-label="Thu nhỏ"
                   onClick={() => applyZoom(panZoom.scale - 0.45)}
                   disabled={panZoom.scale <= CAT_MIN_ZOOM}
-                  className="h-[26px] sm:min-h-[32px] w-6 sm:w-8 flex items-center justify-center text-[#43312B] hover:bg-[#F7EFE6] disabled:text-[#8E766B] disabled:opacity-55 border-r border-[#EDE2D6] cursor-pointer"
+                  className="h-[26px] sm:min-h-[32px] w-6 sm:w-8 flex items-center justify-center text-[#5A3E44] hover:bg-[#FFF0F6] disabled:text-[#A3818B] disabled:opacity-55 border-r border-[#F5DCE5] cursor-pointer"
                 >
                   <ZoomOut className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.4]" />
                 </button>
@@ -1420,7 +1430,7 @@ export function CatFinderGameSection({
                   data-testid="cat-zoom-reset-btn"
                   aria-label="Đưa về 1x"
                   onClick={() => setPanZoom({ scale: 1, panX: 0, panY: 0 })}
-                  className="h-[26px] sm:min-h-[32px] px-1 sm:px-1.5 text-[10px] sm:text-[11px] font-bold text-[#43312B] tabular-nums cursor-pointer"
+                  className="h-[26px] sm:min-h-[32px] px-1 sm:px-1.5 text-[10px] sm:text-[11px] font-bold text-[#5A3E44] tabular-nums cursor-pointer"
                 >
                   {panZoom.scale.toFixed(1)}×
                 </button>
@@ -1430,7 +1440,7 @@ export function CatFinderGameSection({
                   aria-label="Phóng to"
                   onClick={() => applyZoom(panZoom.scale + 0.45)}
                   disabled={panZoom.scale >= CAT_MAX_ZOOM}
-                  className="h-[26px] sm:min-h-[32px] w-6 sm:w-8 flex items-center justify-center text-[#43312B] hover:bg-[#F7EFE6] disabled:text-[#8E766B] disabled:opacity-55 border-l border-[#EDE2D6] cursor-pointer"
+                  className="h-[26px] sm:min-h-[32px] w-6 sm:w-8 flex items-center justify-center text-[#5A3E44] hover:bg-[#FFF0F6] disabled:text-[#A3818B] disabled:opacity-55 border-l border-[#F5DCE5] cursor-pointer"
                 >
                   <ZoomIn className="w-3 h-3 sm:w-3.5 sm:h-3.5 stroke-[2.4]" />
                 </button>
@@ -1445,8 +1455,8 @@ export function CatFinderGameSection({
                 }}
                 className={`hidden min-[460px]:flex h-7 sm:min-h-[34px] w-7 sm:w-8 rounded-lg border items-center justify-center cursor-pointer shrink-0 ${
                   bgmOn
-                    ? 'border-[#E87084] bg-[#FCE7EA] text-[#B84158]'
-                    : 'border-[#DFD2C5] bg-white text-[#6B5B53] hover:bg-[#F5F2EE]'
+                    ? 'border-[#F06E96] bg-[#FFE4EE] text-[#C03E6B]'
+                    : 'border-[#F0C8D6] bg-white text-[#7A5761] hover:bg-[#FFF5F8]'
                 }`}
               >
                 <Music className="w-3.5 h-3.5" />
@@ -1456,7 +1466,7 @@ export function CatFinderGameSection({
                 type="button"
                 aria-label={muted ? 'Bật âm thanh' : 'Tắt âm thanh'}
                 onClick={() => setMuted((v) => !v)}
-                className="h-7 sm:min-h-[34px] w-7 sm:w-8 rounded-lg border border-[#DFD2C5] bg-white text-[#6B5B53] hover:bg-[#F5F2EE] flex items-center justify-center cursor-pointer shrink-0"
+                className="h-7 sm:min-h-[34px] w-7 sm:w-8 rounded-lg border border-[#F0C8D6] bg-white text-[#7A5761] hover:bg-[#FFF5F8] flex items-center justify-center cursor-pointer shrink-0"
               >
                 {muted ? (
                   <VolumeX className="w-3.5 h-3.5" />
@@ -1474,8 +1484,8 @@ export function CatFinderGameSection({
                   title={isFullscreen ? 'Thoát toàn màn hình (Esc)' : 'Toàn màn hình (F11)'}
                   className={`h-7 sm:min-h-[34px] w-7 sm:w-auto sm:px-2.5 rounded-lg border text-xs font-semibold inline-flex items-center justify-center gap-1 cursor-pointer shrink-0 ${
                     isFullscreen
-                      ? 'border-[#DDD0C4] bg-[#F5F2EE] hover:bg-[#EBE4DC] text-[#6B5B53]'
-                      : 'border-[#DFD2C5] bg-white hover:bg-[#F5F2EE] text-[#43312B]'
+                      ? 'border-[#ECCFD9] bg-[#FDF1F5] hover:bg-[#F7E2EA] text-[#7A5761]'
+                      : 'border-[#F0C8D6] bg-white hover:bg-[#FFF5F8] text-[#5A3E44]'
                   }`}
                 >
                   {isFullscreen ? (
@@ -1522,14 +1532,14 @@ export function CatFinderGameSection({
               className={`relative ${
                 isFullscreen
                   ? 'flex-1 min-h-0 min-w-0 w-full h-full mobile-ls:w-auto'
-                  : 'w-full h-[52dvh] min-h-[260px] max-h-[520px] sm:h-[440px] lg:h-[min(62dvh,500px)] mobile-ls:flex-1 mobile-ls:w-auto mobile-ls:h-full mobile-ls:max-h-none mobile-ls:min-h-0 mobile-ls:min-w-0'
-              } bg-[#F5E6D8] overflow-hidden select-none touch-none cursor-crosshair flex items-center justify-center ${
+                  : 'w-full h-[270px] sm:h-[440px] lg:h-[min(62dvh,500px)] mobile-ls:flex-1 mobile-ls:w-auto mobile-ls:h-full mobile-ls:max-h-none mobile-ls:min-h-0 mobile-ls:min-w-0'
+              } bg-[#FBEBF0] overflow-hidden select-none touch-none cursor-crosshair flex items-center justify-center ${
                 shakeCount > 0 ? 'animate-dom-shake' : ''
               }`}
             >
             <div
               data-testid="cat-stage-canvas-box"
-              className="relative origin-center transition-transform duration-75 ease-out shrink-0 overflow-hidden shadow-[0_6px_24px_-12px_rgba(67,49,43,0.22)]"
+              className="relative origin-center transition-transform duration-75 ease-out shrink-0 overflow-hidden shadow-[0_6px_24px_-12px_rgba(90,62,68,0.22)]"
               style={{
                 width: 'min(100%, 200cqh)',
                 height: 'min(50cqw, 100cqh)',
@@ -1764,7 +1774,7 @@ export function CatFinderGameSection({
           <div
             aria-label="Thanh vật phẩm cần tìm"
             data-testid="cat-thumbnail-bar"
-            className={`shrink-0 min-h-0 bg-[#FFFDF8] border-t-2 border-[#EEDFD2] px-2 sm:px-3 py-2 flex flex-row items-center gap-1.5 sm:gap-2 overflow-x-auto touch-pan-x snap-x snap-mandatory mobile-ls:w-[78px] mobile-ls:h-0 mobile-ls:min-h-full mobile-ls:max-h-full mobile-ls:flex-col mobile-ls:overflow-y-auto mobile-ls:overflow-x-hidden mobile-ls:touch-pan-y mobile-ls:snap-y mobile-ls:border-t-0 mobile-ls:border-l-2 mobile-ls:py-1.5 mobile-ls:px-1.5 mobile-ls:gap-1.5 ${
+            className={`shrink-0 min-h-0 bg-[#FFFDFB] border-t-2 border-[#F3C8D8] px-2 sm:px-3 py-2 flex flex-row items-center gap-1.5 sm:gap-2 overflow-x-auto touch-pan-x snap-x snap-mandatory mobile-ls:w-[78px] mobile-ls:h-0 mobile-ls:min-h-full mobile-ls:max-h-full mobile-ls:flex-col mobile-ls:overflow-y-auto mobile-ls:overflow-x-hidden mobile-ls:touch-pan-y mobile-ls:snap-y mobile-ls:border-t-0 mobile-ls:border-l-2 mobile-ls:py-1.5 mobile-ls:px-1.5 mobile-ls:gap-1.5 ${
               isFullscreen
                 ? 'safe-area-x pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] mobile-ls:pl-1.5 mobile-ls:pr-[max(0.375rem,env(safe-area-inset-right,0px))] mobile-ls:pb-[max(0.375rem,env(safe-area-inset-bottom,0px))]'
                 : ''
@@ -1774,8 +1784,8 @@ export function CatFinderGameSection({
               <div
                 className={`shrink-0 snap-start px-2.5 py-1.5 mobile-ls:w-full mobile-ls:px-1 mobile-ls:py-1 mobile-ls:text-center rounded-xl text-[11px] mobile-ls:text-[10px] font-mono font-bold leading-tight ${
                   isGodRayMode
-                    ? 'bg-gradient-to-br from-[#7F1D1D] to-[#43312B] text-amber-100 border border-amber-400/50'
-                    : 'bg-[#43312B] text-[#FFF8EF]'
+                    ? 'bg-gradient-to-br from-[#7F1D1D] to-[#5A3E44] text-amber-100 border border-amber-400/50'
+                    : 'bg-[#5A3E44] text-[#FFF8FA]'
                 }`}
               >
                 <div>{isGodRayMode ? 'Ánh Xạ' : 'Đang tìm'}</div>
@@ -1797,17 +1807,17 @@ export function CatFinderGameSection({
                   aria-label={`${item.label}: ${found ? 'Đã tìm thấy' : 'Chưa tìm thấy'}`}
                   className={`relative shrink-0 snap-start w-12 h-12 sm:w-16 sm:h-16 mobile-ls:w-13 mobile-ls:h-13 rounded-xl sm:rounded-2xl border-2 flex items-center justify-center transition-transform ${
                     found
-                      ? 'bg-[#FFF0F3] border-[#E87084] scale-100'
+                      ? 'bg-[#FFEFF5] border-[#F06E96] scale-100'
                       : isHinted
                       ? 'bg-[#FFF5D6] border-amber-400 animate-pulse'
                       : isGodRayMode
                       ? 'bg-[#FFF8E8] border-[#E59866]'
-                      : 'bg-[#F5EFEA] border-[#E2D4C8]'
+                      : 'bg-[#FFF5F8] border-[#F0D3DF]'
                   }`}
                 >
                   <CatThumbnailIcon artKey={item.artKey} found={found} />
                   {found && (
-                    <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#77B97E] text-white flex items-center justify-center border border-[#43312B]">
+                    <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[#6EC792] text-white flex items-center justify-center border border-[#5A3E44]">
                       <Check className="w-3 h-3 stroke-[3]" />
                     </span>
                   )}
@@ -1824,7 +1834,7 @@ export function CatFinderGameSection({
                 className={`relative shrink-0 snap-start w-12 h-12 sm:w-16 sm:h-16 mobile-ls:w-13 mobile-ls:h-13 rounded-xl sm:rounded-2xl border-2 border-dashed flex items-center justify-center ml-auto mobile-ls:ml-0 mobile-ls:mt-auto ${
                   stageSave.foundSecretCat
                     ? 'bg-[#FEF3C7] border-amber-500'
-                    : 'bg-[#FAF3E8] border-[#D8C4AD]'
+                    : 'bg-[#FFF8EE] border-[#E7C697]'
                 }`}
               >
                 <CatThumbnailIcon
@@ -1842,44 +1852,42 @@ export function CatFinderGameSection({
       {screen === 'GAMEOVER' && (
         <div
           data-testid="cat-gameover-screen"
-          className={`p-5 sm:p-8 mobile-ls:p-3 bg-gradient-to-b from-[#FFF8F6] to-[#FBE4E6] flex flex-col items-center text-center space-y-5 mobile-ls:space-y-3 ${
+          className={`p-5 sm:p-8 mobile-ls:p-3 bg-gradient-to-b from-[#FFF9FC] to-[#FFE7EF] flex flex-col items-center text-center space-y-5 mobile-ls:space-y-3 ${
             isFullscreen ? 'flex-1 min-h-0 overflow-y-auto touch-pan-y safe-area-top safe-area-x safe-area-bottom justify-start sm:justify-center' : ''
           }`}
         >
-          <div className="w-16 h-16 rounded-2xl bg-rose-100 border-2 border-[#43312B] flex items-center justify-center">
-            <Skull className="w-8 h-8 text-rose-600" />
+          <div className="w-16 h-16 rounded-2xl bg-[#FFE0EC] border-2 border-[#5A3E44] flex items-center justify-center shadow-[0_3px_0_#F3C8D8]">
+            <Cat className="w-8 h-8 text-[#DB527E]" />
           </div>
 
           <div>
-            <span className="px-2.5 py-0.5 rounded-full bg-[#43312B] text-amber-200 text-xs font-mono font-bold">
+            <span className="px-2.5 py-0.5 rounded-full bg-[#5A3E44] text-pink-100 text-xs font-mono font-bold">
               {diffConfig.label}
             </span>
-            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#43312B] mt-2">
-              {defeatReason === 'hearts' ? 'Hết Trái Tim Mất Rồi!' : 'Hết Giờ Tìm Kiếm!'}
+            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#5A3E44] mt-2">
+              Hết Trái Tim Mất Rồi!
             </h2>
-            <p className="text-sm text-[#7A6258] mt-1">
-              {defeatReason === 'hearts'
-                ? 'Bạn đã chạm nhầm quá nhiều đồ giả và nền tranh. Hãy phóng to và quan sát kỹ chốt khóa!'
-                : 'Đồng hồ đã điểm 0:00 trước khi gom đủ toàn bộ vật phẩm mục tiêu.'}
+            <p className="text-sm text-[#8F6873] mt-1">
+              Bạn đã chạm nhầm vài món đồ giả rồi. Hãy hít thở sâu, phóng to tranh và mở nhẹ từng chiếc hộp nhé!
             </p>
           </div>
 
           <div className="grid grid-cols-3 gap-3 w-full max-w-md font-mono tabular-nums">
-            <div className="rounded-xl border-2 border-[#E6D4C4] bg-white p-3">
-              <div className="text-[11px] text-[#8D766B]">ĐÃ TÌM</div>
-              <div className="text-lg font-bold text-[#43312B]">
+            <div className="rounded-xl border-2 border-[#F0C8D6] bg-white p-3">
+              <div className="text-[11px] text-[#9D7782]">ĐÃ TÌM</div>
+              <div className="text-lg font-bold text-[#5A3E44]">
                 {regularFoundCount}/{regularItems.length}
               </div>
             </div>
-            <div className="rounded-xl border-2 border-[#E6D4C4] bg-white p-3">
-              <div className="text-[11px] text-[#8D766B]">CÒN TIM</div>
+            <div className="rounded-xl border-2 border-[#F0C8D6] bg-white p-3">
+              <div className="text-[11px] text-[#9D7782]">CÒN TIM</div>
               <div className="text-lg font-bold text-rose-600">
                 {hearts}/{diffConfig.maxHearts}
               </div>
             </div>
-            <div className="rounded-xl border-2 border-[#E6D4C4] bg-white p-3">
-              <div className="text-[11px] text-[#8D766B]">COMBO MAX</div>
-              <div className="text-lg font-bold text-[#D95B72]">×{maxCombo}</div>
+            <div className="rounded-xl border-2 border-[#F0C8D6] bg-white p-3">
+              <div className="text-[11px] text-[#9D7782]">COMBO MAX</div>
+              <div className="text-lg font-bold text-[#DB527E]">×{maxCombo}</div>
             </div>
           </div>
 
@@ -1888,7 +1896,7 @@ export function CatFinderGameSection({
               type="button"
               data-testid="cat-retry-btn"
               onClick={() => startStage(activeStage.id, true)}
-              className="min-h-[44px] px-5 py-2 rounded-xl bg-[#E87084] hover:bg-[#DF5C72] text-white border-2 border-[#43312B] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+              className="min-h-[44px] px-5 py-2 rounded-xl bg-gradient-to-b from-[#F47BA0] to-[#DB527E] hover:from-[#EC6B93] hover:to-[#C9446F] text-white border-2 border-[#5A3E44] shadow-[0_3px_0_#5A3E44] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
               <span>Thử Lại ({diffConfig.multiplierBadge})</span>
@@ -1898,7 +1906,7 @@ export function CatFinderGameSection({
               <button
                 type="button"
                 onClick={() => startStage(activeStage.id, true, 'hard_5x')}
-                className="min-h-[44px] px-4 py-2 rounded-xl border-2 border-[#43312B] bg-[#FFF4D6] hover:bg-[#FDE8B0] text-xs font-bold cursor-pointer"
+                className="min-h-[44px] px-4 py-2 rounded-xl border-2 border-[#5A3E44] bg-[#FFF4D6] hover:bg-[#FDE8B0] text-xs font-bold cursor-pointer"
               >
                 Chuyển về Khó ×5
               </button>
@@ -1908,7 +1916,7 @@ export function CatFinderGameSection({
               type="button"
               data-testid="cat-map-btn"
               onClick={() => setScreen('TITLE')}
-              className="min-h-[44px] px-4 py-2 rounded-xl border-2 border-[#E6D4C4] bg-white hover:border-[#43312B] text-xs font-bold cursor-pointer"
+              className="min-h-[44px] px-4 py-2 rounded-xl border-2 border-[#F0C8D6] bg-white hover:border-[#5A3E44] text-xs font-bold cursor-pointer"
             >
               Bản Đồ Thị Trấn
             </button>
@@ -1920,7 +1928,7 @@ export function CatFinderGameSection({
       {screen === 'VICTORY' && (
         <div
           data-testid="cat-victory-screen"
-          className={`p-5 sm:p-8 mobile-ls:p-3 bg-gradient-to-b from-[#FFFDF8] to-[#FCEEEB] flex flex-col items-center text-center space-y-5 mobile-ls:space-y-3 ${
+          className={`p-5 sm:p-8 mobile-ls:p-3 bg-gradient-to-b from-[#FFFDFB] via-[#FFF4F8] to-[#FCEEF4] flex flex-col items-center text-center space-y-5 mobile-ls:space-y-3 ${
             isFullscreen ? 'flex-1 min-h-0 overflow-y-auto touch-pan-y safe-area-top safe-area-x safe-area-bottom justify-start sm:justify-center' : ''
           }`}
         >
@@ -1928,7 +1936,6 @@ export function CatFinderGameSection({
             {[1, 2, 3].map((s) => {
               const stars = computeCatStageStars(
                 hintsUsed,
-                elapsedSec,
                 stageSave.foundSecretCat,
                 hearts,
                 diffConfig.maxHearts
@@ -1939,7 +1946,7 @@ export function CatFinderGameSection({
                   className={`w-9 h-9 ${
                     s <= stars
                       ? 'text-amber-400 fill-amber-400'
-                      : 'text-[#DECFC2]'
+                      : 'text-[#EAD3DC]'
                   }`}
                 />
               );
@@ -1947,40 +1954,40 @@ export function CatFinderGameSection({
           </div>
 
           <div>
-            <span className="px-2.5 py-0.5 rounded-full bg-[#FCE7EA] text-[#B84158] text-xs font-mono font-bold">
+            <span className="px-2.5 py-0.5 rounded-full bg-[#FFE4EE] text-[#C03E6B] text-xs font-mono font-bold">
               Chinh Phục {diffConfig.label}
             </span>
-            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#43312B] mt-1.5">
+            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#5A3E44] mt-1.5">
               Hoàn Thành · {activeStage.title}
             </h2>
-            <p className="text-sm text-[#7A6258] mt-1">
+            <p className="text-sm text-[#8F6873] mt-1">
               {stageSave.foundSecretCat
                 ? 'Tuyệt vời! Bạn đã tìm trọn bộ đồ xinh lẫn Bé Mèo Vàng Bí Mật!'
-                : 'Đường phố thị trấn đã được tô thêm sắc màu mới!'}
+                : 'Góc phố thị trấn đã lung linh sắc màu pastel mới rồi!'}
             </p>
           </div>
 
           <div className="grid grid-cols-3 gap-3 w-full max-w-md font-mono tabular-nums">
-            <div className="rounded-xl border-2 border-[#E6D4C4] bg-white p-3">
-              <div className="text-[11px] text-[#8D766B]">ĐỒ XINH</div>
-              <div className="text-lg font-bold text-[#43312B]">
+            <div className="rounded-xl border-2 border-[#F0C8D6] bg-white p-3">
+              <div className="text-[11px] text-[#9D7782]">ĐỒ XINH</div>
+              <div className="text-lg font-bold text-[#5A3E44]">
                 {regularItems.length}/{regularItems.length}
               </div>
             </div>
-            <div className="rounded-xl border-2 border-[#E6D4C4] bg-white p-3">
-              <div className="text-[11px] text-[#8D766B]">THỜI GIAN</div>
-              <div className="text-lg font-bold text-[#43312B]">
-                {formatCatTimer(elapsedSec)}
+            <div className="rounded-xl border-2 border-[#F0C8D6] bg-white p-3">
+              <div className="text-[11px] text-[#9D7782]">TIM CÒN LẠI</div>
+              <div className="text-lg font-bold text-[#DB527E]">
+                {hearts}/{diffConfig.maxHearts}
               </div>
             </div>
-            <div className="rounded-xl border-2 border-[#E6D4C4] bg-white p-3">
-              <div className="text-[11px] text-[#8D766B]">COMBO MAX</div>
-              <div className="text-lg font-bold text-[#D95B72]">×{maxCombo}</div>
+            <div className="rounded-xl border-2 border-[#F0C8D6] bg-white p-3">
+              <div className="text-[11px] text-[#9D7782]">COMBO MAX</div>
+              <div className="text-lg font-bold text-[#DB527E]">×{maxCombo}</div>
             </div>
           </div>
 
           {sharePreviewUrl && (
-            <div className="max-w-sm w-full rounded-xl overflow-hidden border-2 border-[#43312B] shadow-md">
+            <div className="max-w-sm w-full rounded-xl overflow-hidden border-2 border-[#5A3E44] shadow-md">
               <img
                 src={sharePreviewUrl}
                 alt="Thẻ thành tích Tìm Mèo & Đồ Xinh"
@@ -1994,7 +2001,7 @@ export function CatFinderGameSection({
               type="button"
               data-testid="cat-share-btn"
               onClick={handleGenerateShareCard}
-              className="min-h-[44px] px-4 py-2 rounded-xl border-2 border-[#43312B] bg-[#FDE68A] hover:bg-[#FCD34D] text-[#43312B] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+              className="min-h-[44px] px-4 py-2 rounded-xl border-2 border-[#5A3E44] bg-[#FDE68A] hover:bg-[#FCD34D] text-[#5A3E44] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
             >
               <Download className="w-4 h-4" />
               <span>Khoe Thành Tích (Tải Ảnh)</span>
@@ -2003,7 +2010,7 @@ export function CatFinderGameSection({
             <button
               type="button"
               onClick={() => startStage(activeStage.id, true)}
-              className="min-h-[44px] px-4 py-2 rounded-xl border-2 border-[#E6D4C4] bg-white hover:border-[#43312B] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+              className="min-h-[44px] px-4 py-2 rounded-xl border-2 border-[#F0C8D6] bg-white hover:border-[#5A3E44] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
               <span>Chơi Lại</span>
@@ -2013,7 +2020,7 @@ export function CatFinderGameSection({
               type="button"
               data-testid="cat-map-btn"
               onClick={() => setScreen('TITLE')}
-              className="min-h-[44px] px-4 py-2 rounded-xl border-2 border-[#E6D4C4] bg-white hover:border-[#43312B] text-xs font-bold cursor-pointer"
+              className="min-h-[44px] px-4 py-2 rounded-xl border-2 border-[#F0C8D6] bg-white hover:border-[#5A3E44] text-xs font-bold cursor-pointer"
             >
               Bản Đồ Thị Trấn
             </button>
@@ -2024,7 +2031,7 @@ export function CatFinderGameSection({
                 data-start="true"
                 data-testid="cat-next-stage-btn"
                 onClick={() => startStage(nextUnlockedStage.id, true)}
-                className="min-h-[44px] px-5 py-2 rounded-xl bg-[#E87084] hover:bg-[#DF5C72] text-white border-2 border-[#43312B] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                className="min-h-[44px] px-5 py-2 rounded-xl bg-gradient-to-b from-[#F47BA0] to-[#DB527E] hover:from-[#EC6B93] hover:to-[#C9446F] text-white border-2 border-[#5A3E44] shadow-[0_3px_0_#5A3E44] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
               >
                 <Sparkles className="w-4 h-4" />
                 <span>Sang {nextUnlockedStage.title}</span>
