@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Cat,
   ChevronDown,
@@ -21,42 +21,44 @@ import {
   Zap,
 } from 'lucide-react';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
+import { lazyWithRetry } from '../utils/lazyWithRetry.ts';
+import { LazyLoadErrorBoundary } from './LazyLoadErrorBoundary.tsx';
 import { PwaInstallButton } from './PwaInstallControls.tsx';
 
-const AnomalyGameSection = lazy(() =>
+const AnomalyGameSection = lazyWithRetry(() =>
   import('./AnomalyGameSection.tsx').then((m) => ({ default: m.AnomalyGameSection }))
 );
-const AntiqueShopGameSection = lazy(() =>
+const AntiqueShopGameSection = lazyWithRetry(() =>
   import('./AntiqueShopGameSection.tsx').then((m) => ({ default: m.AntiqueShopGameSection }))
 );
-const AsmrOrganizerGameSection = lazy(() =>
+const AsmrOrganizerGameSection = lazyWithRetry(() =>
   import('./AsmrOrganizerGameSection.tsx').then((m) => ({ default: m.AsmrOrganizerGameSection }))
 );
-const BlindBoxMergeGameSection = lazy(() =>
+const BlindBoxMergeGameSection = lazyWithRetry(() =>
   import('./BlindBoxMergeGameSection.tsx').then((m) => ({ default: m.BlindBoxMergeGameSection }))
 );
-const CatFinderGameSection = lazy(() =>
+const CatFinderGameSection = lazyWithRetry(() =>
   import('./CatFinderGameSection.tsx').then((m) => ({ default: m.CatFinderGameSection }))
 );
-const FeAcademyGameSection = lazy(() =>
+const FeAcademyGameSection = lazyWithRetry(() =>
   import('./FeAcademyGameSection.tsx').then((m) => ({ default: m.FeAcademyGameSection }))
 );
-const FidgetCockpitGameSection = lazy(() =>
+const FidgetCockpitGameSection = lazyWithRetry(() =>
   import('./FidgetCockpitGameSection.tsx').then((m) => ({ default: m.FidgetCockpitGameSection }))
 );
-const GearArenaGameSection = lazy(() =>
+const GearArenaGameSection = lazyWithRetry(() =>
   import('./GearArenaGameSection.tsx').then((m) => ({ default: m.GearArenaGameSection }))
 );
-const LinuxHackerGameSection = lazy(() =>
+const LinuxHackerGameSection = lazyWithRetry(() =>
   import('./LinuxHackerGameSection.tsx').then((m) => ({ default: m.LinuxHackerGameSection }))
 );
-const PrismTdGameSection = lazy(() =>
+const PrismTdGameSection = lazyWithRetry(() =>
   import('./PrismTdGameSection.tsx').then((m) => ({ default: m.PrismTdGameSection }))
 );
-const TrafficRouterGameSection = lazy(() =>
+const TrafficRouterGameSection = lazyWithRetry(() =>
   import('./TrafficRouterGameSection.tsx').then((m) => ({ default: m.TrafficRouterGameSection }))
 );
-const XiangqiGameSection = lazy(() =>
+const XiangqiGameSection = lazyWithRetry(() =>
   import('./XiangqiGameSection.tsx').then((m) => ({ default: m.XiangqiGameSection }))
 );
 
@@ -801,66 +803,68 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
         )}
 
         <div className={isFullscreen ? 'game-fs-inner w-full flex-1 flex flex-col min-h-0' : undefined}>
-          <Suspense
-            fallback={
-              <div className="min-h-[340px] rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white/80 dark:bg-[#0B1222]/90 flex flex-col items-center justify-center gap-2 p-6 text-center">
-                <div className="w-8 h-8 rounded-full border-2 border-sky-500 border-t-transparent animate-spin" />
-                <p className="text-xs font-mono text-slate-600 dark:text-slate-300">
-                  Đang mở {activeGameMeta?.title ?? 'trò chơi'}...
-                </p>
-              </div>
-            }
-          >
-            {activeGame === 'xiangqi' && <XiangqiGameSection theme={theme} onToggleTheme={onToggleTheme} />}
-            {activeGame === 'antique_shop' && (
-              <AntiqueShopGameSection theme={theme} onToggleTheme={onToggleTheme} />
-            )}
-            {activeGame === 'cat_finder' && (
-              <CatFinderGameSection
-                theme={theme}
-                onToggleTheme={onToggleTheme}
-                isFullscreen={isFullscreen}
-                onToggleFullscreen={toggleFullscreen}
-                onExitFullscreen={exitFullscreen}
-              />
-            )}
-            {activeGame === 'anomaly' && <AnomalyGameSection theme={theme} onToggleTheme={onToggleTheme} />}
-            {activeGame === 'asmr_organizer' && (
-              <AsmrOrganizerGameSection theme={theme} onToggleTheme={onToggleTheme} />
-            )}
-            {activeGame === 'blind_box' && (
-              <BlindBoxMergeGameSection theme={theme} onToggleTheme={onToggleTheme} />
-            )}
-            {activeGame === 'prism_td' && (
-              <PrismTdGameSection
-                theme={theme}
-                onToggleTheme={onToggleTheme}
-                isFullscreen={isFullscreen}
-                onToggleFullscreen={toggleFullscreen}
-                onExitFullscreen={exitFullscreen}
-              />
-            )}
-            {activeGame === 'linux_hacker' && (
-              <LinuxHackerGameSection theme={theme} onToggleTheme={onToggleTheme} />
-            )}
-            {activeGame === 'traffic_router' && (
-              <TrafficRouterGameSection
-                theme={theme}
-                onToggleTheme={onToggleTheme}
-                isFullscreen={isFullscreen}
-                onToggleFullscreen={toggleFullscreen}
-              />
-            )}
-            {activeGame === 'gear_arena' && (
-              <GearArenaGameSection theme={theme} onToggleTheme={onToggleTheme} />
-            )}
-            {activeGame === 'fidget_cockpit' && (
-              <FidgetCockpitGameSection theme={theme} onToggleTheme={onToggleTheme} />
-            )}
-            {activeGame === 'fe_academy' && (
-              <FeAcademyGameSection theme={theme} onToggleTheme={onToggleTheme} />
-            )}
-          </Suspense>
+          <LazyLoadErrorBoundary resetKey={activeGame} label={activeGameMeta?.title ?? 'trò chơi'}>
+            <Suspense
+              fallback={
+                <div className="min-h-[340px] rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white/80 dark:bg-[#0B1222]/90 flex flex-col items-center justify-center gap-2 p-6 text-center">
+                  <div className="w-8 h-8 rounded-full border-2 border-sky-500 border-t-transparent animate-spin" />
+                  <p className="text-xs font-mono text-slate-600 dark:text-slate-300">
+                    Đang mở {activeGameMeta?.title ?? 'trò chơi'}...
+                  </p>
+                </div>
+              }
+            >
+              {activeGame === 'xiangqi' && <XiangqiGameSection theme={theme} onToggleTheme={onToggleTheme} />}
+              {activeGame === 'antique_shop' && (
+                <AntiqueShopGameSection theme={theme} onToggleTheme={onToggleTheme} />
+              )}
+              {activeGame === 'cat_finder' && (
+                <CatFinderGameSection
+                  theme={theme}
+                  onToggleTheme={onToggleTheme}
+                  isFullscreen={isFullscreen}
+                  onToggleFullscreen={toggleFullscreen}
+                  onExitFullscreen={exitFullscreen}
+                />
+              )}
+              {activeGame === 'anomaly' && <AnomalyGameSection theme={theme} onToggleTheme={onToggleTheme} />}
+              {activeGame === 'asmr_organizer' && (
+                <AsmrOrganizerGameSection theme={theme} onToggleTheme={onToggleTheme} />
+              )}
+              {activeGame === 'blind_box' && (
+                <BlindBoxMergeGameSection theme={theme} onToggleTheme={onToggleTheme} />
+              )}
+              {activeGame === 'prism_td' && (
+                <PrismTdGameSection
+                  theme={theme}
+                  onToggleTheme={onToggleTheme}
+                  isFullscreen={isFullscreen}
+                  onToggleFullscreen={toggleFullscreen}
+                  onExitFullscreen={exitFullscreen}
+                />
+              )}
+              {activeGame === 'linux_hacker' && (
+                <LinuxHackerGameSection theme={theme} onToggleTheme={onToggleTheme} />
+              )}
+              {activeGame === 'traffic_router' && (
+                <TrafficRouterGameSection
+                  theme={theme}
+                  onToggleTheme={onToggleTheme}
+                  isFullscreen={isFullscreen}
+                  onToggleFullscreen={toggleFullscreen}
+                />
+              )}
+              {activeGame === 'gear_arena' && (
+                <GearArenaGameSection theme={theme} onToggleTheme={onToggleTheme} />
+              )}
+              {activeGame === 'fidget_cockpit' && (
+                <FidgetCockpitGameSection theme={theme} onToggleTheme={onToggleTheme} />
+              )}
+              {activeGame === 'fe_academy' && (
+                <FeAcademyGameSection theme={theme} onToggleTheme={onToggleTheme} />
+              )}
+            </Suspense>
+          </LazyLoadErrorBoundary>
         </div>
       </div>
     </div>

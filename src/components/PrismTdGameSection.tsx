@@ -47,6 +47,7 @@ import {
   DifficultyId,
   FlameConeFx,
   FloatingCombatText,
+  formatGunPowerMultiplier,
   GAME_MODE_CONFIGS,
   GAME_MODE_ORDER,
   GameModeId,
@@ -1113,7 +1114,7 @@ export function PrismTdGameSection({
       pushCombatText(pt.x, pt.y - 10, `★ ${unlocked.name}!`, '#FDE047', 1.15);
       setStatusNotice(`ĐỘT PHÁ LV${target.level}: Mở khóa "${unlocked.name}" — ${unlocked.summary}!`);
     } else {
-      setStatusNotice(`Đã nâng ${spec.shortName} lên Lv${target.level}/${MAX_GUN_LEVEL} (×2 DMG)!`);
+      setStatusNotice(`Đã nâng ${spec.shortName} lên Lv${target.level}/${MAX_GUN_LEVEL} (×1.9 DMG)!`);
     }
   }, [selectedGunId, gameState, recomputeFirepower, syncHudFromSim, requestCanvasRedraw, emitParticles, pushCombatText, soundEnabled, triggerTactilePulse]);
 
@@ -7642,7 +7643,7 @@ export function PrismTdGameSection({
           </div>
 
           <p className="text-[11px] font-mono text-slate-400 border-t border-slate-800/80 pt-3 mobile-ls:pt-2 mobile-ls:text-[10px] text-center">
-            1-7, A Khúc Xạ, S Hyperion, K Khiên Aegis, Z/X/C/V/B/N Công · F/G/H Độc Quyền · 8/9/D Điện · 0/Q/E/W Hỗ Trợ · U nâng ×2 · Space Hỏa Lực
+            1-7, A Khúc Xạ, S Hyperion, K Khiên Aegis, Z/X/C/V/B/N Công · F/G/H Độc Quyền · 8/9/D Điện · 0/Q/E/W Hỗ Trợ · U nâng ×1.9 · Space Hỏa Lực
           </p>
         </div>
       )}
@@ -8537,7 +8538,7 @@ export function PrismTdGameSection({
                               upgradeSelectedGun();
                             }}
                             disabled={selectedUpgradeCost === null || hud.energy < selectedUpgradeCost}
-                            title="Mỗi lần nâng cấp tốn gấp đôi năng lượng (Max Lv7)"
+                            title="Nâng cấp lần 1 bằng giá mua, các lần sau ×2 năng lượng & mỗi cấp ×1.9 sức mạnh (Max Lv7)"
                             className={`w-full min-h-[44px] px-3 rounded-xl text-xs font-mono font-bold cursor-pointer transition-colors tabular-nums ${
                               selectedUpgradeCost === null
                                 ? 'bg-amber-400/20 border border-amber-400 text-amber-300 cursor-default'
@@ -8547,10 +8548,10 @@ export function PrismTdGameSection({
                             }`}
                           >
                             {selectedUpgradeCost === null
-                              ? 'ĐÃ ĐẠT MAX LV.7 (×64 SỨC MẠNH)'
+                              ? `ĐÃ ĐẠT MAX LV.7 (${formatGunPowerMultiplier(MAX_GUN_LEVEL)} SỨC MẠNH)`
                               : isSupportGunType(selectedGun.type)
                                 ? `Nâng Lv.${selectedGun.level + 1} (${selectedUpgradeCost}⚡ · Tăng Aura)`
-                                : `Nâng Lv.${selectedGun.level + 1} (${selectedUpgradeCost}⚡ · ×2 Giá & ×2 DMG)`}
+                                : `Nâng Lv.${selectedGun.level + 1} (${selectedUpgradeCost}⚡ · ×1.9 DMG)`}
                           </button>
 
                           {/* Next-Level Delta Preview Strip */}
@@ -8655,7 +8656,7 @@ export function PrismTdGameSection({
                                         {step.level === MAX_GUN_LEVEL ? '✦7' : isMilestone ? `★${step.level}` : `L${step.level}`}
                                       </div>
                                       <div className="text-[8px] leading-tight mt-0.5 truncate">
-                                        {isSupportGunType(selectedGun.type) ? `C${step.level}` : `×${Math.pow(2, step.level - 1)}`}
+                                        {isSupportGunType(selectedGun.type) ? `C${step.level}` : formatGunPowerMultiplier(step.level)}
                                       </div>
                                     </div>
                                   );
@@ -9116,7 +9117,7 @@ export function PrismTdGameSection({
                             </span>
                           </div>
                           <span className="text-[10px] font-mono text-amber-300 shrink-0">
-                            Lv1→Lv7: {selectedToolSpec.category === 'support' ? 'Aura Cấp 1→7' : '×1 → ×64 DMG (×2/cấp)'}
+                            Lv1→Lv7: {selectedToolSpec.category === 'support' ? 'Aura Cấp 1→7' : `×1 → ${formatGunPowerMultiplier(MAX_GUN_LEVEL)} DMG (×1.9/cấp)`}
                           </span>
                         </div>
 
@@ -9328,7 +9329,7 @@ export function PrismTdGameSection({
                                       {step.level === MAX_GUN_LEVEL ? '✦Lv7' : isBreakthrough ? `★Lv${step.level}` : `Lv${step.level}`}
                                     </div>
                                     <div className="text-[9px] mt-0.5 truncate">
-                                      {isSupportGunType(selectedGun.type) ? `Cấp ${step.level}` : `×${Math.pow(2, step.level - 1)}`}
+                                      {isSupportGunType(selectedGun.type) ? `Cấp ${step.level}` : formatGunPowerMultiplier(step.level)}
                                     </div>
                                   </div>
                                 );
@@ -9347,7 +9348,7 @@ export function PrismTdGameSection({
                               upgradeSelectedGun();
                             }}
                             disabled={selectedUpgradeCost === null || hud.energy < selectedUpgradeCost}
-                            title="Mỗi lần nâng cấp tốn gấp đôi năng lượng & nhân đôi sức mạnh (Max Lv7)"
+                            title="Nâng cấp lần 1 bằng giá mua, các lần sau ×2 năng lượng & mỗi cấp ×1.9 sức mạnh (Max Lv7)"
                             className={`col-span-2 sm:col-span-1 min-h-[44px] px-4 rounded-xl text-xs font-mono font-bold cursor-pointer transition-colors tabular-nums ${
                               selectedUpgradeCost === null
                                 ? 'bg-amber-400/20 border border-amber-400 text-amber-300 cursor-default'
@@ -9357,10 +9358,10 @@ export function PrismTdGameSection({
                             }`}
                           >
                             {selectedUpgradeCost === null
-                              ? 'MAX LV.7 (×64 DMG)'
+                              ? `MAX LV.7 (${formatGunPowerMultiplier(MAX_GUN_LEVEL)} DMG)`
                               : isSupportGunType(selectedGun.type)
                                 ? `[U] Nâng Lv${selectedGun.level + 1} (${selectedUpgradeCost}⚡ · Tăng Aura)`
-                                : `[U] Nâng Lv${selectedGun.level + 1} (${selectedUpgradeCost}⚡ · ×2 Giá & ×2 DMG)`}
+                                : `[U] Nâng Lv${selectedGun.level + 1} (${selectedUpgradeCost}⚡ · ×1.9 DMG)`}
                           </button>
                           <button
                             type="button"

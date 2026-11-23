@@ -23,6 +23,7 @@ import {
   DIFFICULTY_CONFIGS,
   DIFFICULTY_ORDER,
   ENEMY_KILL_COIN_BOOST,
+  formatGunPowerMultiplier,
   GAME_MODE_CONFIGS,
   GAME_MODE_ORDER,
   getAstralMaxRifts,
@@ -45,6 +46,7 @@ import {
   GRID_ROWS,
   gridToWorldCenter,
   GUN_CATALOG,
+  GUN_POWER_MULT_PER_LEVEL,
   interruptEnemyWindup,
   isElectricGunType,
   isSupportGunType,
@@ -255,7 +257,7 @@ test('Super Hell & Nightmare (2x Super Hell), Boss Apocalypse, and 24x14 Sector-
   assert.equal(p2Step2.outcome.phase2Events.length, 0);
 });
 
-test('26-gun Lv1..Lv7 progression, 2x doubling upgrade cost, pure 0-damage support, and Quantum Prism mechanics', () => {
+test('26-gun Lv1..Lv7 progression, 1x-first-then-2x upgrade cost, ×1.9 power scaling, pure 0-damage support, and Quantum Prism mechanics', () => {
   const overheatKeys = new Set<string>();
   const hotkeys = new Set<string>();
 
@@ -294,8 +296,10 @@ test('26-gun Lv1..Lv7 progression, 2x doubling upgrade cost, pure 0-damage suppo
         assert.equal(omegaProfile.dpsEstimate, 0, `${gun.type} lv${lv} omega must have 0 dpsEstimate`);
         assert.equal(omegaProfile.burnDps, 0, `${gun.type} lv${lv} omega must have 0 burnDps`);
       } else {
-        const expectedAlphaDmg = Math.round(gun.baseDamage * Math.pow(2, lv - 1) * gun.variants.alpha.damageMult);
-        assert.equal(profile.damage, expectedAlphaDmg, `${gun.type} lv${lv} damage must follow 2^(lv-1) scaling`);
+        const expectedAlphaDmg = Math.round(
+          gun.baseDamage * Math.pow(GUN_POWER_MULT_PER_LEVEL, lv - 1) * gun.variants.alpha.damageMult
+        );
+        assert.equal(profile.damage, expectedAlphaDmg, `${gun.type} lv${lv} damage must follow 1.9^(lv-1) scaling`);
         assert.ok(profile.damage > prevDmg, `${gun.type} lv${lv} damage should increase`);
         assert.ok(profile.dpsEstimate > prevDps, `${gun.type} lv${lv} dps should increase`);
         assert.notEqual(
@@ -309,7 +313,11 @@ test('26-gun Lv1..Lv7 progression, 2x doubling upgrade cost, pure 0-damage suppo
 
       if (lv < MAX_GUN_LEVEL) {
         const upCost = getGunUpgradeCost(gun.type, lv);
-        assert.equal(upCost, Math.round(gun.cost * Math.pow(2, lv)), `${gun.type} lv${lv}->${lv + 1} cost must double`);
+        assert.equal(
+          upCost,
+          Math.round(gun.cost * Math.pow(2, lv - 1)),
+          `${gun.type} lv${lv}->${lv + 1} cost must be 1x on Lv1->2 and double thereafter`
+        );
       } else {
         assert.equal(getGunUpgradeCost(gun.type, lv), null);
         assert.equal(profile.visualTier, 4);
@@ -332,12 +340,21 @@ test('26-gun Lv1..Lv7 progression, 2x doubling upgrade cost, pure 0-damage suppo
       if (isSupport) {
         assert.equal(roadmap[i].powerMultiplierLabel, `Cấp ${i + 1}/${MAX_GUN_LEVEL}`);
       } else {
-        assert.equal(roadmap[i].powerMultiplierLabel, `×${Math.pow(2, i)} DMG`);
+        assert.equal(roadmap[i].powerMultiplierLabel, `${formatGunPowerMultiplier(i + 1)} DMG`);
       }
     }
   }
   assert.equal(overheatKeys.size, 26);
   assert.equal(hotkeys.size, 26);
+
+  // Explicit check for a 500-energy gun (orbital): Lv1->Lv2 = 500, Lv2->Lv3 = 1000, Lv3->Lv4 = 2000, ×1.9 power
+  const orbitalMeta = getGunCatalogItem('orbital');
+  assert.equal(orbitalMeta.cost, 500);
+  assert.equal(getGunUpgradeCost('orbital', 1), 500);
+  assert.equal(getGunUpgradeCost('orbital', 2), 1000);
+  assert.equal(getGunUpgradeCost('orbital', 3), 2000);
+  assert.equal(getGunUpgradeCost('orbital', 4), 4000);
+  assert.equal(getGunCombatProfile('orbital', 2, 'alpha').damage, Math.round(orbitalMeta.baseDamage * 1.9 * orbitalMeta.variants.alpha.damageMult));
 
   // Beacon + Radar + Quantum Prism (500⚡) Pure Support Auras (NO attack-speed buff)
   const beaconGun: PlacedGun = {
@@ -420,7 +437,7 @@ test('26-gun Lv1..Lv7 progression, 2x doubling upgrade cost, pure 0-damage suppo
 
   const cryoBase = getGunCatalogItem('cryo').cost;
   const investedLv3 = getGunTotalInvested('cryo', 3);
-  assert.equal(investedLv3, cryoBase * (1 + 2 + 4));
+  assert.equal(investedLv3, cryoBase * (1 + 1 + 2));
   assert.equal(getGunSellRefund({ type: 'cryo', level: 3 }), Math.round(investedLv3 * 0.72));
 });
 

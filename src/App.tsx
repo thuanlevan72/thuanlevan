@@ -3,24 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { FaqAndCta, GlobalFooter } from './components/FaqAndFooter.tsx';
 import { HeroSection } from './components/HeroSection.tsx';
 import { InteractiveTerminal } from './components/InteractiveTerminal.tsx';
+import { LazyLoadErrorBoundary } from './components/LazyLoadErrorBoundary.tsx';
 import { LightboxModal } from './components/LightboxModal.tsx';
 import { ProjectsSection } from './components/ProjectsSection.tsx';
 import { SkillsSection } from './components/SkillsSection.tsx';
 import { GameHubSection } from './components/GameHubSection.tsx';
 import { TopBarAndHeader } from './components/TopBarAndHeader.tsx';
 import { OfflineIndicator } from './components/PwaInstallControls.tsx';
+import { lazyWithRetry } from './utils/lazyWithRetry.ts';
 
-const CvPdfSection = lazy(() =>
+const CvPdfSection = lazyWithRetry(() =>
   import('./components/CvPdfSection.tsx').then((m) => ({ default: m.CvPdfSection }))
 );
-const GallerySection = lazy(() =>
+const GallerySection = lazyWithRetry(() =>
   import('./components/GallerySection.tsx').then((m) => ({ default: m.GallerySection }))
 );
-const LyricGrooveSketchpadSection = lazy(() =>
+const LyricGrooveSketchpadSection = lazyWithRetry(() =>
   import('./components/LyricGrooveSketchpadSection.tsx').then((m) => ({
     default: m.LyricGrooveSketchpadSection,
   }))
@@ -236,34 +238,40 @@ export default function App() {
         }`}
       >
         {activeRoute === 'gallery' ? (
-          <Suspense fallback={<div className="py-16 text-center text-sm text-slate-500">Đang mở thư viện ảnh...</div>}>
-            <GallerySection
-              theme={theme}
-              onToggleTheme={handleToggleTheme}
-              onSelectArtwork={handleOpenArtwork}
-              onBackToProfile={() => handleNavigate('profile', 'overview')}
-            />
-          </Suspense>
+          <LazyLoadErrorBoundary resetKey={activeRoute} label="Thư viện ảnh">
+            <Suspense fallback={<div className="py-16 text-center text-sm text-slate-500">Đang mở thư viện ảnh...</div>}>
+              <GallerySection
+                theme={theme}
+                onToggleTheme={handleToggleTheme}
+                onSelectArtwork={handleOpenArtwork}
+                onBackToProfile={() => handleNavigate('profile', 'overview')}
+              />
+            </Suspense>
+          </LazyLoadErrorBoundary>
         ) : activeRoute === 'cv' ? (
-          <Suspense fallback={<div className="py-16 text-center text-sm text-slate-500">Đang tải hồ sơ CV...</div>}>
-            <CvPdfSection
-              theme={theme}
-              onToggleTheme={handleToggleTheme}
-              onNavigate={handleNavigate}
-            />
-          </Suspense>
+          <LazyLoadErrorBoundary resetKey={activeRoute} label="Hồ sơ CV">
+            <Suspense fallback={<div className="py-16 text-center text-sm text-slate-500">Đang tải hồ sơ CV...</div>}>
+              <CvPdfSection
+                theme={theme}
+                onToggleTheme={handleToggleTheme}
+                onNavigate={handleNavigate}
+              />
+            </Suspense>
+          </LazyLoadErrorBoundary>
         ) : activeRoute === 'game' ? (
           <GameHubSection
             theme={theme}
             onToggleTheme={handleToggleTheme}
           />
         ) : activeRoute === 'studio' ? (
-          <Suspense fallback={<div className="py-16 text-center text-sm text-slate-500">Đang mở Lyric &amp; Groove Sketchpad...</div>}>
-            <LyricGrooveSketchpadSection
-              theme={theme}
-              onToggleTheme={handleToggleTheme}
-            />
-          </Suspense>
+          <LazyLoadErrorBoundary resetKey={activeRoute} label="Phòng sáng tác nhạc">
+            <Suspense fallback={<div className="py-16 text-center text-sm text-slate-500">Đang mở Lyric &amp; Groove Sketchpad...</div>}>
+              <LyricGrooveSketchpadSection
+                theme={theme}
+                onToggleTheme={handleToggleTheme}
+              />
+            </Suspense>
+          </LazyLoadErrorBoundary>
         ) : (
           <>
             <HeroSection

@@ -3493,14 +3493,22 @@ export function getGunCatalogItem(type: GunType): GunCatalogItem {
   return GUN_CATALOG.find((g) => g.type === type) ?? GUN_CATALOG[0];
 }
 
+export const GUN_POWER_MULT_PER_LEVEL = 1.9;
+
+export function formatGunPowerMultiplier(level: number): string {
+  const safeLv = Math.max(1, Math.min(MAX_GUN_LEVEL, Math.round(level)));
+  return `×${Number(Math.pow(GUN_POWER_MULT_PER_LEVEL, safeLv - 1).toFixed(2))}`;
+}
+
 /**
  * Upgrade cost from `level` to `level + 1` (supports levels 1..6 -> MAX Lv7, null at MAX Lv7).
- * Each upgrade tier doubles cost: 2x -> 4x -> 8x -> 16x -> 32x -> 64x base cost.
+ * First upgrade (Lv1 -> Lv2) equals the gun's purchase cost (1x), then doubles each subsequent tier:
+ * 1x -> 2x -> 4x -> 8x -> 16x -> 32x base cost.
  */
 export function getGunUpgradeCost(type: GunType, level: number): number | null {
   if (level >= MAX_GUN_LEVEL || level < 1) return null;
   const item = getGunCatalogItem(type);
-  return Math.round(item.cost * Math.pow(2, level));
+  return Math.round(item.cost * Math.pow(2, level - 1));
 }
 
 export function getGunTotalInvested(type: GunType, level: number): number {
@@ -3521,7 +3529,7 @@ const GUN_PROFILE_CACHE = new Map<string, GunCombatProfile>();
 
 /**
  * Computes deterministic combat stats, visual tier, and unlocked milestone skills for Lv1..7.
- * Each upgrade doubles both cost AND base damage (`2^(level-1)`): 1x -> 2x -> 4x -> 8x -> 16x -> 32x -> 64x.
+ * Each upgrade multiplies base damage by `1.9^(level-1)`: 1x -> 1.9x -> 3.61x -> 6.86x -> 13.03x -> 24.76x -> 47.05x.
  * Pure support towers (`beacon`, `cryo`, `radar`, `quantum_prism`) ALWAYS output 0 damage, 0 dpsEstimate, 0 burnDps.
  */
 export function getGunCombatProfile(
@@ -3539,7 +3547,7 @@ export function getGunCombatProfile(
   const isSupport = item.category === 'support';
 
   const lvOffset = (level - 1) * 1.5;
-  const dmgMult = Math.pow(2, level - 1) * vSpec.damageMult;
+  const dmgMult = Math.pow(GUN_POWER_MULT_PER_LEVEL, level - 1) * vSpec.damageMult;
   const rofMult = (1 + lvOffset * 0.055 + (level >= MAX_GUN_LEVEL ? 0.08 : 0)) * vSpec.rofMult;
   const rangeBonusTiles =
     lvOffset * 0.075 + (level >= 5 ? 0.1 : 0) + (level >= MAX_GUN_LEVEL ? 0.15 : 0) + vSpec.rangeBonus;
@@ -3885,7 +3893,7 @@ function formatSupportPowerAtLevel(type: GunType, profile: GunCombatProfile, var
 
 /**
  * Computes a complete, cached Lv1..Lv7 skill & power roadmap for any gun + variant.
- * Clearly shows exact DMG ×2 scaling, stat deltas, and Lv3/Lv5/Lv7 milestone skills.
+ * Clearly shows exact DMG ×1.9 scaling, stat deltas, and Lv3/Lv5/Lv7 milestone skills.
  */
 export function getGunProgressionRoadmap(
   type: GunType,
@@ -3904,7 +3912,7 @@ export function getGunProgressionRoadmap(
     const prof = getGunCombatProfile(type, lv, variant);
     const milestone = item.milestones.find((m) => m.level === lv) ?? null;
     const costFromPrev = lv === 1 ? null : getGunUpgradeCost(type, lv - 1);
-    const multX = Math.pow(2, lv - 1);
+    const multLabel = formatGunPowerMultiplier(lv);
     const statChanges: string[] = [];
 
     if (!prev) {
@@ -3942,7 +3950,7 @@ export function getGunProgressionRoadmap(
         statChanges.push(`Nhịp ${prev.cooldownSec.toFixed(2)}s→${prof.cooldownSec.toFixed(2)}s`);
       }
     } else {
-      statChanges.push(`DMG ${prev.damage}→${prof.damage} (×2)`);
+      statChanges.push(`DMG ${prev.damage}→${prof.damage} (×${GUN_POWER_MULT_PER_LEVEL})`);
       if (prof.projectilesPerShot > prev.projectilesPerShot) {
         statChanges.push(`${prev.projectilesPerShot}→${prof.projectilesPerShot} tia`);
       }
@@ -3972,7 +3980,7 @@ export function getGunProgressionRoadmap(
       rangeTiles: prof.rangeTiles,
       cooldownSec: prof.cooldownSec,
       armorPiercePct: Math.round(prof.armorPierce * 100),
-      powerMultiplierLabel: isSupport ? `Cấp ${lv}/${MAX_GUN_LEVEL}` : `×${multX} DMG`,
+      powerMultiplierLabel: isSupport ? `Cấp ${lv}/${MAX_GUN_LEVEL}` : `${multLabel} DMG`,
       milestone,
       statChanges,
       powerSummary,
