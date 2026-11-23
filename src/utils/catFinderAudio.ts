@@ -279,6 +279,86 @@ class CatFinderAudioEngine {
     });
   }
 
+  public playMissSound(muted: boolean) {
+    if (muted) return;
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.exponentialRampToValueAtTime(125, now + 0.14);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.085, now + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.17);
+  }
+
+  public playUnlockLatchSound(muted: boolean) {
+    if (muted) return;
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [0, 0.055].forEach((offset, idx) => {
+      const t = now + offset;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(idx === 0 ? 520 : 760, t);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.09, t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.09);
+    });
+  }
+
+  public playWarningTickSound(muted: boolean) {
+    if (muted) return;
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(980, now);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.038, now + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.06);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.07);
+  }
+
+  public playGameOverSound(muted: boolean) {
+    if (muted) return;
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const notes = [440, 392, 349.23, 261.63];
+    notes.forEach((freq, idx) => {
+      const t = now + idx * 0.12;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, t);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.095, t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.34);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.35);
+    });
+  }
+
   public startBgm() {
     if (typeof window === 'undefined' || this.bgmTimer !== null) return;
     this.ensureContext();

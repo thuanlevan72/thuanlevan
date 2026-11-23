@@ -5,19 +5,43 @@ const INK = '#43312B';
 export function CatItemGraphic({
   artKey,
   monochrome = false,
+  camoOpacity = 1,
 }: {
   artKey: string;
   monochrome?: boolean;
+  camoOpacity?: number;
 }) {
   return (
     <g
       style={
         monochrome
           ? { filter: 'grayscale(1) contrast(0.75) opacity(0.55)' }
+          : camoOpacity < 0.99
+          ? { opacity: camoOpacity, filter: 'saturate(0.84) contrast(0.95)' }
           : undefined
       }
     >
       {renderItemShape(artKey)}
+    </g>
+  );
+}
+
+export function CatDecoyGraphic({
+  artKey,
+  mutedTint = false,
+}: {
+  artKey: string;
+  mutedTint?: boolean;
+}) {
+  return (
+    <g
+      style={
+        mutedTint
+          ? { filter: 'saturate(0.58) opacity(0.82)' }
+          : { filter: 'saturate(0.82) opacity(0.92)' }
+      }
+    >
+      {renderDecoyShape(artKey)}
     </g>
   );
 }
@@ -713,7 +737,6 @@ function renderItemShape(artKey: string) {
       );
 
     case 'festival_gold_bell':
-    default:
       return (
         <g className="animate-cozy-sway">
           <path d="M-18,12 C-18,-16 18,-16 18,12 L22,18 L-22,18 Z" fill="#FCD34D" stroke={INK} strokeWidth="2" />
@@ -721,10 +744,401 @@ function renderItemShape(artKey: string) {
           <path d="M-8,-14 L8,-14" stroke="#F472B6" strokeWidth="4" strokeLinecap="round" />
         </g>
       );
+
+    case 'ginger_loaf_cat':
+      return (
+        <g>
+          <ellipse cx="0" cy="8" rx="22" ry="14" fill="#F09A58" stroke={INK} strokeWidth="2" />
+          <path d="M-8,-4 L-5,8 M0,-6 L2,8 M8,-4 L9,8" stroke="#C56E32" strokeWidth="2" strokeLinecap="round" />
+          <polygon points="-18,-2 -15,-16 -7,-7" fill="#F09A58" stroke={INK} strokeWidth="1.8" />
+          <polygon points="7,-7 15,-16 18,-2" fill="#F09A58" stroke={INK} strokeWidth="1.8" />
+          <path d="M-10,4 Q-7,6 -5,4 M5,4 Q7,6 10,4" stroke={INK} strokeWidth="1.6" fill="none" />
+        </g>
+      );
+
+    case 'tuxedo_cup_cat':
+      return (
+        <g>
+          <circle cx="0" cy="-10" r="12" fill="#3B353E" stroke={INK} strokeWidth="2" />
+          <polygon points="-11,-17 -9,-28 -2,-20" fill="#3B353E" stroke={INK} strokeWidth="1.8" />
+          <polygon points="2,-20 9,-28 11,-17" fill="#3B353E" stroke={INK} strokeWidth="1.8" />
+          <polygon points="-5,-6 0,-12 5,-6 3,0 -3,0" fill="#FFFDF8" />
+          <circle cx="-4" cy="-12" r="1.7" fill="#FDE047" />
+          <circle cx="4" cy="-12" r="1.7" fill="#FDE047" />
+          <path d="M-14,0 L14,0 L11,20 L-11,20 Z" fill="#BCE3EC" stroke={INK} strokeWidth="2" />
+          <path d="M14,4 Q21,4 21,11 Q21,16 12,16" fill="none" stroke={INK} strokeWidth="2" />
+        </g>
+      );
+
+    case 'cinnamon_roll':
+      return (
+        <g>
+          <ellipse cx="0" cy="2" rx="21" ry="17" fill="#E8AE74" stroke={INK} strokeWidth="2" />
+          <path d="M0,2 C4,-2 8,2 5,6 C0,11 -8,7 -8,0 C-8,-9 4,-13 11,-7" fill="none" stroke="#8C4E27" strokeWidth="2.4" strokeLinecap="round" />
+          <path d="M-12,-8 Q0,-15 11,-7" stroke="#FFF9EE" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+        </g>
+      );
+
+    case 'honey_dipper':
+      return (
+        <g>
+          <line x1="-18" y1="18" x2="6" y2="-6" stroke="#D99B58" strokeWidth="4" strokeLinecap="round" />
+          <ellipse cx="10" cy="-10" rx="10" ry="13" transform="rotate(45 10 -10)" fill="#F7BA47" stroke={INK} strokeWidth="1.8" />
+          <line x1="4" y1="-16" x2="16" y2="-4" stroke={INK} strokeWidth="1.4" />
+          <line x1="8" y1="-19" x2="19" y2="-8" stroke={INK} strokeWidth="1.4" />
+        </g>
+      );
+
+    case 'berry_tart':
+      return (
+        <g>
+          <path d="M-20,0 L20,0 L15,18 L-15,18 Z" fill="#EBB478" stroke={INK} strokeWidth="2" />
+          <ellipse cx="0" cy="-1" rx="20" ry="7" fill="#FFF5DF" stroke={INK} strokeWidth="1.8" />
+          <circle cx="-7" cy="-5" r="5" fill="#6366F1" stroke={INK} strokeWidth="1.5" />
+          <circle cx="6" cy="-5" r="5" fill="#EC4899" stroke={INK} strokeWidth="1.5" />
+          <circle cx="0" cy="-9" r="5" fill="#818CF8" stroke={INK} strokeWidth="1.5" />
+        </g>
+      );
+
+    case 'butter_dish':
+      return (
+        <g>
+          <ellipse cx="0" cy="12" rx="24" ry="8" fill="#E3F4F8" stroke={INK} strokeWidth="2" />
+          <rect x="-14" y="-6" width="28" height="16" rx="4" fill="#FDE068" stroke={INK} strokeWidth="1.8" />
+          <path d="M-8,-6 L-8,10 M4,-6 L4,10" stroke="#F59E0B" strokeWidth="1.5" />
+        </g>
+      );
+
+    case 'star_cookie':
+      return (
+        <g>
+          <polygon
+            points="0,-20 6,-7 20,-5 10,5 13,19 0,12 -13,19 -10,5 -20,-5 -6,-7"
+            fill="#F4C77B"
+            stroke={INK}
+            strokeWidth="2"
+          />
+          <circle cx="0" cy="0" r="5" fill="#F9A8D4" />
+        </g>
+      );
+
+    case 'vintage_postcard':
+      return (
+        <g>
+          <rect x="-22" y="-14" width="44" height="28" rx="3" fill="#FFFDF5" stroke={INK} strokeWidth="2" />
+          <rect x="8" y="-10" width="9" height="10" fill="#F4A2B2" stroke={INK} strokeWidth="1.2" />
+          <line x1="-16" y1="-4" x2="2" y2="-4" stroke="#B69E91" strokeWidth="2" />
+          <line x1="-16" y1="4" x2="8" y2="4" stroke="#B69E91" strokeWidth="2" />
+        </g>
+      );
+
+    case 'cream_puff':
+      return (
+        <g>
+          <ellipse cx="0" cy="6" rx="20" ry="13" fill="#F0B979" stroke={INK} strokeWidth="2" />
+          <path d="M-18,2 Q0,-6 18,2" stroke="#FFF9EE" strokeWidth="4.5" fill="none" strokeLinecap="round" />
+          <ellipse cx="0" cy="-6" rx="14" ry="9" fill="#F5C98D" stroke={INK} strokeWidth="1.8" />
+        </g>
+      );
+
+    case 'cat_matchbox':
+      return (
+        <g>
+          <rect x="-20" y="-12" width="40" height="24" rx="4" fill="#F59794" stroke={INK} strokeWidth="2" />
+          <rect x="-12" y="-8" width="24" height="16" rx="2" fill="#FFF8EE" stroke={INK} strokeWidth="1.4" />
+          <circle cx="0" cy="1" r="5" fill="#F5B971" stroke={INK} strokeWidth="1.4" />
+          <polygon points="-4,-3 -3,-8 0,-4" fill="#F5B971" />
+          <polygon points="0,-4 3,-8 4,-3" fill="#F5B971" />
+        </g>
+      );
+
+    case 'milk_carton':
+      return (
+        <g>
+          <polygon points="-13,-12 0,-24 13,-12" fill="#FFFDF8" stroke={INK} strokeWidth="2" />
+          <rect x="-13" y="-12" width="26" height="32" rx="2" fill="#FFFDF8" stroke={INK} strokeWidth="2" />
+          <rect x="-13" y="-2" width="26" height="14" fill="#F9A8B8" />
+          <circle cx="0" cy="5" r="4" fill="#FFFDF8" />
+        </g>
+      );
+
+    case 'yarn_basket':
+      return (
+        <g>
+          <circle cx="-8" cy="-8" r="10" fill="#F48FB1" stroke={INK} strokeWidth="1.8" />
+          <circle cx="8" cy="-10" r="10" fill="#93C5FD" stroke={INK} strokeWidth="1.8" />
+          <path d="M-20,0 L20,0 L15,20 L-15,20 Z" fill="#DDA97E" stroke={INK} strokeWidth="2" />
+          <line x1="-17" y1="7" x2="17" y2="7" stroke={INK} strokeWidth="1.5" />
+          <line x1="-16" y1="14" x2="16" y2="14" stroke={INK} strokeWidth="1.5" />
+        </g>
+      );
+
+    case 'bell_collar':
+      return (
+        <g>
+          <ellipse cx="0" cy="-2" rx="18" ry="11" fill="none" stroke="#E86A7D" strokeWidth="5" />
+          <circle cx="0" cy="12" r="6" fill="#FDE047" stroke={INK} strokeWidth="1.8" />
+          <line x1="-3" y1="14" x2="3" y2="14" stroke={INK} strokeWidth="1.6" />
+        </g>
+      );
+
+    case 'paw_cushion':
+      return (
+        <g>
+          <ellipse cx="0" cy="6" rx="18" ry="14" fill="#FBD1DA" stroke={INK} strokeWidth="2" />
+          <circle cx="-11" cy="-8" r="5" fill="#FBD1DA" stroke={INK} strokeWidth="1.8" />
+          <circle cx="0" cy="-12" r="5" fill="#FBD1DA" stroke={INK} strokeWidth="1.8" />
+          <circle cx="11" cy="-8" r="5" fill="#FBD1DA" stroke={INK} strokeWidth="1.8" />
+          <ellipse cx="0" cy="7" rx="8" ry="6" fill="#F48FB1" />
+        </g>
+      );
+
+    case 'bonsai_tree':
+      return (
+        <g>
+          <path d="M-16,8 L16,8 L12,22 L-12,22 Z" fill="#8C624A" stroke={INK} strokeWidth="2" />
+          <path d="M0,8 Q-8,-2 -2,-12" stroke="#7D5338" strokeWidth="5" fill="none" strokeLinecap="round" />
+          <ellipse cx="-10" cy="-10" rx="11" ry="7" fill="#78BE88" stroke={INK} strokeWidth="1.8" />
+          <ellipse cx="6" cy="-16" rx="13" ry="8" fill="#8CD098" stroke={INK} strokeWidth="1.8" />
+        </g>
+      );
+
+    case 'terracotta_frog':
+      return (
+        <g>
+          <ellipse cx="0" cy="6" rx="18" ry="12" fill="#88C68E" stroke={INK} strokeWidth="2" />
+          <circle cx="-8" cy="-6" r="5" fill="#88C68E" stroke={INK} strokeWidth="1.8" />
+          <circle cx="8" cy="-6" r="5" fill="#88C68E" stroke={INK} strokeWidth="1.8" />
+          <circle cx="-8" cy="-6" r="2" fill={INK} />
+          <circle cx="8" cy="-6" r="2" fill={INK} />
+          <path d="M-6,6 Q0,11 6,6" stroke={INK} strokeWidth="1.6" fill="none" />
+        </g>
+      );
+
+    case 'lavender_bundle':
+      return (
+        <g>
+          <line x1="-6" y1="22" x2="-10" y2="-18" stroke="#6FA374" strokeWidth="2.4" />
+          <line x1="0" y1="22" x2="0" y2="-22" stroke="#6FA374" strokeWidth="2.4" />
+          <line x1="6" y1="22" x2="10" y2="-16" stroke="#6FA374" strokeWidth="2.4" />
+          <ellipse cx="-10" cy="-16" rx="5" ry="9" fill="#B794F4" stroke={INK} strokeWidth="1.4" />
+          <ellipse cx="0" cy="-20" rx="5" ry="10" fill="#A78BFA" stroke={INK} strokeWidth="1.4" />
+          <ellipse cx="10" cy="-14" rx="5" ry="9" fill="#C4B5FD" stroke={INK} strokeWidth="1.4" />
+          <rect x="-8" y="8" width="16" height="5" rx="2" fill="#F4A2B2" stroke={INK} strokeWidth="1.4" />
+        </g>
+      );
+
+    case 'snail_shell':
+      return (
+        <g>
+          <path d="M-20,12 Q0,18 22,10 Q18,2 8,6 L-14,4 Q-22,6 -20,12 Z" fill="#F6DFB8" stroke={INK} strokeWidth="1.8" />
+          <circle cx="2" cy="-2" r="13" fill="#F4A28C" stroke={INK} strokeWidth="2" />
+          <path d="M2,-2 C6,-2 6,4 1,4 C-5,4 -5,-6 2,-6" stroke={INK} strokeWidth="1.6" fill="none" />
+        </g>
+      );
+
+    case 'butterfly_pin':
+      return (
+        <g>
+          <ellipse cx="-10" cy="-6" rx="10" ry="8" fill="#FBCFE8" stroke={INK} strokeWidth="1.8" />
+          <ellipse cx="10" cy="-6" rx="10" ry="8" fill="#FBCFE8" stroke={INK} strokeWidth="1.8" />
+          <ellipse cx="-8" cy="7" rx="7" ry="6" fill="#BAE6FD" stroke={INK} strokeWidth="1.8" />
+          <ellipse cx="8" cy="7" rx="7" ry="6" fill="#BAE6FD" stroke={INK} strokeWidth="1.8" />
+          <line x1="0" y1="-10" x2="0" y2="12" stroke={INK} strokeWidth="3" strokeLinecap="round" />
+        </g>
+      );
+
+    case 'paper_crane':
+      return (
+        <g>
+          <polygon points="-22,-4 0,4 -6,-16" fill="#A7F3D0" stroke={INK} strokeWidth="1.8" />
+          <polygon points="22,-4 0,4 6,-16" fill="#6EE7B7" stroke={INK} strokeWidth="1.8" />
+          <polygon points="-8,4 8,4 0,16" fill="#99F6E4" stroke={INK} strokeWidth="1.8" />
+          <polygon points="10,-10 20,-18 15,-6" fill="#A7F3D0" stroke={INK} strokeWidth="1.6" />
+        </g>
+      );
+
+    case 'matcha_parfait':
+      return (
+        <g>
+          <path d="M-14,-2 L14,-2 L9,20 L-9,20 Z" fill="#D4F0C8" stroke={INK} strokeWidth="2" />
+          <circle cx="0" cy="-10" r="11" fill="#82C77E" stroke={INK} strokeWidth="1.8" />
+          <circle cx="-5" cy="-18" r="4" fill="#FFFDF8" stroke={INK} strokeWidth="1.4" />
+          <circle cx="6" cy="-17" r="4" fill="#F27285" stroke={INK} strokeWidth="1.4" />
+        </g>
+      );
+
+    case 'taiyaki_snack':
+      return (
+        <g>
+          <path d="M-22,0 Q-4,-16 14,-6 L26,-12 L22,0 L26,12 L14,6 Q-4,16 -22,0 Z" fill="#ECA962" stroke={INK} strokeWidth="2" />
+          <circle cx="-11" cy="-2" r="2" fill={INK} />
+          <path d="M-3,-6 Q2,0 -3,6 M4,-6 Q9,0 4,6" stroke="#B4692D" strokeWidth="1.6" fill="none" />
+        </g>
+      );
+
+    case 'daruma_doll':
+      return (
+        <g>
+          <ellipse cx="0" cy="2" rx="18" ry="19" fill="#EF6B6B" stroke={INK} strokeWidth="2" />
+          <ellipse cx="0" cy="-4" rx="11" ry="8" fill="#FFF7EB" stroke={INK} strokeWidth="1.6" />
+          <circle cx="-4" cy="-5" r="2.2" fill={INK} />
+          <circle cx="4" cy="-5" r="2.2" fill="#FFF7EB" stroke={INK} strokeWidth="1.4" />
+          <path d="M-8,11 L8,11" stroke="#FBBF24" strokeWidth="3" strokeLinecap="round" />
+        </g>
+      );
+
+    case 'lucky_coin':
+      return (
+        <g>
+          <circle cx="0" cy="0" r="17" fill="#FCD34D" stroke={INK} strokeWidth="2" />
+          <rect x="-5" y="-5" width="10" height="10" fill="#FFFBEB" stroke={INK} strokeWidth="1.8" />
+        </g>
+      );
+
+    case 'sparkler_bundle':
+      return (
+        <g>
+          <line x1="-4" y1="22" x2="-4" y2="-4" stroke="#E07A5F" strokeWidth="3.5" strokeLinecap="round" />
+          <line x1="4" y1="22" x2="4" y2="-4" stroke="#F4A261" strokeWidth="3.5" strokeLinecap="round" />
+          <polygon points="0,-24 4,-12 16,-12 6,-4 10,6 0,0 -10,6 -6,-4 -16,-12 -4,-12" fill="#FDE047" stroke={INK} strokeWidth="1.5" />
+        </g>
+      );
+
+    default:
+      return (
+        <g>
+          <circle cx="0" cy="0" r="14" fill="#F9B4C4" stroke={INK} strokeWidth="2" />
+        </g>
+      );
   }
 }
 
-export function renderCatCoverProp(cover: CatCoverDef, isOpen: boolean) {
+function renderDecoyShape(artKey: string) {
+  switch (artKey) {
+    case 'decoy_croissant':
+      return (
+        <g>
+          <path d="M-20,5 Q-12,-14 0,-14 Q12,-14 20,5 Q10,12 0,10 Q-10,12 -20,5 Z" fill="#E6C39A" stroke={INK} strokeWidth="1.6" />
+          <path d="M-8,-10 L-6,8 M6,-10 L4,8" stroke={INK} strokeWidth="1.2" fill="none" />
+        </g>
+      );
+    case 'decoy_plate':
+      return (
+        <g>
+          <ellipse cx="0" cy="4" rx="22" ry="11" fill="#F5ECE2" stroke={INK} strokeWidth="1.6" />
+          <ellipse cx="0" cy="4" rx="14" ry="6" fill="none" stroke="#CBB7A6" strokeWidth="1.4" />
+        </g>
+      );
+    case 'decoy_cup':
+      return (
+        <g>
+          <rect x="-12" y="-10" width="24" height="22" rx="5" fill="#EAE0D5" stroke={INK} strokeWidth="1.6" />
+          <path d="M12,-4 Q18,-4 18,3 Q18,8 12,8" fill="none" stroke={INK} strokeWidth="1.6" />
+        </g>
+      );
+    case 'decoy_jar':
+      return (
+        <g>
+          <rect x="-12" y="-12" width="24" height="28" rx="6" fill="#E3D7CB" stroke={INK} strokeWidth="1.6" />
+          <rect x="-14" y="-18" width="28" height="7" rx="3" fill="#B89F8D" stroke={INK} strokeWidth="1.5" />
+        </g>
+      );
+    case 'decoy_cat_silhouette':
+      return (
+        <g>
+          <ellipse cx="0" cy="8" rx="14" ry="10" fill="#D5C4B6" stroke={INK} strokeWidth="1.5" />
+          <circle cx="-8" cy="-4" r="9" fill="#D5C4B6" stroke={INK} strokeWidth="1.5" />
+          <polygon points="-15,-9 -12,-18 -7,-11" fill="#D5C4B6" stroke={INK} strokeWidth="1.4" />
+          <polygon points="-7,-11 -2,-18 0,-9" fill="#D5C4B6" stroke={INK} strokeWidth="1.4" />
+        </g>
+      );
+    case 'decoy_leaf':
+      return (
+        <g>
+          <ellipse cx="-6" cy="-4" rx="12" ry="6" transform="rotate(-25 -6 -4)" fill="#A8CEAE" stroke={INK} strokeWidth="1.5" />
+          <ellipse cx="7" cy="2" rx="11" ry="6" transform="rotate(20 7 2)" fill="#93BF9B" stroke={INK} strokeWidth="1.5" />
+        </g>
+      );
+    case 'decoy_whisk':
+      return (
+        <g>
+          <line x1="0" y1="22" x2="0" y2="2" stroke="#B79272" strokeWidth="3.5" strokeLinecap="round" />
+          <ellipse cx="0" cy="-10" rx="9" ry="13" fill="none" stroke={INK} strokeWidth="1.5" />
+          <ellipse cx="0" cy="-10" rx="4" ry="13" fill="none" stroke={INK} strokeWidth="1.3" />
+        </g>
+      );
+    case 'decoy_pot':
+      return (
+        <g>
+          <path d="M-12,-2 L12,-2 L9,16 L-9,16 Z" fill="#D89A7C" stroke={INK} strokeWidth="1.6" />
+          <circle cx="0" cy="-10" r="9" fill="#9BC99F" stroke={INK} strokeWidth="1.5" />
+        </g>
+      );
+    case 'decoy_flower':
+      return (
+        <g>
+          <circle cx="0" cy="-6" r="10" fill="#F6D5DF" stroke={INK} strokeWidth="1.4" />
+          <circle cx="0" cy="-6" r="4" fill="#F6CE68" />
+          <line x1="0" y1="4" x2="0" y2="18" stroke="#78AE82" strokeWidth="2.4" />
+        </g>
+      );
+    case 'decoy_bird':
+      return (
+        <g>
+          <ellipse cx="0" cy="4" rx="12" ry="8" fill="#D8E5EB" stroke={INK} strokeWidth="1.5" />
+          <polygon points="10,0 17,3 10,6" fill="#F2B872" />
+        </g>
+      );
+    case 'decoy_lantern':
+      return (
+        <g>
+          <ellipse cx="0" cy="0" rx="12" ry="16" fill="#E69A8D" stroke={INK} strokeWidth="1.6" />
+          <line x1="-10" y1="0" x2="10" y2="0" stroke={INK} strokeWidth="1.2" opacity="0.5" />
+        </g>
+      );
+    case 'decoy_fan':
+    default:
+      return (
+        <g>
+          <path d="M-18,4 A20,20 0 0,1 18,4 L0,14 Z" fill="#DFD4EC" stroke={INK} strokeWidth="1.5" />
+        </g>
+      );
+  }
+}
+
+export function renderCatCoverProp(cover: CatCoverDef, isOpen: boolean, tapCount = 0) {
+  const needsTwoTaps = (cover.tapsRequired ?? 1) >= 2;
+  const latched = needsTwoTaps && !isOpen && tapCount === 0;
+  const unlatched = needsTwoTaps && !isOpen && tapCount === 1;
+  return (
+    <g>
+      {renderCoverBody(cover, isOpen)}
+      {isOpen && cover.isDecoy && (
+        <g transform={`translate(${cover.w * 0.38}, ${cover.h * 0.56})`}>
+          <ellipse cx="0" cy="4" rx="11" ry="7" fill="#C7BEB6" stroke={INK} strokeWidth="1.4" />
+          <circle cx="-8" cy="0" r="4" fill="#C7BEB6" stroke={INK} strokeWidth="1.2" />
+          <path d="M10,6 Q18,2 16,-4" stroke="#B6ABA0" strokeWidth="2" fill="none" />
+        </g>
+      )}
+      {latched && (
+        <g transform={`translate(${cover.w - 18}, 16)`}>
+          <circle r="10" fill="#FDE68A" stroke={INK} strokeWidth="1.6" />
+          <rect x="-4" y="-1" width="8" height="6" rx="1.5" fill="#D97706" stroke={INK} strokeWidth="1.2" />
+          <path d="M-2.5,-1 L-2.5,-4 A2.5,2.5 0 0,1 2.5,-4 L2.5,-1" fill="none" stroke={INK} strokeWidth="1.4" />
+        </g>
+      )}
+      {unlatched && (
+        <g transform={`translate(${cover.w - 18}, 16)`}>
+          <circle r="10" fill="#DCFCE7" stroke={INK} strokeWidth="1.6" />
+          <path d="M-4,0 L-1,3 L5,-3" fill="none" stroke="#15803D" strokeWidth="2" strokeLinecap="round" />
+        </g>
+      )}
+    </g>
+  );
+}
+
+function renderCoverBody(cover: CatCoverDef, isOpen: boolean) {
   switch (cover.kind) {
     case 'tin_lid':
     case 'stall_box':

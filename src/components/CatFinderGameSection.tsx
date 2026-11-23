@@ -11,11 +11,16 @@ import {
   ArrowLeft,
   Cat,
   Check,
+  Clock,
   Download,
+  Eye,
+  Flame,
+  Heart,
   Lock,
   Music,
   RotateCcw,
   Search,
+  Skull,
   Sparkles,
   Star,
   Volume2,
@@ -24,24 +29,34 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import {
+  CAT_DIFFICULTIES,
   CAT_MAX_ZOOM,
   CAT_MIN_ZOOM,
   CAT_SCENE_H,
   CAT_SCENE_W,
   CAT_STAGES,
+  advanceCoverTapState,
+  applyCatMisclickPenalty,
   clampCatPanZoom,
   computeCatStageStars,
   countCollectedSecretCats,
   createInitialStageSave,
   formatCatTimer,
+  getActiveCatTargetQueue,
+  getCatDifficultyConfig,
+  getEffectiveItemScale,
   getMainStages,
+  getOpenedCoverIdsFromMap,
   getRegularItems,
   getSecretCatItem,
   isCatItemAccessible,
+  isCoverFullyOpen,
+  isItemAllowedByQueue,
   isStageUnlocked,
   parseCatFinderSave,
   pickCatHintTarget,
   updateComboOnFind,
+  type CatDifficultyId,
   type CatFinderSaveData,
   type CatHintTarget,
   type CatItemDef,
@@ -51,6 +66,7 @@ import {
 import { catFinderAudio } from '../utils/catFinderAudio.ts';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 import {
+  CatDecoyGraphic,
   CatItemGraphic,
   CatThumbnailIcon,
   CatTownMapSvg,
@@ -63,7 +79,8 @@ interface CatFinderGameSectionProps {
   onToggleTheme: () => void;
 }
 
-type CatGameScreen = 'TITLE' | 'PLAYING' | 'VICTORY';
+type CatGameScreen = 'TITLE' | 'PLAYING' | 'VICTORY' | 'GAMEOVER';
+type DefeatReason = 'hearts' | 'time';
 
 interface PopBurstFx {
   id: number;
@@ -73,12 +90,23 @@ interface PopBurstFx {
   comboCount: number;
 }
 
-const STORAGE_KEY = 'thuanle-cat-finder-v1';
+interface FloatingNoticeFx {
+  id: number;
+  xPct: number;
+  yPct: number;
+  text: string;
+  tone: 'miss' | 'latch' | 'queue';
+}
+
+const STORAGE_KEY = 'thuanle-cat-finder-v2';
 
 function loadCatSave(): CatFinderSaveData {
   if (typeof window === 'undefined') return parseCatFinderSave(null);
   try {
-    return parseCatFinderSave(window.localStorage.getItem(STORAGE_KEY));
+    const raw =
+      window.localStorage.getItem(STORAGE_KEY) ??
+      window.localStorage.getItem('thuanle-cat-finder-v1');
+    return parseCatFinderSave(raw);
   } catch {
     return parseCatFinderSave(null);
   }
@@ -95,6 +123,7 @@ function saveCatProgress(data: CatFinderSaveData) {
 
 function drawShareCardDataUrl(opts: {
   stageTitle: string;
+  difficultyLabel: string;
   stars: number;
   elapsedSec: number;
   maxCombo: number;
@@ -109,11 +138,9 @@ function drawShareCardDataUrl(opts: {
   const ctx = canvas.getContext('2d');
   if (!ctx) return null;
 
-  // Pastel cream card backdrop
   ctx.fillStyle = '#FFF8EF';
   ctx.fillRect(0, 0, 960, 540);
 
-  // Scalloped soft border
   ctx.strokeStyle = '#F2A7B3';
   ctx.lineWidth = 8;
   ctx.strokeRect(24, 24, 912, 492);
@@ -121,26 +148,23 @@ function drawShareCardDataUrl(opts: {
   ctx.lineWidth = 2.5;
   ctx.strokeRect(36, 36, 888, 468);
 
-  // Title & Stage
   ctx.fillStyle = '#E07082';
-  ctx.font = 'bold 22px sans-serif';
-  ctx.fillText('TÌM MÈO & ĐỒ XINH · TIỆM TẠP HÓA TÍ HON', 68, 92);
+  ctx.font = 'bold 20px sans-serif';
+  ctx.fillText(`TÌM MÈO & ĐỒ XINH · ${opts.difficultyLabel.toUpperCase()}`, 68, 92);
 
   ctx.fillStyle = '#43312B';
-  ctx.font = 'bold 42px Georgia, serif';
+  ctx.font = 'bold 40px Georgia, serif';
   ctx.fillText(opts.stageTitle, 68, 148);
 
-  // Stars row
   ctx.font = '44px sans-serif';
   for (let i = 0; i < 3; i++) {
     ctx.fillStyle = i < opts.stars ? '#FBBF24' : '#E5DDD5';
     ctx.fillText('★', 68 + i * 56, 212);
   }
 
-  // Stats grid
   const boxes = [
     { label: 'ĐỒ XINH', value: `${opts.foundCount}/${opts.totalCount}` },
-    { label: 'THỜI GIAN', value: formatCatTimer(opts.elapsedSec) },
+    { label: 'HOÀN THÀNH', value: formatCatTimer(opts.elapsedSec) },
     { label: 'COMBO MAX', value: `×${opts.maxCombo}` },
   ];
   boxes.forEach((box, idx) => {
@@ -161,7 +185,6 @@ function drawShareCardDataUrl(opts: {
     ctx.fillText(box.value, bx + 18, by + 88);
   });
 
-  // Secret cat stamp
   ctx.fillStyle = opts.foundSecret ? '#FEF3C7' : '#F3ECE5';
   ctx.fillRect(68, 396, 565, 66);
   ctx.strokeStyle = opts.foundSecret ? '#F59E0B' : '#D5C7BA';
@@ -177,7 +200,6 @@ function drawShareCardDataUrl(opts: {
     436
   );
 
-  // Cute Pastel Cat Emblem on Right
   ctx.save();
   ctx.translate(780, 290);
   ctx.fillStyle = '#FCD34D';
@@ -187,13 +209,10 @@ function drawShareCardDataUrl(opts: {
   ctx.arc(0, 48, 66, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-
   ctx.beginPath();
   ctx.arc(0, -34, 54, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-
-  // Ears
   ctx.beginPath();
   ctx.moveTo(-46, -64);
   ctx.lineTo(-34, -108);
@@ -201,7 +220,6 @@ function drawShareCardDataUrl(opts: {
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-
   ctx.beginPath();
   ctx.moveTo(46, -64);
   ctx.lineTo(34, -108);
@@ -209,51 +227,16 @@ function drawShareCardDataUrl(opts: {
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
-
-  // Eyes & cheeks
   ctx.fillStyle = '#43312B';
   ctx.beginPath();
   ctx.arc(-18, -36, 5, 0, Math.PI * 2);
   ctx.arc(18, -36, 5, 0, Math.PI * 2);
   ctx.fill();
-
   ctx.fillStyle = '#F472B6';
   ctx.beginPath();
   ctx.arc(-30, -22, 8, 0, Math.PI * 2);
   ctx.arc(30, -22, 8, 0, Math.PI * 2);
   ctx.fill();
-
-  // Cute w mouth & whiskers
-  ctx.strokeStyle = '#43312B';
-  ctx.lineWidth = 3;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.arc(-6, -22, 6, 0, Math.PI);
-  ctx.arc(6, -22, 6, 0, Math.PI);
-  ctx.moveTo(-48, -32);
-  ctx.lineTo(-68, -36);
-  ctx.moveTo(-48, -22);
-  ctx.lineTo(-68, -22);
-  ctx.moveTo(48, -32);
-  ctx.lineTo(68, -36);
-  ctx.moveTo(48, -22);
-  ctx.lineTo(68, -22);
-  ctx.stroke();
-
-  // Pink collar & golden bell
-  ctx.strokeStyle = '#E87084';
-  ctx.lineWidth = 10;
-  ctx.beginPath();
-  ctx.moveTo(-34, 14);
-  ctx.lineTo(34, 14);
-  ctx.stroke();
-  ctx.fillStyle = '#FEF08A';
-  ctx.strokeStyle = '#43312B';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(0, 24, 11, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
   ctx.restore();
 
   return canvas.toDataURL('image/png');
@@ -263,7 +246,18 @@ export function CatFinderGameSection({
   theme: _theme,
   onToggleTheme: _onToggleTheme,
 }: CatFinderGameSectionProps) {
-  const [saveData, setSaveData] = useState<CatFinderSaveData>(() => loadCatSave());
+  const [saveData, setSaveData] = useState<CatFinderSaveData>(() => {
+    const initial = loadCatSave();
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const d = params.get('difficulty');
+      if (d === 'hard_5x' || d === 'nightmare_8x' || d === 'eagle_10x') {
+        return { ...initial, difficultyId: d };
+      }
+    }
+    return initial;
+  });
+
   const [screen, setScreen] = useState<CatGameScreen>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -272,15 +266,26 @@ export function CatFinderGameSection({
     return 'TITLE';
   });
 
-  const [openedCoverIds, setOpenedCoverIds] = useState<string[]>([]);
+  const diffConfig = useMemo(
+    () => getCatDifficultyConfig(saveData.difficultyId),
+    [saveData.difficultyId]
+  );
+
+  const [coverTapCounts, setCoverTapCounts] = useState<Record<string, number>>({});
+  const [coverOpenedAtMs, setCoverOpenedAtMs] = useState<Record<string, number>>({});
   const [hintsUsed, setHintsUsed] = useState(0);
-  const [elapsedSec, setElapsedSec] = useState(0);
+  const [remainingSec, setRemainingSec] = useState<number>(() => diffConfig.timeLimitSec);
+  const [hearts, setHearts] = useState<number>(() => diffConfig.maxHearts);
+  const [defeatReason, setDefeatReason] = useState<DefeatReason>('time');
   const [comboStreak, setComboStreak] = useState(0);
   const [maxCombo, setMaxCombo] = useState(1);
   const [lastFindAtMs, setLastFindAtMs] = useState<number | null>(null);
   const [activeHint, setActiveHint] = useState<CatHintTarget | null>(null);
   const [popBursts, setPopBursts] = useState<PopBurstFx[]>([]);
+  const [floatingNotices, setFloatingNotices] = useState<FloatingNoticeFx[]>([]);
+  const [shakeCount, setShakeCount] = useState(0);
   const [sharePreviewUrl, setSharePreviewUrl] = useState<string | null>(null);
+  const [spotlightPct, setSpotlightPct] = useState<{ x: number; y: number }>({ x: 50, y: 50 });
 
   const [muted, setMuted] = useState(false);
   const [bgmOn, setBgmOn] = useState(false);
@@ -334,6 +339,16 @@ export function CatFinderGameSection({
     [regularItems, foundSet]
   );
 
+  const openedCoverIds = useMemo(
+    () => getOpenedCoverIdsFromMap(activeStage, coverTapCounts),
+    [activeStage, coverTapCounts]
+  );
+
+  const activeQueue = useMemo(
+    () => getActiveCatTargetQueue(activeStage, stageSave.foundItemIds, diffConfig.activeQueueLimit),
+    [activeStage, stageSave.foundItemIds, diffConfig.activeQueueLimit]
+  );
+
   const secretCatCollectedTotal = useMemo(
     () => countCollectedSecretCats(saveData),
     [saveData]
@@ -363,6 +378,20 @@ export function CatFinderGameSection({
     return m;
   }, [saveData]);
 
+  const elapsedSec = Math.max(0, diffConfig.timeLimitSec - remainingSec);
+  const hintsRemaining = Math.max(0, diffConfig.maxHints - hintsUsed);
+
+  const pushFloatingNotice = useCallback(
+    (xPct: number, yPct: number, text: string, tone: FloatingNoticeFx['tone']) => {
+      const id = Date.now() + Math.floor(Math.random() * 10000);
+      setFloatingNotices((prev) => [...prev.slice(-4), { id, xPct, yPct, text, tone }]);
+      window.setTimeout(() => {
+        setFloatingNotices((prev) => prev.filter((n) => n.id !== id));
+      }, 900);
+    },
+    []
+  );
+
   // Persist save state
   useEffect(() => {
     saveCatProgress(saveData);
@@ -372,7 +401,13 @@ export function CatFinderGameSection({
   useEffect(() => {
     if (typeof document === 'undefined') return;
     document.body.dataset.state =
-      screen === 'TITLE' ? 'title' : screen === 'VICTORY' ? 'gameover' : 'playing';
+      screen === 'TITLE'
+        ? 'title'
+        : screen === 'GAMEOVER'
+        ? 'gameover'
+        : screen === 'VICTORY'
+        ? 'victory'
+        : 'playing';
     return () => {
       delete document.body.dataset.state;
     };
@@ -390,50 +425,79 @@ export function CatFinderGameSection({
     };
   }, [bgmOn, muted, screen]);
 
-  // Gentle timer in PLAYING
+  // Countdown timer & auto-closing covers in NIGHTMARE / EAGLE modes
   useEffect(() => {
     if (screen !== 'PLAYING') return;
     const t = window.setInterval(() => {
-      setElapsedSec((prev) => prev + 1);
+      setRemainingSec((prev) => {
+        if (prev <= 1) {
+          setDefeatReason('time');
+          catFinderAudio.playGameOverSound(muted);
+          setScreen('GAMEOVER');
+          return 0;
+        }
+        if (prev <= 13) {
+          catFinderAudio.playWarningTickSound(muted);
+        }
+        return prev - 1;
+      });
+
+      if (diffConfig.coverAutoCloseSec !== null) {
+        const now = Date.now();
+        const ttlMs = diffConfig.coverAutoCloseSec * 1000;
+        setCoverOpenedAtMs((prevOpenedAt) => {
+          const expiredIds = Object.entries(prevOpenedAt)
+            .filter(([, openedAt]) => now - openedAt >= ttlMs)
+            .map(([id]) => id);
+          if (expiredIds.length === 0) return prevOpenedAt;
+          const nextOpenedAt = { ...prevOpenedAt };
+          for (const id of expiredIds) delete nextOpenedAt[id];
+          setCoverTapCounts((prevTaps) => {
+            const nextTaps = { ...prevTaps };
+            for (const id of expiredIds) delete nextTaps[id];
+            return nextTaps;
+          });
+          return nextOpenedAt;
+        });
+      }
     }, 1000);
     return () => window.clearInterval(t);
-  }, [screen]);
+  }, [screen, muted, diffConfig.coverAutoCloseSec]);
 
   const startStage = useCallback(
-    (stageId?: string, forceReset = false) => {
+    (stageId?: string, forceReset = true, overrideDiffId?: CatDifficultyId) => {
       const targetId = stageId ?? activeStage.id;
       if (!isStageUnlocked(targetId, saveData)) return;
+      const targetDiff = getCatDifficultyConfig(overrideDiffId ?? saveData.difficultyId);
 
       catFinderAudio.unlock();
       catFinderAudio.playRevealSound(muted);
 
-      if (forceReset || saveData.stages[targetId]?.cleared) {
-        setSaveData((prev) => ({
-          ...prev,
-          activeStageId: targetId,
-          stages: {
-            ...prev.stages,
-            [targetId]: {
-              ...(prev.stages[targetId] ?? createInitialStageSave()),
-              foundItemIds: [],
-            },
+      setSaveData((prev) => ({
+        ...prev,
+        activeStageId: targetId,
+        difficultyId: targetDiff.id,
+        stages: {
+          ...prev.stages,
+          [targetId]: {
+            ...(prev.stages[targetId] ?? createInitialStageSave()),
+            foundItemIds: forceReset ? [] : prev.stages[targetId]?.foundItemIds ?? [],
           },
-        }));
-      } else {
-        setSaveData((prev) => ({
-          ...prev,
-          activeStageId: targetId,
-        }));
-      }
+        },
+      }));
 
-      setOpenedCoverIds([]);
+      setCoverTapCounts({});
+      setCoverOpenedAtMs({});
       setHintsUsed(0);
-      setElapsedSec(0);
+      setRemainingSec(targetDiff.timeLimitSec);
+      setHearts(targetDiff.maxHearts);
+      setDefeatReason('time');
       setComboStreak(0);
       setMaxCombo(1);
       setLastFindAtMs(null);
       setActiveHint(null);
       setPopBursts([]);
+      setFloatingNotices([]);
       setSharePreviewUrl(null);
       setPanZoom({ scale: 1, panX: 0, panY: 0 });
       setScreen('PLAYING');
@@ -466,12 +530,43 @@ export function CatFinderGameSection({
 
   const handleToggleCover = useCallback(
     (coverId: string) => {
+      const cover = activeStage.covers.find((c) => c.id === coverId);
+      if (!cover) return;
       catFinderAudio.unlock();
-      catFinderAudio.playRevealSound(muted);
-      setOpenedCoverIds((prev) =>
-        prev.includes(coverId) ? prev.filter((id) => id !== coverId) : [...prev, coverId]
-      );
-      if (activeHint?.needsCoverId === coverId) {
+
+      const curTaps = coverTapCounts[coverId] ?? 0;
+      const step = advanceCoverTapState(cover, curTaps);
+
+      setCoverTapCounts((prev) => ({ ...prev, [coverId]: step.nextTaps }));
+      if (step.nowOpen) {
+        catFinderAudio.playRevealSound(muted);
+        setCoverOpenedAtMs((prev) => ({ ...prev, [coverId]: Date.now() }));
+        if (cover.isDecoy) {
+          pushFloatingNotice(
+            ((cover.x + cover.w / 2) / CAT_SCENE_W) * 100,
+            ((cover.y + cover.h / 2) / CAT_SCENE_H) * 100,
+            'Hộp rỗng!',
+            'queue'
+          );
+        }
+      } else if (step.unlockedLatchStep) {
+        catFinderAudio.playUnlockLatchSound(muted);
+        pushFloatingNotice(
+          ((cover.x + cover.w / 2) / CAT_SCENE_W) * 100,
+          ((cover.y + cover.h * 0.25) / CAT_SCENE_H) * 100,
+          'Mở chốt! Chạm lần 2',
+          'latch'
+        );
+      } else {
+        catFinderAudio.playRevealSound(muted);
+        setCoverOpenedAtMs((prev) => {
+          const next = { ...prev };
+          delete next[coverId];
+          return next;
+        });
+      }
+
+      if (step.nowOpen && activeHint?.needsCoverId === coverId) {
         setActiveHint((prev) =>
           prev
             ? {
@@ -484,13 +579,59 @@ export function CatFinderGameSection({
         );
       }
     },
-    [muted, activeHint]
+    [activeStage.covers, coverTapCounts, muted, activeHint, pushFloatingNotice]
+  );
+
+  const handleMisclick = useCallback(
+    (clientX: number, clientY: number) => {
+      if (screen !== 'PLAYING') return;
+      const rect = viewportRef.current?.getBoundingClientRect();
+      const xPct = rect ? Math.max(8, Math.min(92, ((clientX - rect.left) / rect.width) * 100)) : 50;
+      const yPct = rect ? Math.max(10, Math.min(90, ((clientY - rect.top) / rect.height) * 100)) : 50;
+
+      catFinderAudio.unlock();
+      catFinderAudio.playMissSound(muted);
+
+      const res = applyCatMisclickPenalty(hearts, remainingSec, diffConfig.misclickPenaltySec);
+      setHearts(res.nextHearts);
+      setRemainingSec(res.nextRemainingSec);
+      setComboStreak(0);
+      setShakeCount((c) => c + 1);
+
+      pushFloatingNotice(
+        xPct,
+        yPct,
+        `✖ -1❤️ · -${diffConfig.misclickPenaltySec}s`,
+        'miss'
+      );
+
+      if (res.isGameOver) {
+        setDefeatReason(res.nextHearts <= 0 ? 'hearts' : 'time');
+        catFinderAudio.playGameOverSound(muted);
+        window.setTimeout(() => {
+          setScreen('GAMEOVER');
+        }, 280);
+      }
+    },
+    [screen, muted, hearts, remainingSec, diffConfig.misclickPenaltySec, pushFloatingNotice]
   );
 
   const handleCollectItem = useCallback(
     (item: CatItemDef) => {
       if (foundSet.has(item.id)) return;
       if (!isCatItemAccessible(item, openedCoverIds)) return;
+
+      if (!isItemAllowedByQueue(item, activeQueue)) {
+        catFinderAudio.unlock();
+        catFinderAudio.playUnlockLatchSound(muted);
+        pushFloatingNotice(
+          (item.x / CAT_SCENE_W) * 100,
+          (item.y / CAT_SCENE_H) * 100,
+          'Chưa tới lượt món này!',
+          'queue'
+        );
+        return;
+      }
 
       const now = Date.now();
       const combo = updateComboOnFind(comboStreak, lastFindAtMs, now);
@@ -527,7 +668,13 @@ export function CatFinderGameSection({
       setSaveData((prev) => {
         const cur = prev.stages[activeStage.id] ?? createInitialStageSave();
         const starsNow = nextRegularDone
-          ? computeCatStageStars(hintsUsed, elapsedSec, nextSecret)
+          ? computeCatStageStars(
+              hintsUsed,
+              elapsedSec,
+              nextSecret,
+              hearts,
+              diffConfig.maxHearts
+            )
           : cur.bestStars;
         return {
           ...prev,
@@ -554,12 +701,13 @@ export function CatFinderGameSection({
         catFinderAudio.playVictorySound(muted);
         window.setTimeout(() => {
           setScreen('VICTORY');
-        }, 480);
+        }, 420);
       }
     },
     [
       foundSet,
       openedCoverIds,
+      activeQueue,
       comboStreak,
       lastFindAtMs,
       muted,
@@ -570,30 +718,61 @@ export function CatFinderGameSection({
       activeStage.id,
       hintsUsed,
       elapsedSec,
+      hearts,
+      diffConfig.maxHearts,
+      pushFloatingNotice,
     ]
   );
 
   const handleUseHint = useCallback(() => {
-    const target = pickCatHintTarget(activeStage, stageSave.foundItemIds, openedCoverIds);
+    if (hintsRemaining <= 0) return;
+    const target = pickCatHintTarget(
+      activeStage,
+      stageSave.foundItemIds,
+      openedCoverIds,
+      diffConfig.activeQueueLimit
+    );
     if (!target) return;
     catFinderAudio.unlock();
     catFinderAudio.playHintSound(muted);
     setHintsUsed((prev) => prev + 1);
     setActiveHint(target);
 
-    // Gently pan toward hint if zoomed in
+    // Hint costs remaining time to raise tension!
+    setRemainingSec((prev) => {
+      const next = Math.max(1, prev - diffConfig.hintCostSec);
+      return next;
+    });
+
     const rect = viewportRef.current?.getBoundingClientRect();
     if (rect) {
       const targetPanX = ((CAT_SCENE_W / 2 - target.x) / CAT_SCENE_W) * rect.width * panZoom.scale;
       const targetPanY = ((CAT_SCENE_H / 2 - target.y) / CAT_SCENE_H) * rect.height * panZoom.scale;
-      applyZoom(Math.max(1.25, panZoom.scale), targetPanX, targetPanY);
+      applyZoom(Math.max(1.35, panZoom.scale), targetPanX, targetPanY);
     }
-  }, [activeStage, stageSave.foundItemIds, openedCoverIds, muted, panZoom.scale, applyZoom]);
+  }, [
+    hintsRemaining,
+    activeStage,
+    stageSave.foundItemIds,
+    openedCoverIds,
+    diffConfig.activeQueueLimit,
+    diffConfig.hintCostSec,
+    muted,
+    panZoom.scale,
+    applyZoom,
+  ]);
 
   const handleGenerateShareCard = useCallback(() => {
-    const stars = computeCatStageStars(hintsUsed, elapsedSec, stageSave.foundSecretCat);
+    const stars = computeCatStageStars(
+      hintsUsed,
+      elapsedSec,
+      stageSave.foundSecretCat,
+      hearts,
+      diffConfig.maxHearts
+    );
     const dataUrl = drawShareCardDataUrl({
       stageTitle: activeStage.title,
+      difficultyLabel: diffConfig.label,
       stars,
       elapsedSec,
       maxCombo,
@@ -605,7 +784,7 @@ export function CatFinderGameSection({
     setSharePreviewUrl(dataUrl);
     const link = document.createElement('a');
     link.href = dataUrl;
-    link.download = `tim-meo-${activeStage.id}.png`;
+    link.download = `tim-meo-${activeStage.id}-${saveData.difficultyId}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -613,14 +792,27 @@ export function CatFinderGameSection({
     hintsUsed,
     elapsedSec,
     stageSave.foundSecretCat,
+    hearts,
+    diffConfig.maxHearts,
+    diffConfig.label,
     activeStage.title,
     activeStage.id,
     maxCombo,
     regularItems.length,
+    saveData.difficultyId,
   ]);
+
+  const updateSpotlightFromClient = (clientX: number, clientY: number) => {
+    const rect = viewportRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return;
+    const x = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
+    setSpotlightPct({ x, y });
+  };
 
   // Pointer Pan & Pinch Handlers
   const handleStagePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
+    updateSpotlightFromClient(e.clientX, e.clientY);
     pinchRef.current.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pinchRef.current.pointers.size === 2) {
       const pts = Array.from(pinchRef.current.pointers.values());
@@ -641,6 +833,9 @@ export function CatFinderGameSection({
   };
 
   const handleStagePointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (diffConfig.spotlightRadius !== null) {
+      updateSpotlightFromClient(e.clientX, e.clientY);
+    }
     if (pinchRef.current.pointers.has(e.pointerId)) {
       pinchRef.current.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
@@ -673,7 +868,7 @@ export function CatFinderGameSection({
 
   const handleWheelZoom = (e: ReactWheelEvent<HTMLDivElement>) => {
     e.preventDefault();
-    applyZoom(panZoom.scale + (e.deltaY < 0 ? 0.2 : -0.2));
+    applyZoom(panZoom.scale + (e.deltaY < 0 ? 0.25 : -0.25));
   };
 
   const nextUnlockedStage = useMemo(() => {
@@ -681,6 +876,11 @@ export function CatFinderGameSection({
       (s) => s.order === activeStage.order + 1 && unlockedSet.has(s.id)
     );
   }, [activeStage.order, unlockedSet]);
+
+  const difficultyList = useMemo(
+    () => [CAT_DIFFICULTIES.hard_5x, CAT_DIFFICULTIES.nightmare_8x, CAT_DIFFICULTIES.eagle_10x],
+    []
+  );
 
   return (
     <section
@@ -697,10 +897,10 @@ export function CatFinderGameSection({
               </div>
               <div>
                 <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#43312B] leading-tight">
-                  Tìm Mèo &amp; Đồ Xinh
+                  Tìm Mèo &amp; Đồ Xinh · Thử Thách ×5–×10
                 </h2>
                 <p className="text-xs sm:text-sm text-[#7A6258] mt-0.5">
-                  Tiệm Tạp Hóa Tí Hon · Tô màu thị trấn · Mèo Vàng {secretCatCollectedTotal}/{getMainStages().length}
+                  24–27 mục tiêu ngụy trang · +44 đồ giả · Hộp khóa đôi · Phạt chạm hụt &amp; Đếm ngược · Mèo Vàng {secretCatCollectedTotal}/{getMainStages().length}
                 </p>
               </div>
             </div>
@@ -713,8 +913,61 @@ export function CatFinderGameSection({
               className="min-h-[44px] px-6 py-2.5 rounded-xl bg-[#E87084] hover:bg-[#DF5C72] text-white border-2 border-[#43312B] text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer transition-transform active:scale-95 whitespace-nowrap"
             >
               <Sparkles className="w-4 h-4" aria-hidden="true" />
-              <span>Mở Tranh Chơi Ngay</span>
+              <span>Chơi Ngay ({diffConfig.multiplierBadge})</span>
             </button>
+          </div>
+
+          {/* Difficulty Selector (5x / 8x / 10x) */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5" role="radiogroup" aria-label="Chọn độ khó Tìm Mèo">
+            {difficultyList.map((diff) => {
+              const active = saveData.difficultyId === diff.id;
+              return (
+                <button
+                  key={diff.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  data-testid={`cat-diff-${diff.id}`}
+                  onClick={() =>
+                    setSaveData((prev) => ({ ...prev, difficultyId: diff.id }))
+                  }
+                  className={`text-left rounded-xl border-2 p-3 transition-colors cursor-pointer flex flex-col gap-1.5 ${
+                    active
+                      ? diff.id === 'eagle_10x'
+                        ? 'bg-[#FFF0F3] border-[#BE123C]'
+                        : diff.id === 'nightmare_8x'
+                        ? 'bg-[#FFF6E6] border-[#D97706]'
+                        : 'bg-[#FFF0F2] border-[#D95B72]'
+                      : 'bg-white border-[#E5D5C5] hover:border-[#D95B72]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-sm text-[#43312B] flex items-center gap-1.5">
+                      {diff.id === 'eagle_10x' ? (
+                        <Eye className="w-4 h-4 text-[#BE123C]" />
+                      ) : diff.id === 'nightmare_8x' ? (
+                        <Flame className="w-4 h-4 text-[#D97706]" />
+                      ) : (
+                        <Sparkles className="w-4 h-4 text-[#D95B72]" />
+                      )}
+                      {diff.label}
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[11px] font-mono font-extrabold ${
+                        diff.id === 'eagle_10x'
+                          ? 'bg-[#BE123C] text-white'
+                          : diff.id === 'nightmare_8x'
+                          ? 'bg-[#D97706] text-white'
+                          : 'bg-[#FCE7EA] text-[#B84158]'
+                      }`}
+                    >
+                      {diff.multiplierBadge}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#7A6258] leading-snug">{diff.tagline}</p>
+                </button>
+              );
+            })}
           </div>
 
           {/* Interactive Pastel Town Map */}
@@ -766,7 +1019,7 @@ export function CatFinderGameSection({
                       <Lock className="w-3.5 h-3.5" aria-hidden="true" />
                     ) : (
                       <span className="tabular-nums text-[#C45368]">
-                        {prog.cleared ? `${regTotal}/${regTotal}` : `${prog.foundItemIds.length}/${regTotal}`}
+                        {regTotal} món · {st.covers.length} nắp
                       </span>
                     )}
                   </div>
@@ -802,7 +1055,7 @@ export function CatFinderGameSection({
           </div>
 
           <p className="text-center text-xs text-[#836C61]">
-            Vuốt kéo ngắm tranh · Chạm đồ giống hình bên dưới · Chạm bụi cây, hộp bánh, rèm cửa để lật tìm · Enter để bắt đầu
+            Phóng to (tới {CAT_MAX_ZOOM}×) &amp; kéo tranh để soi đồ tí hon · Chạm 2 lần với nắp có khóa vàng · Tránh click nhầm đồ giả kẻo mất Tim &amp; Giờ!
           </p>
         </div>
       )}
@@ -810,62 +1063,101 @@ export function CatFinderGameSection({
       {/* ACTIVE PLAY SCREEN */}
       {screen === 'PLAYING' && (
         <div className="flex flex-col bg-[#FFF7EE]">
-          {/* Compact Icon-First Pastel HUD */}
+          {/* High-Tension Pastel HUD */}
           <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-[#FFFDF8] border-b-2 border-[#EEDFD2]">
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-2 min-w-0 flex-wrap">
               <button
                 type="button"
                 aria-label="Quay về bản đồ thị trấn"
                 onClick={() => setScreen('TITLE')}
-                className="min-h-[40px] px-2.5 rounded-xl border-2 border-[#E6D4C4] bg-white hover:border-[#D95B72] inline-flex items-center gap-1 text-xs font-bold cursor-pointer"
+                className="min-h-[38px] px-2.5 rounded-xl border-2 border-[#E6D4C4] bg-white hover:border-[#D95B72] inline-flex items-center gap-1 text-xs font-bold cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span className="hidden sm:inline">Thị Trấn</span>
               </button>
 
-              <div className="min-w-0 flex items-center gap-2.5">
-                <span className="font-bold text-sm sm:text-base truncate max-w-[145px] sm:max-w-none">
-                  {activeStage.title}
-                </span>
+              <span className="font-bold text-xs sm:text-sm truncate max-w-[125px] sm:max-w-none">
+                {activeStage.title}
+              </span>
+
+              <span
+                data-testid="cat-diff-badge"
+                className={`px-1.5 py-0.5 rounded-md text-[11px] font-mono font-extrabold shrink-0 ${
+                  diffConfig.id === 'eagle_10x'
+                    ? 'bg-[#BE123C] text-white'
+                    : diffConfig.id === 'nightmare_8x'
+                    ? 'bg-[#D97706] text-white'
+                    : 'bg-[#FCE7EA] text-[#B84158]'
+                }`}
+              >
+                {diffConfig.multiplierBadge}
+              </span>
+
+              <span
+                data-testid="cat-progress-count"
+                className="px-2 py-0.5 rounded-lg bg-[#FCE7EA] text-[#B84158] text-xs font-mono font-bold tabular-nums shrink-0"
+              >
+                {regularFoundCount}/{regularItems.length}
+              </span>
+
+              {/* Hearts Remaining */}
+              <span
+                data-testid="cat-hearts"
+                aria-label={`Còn ${hearts} trên ${diffConfig.maxHearts} trái tim`}
+                className={`px-2 py-0.5 rounded-lg text-xs font-mono font-bold tabular-nums inline-flex items-center gap-1 shrink-0 ${
+                  hearts <= 2
+                    ? 'bg-rose-100 text-rose-700 animate-pulse'
+                    : 'bg-[#FFF0F2] text-[#C83E58]'
+                }`}
+              >
+                <Heart className="w-3.5 h-3.5 fill-current" />
+                {hearts}/{diffConfig.maxHearts}
+              </span>
+
+              {/* Countdown Timer */}
+              <span
+                data-testid="cat-timer"
+                className={`px-2 py-0.5 rounded-lg text-xs font-mono font-extrabold tabular-nums inline-flex items-center gap-1 shrink-0 ${
+                  remainingSec <= 20
+                    ? 'bg-rose-600 text-white animate-pulse'
+                    : 'bg-[#F4EBE2] text-[#43312B]'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                {formatCatTimer(remainingSec)}
+              </span>
+
+              <span
+                title="Bé Mèo Vàng Bí Mật"
+                className={`text-xs font-mono font-bold shrink-0 ${
+                  stageSave.foundSecretCat ? 'text-amber-500' : 'text-[#C2AFA3]'
+                }`}
+              >
+                {stageSave.foundSecretCat ? '★' : '☆'}
+              </span>
+
+              {comboStreak >= 2 && (
                 <span
-                  data-testid="cat-progress-count"
-                  className="px-2 py-0.5 rounded-lg bg-[#FCE7EA] text-[#B84158] text-xs font-mono font-bold tabular-nums shrink-0"
+                  data-testid="cat-combo-badge"
+                  className="px-2 py-0.5 rounded-lg bg-amber-300 text-[#43312B] text-xs font-mono font-extrabold tabular-nums shrink-0"
                 >
-                  {regularFoundCount}/{regularItems.length}
+                  ×{comboStreak}
                 </span>
-                <span
-                  title="Bé Mèo Vàng Bí Mật"
-                  className={`text-xs font-mono font-bold shrink-0 ${
-                    stageSave.foundSecretCat ? 'text-amber-500' : 'text-[#C2AFA3]'
-                  }`}
-                >
-                  {stageSave.foundSecretCat ? '★' : '☆'}
-                </span>
-                {comboStreak >= 2 && (
-                  <span
-                    data-testid="cat-combo-badge"
-                    className="px-2 py-0.5 rounded-lg bg-amber-300 text-[#43312B] text-xs font-mono font-extrabold tabular-nums animate-bounce shrink-0"
-                  >
-                    Combo ×{comboStreak}
-                  </span>
-                )}
-              </div>
+              )}
             </div>
 
             <div className="flex items-center gap-1.5 font-mono">
-              <span className="px-2 py-1 text-xs font-bold tabular-nums text-[#745B50]">
-                {formatCatTimer(elapsedSec)}
-              </span>
-
               <button
                 type="button"
                 data-testid="cat-hint-btn"
+                disabled={hintsRemaining <= 0}
                 onClick={handleUseHint}
-                aria-label="Gợi ý vị trí"
-                className="min-h-[40px] px-2.5 rounded-xl border-2 border-[#F4C46A] bg-[#FFF4D6] hover:bg-[#FDE8B0] text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
+                aria-label={`Gợi ý vùng tìm (còn ${hintsRemaining}, tốn ${diffConfig.hintCostSec} giây)`}
+                className="min-h-[38px] px-2.5 rounded-xl border-2 border-[#F4C46A] bg-[#FFF4D6] hover:bg-[#FDE8B0] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold inline-flex items-center gap-1 cursor-pointer"
               >
                 <Search className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Gợi Ý</span>
+                <span className="tabular-nums">({hintsRemaining})</span>
               </button>
 
               <div className="flex items-center rounded-xl border-2 border-[#E6D4C4] bg-white overflow-hidden">
@@ -873,9 +1165,9 @@ export function CatFinderGameSection({
                   type="button"
                   data-testid="cat-zoom-out-btn"
                   aria-label="Thu nhỏ"
-                  onClick={() => applyZoom(panZoom.scale - 0.35)}
+                  onClick={() => applyZoom(panZoom.scale - 0.45)}
                   disabled={panZoom.scale <= CAT_MIN_ZOOM}
-                  className="min-h-[38px] w-8 flex items-center justify-center disabled:opacity-35 cursor-pointer"
+                  className="min-h-[36px] w-8 flex items-center justify-center disabled:opacity-35 cursor-pointer"
                 >
                   <ZoomOut className="w-3.5 h-3.5" />
                 </button>
@@ -884,7 +1176,7 @@ export function CatFinderGameSection({
                   data-testid="cat-zoom-reset-btn"
                   aria-label="Đưa về 1x"
                   onClick={() => setPanZoom({ scale: 1, panX: 0, panY: 0 })}
-                  className="min-h-[38px] px-1.5 text-[11px] font-bold tabular-nums cursor-pointer"
+                  className="min-h-[36px] px-1.5 text-[11px] font-bold tabular-nums cursor-pointer"
                 >
                   {panZoom.scale.toFixed(1)}×
                 </button>
@@ -892,9 +1184,9 @@ export function CatFinderGameSection({
                   type="button"
                   data-testid="cat-zoom-in-btn"
                   aria-label="Phóng to"
-                  onClick={() => applyZoom(panZoom.scale + 0.35)}
+                  onClick={() => applyZoom(panZoom.scale + 0.45)}
                   disabled={panZoom.scale >= CAT_MAX_ZOOM}
-                  className="min-h-[38px] w-8 flex items-center justify-center disabled:opacity-35 cursor-pointer"
+                  className="min-h-[36px] w-8 flex items-center justify-center disabled:opacity-35 cursor-pointer"
                 >
                   <ZoomIn className="w-3.5 h-3.5" />
                 </button>
@@ -907,7 +1199,7 @@ export function CatFinderGameSection({
                   catFinderAudio.unlock();
                   setBgmOn((v) => !v);
                 }}
-                className={`min-h-[40px] w-10 rounded-xl border-2 flex items-center justify-center cursor-pointer ${
+                className={`min-h-[38px] w-9 rounded-xl border-2 flex items-center justify-center cursor-pointer ${
                   bgmOn
                     ? 'border-[#E87084] bg-[#FCE7EA] text-[#B84158]'
                     : 'border-[#E6D4C4] bg-white text-[#7A6258]'
@@ -920,23 +1212,30 @@ export function CatFinderGameSection({
                 type="button"
                 aria-label={muted ? 'Bật âm thanh' : 'Tắt âm thanh'}
                 onClick={() => setMuted((v) => !v)}
-                className="min-h-[40px] w-10 rounded-xl border-2 border-[#E6D4C4] bg-white flex items-center justify-center cursor-pointer"
+                className="min-h-[38px] w-9 rounded-xl border-2 border-[#E6D4C4] bg-white flex items-center justify-center cursor-pointer"
               >
                 {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
               </button>
             </div>
           </div>
 
-          {/* Panoramic Living Illustration Stage */}
+          {/* Panoramic Cluttered Scene Viewport */}
           <div
             ref={viewportRef}
+            key={shakeCount}
             data-testid="cat-scene-viewport"
             onWheel={handleWheelZoom}
             onPointerDown={handleStagePointerDown}
             onPointerMove={handleStagePointerMove}
             onPointerUp={handleStagePointerUp}
             onPointerCancel={handleStagePointerUp}
-            className="relative w-full h-[320px] sm:h-[430px] lg:h-[490px] bg-[#F5E6D8] overflow-hidden select-none touch-none cursor-grab active:cursor-grabbing flex items-center justify-center"
+            onClick={(e) => {
+              if (dragRef.current.moved) return;
+              handleMisclick(e.clientX, e.clientY);
+            }}
+            className={`relative w-full h-[330px] sm:h-[440px] lg:h-[500px] bg-[#F5E6D8] overflow-hidden select-none touch-none cursor-crosshair flex items-center justify-center ${
+              shakeCount > 0 ? 'animate-dom-shake' : ''
+            }`}
           >
             <div
               className="relative origin-center transition-transform duration-75 ease-out shrink-0"
@@ -953,28 +1252,46 @@ export function CatFinderGameSection({
               >
                 {renderCatWorldBackdrop(activeStage.theme)}
 
-                {/* Items & Cats Layer */}
+                {/* Visual Clutter / Lookalike Decoy Layer */}
+                {activeStage.decoys.map((dec) => (
+                  <g
+                    key={dec.id}
+                    transform={`translate(${dec.x}, ${dec.y}) rotate(${dec.rotateDeg ?? 0}) scale(${dec.scale ?? 0.72})`}
+                    style={{ opacity: dec.opacity ?? 0.86 }}
+                  >
+                    <CatDecoyGraphic artKey={dec.artKey} mutedTint={dec.mutedTint} />
+                  </g>
+                ))}
+
+                {/* Target Items & Secret Golden Cat Layer */}
                 {activeStage.items.map((item) => {
                   const found = foundSet.has(item.id);
                   const accessible = isCatItemAccessible(item, openedCoverIds);
                   if (found) return null;
+                  const finalScale = getEffectiveItemScale(item, diffConfig);
+                  const camoOpacity = !accessible
+                    ? 0.04
+                    : item.camoBlend
+                    ? diffConfig.camoOpacity
+                    : Math.min(1, diffConfig.camoOpacity + 0.08);
                   return (
                     <g
                       key={item.id}
-                      transform={`translate(${item.x}, ${item.y}) rotate(${item.rotateDeg ?? 0}) scale(${item.scale ?? 1})`}
+                      transform={`translate(${item.x}, ${item.y}) rotate(${item.rotateDeg ?? 0}) scale(${finalScale})`}
                       style={{
-                        opacity: accessible ? 1 : 0.08,
+                        opacity: camoOpacity,
                         transition: 'opacity 180ms ease',
                       }}
                     >
-                      <CatItemGraphic artKey={item.artKey} />
+                      <CatItemGraphic artKey={item.artKey} camoOpacity={camoOpacity} />
                     </g>
                   );
                 })}
 
-                {/* Interactive Tap-to-Reveal Covers */}
+                {/* Multi-Tap Interactive & Decoy Covers */}
                 {activeStage.covers.map((cov) => {
-                  const isOpen = openedCoverIds.includes(cov.id);
+                  const tapCount = coverTapCounts[cov.id] ?? 0;
+                  const isOpen = isCoverFullyOpen(cov, coverTapCounts);
                   const tx = isOpen ? cov.x + cov.openOffsetX : cov.x;
                   const ty = isOpen ? cov.y + cov.openOffsetY : cov.y;
                   const rot = isOpen ? cov.openRotateDeg : 0;
@@ -983,35 +1300,37 @@ export function CatFinderGameSection({
                       key={cov.id}
                       transform={`translate(${tx}, ${ty}) rotate(${rot}, ${cov.w / 2}, ${cov.h / 2})`}
                       style={{
-                        opacity: isOpen ? 0.45 : 1,
+                        opacity: isOpen ? 0.42 : 1,
                         transition: 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms ease',
                       }}
                     >
-                      {renderCatCoverProp(cov, isOpen)}
+                      {renderCatCoverProp(cov, isOpen, tapCount)}
                     </g>
                   );
                 })}
 
-                {/* Visual Hint Ring */}
+                {/* Broad Hint Search Zone Ring (intentionally fuzzy) */}
                 {activeHint && (
                   <g transform={`translate(${activeHint.x}, ${activeHint.y})`}>
                     <circle
-                      r="52"
+                      r={diffConfig.hintRadius}
                       fill="#FDE68A"
-                      fillOpacity="0.22"
+                      fillOpacity="0.16"
                       stroke="#E87084"
-                      strokeWidth="3.5"
-                      strokeDasharray="9 6"
+                      strokeWidth="3.2"
+                      strokeDasharray="10 7"
                     />
                   </g>
                 )}
               </svg>
 
-              {/* Accessible Native Hotspots for Items & Secret Cat (z-20) */}
+              {/* Accessible Precision Hotspots for Target Items (z-20) */}
               {activeStage.items.map((item) => {
                 const found = foundSet.has(item.id);
                 const accessible = isCatItemAccessible(item, openedCoverIds);
                 if (found || !accessible) return null;
+                const wPct = Math.max(2.9, (item.hitW * diffConfig.hitboxScale / CAT_SCENE_W) * 100);
+                const hPct = Math.max(4.6, (item.hitH * diffConfig.hitboxScale / CAT_SCENE_H) * 100);
                 return (
                   <button
                     key={item.id}
@@ -1026,21 +1345,27 @@ export function CatFinderGameSection({
                     style={{
                       left: `${(item.x / CAT_SCENE_W) * 100}%`,
                       top: `${(item.y / CAT_SCENE_H) * 100}%`,
-                      width: `${Math.max(5.5, (item.hitW / CAT_SCENE_W) * 100)}%`,
-                      height: `${Math.max(8, (item.hitH / CAT_SCENE_H) * 100)}%`,
+                      width: `${wPct}%`,
+                      height: `${hPct}%`,
                     }}
-                    className="absolute z-20 -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-[#E87084] cursor-pointer transition-colors"
+                    className="absolute z-20 -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-[#E87084] cursor-pointer transition-colors"
                   />
                 );
               })}
 
-              {/* Tap-to-Reveal Cover Hotspots (z-30 closed / z-10 open) */}
+              {/* Tap-to-Reveal Cover Hotspots (blended cleanly without giveaway dashed outlines) */}
               {activeStage.covers.map((cov) => {
-                const isOpen = openedCoverIds.includes(cov.id);
+                const isOpen = isCoverFullyOpen(cov, coverTapCounts);
                 const leftPct =
                   (((isOpen ? cov.x + cov.openOffsetX : cov.x) + cov.w / 2) / CAT_SCENE_W) * 100;
                 const topPct =
                   (((isOpen ? cov.y + cov.openOffsetY : cov.y) + cov.h / 2) / CAT_SCENE_H) * 100;
+                const openedAt = coverOpenedAtMs[cov.id];
+                const expiringSoon =
+                  isOpen &&
+                  diffConfig.coverAutoCloseSec !== null &&
+                  openedAt !== undefined &&
+                  Date.now() - openedAt >= (diffConfig.coverAutoCloseSec - 2.5) * 1000;
                 return (
                   <button
                     key={cov.id}
@@ -1059,8 +1384,10 @@ export function CatFinderGameSection({
                       height: `${((isOpen ? cov.h * 0.72 : cov.h) / CAT_SCENE_H) * 100}%`,
                     }}
                     className={`absolute ${
-                      isOpen ? 'z-10 border-transparent' : 'z-30 border-[#43312B]/15 hover:border-[#E87084]'
-                    } -translate-x-1/2 -translate-y-1/2 rounded-xl border-2 border-dashed cursor-pointer transition-colors`}
+                      isOpen
+                        ? `z-10 ${expiringSoon ? 'ring-2 ring-amber-400/70 animate-pulse' : ''}`
+                        : 'z-30 hover:bg-white/10'
+                    } -translate-x-1/2 -translate-y-1/2 rounded-xl cursor-pointer transition-colors`}
                   />
                 );
               })}
@@ -1098,15 +1425,53 @@ export function CatFinderGameSection({
                 </div>
               ))}
             </div>
+
+            {/* Flashlight / Vignette Overlay in Nightmare x8 and Eagle Eye x10 */}
+            {diffConfig.spotlightRadius !== null && (
+              <div
+                aria-hidden="true"
+                data-testid="cat-spotlight-overlay"
+                className="pointer-events-none absolute inset-0 z-30 transition-[background] duration-75"
+                style={{
+                  background: `radial-gradient(circle ${diffConfig.spotlightRadius}px at ${spotlightPct.x}% ${spotlightPct.y}%, rgba(25, 16, 18, 0) 38%, rgba(25, 16, 18, ${diffConfig.spotlightOpacity}) 100%)`,
+                }}
+              />
+            )}
+
+            {/* Misclick Penalty & Latch Floating Popups */}
+            {floatingNotices.map((notice) => (
+              <div
+                key={notice.id}
+                style={{ left: `${notice.xPct}%`, top: `${notice.yPct}%` }}
+                className={`pointer-events-none absolute z-50 -translate-x-1/2 -translate-y-1/2 px-2.5 py-1 rounded-full text-xs font-mono font-extrabold shadow-md whitespace-nowrap ${
+                  notice.tone === 'miss'
+                    ? 'bg-rose-600 text-white border border-rose-200'
+                    : notice.tone === 'latch'
+                    ? 'bg-amber-300 text-[#43312B] border border-[#43312B]'
+                    : 'bg-[#43312B] text-amber-200'
+                }`}
+              >
+                {notice.text}
+              </div>
+            ))}
           </div>
 
-          {/* 0%-Text Visual Thumbnail Bar (Lights Up Into Pastel Color When Found!) */}
+          {/* Target Thumbnail Bar (All Items in x5, Active Queue in x8 / x10) */}
           <div
             aria-label="Thanh vật phẩm cần tìm"
             data-testid="cat-thumbnail-bar"
             className="bg-[#FFFDF8] border-t-2 border-[#EEDFD2] px-3 py-2.5 flex items-center gap-2 overflow-x-auto"
           >
-            {regularItems.map((item) => {
+            {diffConfig.activeQueueLimit !== null && (
+              <div className="shrink-0 px-2.5 py-1.5 rounded-xl bg-[#43312B] text-[#FFF8EF] text-[11px] font-mono font-bold leading-tight">
+                <div>Đang tìm</div>
+                <div className="text-amber-300">
+                  {activeQueue.length} · +{Math.max(0, regularItems.length - regularFoundCount - activeQueue.length)} chờ
+                </div>
+              </div>
+            )}
+
+            {(diffConfig.activeQueueLimit === null ? regularItems : activeQueue).map((item) => {
               const found = foundSet.has(item.id);
               const isHinted = activeHint?.item.id === item.id;
               return (
@@ -1134,7 +1499,6 @@ export function CatFinderGameSection({
               );
             })}
 
-            {/* Secret Golden Cat Slot on Right of Bar */}
             {secretCatItem && (
               <div
                 data-testid={`cat-thumb-${secretCatItem.id}`}
@@ -1157,6 +1521,82 @@ export function CatFinderGameSection({
         </div>
       )}
 
+      {/* DEFEAT / GAME OVER SCREEN */}
+      {screen === 'GAMEOVER' && (
+        <div
+          data-testid="cat-gameover-screen"
+          className="p-5 sm:p-8 bg-gradient-to-b from-[#FFF8F6] to-[#FBE4E6] flex flex-col items-center text-center space-y-5"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-rose-100 border-2 border-[#43312B] flex items-center justify-center">
+            <Skull className="w-8 h-8 text-rose-600" />
+          </div>
+
+          <div>
+            <span className="px-2.5 py-0.5 rounded-full bg-[#43312B] text-amber-200 text-xs font-mono font-bold">
+              {diffConfig.label}
+            </span>
+            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#43312B] mt-2">
+              {defeatReason === 'hearts' ? 'Hết Trái Tim Mất Rồi!' : 'Hết Giờ Tìm Kiếm!'}
+            </h2>
+            <p className="text-sm text-[#7A6258] mt-1">
+              {defeatReason === 'hearts'
+                ? 'Bạn đã chạm nhầm quá nhiều đồ giả và nền tranh. Hãy phóng to và quan sát kỹ chốt khóa!'
+                : 'Đồng hồ đã điểm 0:00 trước khi gom đủ toàn bộ vật phẩm mục tiêu.'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3 w-full max-w-md font-mono tabular-nums">
+            <div className="rounded-xl border-2 border-[#E6D4C4] bg-white p-3">
+              <div className="text-[11px] text-[#8D766B]">ĐÃ TÌM</div>
+              <div className="text-lg font-bold text-[#43312B]">
+                {regularFoundCount}/{regularItems.length}
+              </div>
+            </div>
+            <div className="rounded-xl border-2 border-[#E6D4C4] bg-white p-3">
+              <div className="text-[11px] text-[#8D766B]">CÒN TIM</div>
+              <div className="text-lg font-bold text-rose-600">
+                {hearts}/{diffConfig.maxHearts}
+              </div>
+            </div>
+            <div className="rounded-xl border-2 border-[#E6D4C4] bg-white p-3">
+              <div className="text-[11px] text-[#8D766B]">COMBO MAX</div>
+              <div className="text-lg font-bold text-[#D95B72]">×{maxCombo}</div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1">
+            <button
+              type="button"
+              data-testid="cat-retry-btn"
+              onClick={() => startStage(activeStage.id, true)}
+              className="min-h-[44px] px-5 py-2 rounded-xl bg-[#E87084] hover:bg-[#DF5C72] text-white border-2 border-[#43312B] text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Thử Lại ({diffConfig.multiplierBadge})</span>
+            </button>
+
+            {saveData.difficultyId !== 'hard_5x' && (
+              <button
+                type="button"
+                onClick={() => startStage(activeStage.id, true, 'hard_5x')}
+                className="min-h-[44px] px-4 py-2 rounded-xl border-2 border-[#43312B] bg-[#FFF4D6] hover:bg-[#FDE8B0] text-xs font-bold cursor-pointer"
+              >
+                Chuyển về Khó ×5
+              </button>
+            )}
+
+            <button
+              type="button"
+              data-testid="cat-map-btn"
+              onClick={() => setScreen('TITLE')}
+              className="min-h-[44px] px-4 py-2 rounded-xl border-2 border-[#E6D4C4] bg-white hover:border-[#43312B] text-xs font-bold cursor-pointer"
+            >
+              Bản Đồ Thị Trấn
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* VICTORY & SHARE ACHIEVEMENT SCREEN */}
       {screen === 'VICTORY' && (
         <div
@@ -1168,7 +1608,9 @@ export function CatFinderGameSection({
               const stars = computeCatStageStars(
                 hintsUsed,
                 elapsedSec,
-                stageSave.foundSecretCat
+                stageSave.foundSecretCat,
+                hearts,
+                diffConfig.maxHearts
               );
               return (
                 <Star
@@ -1184,7 +1626,10 @@ export function CatFinderGameSection({
           </div>
 
           <div>
-            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#43312B]">
+            <span className="px-2.5 py-0.5 rounded-full bg-[#FCE7EA] text-[#B84158] text-xs font-mono font-bold">
+              Chinh Phục {diffConfig.label}
+            </span>
+            <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#43312B] mt-1.5">
               Hoàn Thành · {activeStage.title}
             </h2>
             <p className="text-sm text-[#7A6258] mt-1">
