@@ -15,6 +15,7 @@ import {
   Maximize2,
   Minimize2,
   Network,
+  Skull,
   Sparkles,
   Zap,
 } from 'lucide-react';
@@ -55,11 +56,17 @@ const LuongCuocDuongGameSection = lazyWithRetry(() =>
     default: m.LuongCuocDuongGameSection,
   }))
 );
+const TuanTangGameSection = lazyWithRetry(() =>
+  import('./TuanTangGameSection.tsx').then((m) => ({
+    default: m.TuanTangGameSection,
+  }))
+);
 
 type GameId =
   | 'xiangqi'
   | 'anomaly'
   | 'luong_cuoc_duong'
+  | 'tuan_tang'
   | 'asmr_organizer'
   | 'blind_box'
   | 'cat_finder'
@@ -167,6 +174,16 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     gameKey: 'luong_cuoc_duong',
   },
   {
+    id: 'tuan-tang',
+    category: 'casual',
+    title: 'Tuẫn Táng: Địa Cung Ly Sơn (殉葬)',
+    shortTitle: 'Tuẫn Táng 3D',
+    subtitle: '3D First-Person Sensory Horror · Mic Nín Thở · Diêm Ẩm · Binh Mã Dũng Sống (210 TCN)',
+    badge: '3D Kinh Dị · Mic',
+    playable: true,
+    gameKey: 'tuan_tang',
+  },
+  {
     id: 'asmr-organizer',
     category: 'casual',
     title: 'Sắp Xếp Góc Nhỏ',
@@ -272,6 +289,16 @@ function renderGameIcon(gameKey: GameId | undefined, isSelected: boolean) {
       />
     );
   }
+  if (gameKey === 'tuan_tang') {
+    return (
+      <Skull
+        className={`w-3.5 h-3.5 shrink-0 ${
+          isSelected ? 'text-red-300' : 'text-red-700 dark:text-red-400'
+        }`}
+        aria-hidden="true"
+      />
+    );
+  }
   if (gameKey === 'asmr_organizer') {
     return (
       <LayoutGrid
@@ -357,6 +384,14 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
         playParam === 'tuydong'
       ) {
         return 'luong_cuoc_duong';
+      }
+      if (
+        playParam === 'tuantang' ||
+        playParam === 'tuan-tang' ||
+        playParam === 'tuan_tang' ||
+        playParam === 'lyson'
+      ) {
+        return 'tuan_tang';
       }
       if (playParam === 'asmr' || playParam === 'ocd' || playParam === 'organizer') {
         return 'asmr_organizer';
@@ -515,7 +550,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
             </div>
             <div className="hidden sm:block mobile-ls:hidden min-w-0 max-w-[175px]">
               <p className="text-[10px] font-mono uppercase tracking-[0.1em] text-[#0284C7] dark:text-[#38BDF8] leading-tight">
-                Game Hub · 10 Trò
+                Game Hub · {playableGames.length} Trò
               </p>
               <p className="text-xs font-semibold text-[#0A192F] dark:text-[#E2E8F0] leading-tight truncate">
                 {activeGameMeta?.shortTitle ?? 'Kho Game'}
@@ -736,7 +771,8 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
           activeGame !== 'prism_td' &&
           activeGame !== 'traffic_router' &&
           activeGame !== 'cat_finder' &&
-          activeGame !== 'luong_cuoc_duong' && (
+          activeGame !== 'luong_cuoc_duong' &&
+          activeGame !== 'tuan_tang' && (
           <button
             type="button"
             data-testid="hub-exit-fullscreen-btn"
@@ -778,6 +814,15 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
               {activeGame === 'anomaly' && <AnomalyGameSection theme={theme} onToggleTheme={onToggleTheme} />}
               {activeGame === 'luong_cuoc_duong' && (
                 <LuongCuocDuongGameSection
+                  theme={theme}
+                  onToggleTheme={onToggleTheme}
+                  isFullscreen={isFullscreen}
+                  onToggleFullscreen={toggleFullscreen}
+                  onExitFullscreen={exitFullscreen}
+                />
+              )}
+              {activeGame === 'tuan_tang' && (
+                <TuanTangGameSection
                   theme={theme}
                   onToggleTheme={onToggleTheme}
                   isFullscreen={isFullscreen}
