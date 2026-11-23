@@ -909,21 +909,21 @@ export function ThanhMinhGameSection({
 
         {/* INTERACTIVE STORY & PUZZLE MODALS */}
         {screenMode === 'playing' && hudState.activeModal !== 'none' && (
-          <div className="absolute inset-0 bg-black/84 backdrop-blur-sm flex items-center justify-center p-4 z-20 overflow-y-auto">
+          <div className="absolute inset-0 bg-black/84 backdrop-blur-sm flex p-2.5 sm:p-4 z-20 overflow-y-auto">
             {/* 1. JOURNAL & TRUTH KEEPSAKES + LORE CODEX */}
             {hudState.activeModal === 'journal' && (
-              <div className="max-w-2xl w-full max-h-[86vh] overflow-y-auto rounded-2xl border border-amber-700/40 bg-[#14110e] p-5 space-y-4">
-                <div className="flex items-center justify-between border-b border-stone-800 pb-3">
-                  <div>
-                    <h3 className="text-lg font-editorial font-bold text-amber-200">
+              <div className="max-w-2xl w-full m-auto max-h-full flex flex-col rounded-2xl border border-amber-700/40 bg-[#14110e] p-3.5 sm:p-5 gap-3">
+                <div className="flex items-center justify-between gap-2 border-b border-stone-800 pb-2.5 shrink-0">
+                  <div className="min-w-0">
+                    <h3 className="text-base sm:text-lg font-editorial font-bold text-amber-200 truncate">
                       Hồ Sơ Cô Sơn · Kỷ Vật {hudState.collectedKeepsakeIds.length}/{TRUTH_KEEPSAKES.length} ({keepsakePct}%)
                     </h3>
-                    <p className="text-xs text-stone-400">{currentObjective}</p>
+                    <p className="text-xs text-stone-400 truncate">{currentObjective}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => commitState({ ...stateRef.current, activeModal: 'none' })}
-                    className="min-h-[38px] min-w-[38px] rounded-lg border border-stone-700 bg-stone-900 flex items-center justify-center cursor-pointer"
+                    className="min-h-[38px] min-w-[38px] rounded-lg border border-stone-700 bg-stone-900 flex items-center justify-center cursor-pointer shrink-0"
                     aria-label="Đóng nhật ký"
                   >
                     <X className="w-4 h-4" />
@@ -931,11 +931,11 @@ export function ThanhMinhGameSection({
                 </div>
 
                 {/* Codex Tabs */}
-                <div className="flex items-center gap-2 border-b border-stone-800 pb-2.5">
+                <div className="flex flex-wrap items-center gap-2 border-b border-stone-800 pb-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => setJournalTab('keepsakes')}
-                    className={`min-h-[36px] px-3.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${
+                    className={`min-h-[34px] px-3 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${
                       journalTab === 'keepsakes'
                         ? 'border-amber-500/70 bg-amber-950/50 text-amber-200'
                         : 'border-stone-800 bg-stone-900/70 text-stone-400 hover:text-stone-200'
@@ -946,7 +946,7 @@ export function ThanhMinhGameSection({
                   <button
                     type="button"
                     onClick={() => setJournalTab('lore')}
-                    className={`min-h-[36px] px-3.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${
+                    className={`min-h-[34px] px-3 rounded-lg border text-xs font-semibold cursor-pointer transition-colors ${
                       journalTab === 'lore'
                         ? 'border-amber-500/70 bg-amber-950/50 text-amber-200'
                         : 'border-stone-800 bg-stone-900/70 text-stone-400 hover:text-stone-200'
@@ -957,8 +957,14 @@ export function ThanhMinhGameSection({
                 </div>
 
                 {journalTab === 'keepsakes' ? (
-                  <div className="space-y-3">
-                    {TRUTH_KEEPSAKES.map((ks) => {
+                  <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 pr-1">
+                    {[...TRUTH_KEEPSAKES]
+                      .sort((a, b) => {
+                        const aOwned = hudState.collectedKeepsakeIds.includes(a.id) ? 0 : 1;
+                        const bOwned = hudState.collectedKeepsakeIds.includes(b.id) ? 0 : 1;
+                        return aOwned - bOwned;
+                      })
+                      .map((ks) => {
                       const owned = hudState.collectedKeepsakeIds.includes(ks.id);
                       return (
                         <div
@@ -988,8 +994,14 @@ export function ThanhMinhGameSection({
                     })}
                   </div>
                 ) : (
-                  <div className="space-y-3">
-                    {STORY_LORE_ENTRIES.map((lore) => {
+                  <div className="flex-1 min-h-0 overflow-y-auto space-y-2.5 pr-1">
+                    {[...STORY_LORE_ENTRIES]
+                      .sort((a, b) => {
+                        const aOwned = hudState.collectedLoreIds.includes(a.id) ? 0 : 1;
+                        const bOwned = hudState.collectedLoreIds.includes(b.id) ? 0 : 1;
+                        return aOwned - bOwned;
+                      })
+                      .map((lore) => {
                       const owned = hudState.collectedLoreIds.includes(lore.id);
                       const showSecret =
                         (lore.id === 'lore-7-darkroom-ledger' &&
@@ -1057,7 +1069,7 @@ export function ThanhMinhGameSection({
                   (entry.id === 'lore-10-to-vien-1986' &&
                     hudState.flags.offered_qingming_tribute);
                 return (
-                  <div className="max-w-lg w-full rounded-2xl border border-amber-700/50 bg-[#15110e] p-5 space-y-4">
+                  <div className="max-w-lg w-full m-auto rounded-2xl border border-amber-700/50 bg-[#15110e] p-5 space-y-4">
                     <div className="flex items-start justify-between gap-3 border-b border-stone-800 pb-3">
                       <div className="space-y-0.5">
                         <div className="text-[11px] font-mono text-amber-400">
@@ -1126,7 +1138,7 @@ export function ThanhMinhGameSection({
 
             {/* 2. NGŨ HÀNH SPIRIT TABLETS (ACT 1) */}
             {hudState.activeModal === 'wuxing_puzzle' && (
-              <div className="max-w-md w-full rounded-2xl border border-red-800/50 bg-[#150f0d] p-5 space-y-4">
+              <div className="max-w-md w-full m-auto rounded-2xl border border-red-800/50 bg-[#150f0d] p-5 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-editorial font-bold text-amber-200">
                     Bàn Thờ Ngũ Hành — Hóa Vàng & Thắp Nhang
@@ -1177,7 +1189,7 @@ export function ThanhMinhGameSection({
 
             {/* 2B. TEACHERS' OFFICE 3-DIGIT WOODEN CIPHER BOX (4-0-5) */}
             {hudState.activeModal === 'cipher_lock' && (
-              <div className="max-w-md w-full rounded-2xl border border-amber-700/50 bg-[#16110e] p-5 space-y-4">
+              <div className="max-w-md w-full m-auto rounded-2xl border border-amber-700/50 bg-[#16110e] p-5 space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Lock className="w-4 h-4 text-amber-400" aria-hidden="true" />
@@ -1207,7 +1219,8 @@ export function ThanhMinhGameSection({
                     const val = hudState.cipherDigits[slot];
                     const adjustDigit = (delta: number) => {
                       audioRef.current?.unlock();
-                      const res = setCipherDigit(stateRef.current, slot, val + delta);
+                      const currentDigit = stateRef.current.cipherDigits[slot];
+                      const res = setCipherDigit(stateRef.current, slot, currentDigit + delta);
                       if (res.solved) {
                         audioRef.current?.playAltarChime();
                         rendererRef.current?.triggerShake(4.5);
@@ -1246,7 +1259,7 @@ export function ThanhMinhGameSection({
 
             {/* 3. VINTAGE TRANSISTOR RADIO DIAL (ACT 2: 104.7 MHz & ACT 3 SECRET: 109.2 MHz) */}
             {hudState.activeModal === 'radio_tuner' && (
-              <div className="max-w-md w-full rounded-2xl border border-amber-700/40 bg-[#14110f] p-5 space-y-4">
+              <div className="max-w-md w-full m-auto rounded-2xl border border-amber-700/40 bg-[#14110f] p-5 space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Radio className="w-4 h-4 text-amber-400" aria-hidden="true" />
@@ -1329,7 +1342,7 @@ export function ThanhMinhGameSection({
 
             {/* 4. DARKROOM 35MM NEGATIVE FILM REVEAL (ACT 2 CLIMAX) */}
             {hudState.activeModal === 'darkroom_reveal' && (
-              <div className="max-w-lg w-full rounded-2xl border border-red-800/70 bg-[#1a0507] p-5 space-y-4">
+              <div className="max-w-lg w-full m-auto rounded-2xl border border-red-800/70 bg-[#1a0507] p-5 space-y-4">
                 <h3 className="text-lg font-editorial font-bold text-red-200">
                   Khay Thuốc Hiện Hình — Ánh Đèn Đỏ
                 </h3>
@@ -1366,7 +1379,7 @@ export function ThanhMinhGameSection({
 
             {/* 5. SHADOW PUPPET THEATRE (ACT 3) */}
             {hudState.activeModal === 'puppet_theatre' && (
-              <div className="max-w-2xl w-full rounded-2xl border border-amber-700/50 bg-[#16110e] p-5 space-y-4">
+              <div className="max-w-2xl w-full m-auto rounded-2xl border border-amber-700/50 bg-[#16110e] p-5 space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-editorial font-bold text-amber-200">
@@ -1427,7 +1440,7 @@ export function ThanhMinhGameSection({
 
             {/* 6. FINAL INTERROGATION TRIAL (ACT 4 CLIMAX) */}
             {hudState.activeModal === 'interrogation_trial' && (
-              <div className="max-w-xl w-full rounded-2xl border border-stone-600 bg-[#12100f] p-5 space-y-4">
+              <div className="max-w-xl w-full m-auto rounded-2xl border border-stone-600 bg-[#12100f] p-5 space-y-4">
                 <div className="space-y-1">
                   <div className="text-xs font-mono text-rose-400">
                     Hồi 4 · Phiên Tòa Của Linh Hồn ({hudState.interrogationStep + 1}/{INTERROGATION_PROMPTS.length})
@@ -1468,8 +1481,8 @@ export function ThanhMinhGameSection({
 
         {/* ENDING SUMMARY / GAMEOVER OVERLAY */}
         {screenMode === 'gameover' && (
-          <div className="absolute inset-0 bg-black/88 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto z-30">
-            <div className="max-w-xl w-full rounded-2xl border border-stone-700 bg-[#120f0e] p-6 space-y-4">
+          <div className="absolute inset-0 bg-black/88 backdrop-blur-sm flex p-3 sm:p-4 overflow-y-auto z-30">
+            <div className="max-w-xl w-full m-auto rounded-2xl border border-stone-700 bg-[#120f0e] p-6 space-y-4">
               <div className={`inline-block text-[11px] font-mono px-2.5 py-1 rounded border ${endingInfo.accentClass}`}>
                 {endingInfo.tag}
               </div>
@@ -1599,15 +1612,15 @@ export function ThanhMinhGameSection({
             </button>
           </div>
 
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0 max-w-full overflow-hidden">
             {nearbyHotspot ? (
               <button
                 type="button"
                 onClick={triggerInteract}
-                className="min-h-[40px] px-4 py-1.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer max-w-full truncate transition-colors"
+                className="min-h-[40px] px-3.5 sm:px-4 py-1.5 rounded-lg bg-amber-700 hover:bg-amber-600 text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer max-w-full min-w-0 overflow-hidden transition-colors"
               >
                 <Flame className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                <span className="truncate">[E] {nearbyHotspot.label}</span>
+                <span className="truncate min-w-0">[E] {nearbyHotspot.label}</span>
               </button>
             ) : (
               <span className="text-xs text-stone-400 hidden sm:inline truncate">
