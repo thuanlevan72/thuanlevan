@@ -66,19 +66,23 @@ test('computeVfxClutterBudget caps stacked ultimates and reduces area wash alpha
   assert.ok(saturatedBudget.maxOverheatEffects <= 9);
 });
 
-test('filterArsenalGuns cleanly partitions all, attack, electric, and support guns across the 19-gun roster', () => {
+test('filterArsenalGuns cleanly partitions all, attack, electric, and support guns across standard and exclusive maps', () => {
   const guns = getAvailableGunsForMap(PRISM_MAPS[0].id);
   const all = filterArsenalGuns(guns, 'all');
   const attack = filterArsenalGuns(guns, 'attack');
   const electric = filterArsenalGuns(guns, 'electric');
   const support = filterArsenalGuns(guns, 'support');
 
-  assert.equal(all.length, 19);
-  assert.equal(guns.length, 19);
-  assert.equal(attack.length, 13);
-  assert.equal(electric.length, 2);
+  assert.equal(all.length, 23);
+  assert.equal(guns.length, 23);
+  assert.equal(attack.length, 16);
+  assert.equal(electric.length, 3);
   assert.equal(support.length, 4);
   assert.equal(attack.length + electric.length + support.length, all.length);
+
+  for (const mapId of ['sector-17', 'sector-18', 'sector-19'] as const) {
+    assert.equal(getAvailableGunsForMap(mapId).length, 24);
+  }
 });
 
 test('computeMobileLandscapeSidebarPx preserves 70%–75%+ map width across iPhone 14–18 Pro/Pro Max landscape viewports', () => {
@@ -96,7 +100,8 @@ test('computeMobileLandscapeSidebarPx preserves 70%–75%+ map width across iPho
   }
 });
 
-test('getGunMobileShortName provides concise unclipped names for all 19 guns', () => {
+test('getGunMobileShortName provides concise unclipped names for all 26 guns', () => {
+  assert.equal(GUN_CATALOG.length, 26);
   for (const gun of GUN_CATALOG) {
     const short = getGunMobileShortName(gun.type);
     assert.ok(short.length >= 4 && short.length <= 12, `${gun.type} short name "${short}" should stay concise`);

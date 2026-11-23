@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   advanceEnemyAlongPath,
+  applyCoreDamageWithShield,
   applyDamageToEnemy,
   BIOME_PALETTES,
   boostEnemyKillReward,
@@ -9,6 +10,7 @@ import {
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
   clampEnemyToTrackCorridor,
+  computeAegisCoreShieldSpec,
   computeBeaconBuffAtTile,
   computeChronoFieldRecord,
   computeElectricWetSynergy,
@@ -27,6 +29,7 @@ import {
   getAvailableGunsForMap,
   getChronosMaxFields,
   getEffectiveMapSetup,
+  getExclusiveGunForMap,
   getGunCatalogItem,
   getGunCategory,
   getGunCombatProfile,
@@ -35,6 +38,7 @@ import {
   getGunTotalInvested,
   getGunUpgradeCost,
   getMapPathTileSet,
+  getMapScalingCurve,
   getMothershipMaxDrones,
   getTileKind,
   GRID_COLS,
@@ -58,7 +62,7 @@ import {
 } from './prismTdEngine.ts';
 import { playOverheatSkillSfx, playPrismSfx } from './prismTdSound.ts';
 
-test('PRISM_MAPS define 19 valid maps (18x 16x10 + 24x14 super-wide), 19 guns (13 Attack, 2 Electric, 4 Support), 5 difficulties, and 9 modes', () => {
+test('PRISM_MAPS define 19 valid maps with unique bosses, 26 guns (19 Attack, 3 Electric, 4 Support), 6 difficulties, and 9 modes', () => {
   assert.equal(PRISM_MAPS.length, 19);
   assert.equal(GRID_COLS, 16);
   assert.equal(GRID_ROWS, 10);
@@ -66,16 +70,17 @@ test('PRISM_MAPS define 19 valid maps (18x 16x10 + 24x14 super-wide), 19 guns (1
   assert.equal(CANVAS_WIDTH, 896);
   assert.equal(CANVAS_HEIGHT, 560);
 
-  assert.equal(GUN_CATALOG.length, 19);
+  assert.equal(GUN_CATALOG.length, 26);
   const attackGuns = GUN_CATALOG.filter((g) => g.category === 'attack');
   const electricGuns = GUN_CATALOG.filter((g) => g.category === 'electric');
   const supportGuns = GUN_CATALOG.filter((g) => g.category === 'support');
-  assert.equal(attackGuns.length, 13);
-  assert.equal(electricGuns.length, 2);
+  assert.equal(attackGuns.length, 19);
+  assert.equal(electricGuns.length, 3);
   assert.equal(supportGuns.length, 4);
 
   assert.equal(isElectricGunType('tesla'), true);
   assert.equal(isElectricGunType('tempest'), true);
+  assert.equal(isElectricGunType('aurora_spire'), true);
   assert.equal(isElectricGunType('gatling'), false);
 
   assert.equal(isSupportGunType('beacon'), true);
@@ -87,7 +92,7 @@ test('PRISM_MAPS define 19 valid maps (18x 16x10 + 24x14 super-wide), 19 guns (1
   assert.equal(isSupportGunType('chronos'), false);
 
   assert.equal(MAX_GUN_LEVEL, 7);
-  assert.deepEqual(DIFFICULTY_ORDER, ['easy', 'normal', 'hard', 'hell', 'super_hell']);
+  assert.deepEqual(DIFFICULTY_ORDER, ['easy', 'normal', 'hard', 'hell', 'super_hell', 'nightmare']);
   assert.deepEqual(GAME_MODE_ORDER, [
     'campaign',
     'blitz',
@@ -100,12 +105,15 @@ test('PRISM_MAPS define 19 valid maps (18x 16x10 + 24x14 super-wide), 19 guns (1
     'chaos_swarm',
   ]);
 
-  assert.equal(DIFFICULTY_CONFIGS.easy.hpMult, 1.11);
-  assert.equal(DIFFICULTY_CONFIGS.normal.hpMult, 1.66);
-  assert.equal(DIFFICULTY_CONFIGS.hard.hpMult, 2.44);
-  assert.equal(DIFFICULTY_CONFIGS.hell.hpMult, 3.55);
-  assert.equal(DIFFICULTY_CONFIGS.super_hell.hpMult, 5.2);
+  assert.equal(DIFFICULTY_CONFIGS.easy.hpMult, 1.28);
+  assert.equal(DIFFICULTY_CONFIGS.normal.hpMult, 1.92);
+  assert.equal(DIFFICULTY_CONFIGS.hard.hpMult, 2.86);
+  assert.equal(DIFFICULTY_CONFIGS.hell.hpMult, 4.18);
+  assert.equal(DIFFICULTY_CONFIGS.super_hell.hpMult, 6.15);
   assert.equal(DIFFICULTY_CONFIGS.super_hell.extraWaves, 4);
+  assert.equal(DIFFICULTY_CONFIGS.nightmare.hpMult, DIFFICULTY_CONFIGS.super_hell.hpMult * 2);
+  assert.equal(DIFFICULTY_CONFIGS.nightmare.shieldMult, DIFFICULTY_CONFIGS.super_hell.shieldMult * 2);
+  assert.equal(DIFFICULTY_CONFIGS.nightmare.extraWaves, 6);
 
   assert.ok(GAME_MODE_CONFIGS.blitz.speedMult > 1);
   assert.ok(GAME_MODE_CONFIGS.boss_rush.startEnergyMult >= 2);
@@ -115,17 +123,27 @@ test('PRISM_MAPS define 19 valid maps (18x 16x10 + 24x14 super-wide), 19 guns (1
   assert.equal(GAME_MODE_CONFIGS.tactical_tycoon.startEnergyMult, 1.85);
   assert.equal(GAME_MODE_CONFIGS.chaos_swarm.swarmCountMult, 1.45);
 
+  const bossIds = new Set<string>();
+  let prevScaleHp = 0;
+
   for (const map of PRISM_MAPS) {
     if (map.id === 'sector-19') {
       assert.equal(map.cols, 24);
       assert.equal(map.rows, 14);
       assert.equal(map.biome, 'astral_abyss');
       assert.ok(map.wetZones.length >= 6);
+      assert.equal(map.bossSpec.emblemKind, 'void_star');
     } else {
       assert.equal(map.cols, 16);
       assert.equal(map.rows, 10);
       assert.ok(map.wetZones.length >= 2, `${map.id} must define >= 2 conductive wetZones`);
     }
+    assert.ok(map.bossSpec.id.length > 0 && !bossIds.has(map.bossSpec.id), `${map.id} must have a unique bossSpec`);
+    bossIds.add(map.bossSpec.id);
+    const scale = getMapScalingCurve(map.id);
+    assert.ok(scale.hpMult >= prevScaleHp, `${map.id} progressive scaling must be non-decreasing`);
+    prevScaleHp = scale.hpMult;
+
     assert.ok(BIOME_PALETTES[map.biome]);
     assert.ok(DIFFICULTY_CONFIGS[map.recommendedDifficulty]);
     assert.ok(map.totalWaves >= 16 && map.totalWaves <= 42, `${map.id} waves should be 16..42`);
@@ -152,24 +170,36 @@ test('PRISM_MAPS define 19 valid maps (18x 16x10 + 24x14 super-wide), 19 guns (1
     }
 
     const available = getAvailableGunsForMap(map.id);
-    assert.equal(available.length, 19, `${map.id} should expose all 19 consolidated guns`);
+    const exclusive = getExclusiveGunForMap(map.id);
+    if (map.id === 'sector-17' || map.id === 'sector-18' || map.id === 'sector-19') {
+      assert.ok(exclusive, `${map.id} must have an exclusive weapon`);
+      assert.equal(available.length, 24, `${map.id} should expose 23 base + 1 map-exclusive gun`);
+      assert.ok(available.some((g) => g.type === exclusive.type));
+    } else {
+      assert.equal(exclusive, null);
+      assert.equal(available.length, 23, `${map.id} should expose 23 standard guns`);
+    }
   }
+  assert.equal(bossIds.size, 19);
 });
 
-test('Super Hell difficulty, Boss Apocalypse (Boss/Super Boss only), and 24x14 Sector-19 scaling', () => {
+test('Super Hell & Nightmare (2x Super Hell), Boss Apocalypse, and 24x14 Sector-19 Super Boss Phase 2', () => {
   const map = PRISM_MAPS[0];
   const setupEasy = getEffectiveMapSetup(map, 'easy', 'campaign');
   const setupNormal = getEffectiveMapSetup(map, 'normal', 'campaign');
   const setupHard = getEffectiveMapSetup(map, 'hard', 'campaign');
   const setupHell = getEffectiveMapSetup(map, 'hell', 'campaign');
   const setupSuperHell = getEffectiveMapSetup(map, 'super_hell', 'campaign');
+  const setupNightmare = getEffectiveMapSetup(map, 'nightmare', 'campaign');
 
   assert.equal(setupEasy.totalWaves, 16);
   assert.equal(setupNormal.totalWaves, 18);
   assert.equal(setupHard.totalWaves, 20);
   assert.equal(setupHell.totalWaves, 22);
   assert.equal(setupSuperHell.totalWaves, 24);
+  assert.equal(setupNightmare.totalWaves, 28);
   assert.ok(setupSuperHell.startCoreHp <= setupHell.startCoreHp);
+  assert.ok(setupNightmare.startEnergy >= setupSuperHell.startEnergy);
 
   // Boss Apocalypse mode: spawns ONLY boss and super_boss (0 scouts or minions)
   const setupApoc = getEffectiveMapSetup(map, 'hard', 'boss_apocalypse');
@@ -187,14 +217,14 @@ test('Super Hell difficulty, Boss Apocalypse (Boss/Super Boss only), and 24x14 S
   const lateApoc = buildWaveSpawns(setupApoc.totalWaves, setupApoc.totalWaves, 'super_hell', 'boss_apocalypse');
   assert.ok(lateApoc.some((i) => i.kind === 'super_boss'));
 
-  // Hell W1 still stays balanced
+  // Hell W1 boosted +15-20% over baseline while staying balanced
   const w1Hell = buildWaveSpawns(1, setupHell.totalWaves, 'hell', 'campaign');
   const w1TotalHp = w1Hell.reduce(
     (sum, item, idx) =>
       sum + createEnemyForWave(idx + 1, item.kind, 1, map, item.isElite, 'hell', 'campaign').maxHp,
     0
   );
-  assert.ok(w1TotalHp > 7500 && w1TotalHp < 15500, `Hell W1 total HP=${w1TotalHp} should stay balanced`);
+  assert.ok(w1TotalHp > 9000 && w1TotalHp < 19000, `Hell W1 total HP=${w1TotalHp} should reflect +15-20% buff`);
 
   // Sector 17, 18, and 19 (24x14 super-wide)
   const map17 = PRISM_MAPS[16];
@@ -212,9 +242,20 @@ test('Super Hell difficulty, Boss Apocalypse (Boss/Super Boss only), and 24x14 S
       `sector-19 (${diff}) must allow W1 deployment of 1200⚡ astral_ark`
     );
   }
+
+  // Sector-19 Super Boss Phase 2 triggers once at <= 50% HP
+  const apexBoss = createEnemyForWave(99, 'super_boss', 18, map19, false, 'normal', 'campaign');
+  assert.equal(apexBoss.bossTitle, map19.bossSpec.title);
+  assert.equal(apexBoss.bossPhase, 1);
+  apexBoss.hp = Math.round(apexBoss.maxHp * 0.48);
+  const p2Step1 = stepEnemies([apexBoss], map19, 0.05);
+  assert.equal(apexBoss.bossPhase, 2);
+  assert.equal(p2Step1.outcome.phase2Events.length, 1);
+  const p2Step2 = stepEnemies([apexBoss], map19, 0.05);
+  assert.equal(p2Step2.outcome.phase2Events.length, 0);
 });
 
-test('19-gun Lv1..Lv7 progression, 2x doubling upgrade cost, pure 0-damage support, and Quantum Prism mechanics', () => {
+test('26-gun Lv1..Lv7 progression, 2x doubling upgrade cost, pure 0-damage support, and Quantum Prism mechanics', () => {
   const overheatKeys = new Set<string>();
   const hotkeys = new Set<string>();
 
@@ -295,8 +336,8 @@ test('19-gun Lv1..Lv7 progression, 2x doubling upgrade cost, pure 0-damage suppo
       }
     }
   }
-  assert.equal(overheatKeys.size, 19);
-  assert.equal(hotkeys.size, 19);
+  assert.equal(overheatKeys.size, 26);
+  assert.equal(hotkeys.size, 26);
 
   // Beacon + Radar + Quantum Prism (500⚡) Pure Support Auras (NO attack-speed buff)
   const beaconGun: PlacedGun = {
@@ -484,12 +525,39 @@ test('1200-energy Astral Ark, Chronos 700, Orbital 300, Singularity 330, Mothers
   assert.ok(getGunCombatProfile('tesla', 7).chainCount >= 7);
   assert.ok(getGunCombatProfile('tempest', 7, 'omega').shieldMult >= 1.9);
 
-  // Requested pricing checks
-  assert.equal(getGunCatalogItem('orbital').cost, 300);
+  // Requested pricing checks (incl. reworked Orbital 500⚡, Aegis Bastion 800⚡, 3 new guns, and 3 map-exclusive guns)
+  assert.equal(getGunCatalogItem('orbital').cost, 500);
+  assert.equal(getGunCatalogItem('aegis_bastion').cost, 800);
+  assert.equal(getGunCatalogItem('aegis_bastion').hotkey, 'k');
+  assert.equal(getGunCatalogItem('prism_refract').cost, 300);
+  assert.equal(getGunCatalogItem('hyperion').cost, 500);
+  assert.equal(getGunCatalogItem('aurora_spire').cost, 500);
+  assert.equal(getGunCatalogItem('aurelia_cannon').cost, 450);
+  assert.equal(getGunCatalogItem('paradox_scythe').cost, 600);
+  assert.equal(getGunCatalogItem('nebula_core').cost, 850);
   assert.equal(getGunCatalogItem('singularity').cost, 330);
   assert.equal(getGunCatalogItem('mothership').cost, 280);
   assert.equal(getGunCatalogItem('chronos').cost, 700);
   assert.equal(getGunCatalogItem('quantum_prism').cost, 500);
+
+  // Hybrid Offense + Defense Aegis Bastion (800⚡) Core Shield generation + absorption
+  const aegisNone = computeAegisCoreShieldSpec([]);
+  assert.equal(aegisNone.maxShield, 0);
+  assert.equal(aegisNone.bastionCount, 0);
+
+  const aegisAlphaLv1 = computeAegisCoreShieldSpec([{ type: 'aegis_bastion', level: 1, variant: 'alpha' }]);
+  assert.equal(aegisAlphaLv1.maxShield, 2);
+  assert.equal(aegisAlphaLv1.rechargeAmount, 1);
+
+  const aegisOmegaLv7 = computeAegisCoreShieldSpec([{ type: 'aegis_bastion', level: 7, variant: 'omega' }]);
+  assert.equal(aegisOmegaLv7.maxShield, 14);
+  assert.equal(aegisOmegaLv7.rechargeAmount, 2);
+  assert.equal(aegisOmegaLv7.rechargeIntervalSec, 6.5);
+
+  const fullBlock = applyCoreDamageWithShield(28, 5, 3);
+  assert.deepEqual(fullBlock, { nextCoreHp: 28, nextCoreShield: 2, absorbed: 3, coreLoss: 0 });
+  const partialBlock = applyCoreDamageWithShield(28, 2, 5);
+  assert.deepEqual(partialBlock, { nextCoreHp: 25, nextCoreShield: 0, absorbed: 2, coreLoss: 3 });
 
   // Astral Ark (1200⚡)
   const astralMeta = getGunCatalogItem('astral_ark');
@@ -553,7 +621,7 @@ test('1200-energy Astral Ark, Chronos 700, Orbital 300, Singularity 330, Mothers
   assert.ok(hit.actualDamage >= 500);
 });
 
-test('prismTdSound synthesizes compressor+shaper bus, guards suspended state, and covers all 19 guns + Overheat + interrupt', () => {
+test('prismTdSound synthesizes compressor+shaper bus, guards suspended state, and covers all 25 guns + Overheat + interrupt', () => {
   let oscCount = 0;
   let noiseSrcCount = 0;
   let filterCount = 0;
@@ -663,7 +731,7 @@ test('prismTdSound synthesizes compressor+shaper bus, guards suspended state, an
     assert.equal(compressorCount, 1);
     assert.equal(shaperCount, 1);
     assert.equal(bufferCount, 8);
-    assert.ok(noiseSrcCount + oscCount - beforeVoices >= 51);
+    assert.ok(noiseSrcCount + oscCount - beforeVoices >= 65);
     assert.ok(filterCount > 0);
   } finally {
     (performance as { now: () => number }).now = origPerfNow;

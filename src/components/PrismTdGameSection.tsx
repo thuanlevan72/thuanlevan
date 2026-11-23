@@ -25,13 +25,16 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import {
+  applyCoreDamageWithShield,
   applyDamageToEnemy,
+  AuroraPylonFx,
   BIOME_PALETTES,
   buildWaveSpawns,
   CarrierDrone,
   ChronoField,
   ChronoSlashFx,
   clampEnemyToTrackCorridor,
+  computeAegisCoreShieldSpec,
   computeChronoFieldRecord,
   computeElectricWetSynergy,
   computeOverdriveTimeChargeGain,
@@ -51,6 +54,7 @@ import {
   getAvailableGunsForMap,
   getChronosMaxFields,
   getEffectiveMapSetup,
+  getExclusiveGunForMap,
   getGunCatalogItem,
   getGunCombatProfile,
   getGunProgressionRoadmap,
@@ -102,6 +106,7 @@ import {
 } from '../utils/prismTdMobileHelpers.ts';
 import { PrismTdGunGlyph } from './PrismTdGunGlyph.tsx';
 import {
+  drawAuroraPylons,
   drawCarrierDrones,
   drawChronoFieldsAndSlashes,
   drawEnemySprite,
@@ -197,6 +202,8 @@ interface HudSnapshot {
   energy: number;
   coreHp: number;
   maxCoreHp: number;
+  coreShield: number;
+  maxCoreShield: number;
   wave: number;
   totalWaves: number;
   score: number;
@@ -212,6 +219,16 @@ interface HudSnapshot {
   speedMult: 1 | 2 | 3;
   outcome: 'victory' | 'defeat' | null;
   selectedGunVersion: number;
+  activeBoss: {
+    title: string;
+    hp: number;
+    maxHp: number;
+    shield: number;
+    maxShield: number;
+    phase: 1 | 2;
+    color: string;
+    isSuper: boolean;
+  } | null;
 }
 
 const SAVE_BEST_KEY = 'thuanle-gun-td-best-v2';
@@ -405,6 +422,8 @@ export function PrismTdGameSection({
       energy: initSetup.startEnergy,
       coreHp: initSetup.startCoreHp,
       maxCoreHp: initSetup.startCoreHp,
+      coreShield: 0,
+      maxCoreShield: 0,
       wave: 0,
       totalWaves: initSetup.totalWaves,
       score: 0,
@@ -420,6 +439,7 @@ export function PrismTdGameSection({
       remainingEnemies: 0,
       outcome: null,
       selectedGunVersion: 0,
+      activeBoss: null,
     };
   });
 
@@ -457,6 +477,7 @@ export function PrismTdGameSection({
     chronoSlashes: ChronoSlashFx[];
     voidRifts: VoidRiftFx[];
     quantumArcs: QuantumEchoArcFx[];
+    auroraPylons: AuroraPylonFx[];
     floatingTexts: FloatingCombatText[];
     spawnQueue: WaveSpawnItem[];
     waveElapsed: number;
@@ -465,6 +486,9 @@ export function PrismTdGameSection({
     nextProjId: number;
     energy: number;
     coreHp: number;
+    coreShield: number;
+    maxCoreShield: number;
+    aegisRechargeTimer: number;
     wave: number;
     waveActive: boolean;
     score: number;
@@ -516,6 +540,7 @@ export function PrismTdGameSection({
     chronoSlashes: [],
     voidRifts: [],
     quantumArcs: [],
+    auroraPylons: [],
     floatingTexts: [],
     spawnQueue: [],
     waveElapsed: 0,
@@ -524,6 +549,9 @@ export function PrismTdGameSection({
     nextProjId: 1,
     energy: effectiveSetup.startEnergy,
     coreHp: effectiveSetup.startCoreHp,
+    coreShield: 0,
+    maxCoreShield: 0,
+    aegisRechargeTimer: 0,
     wave: 0,
     waveActive: false,
     score: 0,
@@ -596,16 +624,35 @@ export function PrismTdGameSection({
         overdriveMult;
     }
     s.totalDps = Math.round(total);
+    const aegisSpec = computeAegisCoreShieldSpec(
+      s.guns,
+      s.overdriveTimer > 0 ? OVERDRIVE_CONFIG.skillPowerMult : 1
+    );
+    s.maxCoreShield = aegisSpec.maxShield;
   }, []);
 
   const syncHudFromSim = useCallback(() => {
     const s = simRef.current;
+    let liveBoss: TdEnemy | null = null;
+    for (const en of s.enemies) {
+      if (en.hp <= 0 || en.koTimer > 0) continue;
+      if (en.kind !== 'boss' && en.kind !== 'super_boss') continue;
+      if (
+        !liveBoss ||
+        (en.kind === 'super_boss' && liveBoss.kind !== 'super_boss') ||
+        (en.kind === liveBoss.kind && en.hp > liveBoss.hp)
+      ) {
+        liveBoss = en;
+      }
+    }
     setHud({
       difficulty: s.difficulty,
       gameMode: s.gameMode,
       energy: Math.round(s.energy),
       coreHp: Math.max(0, Math.round(s.coreHp)),
       maxCoreHp: s.maxCoreHp,
+      coreShield: Math.max(0, Math.round(s.coreShield)),
+      maxCoreShield: s.maxCoreShield,
       wave: s.wave,
       totalWaves: s.totalWaves,
       score: Math.round(s.score),
@@ -621,6 +668,18 @@ export function PrismTdGameSection({
       speedMult: s.speedMult,
       outcome: s.outcome,
       selectedGunVersion: s.selectedGunVersion,
+      activeBoss: liveBoss
+        ? {
+            title: liveBoss.bossTitle ?? s.map.bossSpec.title,
+            hp: Math.max(0, Math.round(liveBoss.hp)),
+            maxHp: Math.max(1, Math.round(liveBoss.maxHp)),
+            shield: Math.max(0, Math.round(liveBoss.shield)),
+            maxShield: Math.max(0, Math.round(liveBoss.maxShield)),
+            phase: liveBoss.bossPhase ?? 1,
+            color: liveBoss.bossColor ?? s.map.bossSpec.color,
+            isSuper: liveBoss.kind === 'super_boss',
+          }
+        : null,
     });
   }, []);
 
@@ -721,6 +780,7 @@ export function PrismTdGameSection({
       s.chronoSlashes = [];
       s.voidRifts = [];
       s.quantumArcs = [];
+      s.auroraPylons = [];
       s.floatingTexts = [];
       s.spawnQueue = [];
       s.waveElapsed = 0;
@@ -729,6 +789,9 @@ export function PrismTdGameSection({
       s.nextProjId = 1;
       s.energy = effective.startEnergy;
       s.coreHp = effective.startCoreHp;
+      s.coreShield = 0;
+      s.maxCoreShield = 0;
+      s.aegisRechargeTimer = 0;
       s.wave = 0;
       s.waveActive = false;
       s.score = 0;
@@ -1012,6 +1075,10 @@ export function PrismTdGameSection({
     target.level += 1;
     s.selectedGunVersion += 1;
     recomputeFirepower();
+    if (target.type === 'aegis_bastion') {
+      const shieldGrant = target.level === MAX_GUN_LEVEL || target.variant === 'omega' ? 3 : 2;
+      s.coreShield = Math.min(Math.max(s.coreShield, s.maxCoreShield), s.coreShield + shieldGrant);
+    }
     syncHudFromSim();
 
     const pt = gridToWorldCenter(target.col, target.row);
@@ -1057,11 +1124,13 @@ export function PrismTdGameSection({
     const refund = getGunSellRefund(target);
     s.guns.splice(idx, 1);
     s.carrierDrones = s.carrierDrones.filter((d) => d.sourceGunId !== target.id);
+    s.auroraPylons = s.auroraPylons.filter((p) => p.sourceGunId !== target.id);
     s.energy += refund;
     s.selectedGunId = null;
     s.selectedGunVersion += 1;
     setSelectedGunId(null);
     recomputeFirepower();
+    s.coreShield = Math.min(s.coreShield, s.maxCoreShield);
     syncHudFromSim();
     const pt = gridToWorldCenter(target.col, target.row);
     emitParticles(pt.x, pt.y, '#94A3B8', 12, 85);
@@ -1156,6 +1225,8 @@ export function PrismTdGameSection({
           toolType === 'missile' ||
           toolType === 'mortar' ||
           toolType === 'orbital' ||
+          toolType === 'hyperion' ||
+          toolType === 'nebula_core' ||
           toolType === 'astral_ark'
             ? 'strongest'
             : 'first',
@@ -1177,6 +1248,11 @@ export function PrismTdGameSection({
       pendingBuildTileRef.current = null;
       dragGhostTileRef.current = null;
       recomputeFirepower();
+      let placedShieldGrant = 0;
+      if (toolType === 'aegis_bastion') {
+        placedShieldGrant = selectedVariant === 'omega' ? 3 : 2;
+        s.coreShield = Math.min(s.maxCoreShield, s.coreShield + placedShieldGrant);
+      }
       syncHudFromSim();
 
       const pt = gridToWorldCenter(col, row);
@@ -1190,10 +1266,17 @@ export function PrismTdGameSection({
         lineWidth: 2.2,
       });
       emitParticles(pt.x, pt.y, spec.accentColor, 14, 95);
+      if (placedShieldGrant > 0) {
+        pushCombatText(pt.x, pt.y - 12, `🛡️ +${placedShieldGrant} KHIÊN LÕI!`, '#38BDF8', 1.1);
+      }
       if (gameState === 'paused') requestCanvasRedraw();
       playSynthFx('place', soundEnabled, audioCtxRef);
       triggerTactilePulse('place');
-      setStatusNotice(`Đã triển khai ${spec.name} Lv1! Bấm [U] để nâng cấp tới Lv${MAX_GUN_LEVEL}.`);
+      setStatusNotice(
+        placedShieldGrant > 0
+          ? `Đã triển khai ${spec.name} Lv1 (+${placedShieldGrant}🛡️ Khiên Lõi & đẩy lùi)!`
+          : `Đã triển khai ${spec.name} Lv1! Bấm [U] để nâng cấp tới Lv${MAX_GUN_LEVEL}.`
+      );
       return true;
     },
     [
@@ -1204,6 +1287,7 @@ export function PrismTdGameSection({
       recomputeFirepower,
       syncHudFromSim,
       emitParticles,
+      pushCombatText,
       requestCanvasRedraw,
       triggerTactilePulse,
     ]
@@ -2871,6 +2955,368 @@ export function PrismTdGameSection({
             }
             if (interruptedAny) playSynthFx('interrupt', soundEnabled, audioCtxRef);
             pushCombatText(centerPt.x, centerPt.y - 28, '✦ ĐẠI THẢM HỌA HƯ KHÔNG!', '#F0ABFC', 1.2);
+          } else if (gun.type === 'prism_refract') {
+            const centerPt = target ? { x: target.x, y: target.y } : origin;
+            s.overheatEffects.push({
+              kind: 'prism_web',
+              x: origin.x,
+              y: origin.y,
+              radius: Math.round(profile.rangePx * 1.32 * odSkillRadius),
+              angle: gun.aimAngle,
+              life: 0.72,
+              maxLife: 0.72,
+              color: '#38BDF8',
+            });
+            const spectrumTargets = [...liveEnemies]
+              .filter((e) => Math.hypot(e.x - origin.x, e.y - origin.y) <= profile.rangePx * 1.38)
+              .sort((a, b) => b.hp + b.shield - (a.hp + a.shield))
+              .slice(0, 10);
+            const rainbowCols = ['#38BDF8', '#A855F7', '#F43F5E', '#FACC15', '#34D399'];
+            for (let idx = 0; idx < 10; idx++) {
+              const tEn = spectrumTargets[idx];
+              const beamCol = rainbowCols[idx % rainbowCols.length];
+              if (tEn) {
+                s.railBeams.push({
+                  x1: origin.x,
+                  y1: origin.y,
+                  x2: tEn.x,
+                  y2: tEn.y,
+                  alpha: 1.15,
+                  color: beamCol,
+                  visualTier: 4,
+                  variant: 'prism_refract',
+                });
+                tEn.markedTimer = Math.max(tEn.markedTimer, 4.2 * odSkillDur);
+                tEn.markedBonus = Math.max(tEn.markedBonus, 0.35);
+                const res = applyDamageToEnemy(tEn, Math.round(shotDmg * 1.25 * odSkillDmg), {
+                  armorPierce: 0.9,
+                  shieldMult: 2.0,
+                });
+                recordDamageTelemetry(tEn, res.actualDamage, gun.id, 0);
+                emitParticles(tEn.x, tEn.y, beamCol, 6, 120, 1.0);
+                if (res.killed) recordKill(tEn, gun.id);
+              } else {
+                const fanA = gun.aimAngle + (idx - 4.5) * 0.14;
+                s.railBeams.push({
+                  x1: origin.x,
+                  y1: origin.y,
+                  x2: origin.x + Math.cos(fanA) * profile.rangePx * 1.15,
+                  y2: origin.y + Math.sin(fanA) * profile.rangePx * 1.15,
+                  alpha: 0.95,
+                  color: beamCol,
+                  visualTier: 3,
+                  variant: 'prism_refract',
+                });
+              }
+            }
+            pushCombatText(centerPt.x, centerPt.y - 22, '✦ MẠNG LƯỚI QUANG PHỔ!', '#38BDF8', 1.12);
+          } else if (gun.type === 'hyperion') {
+            s.overheatEffects.push({
+              kind: 'doomsday_blast',
+              x: origin.x,
+              y: origin.y,
+              radius: Math.round(115 * odSkillRadius),
+              angle: gun.aimAngle,
+              life: 0.72,
+              maxLife: 0.72,
+              color: '#F43F5E',
+            });
+            const locks = [...liveEnemies]
+              .sort((a, b) => b.hp + b.shield - (a.hp + a.shield))
+              .slice(0, 3);
+            for (let h = 0; h < 3; h++) {
+              const lock = locks[h % Math.max(1, locks.length)] ?? target;
+              const angle = lock ? Math.atan2(lock.y - origin.y, lock.x - origin.x) : gun.aimAngle + (h - 1) * 0.25;
+              const spd = 420;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'hyperion_shell',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(angle) * 24,
+                y: origin.y + Math.sin(angle) * 24,
+                vx: Math.cos(angle) * spd,
+                vy: Math.sin(angle) * spd,
+                targetId: lock?.id ?? -1,
+                damage: Math.round(shotDmg * 1.15 * odSkillDmg),
+                armorPierce: 0.96,
+                shieldMult: 2.4,
+                splashRadius: Math.round(105 * odSkillRadius),
+                pullForce: 14,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0.25,
+                pierceLeft: 0,
+                executeThreshold: 0.28,
+                life: 2.4,
+                maxLife: 2.4,
+                age: 0,
+                speed: spd,
+                color: '#F43F5E',
+                visualTier: 4,
+                isCrit: true,
+                trail: [],
+              });
+            }
+            pushCombatText(origin.x, origin.y - 26, '☠ LOẠT ĐẠI BÁC TẬN THẾ!', '#F43F5E', 1.14);
+          } else if (gun.type === 'aurora_spire') {
+            const centerPt = target ? { x: target.x, y: target.y } : origin;
+            s.overheatEffects.push({
+              kind: 'aurora_storm',
+              x: centerPt.x,
+              y: centerPt.y,
+              radius: Math.round(profile.rangePx * 1.25 * odSkillRadius),
+              angle: gun.aimAngle,
+              life: 0.85,
+              maxLife: 0.85,
+              color: '#2DD4BF',
+            });
+            s.auroraPylons.push({
+              id: s.nextProjId++,
+              sourceGunId: gun.id,
+              x: centerPt.x,
+              y: centerPt.y,
+              radius: Math.round(profile.splashRadius * 1.28 * odSkillRadius),
+              dps: Math.round(shotDmg * 1.05 * odSkillDmg),
+              armorPierce: 0.94,
+              shieldMult: 2.5,
+              life: 7.0 * odSkillDur,
+              maxLife: 7.0 * odSkillDur,
+              pulseTimer: 0.05,
+              visualTier: 4,
+              variant: gun.variant ?? 'alpha',
+            });
+            const stormTargets = [...liveEnemies]
+              .filter((e) => Math.hypot(e.x - origin.x, e.y - origin.y) <= profile.rangePx * 1.45)
+              .slice(0, 8);
+            let interruptedAny = false;
+            for (const sEn of stormTargets) {
+              const syn = computeElectricWetSynergy(sEn, MAX_GUN_LEVEL);
+              if (interruptEnemyWindup(sEn)) interruptedAny = true;
+              sEn.stunTimer = Math.max(sEn.stunTimer, 0.45);
+              sEn.shockTimer = Math.max(sEn.shockTimer, 1.1);
+              s.lightningArcs.push({
+                points: [
+                  { x: centerPt.x, y: centerPt.y },
+                  { x: (centerPt.x + sEn.x) * 0.5 + (Math.random() * 20 - 10), y: (centerPt.y + sEn.y) * 0.5 + (Math.random() * 20 - 10) },
+                  { x: sEn.x, y: sEn.y },
+                ],
+                alpha: 1,
+                color: '#2DD4BF',
+                width: 3.4,
+                isWetOverdrive: syn.isWetSynergy,
+              });
+              const res = applyDamageToEnemy(sEn, Math.round(shotDmg * 1.15 * syn.damageMult * odSkillDmg), {
+                armorPierce: 0.94,
+                shieldMult: 2.5 + syn.shieldMultBonus,
+              });
+              recordDamageTelemetry(sEn, res.actualDamage, gun.id, 0);
+              if (res.killed) recordKill(sEn, gun.id);
+            }
+            if (interruptedAny) playSynthFx('interrupt', soundEnabled, audioCtxRef);
+            pushCombatText(centerPt.x, centerPt.y - 24, '⚡ BÃO TỪ CỰC QUANG!', '#2DD4BF', 1.14);
+          } else if (gun.type === 'aurelia_cannon') {
+            s.overheatEffects.push({
+              kind: 'solar_bounty',
+              x: origin.x,
+              y: origin.y,
+              radius: Math.round(145 * odSkillRadius),
+              angle: gun.aimAngle,
+              life: 0.78,
+              maxLife: 0.78,
+              color: '#FACC15',
+            });
+            s.energy += 35;
+            for (let l = 0; l < 6; l++) {
+              const angle = gun.aimAngle + (l - 2.5) * 0.14;
+              const spd = 620;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'golden_lance',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(angle) * 22,
+                y: origin.y + Math.sin(angle) * 22,
+                vx: Math.cos(angle) * spd,
+                vy: Math.sin(angle) * spd,
+                targetId: target?.id ?? -1,
+                damage: Math.round(shotDmg * 1.1 * odSkillDmg),
+                armorPierce: 0.95,
+                shieldMult: 2.2,
+                splashRadius: Math.round(68 * odSkillRadius),
+                pullForce: 0,
+                burnDps: Math.round(shotDmg * 0.45 * odSkillDmg),
+                burnDuration: 2.8,
+                slowAmount: 0,
+                pierceLeft: 6,
+                hitIds: [],
+                bountyGold: 4,
+                life: 1.5,
+                maxLife: 1.5,
+                age: 0,
+                speed: spd,
+                color: '#FACC15',
+                visualTier: 4,
+                isCrit: true,
+                trail: [],
+              });
+            }
+            pushCombatText(origin.x, origin.y - 26, '★ THIÊN VŨ HOÀNG KIM +35⚡!', '#FACC15', 1.14);
+          } else if (gun.type === 'paradox_scythe') {
+            s.overheatEffects.push({
+              kind: 'paradox_rift',
+              x: origin.x,
+              y: origin.y,
+              radius: Math.round(150 * odSkillRadius),
+              angle: gun.aimAngle,
+              life: 0.8,
+              maxLife: 0.8,
+              color: '#67E8F9',
+            });
+            for (let sc = 0; sc < 5; sc++) {
+              const angle = gun.aimAngle + (sc - 2) * 0.24;
+              const spd = 430;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'paradox_scythe',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(angle) * 20,
+                y: origin.y + Math.sin(angle) * 20,
+                vx: Math.cos(angle) * spd,
+                vy: Math.sin(angle) * spd,
+                originX: origin.x,
+                originY: origin.y,
+                isReturning: false,
+                targetId: target?.id ?? -1,
+                damage: Math.round(shotDmg * 1.05 * odSkillDmg),
+                armorPierce: 1,
+                shieldMult: 2.3,
+                splashRadius: Math.round(68 * odSkillRadius),
+                pullForce: 18,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0.35,
+                pierceLeft: 12,
+                hitIds: [],
+                life: Math.max(1.8, (profile.rangePx * 2.4) / spd),
+                maxLife: Math.max(1.8, (profile.rangePx * 2.4) / spd),
+                age: 0,
+                speed: spd,
+                color: '#67E8F9',
+                visualTier: 4,
+                isCrit: true,
+                trail: [],
+              });
+            }
+            pushCombatText(origin.x, origin.y - 26, '✦ BÃO LIỀM NGHỊCH LÝ!', '#67E8F9', 1.14);
+          } else if (gun.type === 'nebula_core') {
+            const centerPt = target ? { x: target.x, y: target.y } : origin;
+            s.overheatEffects.push({
+              kind: 'nebula_swarm',
+              x: centerPt.x,
+              y: centerPt.y,
+              radius: Math.round(165 * odSkillRadius),
+              angle: gun.aimAngle,
+              life: 0.9,
+              maxLife: 0.9,
+              color: '#F0ABFC',
+            });
+            const topTargets = [...liveEnemies].sort((a, b) => b.hp + b.shield - (a.hp + a.shield));
+            for (let m = 0; m < 7; m++) {
+              const lock = topTargets[m % Math.max(1, topTargets.length)] ?? target;
+              const angle = gun.aimAngle + (m - 3) * 0.25;
+              const spd = 380;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'nebula_meteor',
+                sourceGunId: gun.id,
+                x: origin.x + Math.cos(angle) * 22,
+                y: origin.y + Math.sin(angle) * 22,
+                vx: Math.cos(angle) * spd,
+                vy: Math.sin(angle) * spd,
+                targetId: lock?.id ?? -1,
+                damage: Math.round(shotDmg * 1.15 * odSkillDmg),
+                armorPierce: 1,
+                shieldMult: 2.75,
+                splashRadius: Math.round(125 * odSkillRadius),
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0.3,
+                pierceLeft: 0,
+                spawnCluster: true,
+                supernovaBrandAmp: Math.max(0.05, profile.brittleBonus),
+                life: 2.8,
+                maxLife: 2.8,
+                age: 0,
+                speed: spd,
+                color: '#F0ABFC',
+                visualTier: 4,
+                isCrit: true,
+                trail: [],
+              });
+            }
+            pushCombatText(centerPt.x, centerPt.y - 28, '✦ MƯA SAO BĂNG TẬN THẾ!', '#F0ABFC', 1.18);
+          } else if (gun.type === 'aegis_bastion') {
+            const centerPt = target ? { x: target.x, y: target.y } : origin;
+            const novaRadius = Math.round(190 * odSkillRadius);
+            const shieldAdd = s.overdriveTimer > 0 ? 6 : 4;
+            const shieldSpec = computeAegisCoreShieldSpec(s.guns, overdriveSkillMult);
+            s.maxCoreShield = shieldSpec.maxShield;
+            s.coreShield = Math.min(shieldSpec.maxShield + 4, s.coreShield + shieldAdd);
+            s.coreHp = Math.min(s.maxCoreHp, s.coreHp + 1);
+            s.overheatEffects.push({
+              kind: 'aegis_nova',
+              x: origin.x,
+              y: origin.y,
+              radius: novaRadius,
+              angle: gun.aimAngle,
+              life: 0.9,
+              maxLife: 0.9,
+              color: '#38BDF8',
+            });
+            s.shockwaves.push({
+              x: centerPt.x,
+              y: centerPt.y,
+              radius: 14,
+              maxRadius: novaRadius,
+              alpha: 0.96,
+              color: '#38BDF8',
+              lineWidth: 3.4,
+            });
+            emitParticles(origin.x, origin.y, '#38BDF8', 20, 175, 1.3);
+            emitParticles(centerPt.x, centerPt.y, '#FDE047', 18, 175, 1.25);
+            let interruptedBoss = false;
+            for (const en of liveEnemies) {
+              const dOrigin = Math.hypot(en.x - origin.x, en.y - origin.y);
+              const dTarget = Math.hypot(en.x - centerPt.x, en.y - centerPt.y);
+              if (dOrigin <= novaRadius + en.radius || dTarget <= novaRadius + en.radius) {
+                const isHeavy = en.kind === 'boss' || en.kind === 'super_boss' || en.kind === 'juggernaut';
+                en.stunTimer = Math.max(en.stunTimer, isHeavy ? 0.45 : 0.95);
+                en.slowTimer = Math.max(en.slowTimer, 3.2 * odSkillDur);
+                en.slowFactor = Math.min(en.slowFactor || 1, 0.56);
+                en.brittleBonus = Math.max(en.brittleBonus, Math.max(0.24, profile.brittleBonus));
+                en.armorShred = Math.max(en.armorShred, 0.25);
+                if (interruptEnemyWindup(en)) interruptedBoss = true;
+                if (!isHeavy) {
+                  const backWp = s.map.path[Math.max(0, en.waypointIndex - 2)] ?? s.map.path[0];
+                  const backPt = gridToWorldCenter(backWp.col, backWp.row);
+                  pullEnemyAlongTrack(en, s.map, backPt.x, backPt.y, 44);
+                }
+                const res = applyDamageToEnemy(en, Math.round(shotDmg * 1.45 * odSkillDmg), {
+                  armorPierce: Math.min(1, profile.armorPierce + 0.1),
+                  shieldMult: profile.shieldMult * 1.3,
+                });
+                recordDamageTelemetry(en, res.actualDamage, gun.id, 0);
+                if (res.killed) recordKill(en, gun.id);
+              }
+            }
+            if (interruptedBoss) playSynthFx('interrupt', soundEnabled, audioCtxRef);
+            pushCombatText(
+              origin.x,
+              origin.y - 26,
+              `🛡️ THÀNH TRÌ BẤT HOẠI +${shieldAdd} KHIÊN & +1 LÕI!`,
+              '#38BDF8',
+              1.16
+            );
           }
         };
 
@@ -3040,7 +3486,8 @@ export function PrismTdGameSection({
                 burnDps: 0,
                 burnDuration: 0,
                 slowAmount: 0,
-                pierceLeft: 0,
+                pierceLeft: gun.level >= MAX_GUN_LEVEL ? 1 : 0,
+                hitIds: [],
                 life: 0.95,
                 maxLife: 0.95,
                 age: 0,
@@ -3051,6 +3498,9 @@ export function PrismTdGameSection({
                 trail: [],
               });
               s.muzzleFlashes.push({ x: muzzleX, y: muzzleY, angle: shotAngle, radius: 13 + profile.visualTier * 2.2, alpha: 0.95, color: bColor });
+            }
+            if (gun.level >= MAX_GUN_LEVEL) {
+              spawnCasing(origin.x, origin.y, gun.aimAngle, '#FDE047');
             }
             playSynthFx('gatling', soundEnabled, audioCtxRef);
           } else if (gun.type === 'shotgun') {
@@ -3077,8 +3527,8 @@ export function PrismTdGameSection({
                 damage: perPelletDmg,
                 armorPierce: profile.armorPierce,
                 shieldMult: profile.shieldMult,
-                splashRadius: 0,
-                pullForce: 0,
+                splashRadius: profile.splashRadius,
+                pullForce: profile.pullForce,
                 burnDps: profile.burnDps,
                 burnDuration: profile.burnDps > 0 ? 2.0 : 0,
                 slowAmount: 0,
@@ -3166,6 +3616,33 @@ export function PrismTdGameSection({
                   recordDamageTelemetry(en, res.actualDamage, gun.id, 0.05);
                   if (res.killed) recordKill(en, gun.id);
                 }
+              }
+            }
+            if (isNova360) {
+              const existingZone = s.orbitalZones.find(
+                (z) => z.sourceGunId === gun.id && Math.hypot(z.x - origin.x, z.y - origin.y) < 32
+              );
+              const plasmaRadius = Math.round(coneRange * 0.72);
+              const plasmaDps = Math.max(24, Math.round(profile.burnDps * 0.85 * overdriveDmgMult * teamBuff.damageMult));
+              if (existingZone) {
+                existingZone.life = 2.2;
+                existingZone.dps = Math.max(existingZone.dps, plasmaDps);
+              } else {
+                if (s.orbitalZones.length >= 12) s.orbitalZones.shift();
+                s.orbitalZones.push({
+                  id: s.nextProjId++,
+                  sourceGunId: gun.id,
+                  x: origin.x,
+                  y: origin.y,
+                  radius: plasmaRadius,
+                  dps: plasmaDps,
+                  armorPierce: profile.armorPierce,
+                  shieldMult: profile.shieldMult,
+                  armorShred: 0.28,
+                  slowPct: profile.slowPct,
+                  life: 2.2,
+                  maxLife: 2.2,
+                });
               }
             }
             playSynthFx('flamer', soundEnabled, audioCtxRef);
@@ -3397,8 +3874,12 @@ export function PrismTdGameSection({
                 const py = origin.y + tProj * (endY - origin.y);
                 const distSq = (en.x - px) ** 2 + (en.y - py) ** 2;
                 if (distSq <= (en.radius + 14 + profile.visualTier * 2) ** 2) {
-                  const bossCrit = gun.level === MAX_GUN_LEVEL && (en.kind === 'boss' || en.kind === 'super_boss');
-                  const beamHitDmg = bossCrit ? Math.round(perBeamDmg * 1.25) : perBeamDmg;
+                  const bossCrit = gun.level >= 3 && (en.kind === 'boss' || en.kind === 'super_boss');
+                  const beamHitDmg = bossCrit ? Math.round(perBeamDmg * (gun.level === MAX_GUN_LEVEL ? 1.35 : 1.25)) : perBeamDmg;
+                  if (gun.level >= MAX_GUN_LEVEL && interruptEnemyWindup(en)) {
+                    pushCombatText(en.x, en.y - 16, '⚡ RAILGUN NGẮT CHIÊU!', '#FDE047', 1.12);
+                    playSynthFx('interrupt', soundEnabled, audioCtxRef);
+                  }
                   emitParticles(en.x, en.y, profile.visualTier >= 3 ? '#FDE047' : '#E879F9', 14, 175, 1.2);
                   const res = applyDamageToEnemy(en, beamHitDmg, {
                     armorPierce: profile.armorPierce,
@@ -3504,7 +3985,7 @@ export function PrismTdGameSection({
                 damage: profile.projectilesPerShot === 3 ? Math.round(shotDmg * 0.5) : profile.projectilesPerShot === 2 ? Math.round(shotDmg * 0.68) : shotDmg,
                 armorPierce: profile.armorPierce,
                 shieldMult: profile.shieldMult,
-                splashRadius: 0,
+                splashRadius: profile.splashRadius,
                 pullForce: 0,
                 burnDps: profile.burnDps,
                 burnDuration: profile.burnDps > 0 ? 1.8 : 0,
@@ -3659,8 +4140,8 @@ export function PrismTdGameSection({
               .slice(0, profile.projectilesPerShot);
             const isOmega = (gun.variant ?? 'alpha') === 'omega';
             const zoneRadius = Math.round(profile.splashRadius * (isOmega ? 1.24 : 1.0));
-            const zoneLife = isOmega ? 5.4 : 4.1;
-            const shredPct = gun.level >= 5 ? 0.35 : 0.24;
+            const zoneLife = isOmega ? 5.6 : 4.2;
+            const shredPct = gun.level >= MAX_GUN_LEVEL ? 0.45 : gun.level >= 5 ? 0.35 : gun.level >= 3 ? 0.3 : 0.22;
 
             for (const oTarget of pillarTargets) {
               s.orbitalBeams.push({
@@ -3674,13 +4155,13 @@ export function PrismTdGameSection({
               s.impactFlashes.push({
                 x: oTarget.x,
                 y: oTarget.y,
-                radius: Math.min(58, profile.splashRadius * 0.78),
+                radius: Math.min(64, profile.splashRadius * 0.8),
                 alpha: 1,
                 color: '#FB923C',
                 spikes: 7,
                 rot: s.animTime,
               });
-              spawnCrater(oTarget.x, oTarget.y, Math.min(48, zoneRadius * 0.75), 'scorch');
+              spawnCrater(oTarget.x, oTarget.y, Math.min(52, zoneRadius * 0.78), 'scorch');
               emitParticles(oTarget.x, oTarget.y, '#FDBA74', 18, 165, 1.25);
 
               if (s.orbitalZones.length >= 12) s.orbitalZones.shift();
@@ -3690,7 +4171,7 @@ export function PrismTdGameSection({
                 x: oTarget.x,
                 y: oTarget.y,
                 radius: zoneRadius,
-                dps: Math.max(32, Math.round(profile.burnDps * overdriveDmgMult * teamBuff.damageMult)),
+                dps: Math.max(36, Math.round(profile.burnDps * overdriveDmgMult * teamBuff.damageMult)),
                 armorPierce: profile.armorPierce,
                 shieldMult: profile.shieldMult,
                 armorShred: shredPct,
@@ -3703,18 +4184,22 @@ export function PrismTdGameSection({
                 const dist = Math.hypot(en.x - oTarget.x, en.y - oTarget.y);
                 if (dist <= profile.splashRadius + en.radius) {
                   const isBoss = en.kind === 'boss' || en.kind === 'super_boss';
-                  const bossMult = gun.level >= 5 && isBoss ? 1.38 : 1;
-                  const centerRatio = en.id === oTarget.id || dist < 26 ? 1 : 0.68;
+                  const bossMult = gun.level >= 5 && isBoss ? 1.42 : 1;
+                  const centerRatio = en.id === oTarget.id || dist < 26 ? (gun.level >= MAX_GUN_LEVEL ? 1.45 : 1) : 0.68;
                   const maxHpBurn =
                     en.id === oTarget.id
                       ? Math.min(
-                          Math.round(shotDmg * 1.15),
-                          Math.round(en.maxHp * (gun.level >= 5 ? 0.06 : 0.035))
+                          Math.round(shotDmg * 1.45),
+                          Math.round(en.maxHp * (gun.level >= 5 ? 0.08 : 0.04))
                         )
                       : 0;
+                  if (gun.level >= MAX_GUN_LEVEL && interruptEnemyWindup(en)) {
+                    pushCombatText(en.x, en.y - 16, '☄ THIÊN PHẠT NGẮT CHIÊU!', '#FDBA74', 1.1);
+                    playSynthFx('interrupt', soundEnabled, audioCtxRef);
+                  }
                   const pillarDmg = Math.round(shotDmg * centerRatio * bossMult) + maxHpBurn;
                   en.armorShred = Math.max(en.armorShred, shredPct);
-                  en.burnTimer = Math.max(en.burnTimer, 2.8);
+                  en.burnTimer = Math.max(en.burnTimer, 3.0);
                   en.burnDps = Math.max(en.burnDps, profile.burnDps);
                   const res = applyDamageToEnemy(en, pillarDmg, {
                     armorPierce: profile.armorPierce,
@@ -4108,6 +4593,390 @@ export function PrismTdGameSection({
               });
             }
             playSynthFx('astral_ark', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'prism_refract') {
+            const rainbowCols = ['#38BDF8', '#A855F7', '#F43F5E', '#FACC15', '#34D399'];
+            const maxRefracts = profile.chainCount + teamBuff.bonusMultishot;
+            s.railBeams.push({
+              x1: origin.x + Math.cos(gun.aimAngle) * 18,
+              y1: origin.y + Math.sin(gun.aimAngle) * 18,
+              x2: target.x,
+              y2: target.y,
+              alpha: 1.05,
+              color: profile.visualTier === 4 ? '#FDE047' : '#38BDF8',
+              visualTier: profile.visualTier,
+              variant: 'prism_refract',
+            });
+            s.muzzleFlashes.push({
+              x: origin.x + Math.cos(gun.aimAngle) * 18,
+              y: origin.y + Math.sin(gun.aimAngle) * 18,
+              angle: gun.aimAngle,
+              radius: 20 + profile.visualTier * 2,
+              alpha: 0.95,
+              color: '#38BDF8',
+            });
+            const hitIds = new Set<number>([target.id]);
+            let cur: TdEnemy | null = target;
+            for (let hop = 0; hop <= maxRefracts && cur; hop++) {
+              const hopDmg = Math.round(shotDmg * Math.max(0.45, 1 - hop * 0.12));
+              cur.markedTimer = Math.max(cur.markedTimer, 3.2);
+              cur.markedBonus = Math.max(cur.markedBonus, profile.brittleBonus);
+              const res = applyDamageToEnemy(cur, hopDmg, {
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+              });
+              recordDamageTelemetry(cur, res.actualDamage, gun.id, 0.045);
+              emitParticles(cur.x, cur.y, rainbowCols[hop % rainbowCols.length], 6, 115, 0.95);
+              if (hop === 0 && didCrit && res.actualDamage > 0) {
+                pushCombatText(cur.x, cur.y - 10, `KHÚC XẠ! -${Math.round(res.actualDamage)}`, '#38BDF8', 1.04);
+              }
+              if (res.killed) recordKill(cur, gun.id);
+
+              if (hop === 0 && profile.splashRadius > 0) {
+                s.impactFlashes.push({
+                  x: cur.x,
+                  y: cur.y,
+                  radius: profile.splashRadius * 0.7,
+                  alpha: 0.9,
+                  color: '#A855F7',
+                  spikes: 6,
+                  rot: s.animTime,
+                });
+                const shatterDmg = Math.round(shotDmg * 0.42);
+                for (const near of liveEnemies) {
+                  if (near.id === cur.id || near.hp <= 0 || near.koTimer > 0) continue;
+                  if (Math.hypot(near.x - cur.x, near.y - cur.y) <= profile.splashRadius + near.radius) {
+                    const sRes = applyDamageToEnemy(near, shatterDmg, {
+                      armorPierce: profile.armorPierce,
+                      shieldMult: profile.shieldMult,
+                    });
+                    recordDamageTelemetry(near, sRes.actualDamage, gun.id, 0);
+                    if (sRes.killed) recordKill(near, gun.id);
+                  }
+                }
+              }
+
+              if (hop >= maxRefracts) break;
+              let nextHop: TdEnemy | null = null;
+              let bestD = 195 * 195;
+              for (const cand of liveEnemies) {
+                if (hitIds.has(cand.id) || cand.hp <= 0 || cand.koTimer > 0) continue;
+                const dSq = (cand.x - cur.x) ** 2 + (cand.y - cur.y) ** 2;
+                if (dSq <= bestD) {
+                  bestD = dSq;
+                  nextHop = cand;
+                }
+              }
+              if (nextHop) {
+                hitIds.add(nextHop.id);
+                s.railBeams.push({
+                  x1: cur.x,
+                  y1: cur.y,
+                  x2: nextHop.x,
+                  y2: nextHop.y,
+                  alpha: 0.95,
+                  color: rainbowCols[(hop + 1) % rainbowCols.length],
+                  visualTier: profile.visualTier,
+                  variant: 'prism_refract',
+                });
+              }
+              cur = nextHop;
+            }
+            playSynthFx('prism_refract', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'hyperion') {
+            const count = profile.projectilesPerShot + teamBuff.bonusMultishot;
+            const perDmg = count > 1 ? Math.round(shotDmg * 0.72) : shotDmg;
+            const spd = 360 + gun.level * 12;
+            for (let b = 0; b < count; b++) {
+              const offsetAngle = count === 1 ? 0 : (b - (count - 1) / 2) * 0.14;
+              const shotAngle = gun.aimAngle + offsetAngle;
+              const muzzleX = origin.x + Math.cos(shotAngle) * 24;
+              const muzzleY = origin.y + Math.sin(shotAngle) * 24;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'hyperion_shell',
+                sourceGunId: gun.id,
+                x: muzzleX,
+                y: muzzleY,
+                vx: Math.cos(shotAngle) * spd,
+                vy: Math.sin(shotAngle) * spd,
+                targetId: target.id,
+                damage: perDmg,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: profile.splashRadius,
+                pullForce: profile.pullForce,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0.2,
+                pierceLeft: 0,
+                executeThreshold: profile.brittleBonus,
+                life: 2.1,
+                maxLife: 2.1,
+                age: 0,
+                speed: spd,
+                color: '#F43F5E',
+                visualTier: profile.visualTier,
+                isCrit: didCrit,
+                trail: [],
+              });
+              s.muzzleFlashes.push({
+                x: muzzleX,
+                y: muzzleY,
+                angle: shotAngle,
+                radius: 26 + profile.visualTier * 3,
+                alpha: 1,
+                color: '#F43F5E',
+              });
+            }
+            playSynthFx('hyperion', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'aurora_spire') {
+            const maxPylons = profile.projectilesPerShot;
+            const gunPylons = s.auroraPylons.filter((p) => p.sourceGunId === gun.id);
+            const nearby = gunPylons.find((p) => Math.hypot(p.x - target.x, p.y - target.y) <= 60);
+            const pylonDps = Math.round(shotDmg * 0.88);
+            if (nearby) {
+              nearby.life = 6.2;
+              nearby.radius = profile.splashRadius;
+              nearby.dps = Math.max(nearby.dps, pylonDps);
+              nearby.visualTier = profile.visualTier;
+            } else {
+              if (gunPylons.length >= maxPylons) {
+                const oldIdx = s.auroraPylons.findIndex((p) => p.sourceGunId === gun.id);
+                if (oldIdx >= 0) s.auroraPylons.splice(oldIdx, 1);
+              }
+              s.auroraPylons.push({
+                id: s.nextProjId++,
+                sourceGunId: gun.id,
+                x: target.x,
+                y: target.y,
+                radius: profile.splashRadius,
+                dps: pylonDps,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                life: 6.2,
+                maxLife: 6.2,
+                pulseTimer: 0.04,
+                visualTier: profile.visualTier,
+                variant: gun.variant ?? 'alpha',
+              });
+            }
+            s.muzzleFlashes.push({
+              x: origin.x,
+              y: origin.y,
+              angle: gun.aimAngle,
+              radius: 20 + profile.visualTier * 2,
+              alpha: 0.9,
+              color: '#2DD4BF',
+            });
+            playSynthFx('aurora_spire', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'aurelia_cannon') {
+            const count = profile.projectilesPerShot + teamBuff.bonusMultishot;
+            const perLanceDmg = count >= 3 ? Math.round(shotDmg * 0.56) : count === 2 ? Math.round(shotDmg * 0.72) : shotDmg;
+            const spd = 590;
+            for (let l = 0; l < count; l++) {
+              const offsetAngle = count === 1 ? 0 : (l - (count - 1) / 2) * 0.14;
+              const shotAngle = gun.aimAngle + offsetAngle;
+              const muzzleX = origin.x + Math.cos(shotAngle) * 22;
+              const muzzleY = origin.y + Math.sin(shotAngle) * 22;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'golden_lance',
+                sourceGunId: gun.id,
+                x: muzzleX,
+                y: muzzleY,
+                vx: Math.cos(shotAngle) * spd,
+                vy: Math.sin(shotAngle) * spd,
+                targetId: target.id,
+                damage: perLanceDmg,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: gun.level >= 5 ? profile.splashRadius : 0,
+                pullForce: 0,
+                burnDps: profile.burnDps,
+                burnDuration: profile.burnDps > 0 ? 2.5 : 0,
+                slowAmount: 0,
+                pierceLeft: profile.chainCount,
+                hitIds: [],
+                bountyGold: gun.level >= MAX_GUN_LEVEL ? 6 : gun.level >= 3 ? 3 : 0,
+                life: 1.4,
+                maxLife: 1.4,
+                age: 0,
+                speed: spd,
+                color: '#FACC15',
+                visualTier: profile.visualTier,
+                isCrit: didCrit,
+                trail: [],
+              });
+              s.muzzleFlashes.push({
+                x: muzzleX,
+                y: muzzleY,
+                angle: shotAngle,
+                radius: 22 + profile.visualTier * 2.5,
+                alpha: 1,
+                color: '#FACC15',
+              });
+            }
+            playSynthFx('aurelia_cannon', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'paradox_scythe') {
+            const count = profile.projectilesPerShot + teamBuff.bonusMultishot;
+            const perScytheDmg = count >= 3 ? Math.round(shotDmg * 0.56) : count === 2 ? Math.round(shotDmg * 0.72) : shotDmg;
+            const spd = 390 + gun.level * 10;
+            const scytheLife = Math.max(1.5, (profile.rangePx * 2.15) / spd);
+            for (let sc = 0; sc < count; sc++) {
+              const offsetAngle = count === 1 ? 0 : (sc - (count - 1) / 2) * 0.24;
+              const shotAngle = gun.aimAngle + offsetAngle;
+              const muzzleX = origin.x + Math.cos(shotAngle) * 18;
+              const muzzleY = origin.y + Math.sin(shotAngle) * 18;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'paradox_scythe',
+                sourceGunId: gun.id,
+                x: muzzleX,
+                y: muzzleY,
+                vx: Math.cos(shotAngle) * spd,
+                vy: Math.sin(shotAngle) * spd,
+                originX: origin.x,
+                originY: origin.y,
+                isReturning: false,
+                targetId: target.id,
+                damage: perScytheDmg,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: gun.level >= 5 ? profile.splashRadius : 0,
+                pullForce: profile.pullForce,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0.28,
+                pierceLeft: 12,
+                hitIds: [],
+                life: scytheLife,
+                maxLife: scytheLife,
+                age: 0,
+                speed: spd,
+                color: '#67E8F9',
+                visualTier: profile.visualTier,
+                isCrit: didCrit,
+                trail: [],
+              });
+              s.muzzleFlashes.push({
+                x: muzzleX,
+                y: muzzleY,
+                angle: shotAngle,
+                radius: 20 + profile.visualTier * 2.5,
+                alpha: 0.96,
+                color: '#67E8F9',
+              });
+            }
+            playSynthFx('paradox_scythe', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'nebula_core') {
+            const count = profile.projectilesPerShot + teamBuff.bonusMultishot;
+            const inRangeSorted = [...liveEnemies]
+              .filter((e) => (e.x - origin.x) ** 2 + (e.y - origin.y) ** 2 <= rangeSq)
+              .sort((a, b) => b.hp + b.shield - (a.hp + a.shield));
+            const perMeteorDmg =
+              count >= 5 ? Math.round(shotDmg * 0.44) : count >= 3 ? Math.round(shotDmg * 0.58) : Math.round(shotDmg * 0.78);
+            const spd = 330 + gun.level * 10;
+            for (let nb = 0; nb < count; nb++) {
+              const lock = inRangeSorted[nb % Math.max(1, inRangeSorted.length)] ?? target;
+              const offsetAngle = count === 1 ? 0 : (nb - (count - 1) / 2) * 0.24;
+              const shotAngle = gun.aimAngle + offsetAngle;
+              const muzzleX = origin.x + Math.cos(shotAngle) * 20;
+              const muzzleY = origin.y + Math.sin(shotAngle) * 20;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'nebula_meteor',
+                sourceGunId: gun.id,
+                x: muzzleX,
+                y: muzzleY,
+                vx: Math.cos(shotAngle) * spd,
+                vy: Math.sin(shotAngle) * spd,
+                targetId: lock.id,
+                damage: perMeteorDmg,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: profile.splashRadius,
+                pullForce: 0,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: 0.26,
+                pierceLeft: 0,
+                spawnCluster: gun.level >= 5,
+                supernovaBrandAmp: profile.brittleBonus,
+                life: 2.7,
+                maxLife: 2.7,
+                age: 0,
+                speed: spd,
+                color: '#F0ABFC',
+                visualTier: profile.visualTier,
+                isCrit: didCrit,
+                trail: [],
+              });
+              s.muzzleFlashes.push({
+                x: muzzleX,
+                y: muzzleY,
+                angle: shotAngle,
+                radius: 22 + profile.visualTier * 2.5,
+                alpha: 1,
+                color: '#F0ABFC',
+              });
+            }
+            playSynthFx('nebula_core', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'aegis_bastion') {
+            gun.shotsFired = (gun.shotsFired ?? 0) + 1;
+            const isOmega = (gun.variant ?? 'alpha') === 'omega';
+            const count = profile.projectilesPerShot + teamBuff.bonusMultishot;
+            const perLanceDmg =
+              count >= 3 ? Math.round(shotDmg * 0.58) : count === 2 ? Math.round(shotDmg * 0.74) : shotDmg;
+            const spd = 560;
+            const lanceColor = isOmega ? '#FDE047' : '#38BDF8';
+            for (let l = 0; l < count; l++) {
+              const offsetAngle = count === 1 ? 0 : (l - (count - 1) / 2) * 0.15;
+              const shotAngle = gun.aimAngle + offsetAngle;
+              const muzzleX = origin.x + Math.cos(shotAngle) * 20;
+              const muzzleY = origin.y + Math.sin(shotAngle) * 20;
+              s.projectiles.push({
+                id: s.nextProjId++,
+                kind: 'aegis_lance',
+                sourceGunId: gun.id,
+                x: muzzleX,
+                y: muzzleY,
+                vx: Math.cos(shotAngle) * spd,
+                vy: Math.sin(shotAngle) * spd,
+                targetId: target.id,
+                damage: perLanceDmg,
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult,
+                splashRadius: profile.splashRadius,
+                pullForce: profile.pullForce,
+                burnDps: 0,
+                burnDuration: 0,
+                slowAmount: profile.slowPct,
+                pierceLeft: profile.chainCount,
+                hitIds: [],
+                supernovaBrandAmp: profile.brittleBonus,
+                life: 1.4,
+                maxLife: 1.4,
+                age: 0,
+                speed: spd,
+                color: lanceColor,
+                visualTier: profile.visualTier,
+                isCrit: didCrit,
+                trail: [],
+              });
+              s.muzzleFlashes.push({
+                x: muzzleX,
+                y: muzzleY,
+                angle: shotAngle,
+                radius: 22 + profile.visualTier * 2.5,
+                alpha: 0.96,
+                color: lanceColor,
+              });
+            }
+            if (gun.shotsFired % (isOmega ? 3 : 4) === 0 && s.coreShield < s.maxCoreShield) {
+              s.coreShield = Math.min(s.maxCoreShield, s.coreShield + 1);
+              pushCombatText(origin.x, origin.y - 16, '🛡️ +1 KHIÊN LÕI', '#38BDF8', 0.96);
+            }
+            playSynthFx('aegis_bastion', soundEnabled, audioCtxRef);
           }
         }
 
@@ -4125,7 +4994,8 @@ export function PrismTdGameSection({
           const isHoming =
             pr.kind === 'missile' ||
             pr.kind === 'mortar' ||
-            pr.kind === 'tempest_orb';
+            pr.kind === 'tempest_orb' ||
+            pr.kind === 'nebula_meteor';
           if (isHoming) {
             let tgt = s.enemies.find((e) => e.id === pr.targetId && e.hp > 0 && e.koTimer <= 0);
             if (!tgt) {
@@ -4140,7 +5010,7 @@ export function PrismTdGameSection({
               }
               if (tgt) pr.targetId = tgt.id;
             }
-            const steerDelay = pr.kind === 'missile' ? 0.07 : 0;
+            const steerDelay = pr.kind === 'missile' || pr.kind === 'nebula_meteor' ? 0.07 : 0;
             if (tgt && pr.age >= steerDelay) {
               const targetAngle = Math.atan2(tgt.y - pr.y, tgt.x - pr.x);
               const curAngle = Math.atan2(pr.vy, pr.vx);
@@ -4152,10 +5022,34 @@ export function PrismTdGameSection({
             }
           }
 
-          if ((pr.kind === 'missile' || pr.kind === 'mortar' || pr.kind === 'supernova_orb') && Math.random() < 0.65) {
+          // Boomerang return steering for Paradox Scythe
+          let scytheReturnedHome = false;
+          if (pr.kind === 'paradox_scythe') {
+            const ox = pr.originX ?? pr.x;
+            const oy = pr.originY ?? pr.y;
+            if (!pr.isReturning) {
+              if ((pr.age ?? 0) >= pr.maxLife * 0.48) {
+                pr.isReturning = true;
+                pr.hitIds = [];
+              }
+            } else {
+              const dx = ox - pr.x;
+              const dy = oy - pr.y;
+              const dist = Math.hypot(dx, dy);
+              if (dist <= 18) {
+                scytheReturnedHome = true;
+              } else {
+                pr.vx = (dx / dist) * pr.speed;
+                pr.vy = (dy / dist) * pr.speed;
+              }
+            }
+          }
+          if (scytheReturnedHome) continue;
+
+          if ((pr.kind === 'missile' || pr.kind === 'mortar' || pr.kind === 'supernova_orb' || pr.kind === 'nebula_meteor') && Math.random() < 0.65) {
             emitParticles(pr.x, pr.y, pr.color, 1, 36, pr.visualTier >= 3 ? 0.95 : 0.75);
-          } else if (pr.kind === 'sawblade' && pr.visualTier >= 3 && Math.random() < 0.45) {
-            emitParticles(pr.x, pr.y, '#FDE047', 1, 45, 0.75);
+          } else if ((pr.kind === 'sawblade' || pr.kind === 'paradox_scythe') && pr.visualTier >= 3 && Math.random() < 0.45) {
+            emitParticles(pr.x, pr.y, pr.kind === 'paradox_scythe' ? '#67E8F9' : '#FDE047', 1, 45, 0.75);
           }
 
           pr.x += pr.vx * simDt;
@@ -4212,6 +5106,23 @@ export function PrismTdGameSection({
                   recordDamageTelemetry(en, res.actualDamage, pr.sourceGunId, 0.045);
                   if (res.killed) recordKill(en, pr.sourceGunId);
                 }
+              }
+              if ((sourceGun?.level ?? 0) >= MAX_GUN_LEVEL) {
+                if (s.orbitalZones.length >= 12) s.orbitalZones.shift();
+                s.orbitalZones.push({
+                  id: s.nextProjId++,
+                  sourceGunId: pr.sourceGunId,
+                  x: pr.x,
+                  y: pr.y,
+                  radius: Math.round(pr.splashRadius * 0.75),
+                  dps: Math.max(28, pr.burnDps),
+                  armorPierce: pr.armorPierce,
+                  shieldMult: pr.shieldMult,
+                  armorShred: 0.25,
+                  slowPct: pr.slowAmount,
+                  life: 2.6,
+                  maxLife: 2.6,
+                });
               }
               playSynthFx('explosion', soundEnabled, audioCtxRef);
               continue;
@@ -4272,6 +5183,296 @@ export function PrismTdGameSection({
               }
               playSynthFx('explosion', soundEnabled, audioCtxRef);
               continue;
+            } else if (pr.kind === 'hyperion_shell') {
+              spawnCrater(pr.x, pr.y, Math.min(54, pr.splashRadius * 0.65), 'scorch');
+              s.impactFlashes.push({
+                x: pr.x,
+                y: pr.y,
+                radius: Math.min(64, Math.max(32, pr.splashRadius * 0.62)),
+                alpha: 1,
+                color: '#F43F5E',
+                spikes: 8,
+                rot: s.animTime,
+              });
+              emitParticles(pr.x, pr.y, '#FB7185', 18, 165, 1.25);
+              const execThresh = pr.executeThreshold ?? 0;
+              for (const en of s.enemies) {
+                if (en.hp <= 0 || en.koTimer > 0) continue;
+                const dist = Math.hypot(en.x - pr.x, en.y - pr.y);
+                if (dist <= pr.splashRadius + en.radius) {
+                  en.armorShred = Math.max(en.armorShred, 0.28);
+                  const isBoss = en.kind === 'boss' || en.kind === 'super_boss';
+                  const execMult = execThresh > 0 && isBoss ? 1.45 : 1;
+                  const dmg = Math.round(pr.damage * (dist < 32 ? 1 : 0.72) * execMult);
+                  const res = applyDamageToEnemy(en, dmg, {
+                    armorPierce: pr.armorPierce,
+                    shieldMult: pr.shieldMult,
+                  });
+                  recordDamageTelemetry(en, res.actualDamage, pr.sourceGunId, 0.045);
+                  if (res.killed) {
+                    recordKill(en, pr.sourceGunId);
+                  } else if (
+                    execThresh > 0 &&
+                    !isBoss &&
+                    en.hp > 0 &&
+                    en.hp / en.maxHp <= execThresh
+                  ) {
+                    const remainingHp = en.hp;
+                    en.hp = 0;
+                    en.koTimer = 0.28;
+                    recordDamageTelemetry(en, remainingHp, pr.sourceGunId, 0);
+                    recordKill(en, pr.sourceGunId);
+                    pushCombatText(en.x, en.y - 12, '☠ HÀNH QUYẾT!', '#FB7185', 1.06);
+                  }
+                }
+              }
+              playSynthFx('explosion', soundEnabled, audioCtxRef);
+              continue;
+            } else if (pr.kind === 'golden_lance') {
+              const res = applyDamageToEnemy(hitEnemy, pr.damage, {
+                armorPierce: pr.armorPierce,
+                shieldMult: pr.shieldMult,
+              });
+              if (pr.burnDps > 0) {
+                hitEnemy.burnTimer = Math.max(hitEnemy.burnTimer, pr.burnDuration);
+                hitEnemy.burnDps = Math.max(hitEnemy.burnDps, pr.burnDps);
+              }
+              const isHighValue =
+                hitEnemy.isElite || hitEnemy.kind === 'boss' || hitEnemy.kind === 'super_boss';
+              if (isHighValue && (pr.bountyGold ?? 0) > 0) {
+                s.energy += pr.bountyGold!;
+                pushCombatText(hitEnemy.x, hitEnemy.y - 14, `+${pr.bountyGold}⚡`, '#FACC15', 0.96);
+              }
+              recordDamageTelemetry(hitEnemy, res.actualDamage, pr.sourceGunId, 0.045);
+              emitParticles(pr.x, pr.y, '#FACC15', 7, 110, 0.95);
+              if (res.killed) recordKill(hitEnemy, pr.sourceGunId);
+
+              if (isHighValue && pr.splashRadius > 0) {
+                s.impactFlashes.push({
+                  x: pr.x,
+                  y: pr.y,
+                  radius: Math.min(48, pr.splashRadius * 0.65),
+                  alpha: 0.95,
+                  color: '#FDE047',
+                  spikes: 6,
+                  rot: s.animTime,
+                });
+                const burstDmg = Math.round(pr.damage * 0.65);
+                for (const near of s.enemies) {
+                  if (near.id === hitEnemy.id || near.hp <= 0 || near.koTimer > 0) continue;
+                  if (Math.hypot(near.x - pr.x, near.y - pr.y) <= pr.splashRadius + near.radius) {
+                    const nRes = applyDamageToEnemy(near, burstDmg, {
+                      armorPierce: pr.armorPierce,
+                      shieldMult: pr.shieldMult,
+                    });
+                    recordDamageTelemetry(near, nRes.actualDamage, pr.sourceGunId, 0);
+                    if (nRes.killed) recordKill(near, pr.sourceGunId);
+                  }
+                }
+              }
+
+              if (pr.pierceLeft > 0) {
+                pr.pierceLeft -= 1;
+                if (!pr.hitIds) pr.hitIds = [];
+                pr.hitIds.push(hitEnemy.id);
+              } else {
+                continue;
+              }
+            } else if (pr.kind === 'aegis_lance') {
+              const isBoss = hitEnemy.kind === 'boss' || hitEnemy.kind === 'super_boss';
+              const srcLv = sourceGun?.level ?? 1;
+              const bossHitMult = srcLv >= 5 && isBoss ? 1.35 : 1;
+              const res = applyDamageToEnemy(hitEnemy, Math.round(pr.damage * bossHitMult), {
+                armorPierce: pr.armorPierce,
+                shieldMult: pr.shieldMult,
+              });
+              hitEnemy.slowTimer = Math.max(hitEnemy.slowTimer, 1.8);
+              hitEnemy.slowFactor = Math.min(hitEnemy.slowFactor || 1, 1 - pr.slowAmount);
+              hitEnemy.brittleBonus = Math.max(hitEnemy.brittleBonus, pr.supernovaBrandAmp ?? 0.14);
+              hitEnemy.armorShred = Math.max(hitEnemy.armorShred, srcLv >= 5 ? 0.22 : 0.12);
+              if (
+                pr.pullForce > 0 &&
+                hitEnemy.kind !== 'boss' &&
+                hitEnemy.kind !== 'super_boss' &&
+                hitEnemy.kind !== 'juggernaut'
+              ) {
+                const backWp = s.map.path[Math.max(0, hitEnemy.waypointIndex - 1)] ?? s.map.path[0];
+                const backPt = gridToWorldCenter(backWp.col, backWp.row);
+                pullEnemyAlongTrack(hitEnemy, s.map, backPt.x, backPt.y, pr.pullForce);
+              }
+              if (srcLv >= MAX_GUN_LEVEL && interruptEnemyWindup(hitEnemy)) {
+                pushCombatText(hitEnemy.x, hitEnemy.y - 16, '🛡️ KHIÊN AEGIS NGẮT CHIÊU!', '#38BDF8', 1.08);
+                playSynthFx('interrupt', soundEnabled, audioCtxRef);
+              }
+              recordDamageTelemetry(hitEnemy, res.actualDamage, pr.sourceGunId, 0.045);
+              emitParticles(pr.x, pr.y, pr.color, 9, 130, 1.0);
+              if (res.killed) recordKill(hitEnemy, pr.sourceGunId);
+
+              if (pr.splashRadius > 0) {
+                s.shockwaves.push({
+                  x: pr.x,
+                  y: pr.y,
+                  radius: 10,
+                  maxRadius: pr.splashRadius,
+                  alpha: 0.85,
+                  color: pr.color,
+                  lineWidth: 2.4,
+                });
+                const waveDmg = Math.round(pr.damage * 0.56);
+                for (const near of s.enemies) {
+                  if (near.id === hitEnemy.id || near.hp <= 0 || near.koTimer > 0) continue;
+                  if (Math.hypot(near.x - pr.x, near.y - pr.y) <= pr.splashRadius + near.radius) {
+                    near.slowTimer = Math.max(near.slowTimer, 1.4);
+                    near.slowFactor = Math.min(near.slowFactor || 1, 1 - pr.slowAmount);
+                    near.brittleBonus = Math.max(near.brittleBonus, pr.supernovaBrandAmp ?? 0.14);
+                    if (
+                      pr.pullForce > 0 &&
+                      near.kind !== 'boss' &&
+                      near.kind !== 'super_boss' &&
+                      near.kind !== 'juggernaut'
+                    ) {
+                      const backWp = s.map.path[Math.max(0, near.waypointIndex - 1)] ?? s.map.path[0];
+                      const backPt = gridToWorldCenter(backWp.col, backWp.row);
+                      pullEnemyAlongTrack(near, s.map, backPt.x, backPt.y, Math.round(pr.pullForce * 0.72));
+                    }
+                    const nRes = applyDamageToEnemy(near, waveDmg, {
+                      armorPierce: pr.armorPierce,
+                      shieldMult: pr.shieldMult,
+                    });
+                    recordDamageTelemetry(near, nRes.actualDamage, pr.sourceGunId, 0);
+                    if (nRes.killed) recordKill(near, pr.sourceGunId);
+                  }
+                }
+                pr.splashRadius = 0; // trigger counter-wave once per lance volley
+              }
+
+              if (pr.pierceLeft > 0) {
+                pr.pierceLeft -= 1;
+                if (!pr.hitIds) pr.hitIds = [];
+                pr.hitIds.push(hitEnemy.id);
+              } else {
+                continue;
+              }
+            } else if (pr.kind === 'paradox_scythe') {
+              const res = applyDamageToEnemy(hitEnemy, pr.damage, {
+                armorPierce: pr.armorPierce,
+                shieldMult: pr.shieldMult,
+              });
+              hitEnemy.slowTimer = Math.max(hitEnemy.slowTimer, 1.5);
+              hitEnemy.slowFactor = Math.min(hitEnemy.slowFactor || 1, 1 - pr.slowAmount);
+              if (pr.pullForce > 0 && hitEnemy.kind !== 'boss' && hitEnemy.kind !== 'super_boss' && hitEnemy.kind !== 'juggernaut') {
+                const backWp = s.map.path[Math.max(0, hitEnemy.waypointIndex - 1)] ?? s.map.path[0];
+                const backPt = gridToWorldCenter(backWp.col, backWp.row);
+                pullEnemyAlongTrack(hitEnemy, s.map, backPt.x, backPt.y, pr.pullForce);
+              }
+              if ((sourceGun?.level ?? 0) >= MAX_GUN_LEVEL && interruptEnemyWindup(hitEnemy)) {
+                pushCombatText(hitEnemy.x, hitEnemy.y - 16, '✦ NGHỊCH LÝ NGẮT CHIÊU!', '#67E8F9', 1.06);
+                playSynthFx('interrupt', soundEnabled, audioCtxRef);
+              }
+              recordDamageTelemetry(hitEnemy, res.actualDamage, pr.sourceGunId, 0.045);
+              emitParticles(pr.x, pr.y, '#67E8F9', 8, 125, 1.0);
+              if (res.killed) recordKill(hitEnemy, pr.sourceGunId);
+
+              if (pr.splashRadius > 0) {
+                s.chronoSlashes.push({
+                  x: pr.x,
+                  y: pr.y,
+                  angle: Math.atan2(pr.vy, pr.vx),
+                  length: pr.splashRadius * 0.8,
+                  alpha: 0.9,
+                  color: '#67E8F9',
+                  isCrit: pr.isCrit,
+                });
+                const riftDmg = Math.round(pr.damage * 0.45);
+                for (const near of s.enemies) {
+                  if (near.id === hitEnemy.id || near.hp <= 0 || near.koTimer > 0) continue;
+                  if (Math.hypot(near.x - pr.x, near.y - pr.y) <= pr.splashRadius + near.radius) {
+                    const sRes = applyDamageToEnemy(near, riftDmg, {
+                      armorPierce: pr.armorPierce,
+                      shieldMult: pr.shieldMult,
+                    });
+                    recordDamageTelemetry(near, sRes.actualDamage, pr.sourceGunId, 0);
+                    if (sRes.killed) recordKill(near, pr.sourceGunId);
+                  }
+                }
+              }
+
+              if (!pr.hitIds) pr.hitIds = [];
+              pr.hitIds.push(hitEnemy.id);
+              if (pr.pierceLeft > 0) {
+                pr.pierceLeft -= 1;
+              } else {
+                continue;
+              }
+            } else if (pr.kind === 'nebula_meteor') {
+              spawnCrater(pr.x, pr.y, Math.min(54, pr.splashRadius * 0.6), 'plasma');
+              s.impactFlashes.push({
+                x: pr.x,
+                y: pr.y,
+                radius: Math.min(68, Math.max(36, pr.splashRadius * 0.62)),
+                alpha: 1,
+                color: '#F0ABFC',
+                spikes: 9,
+                rot: s.animTime,
+              });
+              emitParticles(pr.x, pr.y, '#F0ABFC', 20, 175, 1.25);
+              const bossPct = pr.supernovaBrandAmp ?? 0.025;
+              for (const en of s.enemies) {
+                if (en.hp <= 0 || en.koTimer > 0) continue;
+                const dist = Math.hypot(en.x - pr.x, en.y - pr.y);
+                if (dist <= pr.splashRadius + en.radius) {
+                  en.slowTimer = Math.max(en.slowTimer, 1.6);
+                  en.slowFactor = Math.min(en.slowFactor || 1, 1 - pr.slowAmount);
+                  const isBoss = en.kind === 'boss' || en.kind === 'super_boss';
+                  const pctDmg =
+                    isBoss && dist <= 52
+                      ? Math.min(Math.round(pr.damage * 1.4), Math.round(en.maxHp * bossPct))
+                      : 0;
+                  const dmg = Math.round(pr.damage * (dist < 38 ? 1 : 0.72)) + pctDmg;
+                  const res = applyDamageToEnemy(en, dmg, {
+                    armorPierce: pr.armorPierce,
+                    shieldMult: pr.shieldMult,
+                  });
+                  recordDamageTelemetry(en, res.actualDamage, pr.sourceGunId, 0.045);
+                  if (res.killed) recordKill(en, pr.sourceGunId);
+                }
+              }
+              if (pr.spawnCluster) {
+                const nearCands = s.enemies.filter((e) => e.hp > 0 && e.koTimer <= 0 && e.id !== hitEnemy.id);
+                for (let c = 0; c < 2; c++) {
+                  const ca = c * Math.PI + Math.random() * 0.6;
+                  const shardTgt = nearCands[c % Math.max(1, nearCands.length)];
+                  s.projectiles.push({
+                    id: s.nextProjId++,
+                    kind: 'bomblet',
+                    sourceGunId: pr.sourceGunId,
+                    x: pr.x,
+                    y: pr.y,
+                    vx: Math.cos(ca) * 260,
+                    vy: Math.sin(ca) * 260,
+                    targetId: shardTgt?.id ?? -1,
+                    damage: Math.round(pr.damage * 0.36),
+                    armorPierce: pr.armorPierce,
+                    shieldMult: pr.shieldMult,
+                    splashRadius: 48,
+                    pullForce: 0,
+                    burnDps: 0,
+                    burnDuration: 0,
+                    slowAmount: 0,
+                    pierceLeft: 0,
+                    isClusterBomblet: true,
+                    life: 0.45,
+                    maxLife: 0.45,
+                    age: 0,
+                    speed: 260,
+                    color: '#F0ABFC',
+                    visualTier: pr.visualTier,
+                    trail: [],
+                  });
+                }
+              }
+              playSynthFx('explosion', soundEnabled, audioCtxRef);
+              continue;
             } else if (pr.kind === 'sawblade') {
               const res = applyDamageToEnemy(hitEnemy, pr.damage, {
                 armorPierce: pr.armorPierce,
@@ -4285,7 +5486,7 @@ export function PrismTdGameSection({
               s.impactFlashes.push({
                 x: pr.x,
                 y: pr.y,
-                radius: 14,
+                radius: pr.splashRadius > 0 ? Math.max(18, pr.splashRadius * 0.78) : 14,
                 alpha: 0.85,
                 color: pr.visualTier === 4 ? '#FDE047' : '#FB7185',
                 spikes: 4,
@@ -4293,6 +5494,21 @@ export function PrismTdGameSection({
               });
               emitParticles(pr.x, pr.y, '#F43F5E', 8, 120, 0.95);
               if (res.killed) recordKill(hitEnemy, pr.sourceGunId);
+
+              if (pr.splashRadius > 0) {
+                const sawSplashDmg = Math.round(pr.damage * 0.42);
+                for (const near of s.enemies) {
+                  if (near.id === hitEnemy.id || near.hp <= 0 || near.koTimer > 0) continue;
+                  if (Math.hypot(near.x - pr.x, near.y - pr.y) <= pr.splashRadius + near.radius) {
+                    const sRes = applyDamageToEnemy(near, sawSplashDmg, {
+                      armorPierce: pr.armorPierce,
+                      shieldMult: pr.shieldMult,
+                    });
+                    recordDamageTelemetry(near, sRes.actualDamage, pr.sourceGunId, 0);
+                    if (sRes.killed) recordKill(near, pr.sourceGunId);
+                  }
+                }
+              }
 
               pr.bounceLeft = (pr.bounceLeft ?? 1) - 1;
               if (!pr.hitIds) pr.hitIds = [];
@@ -4451,8 +5667,14 @@ export function PrismTdGameSection({
                   if (en.hp <= 0 || en.koTimer > 0) continue;
                   const dist = Math.hypot(en.x - pr.x, en.y - pr.y);
                   if (dist <= pr.splashRadius + en.radius) {
-                    if (pr.pullForce > 0 && dist > 6) {
-                      pullEnemyAlongTrack(en, s.map, pr.x, pr.y, pr.pullForce);
+                    if (pr.pullForce > 0 && en.kind !== 'boss' && en.kind !== 'super_boss' && en.kind !== 'juggernaut') {
+                      if (pr.kind === 'pellet') {
+                        const backWp = s.map.path[Math.max(0, en.waypointIndex - 1)] ?? s.map.path[0];
+                        const backPt = gridToWorldCenter(backWp.col, backWp.row);
+                        pullEnemyAlongTrack(en, s.map, backPt.x, backPt.y, pr.pullForce);
+                      } else if (dist > 6) {
+                        pullEnemyAlongTrack(en, s.map, pr.x, pr.y, pr.pullForce);
+                      }
                     }
                     const res = applyDamageToEnemy(en, Math.round(pr.damage * (en.id === hitEnemy.id ? 1 : 0.48)), {
                       armorPierce: pr.armorPierce,
@@ -4624,6 +5846,31 @@ export function PrismTdGameSection({
               }
             }
           }
+          for (const p2 of outcome.phase2Events) {
+            s.overheatEffects.push({
+              kind: 'phase2_surge',
+              x: p2.x,
+              y: p2.y,
+              radius: 175,
+              angle: s.animTime,
+              life: 1.0,
+              maxLife: 1.0,
+              color: p2.color,
+            });
+            s.shockwaves.push({
+              x: p2.x,
+              y: p2.y,
+              radius: 20,
+              maxRadius: 210,
+              alpha: 0.96,
+              color: p2.color,
+              lineWidth: 3.5,
+            });
+            emitParticles(p2.x, p2.y, p2.color, 34, 210, 1.45);
+            pushCombatText(p2.x, p2.y - 26, '☠ PHA 2: CUỒNG NỘ HƯ VÔ!', p2.color, 1.24);
+            setStatusNotice(`☠ ${p2.title} bước vào PHA 2 (<50% HP) · Hồi khiên & tăng tốc!`);
+            playSynthFx('wave', soundEnabled, audioCtxRef);
+          }
 
           for (const en of s.enemies) {
             if (en.koTimer >= 0.24 && beforeIds.has(en.id)) {
@@ -4638,15 +5885,66 @@ export function PrismTdGameSection({
             playSynthFx('kill', soundEnabled, audioCtxRef);
           }
 
+          if (s.waveActive && !s.outcome && s.maxCoreShield > 0) {
+            const shieldSpec = computeAegisCoreShieldSpec(s.guns, overdriveSkillMult);
+            s.maxCoreShield = shieldSpec.maxShield;
+            if (s.coreShield < s.maxCoreShield) {
+              s.aegisRechargeTimer += simDt;
+              if (s.aegisRechargeTimer >= shieldSpec.rechargeIntervalSec) {
+                s.aegisRechargeTimer = 0;
+                const beforeSh = s.coreShield;
+                s.coreShield = Math.min(s.maxCoreShield, s.coreShield + shieldSpec.rechargeAmount);
+                const gainedSh = s.coreShield - beforeSh;
+                if (gainedSh > 0) {
+                  const corePt = gridToWorldCenter(
+                    s.map.path[s.map.path.length - 1].col,
+                    s.map.path[s.map.path.length - 1].row
+                  );
+                  s.shockwaves.push({
+                    x: corePt.x,
+                    y: corePt.y,
+                    radius: 12,
+                    maxRadius: 68,
+                    alpha: 0.85,
+                    color: '#38BDF8',
+                    lineWidth: 2.5,
+                  });
+                  pushCombatText(corePt.x, corePt.y - 20, `🛡️ +${gainedSh} KHIÊN LÕI`, '#38BDF8', 1.05);
+                }
+              }
+            } else {
+              s.aegisRechargeTimer = 0;
+            }
+          }
+
           if (coreDamageTaken > 0) {
-            s.coreHp = Math.max(0, s.coreHp - coreDamageTaken);
-            s.shakeTrauma = Math.min(1, s.shakeTrauma + 0.55);
+            const shieldResult = applyCoreDamageWithShield(s.coreHp, s.coreShield, coreDamageTaken);
+            s.coreHp = shieldResult.nextCoreHp;
+            s.coreShield = shieldResult.nextCoreShield;
             const corePt = gridToWorldCenter(
               s.map.path[s.map.path.length - 1].col,
               s.map.path[s.map.path.length - 1].row
             );
-            emitParticles(corePt.x, corePt.y, '#F43F5E', 18, 145, 1.2);
-            playSynthFx('hurt', soundEnabled, audioCtxRef);
+            if (shieldResult.absorbed > 0) {
+              s.shockwaves.push({
+                x: corePt.x,
+                y: corePt.y,
+                radius: 14,
+                maxRadius: 84,
+                alpha: 0.96,
+                color: '#38BDF8',
+                lineWidth: 3.2,
+              });
+              emitParticles(corePt.x, corePt.y, '#38BDF8', 18, 145, 1.15);
+              pushCombatText(corePt.x, corePt.y - 22, `🛡️ CHẶN -${shieldResult.absorbed}!`, '#38BDF8', 1.14);
+            }
+            if (shieldResult.coreLoss > 0) {
+              s.shakeTrauma = Math.min(1, s.shakeTrauma + 0.55);
+              emitParticles(corePt.x, corePt.y, '#F43F5E', 18, 145, 1.2);
+              playSynthFx('hurt', soundEnabled, audioCtxRef);
+            } else {
+              playSynthFx('variant', soundEnabled, audioCtxRef);
+            }
           }
 
           s.enemies = s.enemies.filter((e) => e.hp > 0 || e.koTimer > 0);
@@ -5009,6 +6307,66 @@ export function PrismTdGameSection({
           s.voidRifts = survivingRifts;
         }
 
+        // 4g. Step Aurora Magnetic Pylons (pulsing lightning chains + stun + Boss windup interrupt + Lv7 cross-pylon arcs)
+        if (s.auroraPylons.length > 0) {
+          const survivingPylons: AuroraPylonFx[] = [];
+          for (const pylon of s.auroraPylons) {
+            pylon.life -= simDt;
+            if (pylon.life <= 0) continue;
+            pylon.pulseTimer -= simDt;
+            if (pylon.pulseTimer <= 0) {
+              pylon.pulseTimer = 0.42;
+              const parentGun = s.guns.find((g) => g.id === pylon.sourceGunId);
+              const parentProfile = parentGun
+                ? getGunCombatProfile(parentGun.type, parentGun.level, parentGun.variant ?? 'alpha')
+                : null;
+              const maxTargets = parentProfile?.chainCount ?? 5;
+              const inRadius = s.enemies
+                .filter(
+                  (e) =>
+                    e.hp > 0 &&
+                    e.koTimer <= 0 &&
+                    Math.hypot(e.x - pylon.x, e.y - pylon.y) <= pylon.radius + e.radius
+                )
+                .sort((a, b) => b.hp + b.shield - (a.hp + a.shield))
+                .slice(0, maxTargets);
+              const pulseDmg = Math.round(pylon.dps * 0.45 * overdriveSkillMult);
+              for (const tEn of inRadius) {
+                const syn = computeElectricWetSynergy(tEn, parentGun?.level ?? 5);
+                tEn.shockTimer = Math.max(tEn.shockTimer, Math.max(0.45, syn.shockSec));
+                tEn.slowTimer = Math.max(tEn.slowTimer, 0.9);
+                tEn.slowFactor = Math.min(tEn.slowFactor || 1, 1 - (parentProfile?.slowPct ?? 0.26));
+                if ((parentGun?.level ?? 1) >= 5 || syn.isWetSynergy) {
+                  tEn.stunTimer = Math.max(tEn.stunTimer, syn.isWetSynergy ? 0.3 : 0.2);
+                }
+                if ((parentGun?.level ?? 1) >= 3 && interruptEnemyWindup(tEn)) {
+                  pushCombatText(tEn.x, tEn.y - 16, '⚡ CỰC QUANG NGẮT CHIÊU!', '#2DD4BF', 1.06);
+                  playSynthFx('interrupt', soundEnabled, audioCtxRef);
+                }
+                s.lightningArcs.push({
+                  points: [
+                    { x: pylon.x, y: pylon.y },
+                    { x: (pylon.x + tEn.x) * 0.5 + (Math.random() * 14 - 7), y: (pylon.y + tEn.y) * 0.5 + (Math.random() * 14 - 7) },
+                    { x: tEn.x, y: tEn.y },
+                  ],
+                  alpha: 0.9,
+                  color: syn.isWetSynergy ? '#22D3EE' : '#2DD4BF',
+                  width: 2.5,
+                  isWetOverdrive: syn.isWetSynergy,
+                });
+                const res = applyDamageToEnemy(tEn, Math.round(pulseDmg * syn.damageMult), {
+                  armorPierce: pylon.armorPierce,
+                  shieldMult: pylon.shieldMult + syn.shieldMultBonus,
+                });
+                recordDamageTelemetry(tEn, res.actualDamage, pylon.sourceGunId, 0.04);
+                if (res.killed) recordKill(tEn, pylon.sourceGunId);
+              }
+            }
+            survivingPylons.push(pylon);
+          }
+          s.auroraPylons = survivingPylons;
+        }
+
         // 5. Update transient FX (speed-scaled so 1x/2x/3x weapon FX stay crisp without stacking)
         const fxDt = dt * Math.min(2.0, s.speedMult);
         for (const p of s.particles) {
@@ -5351,6 +6709,27 @@ export function PrismTdGameSection({
           ctx.fillStyle = '#A7F3D0';
           ctx.fillText('LÕI', corePt.x, corePt.y);
 
+          if (s.coreShield > 0) {
+            ctx.save();
+            ctx.translate(corePt.x, corePt.y);
+            ctx.rotate(s.visualTime * 1.1);
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)';
+            ctx.fillStyle = 'rgba(56, 189, 248, 0.14)';
+            ctx.lineWidth = 2.4;
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+              const a = (i * Math.PI) / 3;
+              const px = Math.cos(a) * 28 * corePulse;
+              const py = Math.sin(a) * 28 * corePulse;
+              if (i === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+          }
+
           // 5. Hover / Touch Preview Ghost Turret & Range Ring (Playing & Paused Tactical Build)
           const previewTile = pendingBuildTileRef.current ?? dragGhostTileRef.current ?? s.hoverTile;
           if (previewTile && (gameState === 'playing' || gameState === 'paused')) {
@@ -5481,6 +6860,7 @@ export function PrismTdGameSection({
             s.animTime,
             areaAlpha
           );
+          drawAuroraPylons(ctx, s.auroraPylons, s.animTime, areaAlpha);
           drawOverheatSpecialFx(
             ctx,
             s.overheatEffects.slice(-clutterBudget.maxOverheatEffects),
@@ -5950,7 +7330,7 @@ export function PrismTdGameSection({
             ? 'rounded-xl border border-slate-800/80 min-h-full lg:h-full lg:max-h-full mobile-ls:h-full mobile-ls:max-h-full mobile-ls:overflow-hidden mobile-ls:overscroll-none lg:overflow-hidden flex flex-col'
             : 'rounded-xl border border-slate-800/80 min-h-full flex flex-col justify-between'
           : gameState === 'playing' || gameState === 'paused'
-            ? 'overflow-hidden overscroll-none rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] shadow-[0_20px_50px_-24px_rgba(56,189,248,0.22)] mobile-ls:h-[calc(100dvh-56px)] mobile-ls:flex mobile-ls:flex-col'
+            ? 'overflow-hidden overscroll-none rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] shadow-[0_20px_50px_-24px_rgba(56,189,248,0.22)] mobile-ls:h-[calc(100dvh-42px)] mobile-ls:max-h-[calc(100dvh-42px)] mobile-ls:flex mobile-ls:flex-col'
             : 'overflow-hidden rounded-2xl border border-[#DCE6F2] dark:border-[#1E2E4A] shadow-[0_20px_50px_-24px_rgba(56,189,248,0.22)]'
       }`}
     >
@@ -5968,21 +7348,21 @@ export function PrismTdGameSection({
                     Thủ Thành Pháo Đài Lv7
                   </h1>
                   <p className="text-xs sm:text-sm mobile-ls:text-[10px] text-sky-300/90 font-mono">
-                    {DIFFICULTY_ORDER.length} Cấp · {GAME_MODE_ORDER.length} Chế Độ · {PRISM_MAPS.length} Màn (16×10 &amp; 24×14 Siêu Rộng) · {GUN_CATALOG.length} Súng (13 Công · 2 Điện · 4 Thuần Hỗ Trợ)
+                    {DIFFICULTY_ORDER.length} Cấp · {GAME_MODE_ORDER.length} Chế Độ · {PRISM_MAPS.length} Màn (16×10 &amp; 24×14 Siêu Rộng) · {GUN_CATALOG.length} Súng (3 Độc Quyền Màn)
                     {hud.bestScore > 0 ? ` · Kỷ lục: ${hud.bestScore}đ` : ''}
                   </p>
                 </div>
               </div>
 
-              {/* 5 Difficulty Tiers Selector */}
+              {/* 6 Difficulty Tiers Selector (incl. Ác Mộng 2x Siêu Địa Ngục) */}
               <div className="space-y-2">
                 <p className="text-xs font-mono uppercase tracking-[0.12em] text-slate-400">
-                  Chọn Cấp Độ Thử Thách (Dễ → Siêu Địa Ngục)
+                  Chọn Cấp Độ Thử Thách (Dễ → Ác Mộng 2× Siêu Địa Ngục)
                 </p>
                 <div
                   role="radiogroup"
                   aria-label="Chọn cấp độ thử thách"
-                  className="grid grid-cols-2 sm:grid-cols-5 gap-2"
+                  className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2"
                 >
                   {DIFFICULTY_ORDER.map((diffId) => {
                     const cfg = DIFFICULTY_CONFIGS[diffId];
@@ -6084,10 +7464,10 @@ export function PrismTdGameSection({
                 </p>
               </div>
 
-              {/* Map Selection (19 Biome Maps: 16x10 & 24x14 Super-Wide) */}
+              {/* Map Selection (19 Biome Maps: 16x10 & 24x14 Super-Wide, Unique Bosses & Map-Exclusive Guns) */}
               <div className="space-y-2">
                 <p className="text-xs font-mono uppercase tracking-[0.12em] text-slate-400">
-                  Chọn Chiến Trường ({PRISM_MAPS.length} Màn · 16×10 &amp; 24×14 Siêu Rộng · Đường Đi &amp; Vùng Nước Dẫn Điện)
+                  Chọn Chiến Trường ({PRISM_MAPS.length} Màn · Boss Đặc Biệt Mỗi Màn · Súng Độc Quyền Màn 17–19)
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                   {PRISM_MAPS.map((m, idx) => {
@@ -6097,6 +7477,7 @@ export function PrismTdGameSection({
                     const isSpecialMap = m.id === 'sector-17' || isMap18 || isMap19;
                     const accent = BIOME_PALETTES[m.biome].accent;
                     const mapDiffCfg = DIFFICULTY_CONFIGS[m.recommendedDifficulty];
+                    const exclusiveGun = getExclusiveGunForMap(m.id);
                     return (
                       <button
                         key={m.id}
@@ -6128,7 +7509,7 @@ export function PrismTdGameSection({
                         {isSpecialMap ? (
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="min-w-0">
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-1.5">
                                 <span
                                   className={`text-[10px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
                                     isMap19
@@ -6148,13 +7529,17 @@ export function PrismTdGameSection({
                                 >
                                   {m.name}
                                 </span>
+                                {exclusiveGun && (
+                                  <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border border-amber-300/60 bg-amber-400/15 text-amber-200">
+                                    ★ Độc Quyền: {exclusiveGun.shortName} ({exclusiveGun.cost}⚡)
+                                  </span>
+                                )}
                               </div>
                               <p className="text-[10px] font-mono text-cyan-300/90 mt-1">
+                                ☠ Boss: {m.bossSpec.name} ·{' '}
                                 {isMap19
-                                  ? `${m.cols}×${m.rows} Siêu Rộng · ${m.wetZones.length} mạch nước · Khởi đầu ${m.startEnergy}⚡ (đặt Pháo 1200⚡ & Lăng Kính 500⚡)`
-                                  : isMap18
-                                    ? `≈ ${m.wetZones.length} mạch nước · Khởi đầu ${m.startEnergy}⚡ (đặt Pháo Thời Không 700⚡)`
-                                    : `≈ ${m.wetZones.length} vùng nước · Khởi đầu ${m.startEnergy}⚡ (đặt Siêu Tân Tinh 500⚡)`}
+                                  ? `${m.cols}×${m.rows} Siêu Rộng · Vốn ${m.startEnergy}⚡`
+                                  : `≈ ${m.wetZones.length} mạch nước · Vốn ${m.startEnergy}⚡`}
                               </p>
                             </div>
                             <span
@@ -6179,8 +7564,8 @@ export function PrismTdGameSection({
                               />
                             </div>
                             <div className="text-[11px] font-bold mt-0.5 truncate">{m.name}</div>
-                            <div className="text-[9px] font-mono text-cyan-300/90 truncate mt-0.5">
-                              ≈ {m.wetZones.length} vùng nước dẫn điện
+                            <div className="text-[9px] font-mono truncate mt-0.5" style={{ color: m.bossSpec.color }}>
+                              ☠ {m.bossSpec.name}
                             </div>
                           </>
                         )}
@@ -6192,6 +7577,17 @@ export function PrismTdGameSection({
                   <p className="text-[11px] text-slate-300 leading-snug">
                     <strong className="text-white">{activeMap.name}:</strong> {activeMap.subtitle}
                   </p>
+                  <p className="text-[11px] font-mono leading-snug" style={{ color: activeMap.bossSpec.color }}>
+                    ☠ Boss Trùm: <strong>{activeMap.bossSpec.title}</strong> — {activeMap.bossSpec.flavor}
+                  </p>
+                  {(() => {
+                    const exGun = getExclusiveGunForMap(activeMap.id);
+                    return exGun ? (
+                      <p className="text-[11px] font-mono text-amber-300 leading-snug">
+                        ★ Vũ Khí Độc Quyền Màn: <strong>{exGun.name} ({exGun.cost}⚡)</strong> — {exGun.roleClue}
+                      </p>
+                    ) : null;
+                  })()}
                   <p className="text-[11px] font-mono text-cyan-300 leading-snug">
                     ⚡ {activeMap.tacticalHint}
                   </p>
@@ -6221,14 +7617,14 @@ export function PrismTdGameSection({
                   className="w-full h-auto rounded-lg block border border-slate-800"
                 />
                 <p className="text-xs mobile-ls:text-[10px] text-slate-400 text-center">
-                  Kho <strong className="text-amber-300">{GUN_CATALOG.length} súng tinh gọn</strong> (13 Tấn Công · 2 Hệ Điện · 4 Thuần Hỗ Trợ) · Biến thể <strong className="text-cyan-300">α / ω</strong> · <strong className="text-rose-300">Siêu Boss</strong>
+                  Kho <strong className="text-amber-300">{GUN_CATALOG.length} súng</strong> (19 Công · 3 Điện · 4 Hỗ Trợ · 3 Độc Quyền Màn) · <strong className="text-rose-300">Siêu Boss 2 Pha</strong>
                 </p>
               </div>
             </div>
           </div>
 
           <p className="text-[11px] font-mono text-slate-400 border-t border-slate-800/80 pt-3 mobile-ls:pt-2 mobile-ls:text-[10px] text-center">
-            1-7, Z, X, C, V, B, N Súng Công (N Pháo 1200⚡) · 8-9 Hệ Điện · 0, Q, E, W Thuần Hỗ Trợ (W Lăng Kính 500⚡) · U nâng ×2/cấp (Max Lv7) · R α/ω · T mục tiêu · Space Hỏa Lực
+            1-7, A Khúc Xạ, S Hyperion, K Khiên Aegis, Z/X/C/V/B/N Công · F/G/H Độc Quyền · 8/9/D Điện · 0/Q/E/W Hỗ Trợ · U nâng ×2 · Space Hỏa Lực
           </p>
         </div>
       )}
@@ -6240,47 +7636,45 @@ export function PrismTdGameSection({
             useSidebarTheater ? 'flex-1 min-h-0 flex flex-col' : ''
           }`}
         >
-          {/* Portrait Mobile Rotate / Fullscreen / PWA Guidance Banner */}
+          {/* Portrait Mobile Rotate / Fullscreen / PWA Guidance Banner (Ultra-compact single row) */}
           {isPortraitMobile && !portraitHintDismissed && (
             <div
               data-testid="td-portrait-guide"
-              className="shrink-0 border-b border-sky-500/35 bg-sky-950/60 px-3 py-2 flex flex-col gap-2 safe-area-x"
+              className="shrink-0 border-b border-sky-500/35 bg-sky-950/60 px-2.5 py-1.5 flex items-center justify-between gap-2 safe-area-x"
             >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-start gap-2 min-w-0">
-                  <Smartphone className="w-4 h-4 text-sky-300 rotate-90 shrink-0 mt-0.5" aria-hidden="true" />
-                  <p className="text-xs text-sky-100 leading-snug">
-                    <strong className="text-white">Xoay ngang điện thoại</strong> để bản đồ rộng ~75% và thao tác chọn/nâng tháp thoải mái hơn.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setPortraitHintDismissed(true)}
-                  aria-label="Ẩn gợi ý xoay ngang"
-                  className="min-w-[36px] min-h-[36px] rounded-lg border border-slate-700 bg-slate-900/90 text-slate-300 hover:text-white flex items-center justify-center cursor-pointer shrink-0"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Smartphone className="w-3.5 h-3.5 text-sky-300 rotate-90 shrink-0" aria-hidden="true" />
+                <p className="text-[11px] text-sky-100 leading-tight truncate">
+                  <strong className="text-white">Xoay ngang</strong> để bản đồ rộng ~75%
+                </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 shrink-0">
                 {onToggleFullscreen && !isFullscreen && (
                   <button
                     type="button"
                     onClick={onToggleFullscreen}
-                    className="flex-1 min-h-[40px] px-3 rounded-lg bg-sky-500 hover:bg-sky-400 text-[#070B14] font-mono font-bold text-xs inline-flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap"
+                    className="min-h-[34px] px-2.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-[#070B14] font-mono font-bold text-[11px] inline-flex items-center justify-center gap-1 cursor-pointer whitespace-nowrap"
                   >
-                    <Maximize2 className="w-3.5 h-3.5" aria-hidden="true" />
-                    <span>Chơi Toàn Màn</span>
+                    <Maximize2 className="w-3 h-3" aria-hidden="true" />
+                    <span>Toàn Màn</span>
                   </button>
                 )}
-                <PwaInstallButton compact className="flex-1 min-h-[40px] px-3 text-xs" />
+                <PwaInstallButton compact className="min-h-[34px] px-2 text-[11px]" />
+                <button
+                  type="button"
+                  onClick={() => setPortraitHintDismissed(true)}
+                  aria-label="Ẩn gợi ý xoay ngang"
+                  className="min-w-[34px] min-h-[34px] rounded-lg border border-slate-700 bg-slate-900/90 text-slate-300 hover:text-white flex items-center justify-center cursor-pointer shrink-0"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           )}
 
           {/* Top Unified 1-Row HUD Strip: Compact Tabular Metrics Left · Separated 40-44px Action Controls Right */}
-          <div className="shrink-0 border-b border-slate-800 bg-[#0B1222] px-2.5 sm:px-4 mobile-ls:px-2.5 py-1.5 mobile-ls:py-1 flex flex-wrap mobile-ls:flex-nowrap items-center justify-between gap-2 mobile-ls:gap-2 safe-area-x">
-            {/* Compact 1-Row Core Stats (Wave · Energy · DPS · Core) — never clips 28/28 */}
+          <div className="shrink-0 border-b border-slate-800 bg-[#0B1222] px-2.5 sm:px-4 mobile-ls:px-2.5 py-1.5 mobile-ls:py-1 flex flex-wrap mobile-ls:flex-nowrap items-center justify-between gap-1.5 sm:gap-2 mobile-ls:gap-2 safe-area-x">
+            {/* Compact 1-Row Core Stats (Wave · Energy · DPS · Core + Aegis Core Shield) — never clips 28/28 */}
             <div className="flex items-center gap-2 sm:gap-3.5 mobile-ls:gap-2 tabular-nums min-w-0 flex-nowrap">
               <span
                 data-testid="td-hud-difficulty"
@@ -6327,9 +7721,17 @@ export function PrismTdGameSection({
               <span className="text-slate-700 select-none shrink-0" aria-hidden="true">·</span>
 
               <div className="flex items-center gap-1 whitespace-nowrap shrink-0" data-testid="td-stat-core">
-                <Shield className="w-3.5 h-3.5 text-emerald-400 shrink-0" aria-hidden="true" />
+                <Shield className={`w-3.5 h-3.5 shrink-0 ${hud.coreShield > 0 ? 'text-cyan-300' : 'text-emerald-400'}`} aria-hidden="true" />
                 <span className="text-sm sm:text-base mobile-ls:text-sm font-bold text-white leading-none">
                   {hud.coreHp}/{hud.maxCoreHp}
+                  {(hud.coreShield > 0 || hud.maxCoreShield > 0) && (
+                    <span
+                      data-testid="td-stat-core-shield"
+                      className="ml-1 text-[11px] font-mono font-bold text-cyan-300"
+                    >
+                      +{hud.coreShield}🛡️
+                    </span>
+                  )}
                 </span>
               </div>
 
@@ -6486,22 +7888,23 @@ export function PrismTdGameSection({
                 useSidebarTheater ? 'min-w-0 min-h-0 flex-1 flex items-center justify-center lg:p-2 mobile-ls:p-1' : ''
               }`}
             >
-              {/* Non-Blocking Tactical Pause Strip */}
+              {/* Non-Blocking Tactical Pause Strip (Top Center z-30 — never collides with bottom-right zoom controls) */}
               {gameState === 'paused' && (
-                <div className="pointer-events-none absolute inset-x-2 top-2 z-20 flex justify-center">
+                <div className="pointer-events-none absolute inset-x-1.5 top-1.5 z-30 flex justify-center">
                   <div
                     data-testid="td-paused-banner"
-                    className="pointer-events-auto flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 rounded-xl border border-amber-400/75 bg-[#0B1222]/95 px-2.5 sm:px-3 py-1.5 shadow-[0_10px_28px_rgba(0,0,0,0.65)]"
+                    className="pointer-events-auto flex flex-nowrap items-center justify-center gap-1 sm:gap-2 rounded-xl border border-amber-400/75 bg-[#0B1222]/95 px-2 sm:px-3 py-1 shadow-[0_10px_28px_rgba(0,0,0,0.65)] max-w-full overflow-x-auto no-scrollbar"
                   >
-                    <span className="text-[11px] sm:text-xs font-mono font-bold text-amber-300 inline-flex items-center gap-1.5">
+                    <span className="text-[10px] sm:text-xs font-mono font-bold text-amber-300 inline-flex items-center gap-1 whitespace-nowrap shrink-0">
                       <Pause className="w-3.5 h-3.5 shrink-0" />
-                      <span>TẠM DỪNG · Lắp &amp; Nâng súng tự do</span>
+                      <span className="hidden sm:inline mobile-ls:hidden">TẠM DỪNG · Lắp &amp; Nâng súng tự do</span>
+                      <span className="sm:hidden mobile-ls:inline">TẠM DỪNG</span>
                     </span>
                     <button
                       type="button"
                       data-testid="td-resume-btn"
                       onClick={() => setGameState('playing')}
-                      className="min-h-[34px] px-3 rounded-lg bg-amber-400 hover:bg-amber-300 text-[#070B14] font-mono font-bold text-xs inline-flex items-center gap-1 cursor-pointer"
+                      className="min-h-[32px] sm:min-h-[34px] px-2.5 sm:px-3 rounded-lg bg-amber-400 hover:bg-amber-300 text-[#070B14] font-mono font-bold text-[11px] sm:text-xs inline-flex items-center gap-1 cursor-pointer whitespace-nowrap shrink-0"
                     >
                       <Play className="w-3.5 h-3.5 shrink-0" />
                       <span>Tiếp Tục</span>
@@ -6509,14 +7912,14 @@ export function PrismTdGameSection({
                     <button
                       type="button"
                       onClick={() => startNewRun(selectedMapIndex, difficulty, gameMode)}
-                      className="min-h-[34px] px-2.5 rounded-lg border border-slate-700 bg-slate-900 hover:border-amber-400 text-slate-200 font-mono text-[11px] cursor-pointer"
+                      className="min-h-[32px] sm:min-h-[34px] px-2 sm:px-2.5 rounded-lg border border-slate-700 bg-slate-900 hover:border-amber-400 text-slate-200 font-mono text-[10px] sm:text-[11px] cursor-pointer whitespace-nowrap shrink-0"
                     >
                       Chơi Lại
                     </button>
                     <button
                       type="button"
                       onClick={() => setGameState('title')}
-                      className="min-h-[34px] px-2.5 rounded-lg border border-slate-700 bg-slate-900 hover:border-slate-500 text-slate-300 font-mono text-[11px] cursor-pointer"
+                      className="min-h-[32px] sm:min-h-[34px] px-2 sm:px-2.5 rounded-lg border border-slate-700 bg-slate-900 hover:border-slate-500 text-slate-300 font-mono text-[10px] sm:text-[11px] cursor-pointer whitespace-nowrap shrink-0"
                     >
                       Đổi Màn
                     </button>
@@ -6524,10 +7927,50 @@ export function PrismTdGameSection({
                 </div>
               )}
 
-              {/* Subtle Corner Map Zoom Controls (helpful on 24x14 large maps & small landscape screens) */}
+              {/* Active Map Boss / Super Boss Live Health Nameplate Banner */}
+              {hud.activeBoss && (
+                <div className="pointer-events-none absolute inset-x-2 top-2 z-10 flex justify-center">
+                  <div
+                    data-testid="td-boss-hud"
+                    className="w-full max-w-[320px] rounded-xl border bg-[#090F1D]/90 px-2.5 py-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.68)] backdrop-blur-sm space-y-1"
+                    style={{ borderColor: `${hud.activeBoss.color}99` }}
+                  >
+                    <div className="flex items-center justify-between gap-2 text-[10px] font-mono font-bold">
+                      <span className="truncate" style={{ color: hud.activeBoss.color }}>
+                        {hud.activeBoss.isSuper ? '☠ SIÊU BOSS:' : '☠ BOSS:'} {hud.activeBoss.title}
+                      </span>
+                      <span className="shrink-0 text-slate-200 tabular-nums">
+                        {hud.activeBoss.phase === 2 ? 'PHA 2 ⚡ · ' : ''}
+                        {hud.activeBoss.hp.toLocaleString()}/{hud.activeBoss.maxHp.toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden flex">
+                      <div
+                        className="h-full transition-all duration-150"
+                        style={{
+                          width: `${Math.min(100, Math.round((hud.activeBoss.hp / hud.activeBoss.maxHp) * 100))}%`,
+                          backgroundColor: hud.activeBoss.color,
+                        }}
+                      />
+                    </div>
+                    {hud.activeBoss.maxShield > 0 && hud.activeBoss.shield > 0 && (
+                      <div className="h-1 w-full rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                          className="h-full bg-sky-400 transition-all duration-150"
+                          style={{
+                            width: `${Math.min(100, Math.round((hud.activeBoss.shield / hud.activeBoss.maxShield) * 100))}%`,
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Subtle Bottom-Right Map Zoom Controls (never collides with top Pause/Boss banners or centered Confirm bar) */}
               <div
                 data-testid="td-zoom-controls"
-                className="absolute top-2 right-2 z-20 flex items-center gap-0.5 rounded-lg border border-slate-700/80 bg-[#0B1222]/90 p-0.5 shadow-lg backdrop-blur-sm"
+                className={`absolute ${pendingBuildTile ? 'bottom-14' : 'bottom-2'} right-2 z-20 flex items-center gap-0.5 rounded-lg border border-slate-700/80 bg-[#0B1222]/90 p-0.5 shadow-lg backdrop-blur-sm transition-all`}
               >
                 <button
                   type="button"
@@ -6583,10 +8026,10 @@ export function PrismTdGameSection({
                     ? {
                         maxWidth: isFullscreen
                           ? isCompactTheater
-                            ? `min(100%, calc((100dvh - 60px) * ${mapAspectRatio}))`
+                            ? `min(100%, calc((100dvh - 50px) * ${mapAspectRatio}))`
                             : `min(100%, calc((100dvh - 76px) * ${mapAspectRatio}))`
                           : isCompactTheater
-                            ? `min(100%, calc((100dvh - 116px) * ${mapAspectRatio}))`
+                            ? `min(100%, calc((100dvh - 86px) * ${mapAspectRatio}))`
                             : `${activeMap.cols * 60}px`,
                       }
                     : undefined
@@ -6749,16 +8192,70 @@ export function PrismTdGameSection({
                 </button>
               </div>
             ) : (
-              /* 24-Gun Arsenal Dock & Tactical Command Sidebar (Tabbed on Sidebar Theater: Kho | Chi tiết) */
+              /* 26-Gun Arsenal Dock & Tactical Command Sidebar (Tabbed on Sidebar Theater & Portrait Mobile: Kho | Chi tiết) */
               <div
                 data-testid="td-control-pane"
                 className={`border-t border-slate-800 bg-[#0B1222] safe-area-bottom ${
                   useSidebarTheater
                     ? 'mobile-ls:border-t-0 mobile-ls:border-l lg:border-t-0 lg:border-l flex flex-col min-h-0 mobile-ls:max-h-full safe-area-right'
-                    : 'px-2.5 sm:px-4 py-2.5 space-y-2.5'
+                    : isPortraitMobile
+                      ? 'px-2 py-2 space-y-2'
+                      : 'px-2.5 sm:px-4 py-2.5 space-y-2.5'
                 }`}
               >
-                {/* Dock Header: Mode Tabs (Kho / Chi tiết) + Collapse Toggle in Sidebar Theater */}
+                {/* Portrait Mobile Immediate Primary Action Strip right under Canvas (Wave CTA + Hỏa Lực + α/ω visible without scrolling!) */}
+                {!useSidebarTheater && isPortraitMobile && (
+                  <div
+                    data-testid="td-portrait-quick-bar"
+                    className="flex items-center gap-1.5"
+                  >
+                    <button
+                      type="button"
+                      data-testid="prism-wave-btn"
+                      onClick={launchNextWave}
+                      disabled={hud.waveActive || (hud.gameMode !== 'endless' && hud.wave >= hud.totalWaves)}
+                      className="flex-1 min-h-[44px] px-2.5 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer tabular-nums disabled:bg-slate-800 disabled:text-slate-300 disabled:border disabled:border-slate-700 disabled:cursor-not-allowed bg-emerald-500 hover:bg-emerald-400 text-[#070B14]"
+                    >
+                      <Play className="w-4 h-4 shrink-0" />
+                      <span className="truncate">
+                        {hud.waveActive
+                          ? `Đợt ${hud.wave}/${hud.gameMode === 'endless' ? '∞' : hud.totalWaves} · ${hud.remainingEnemies} quái`
+                          : `Gọi Đợt ${hud.wave + 1}/${hud.gameMode === 'endless' ? '∞' : hud.totalWaves} (${hud.nextWaveCountdown}s · +${hud.wave > 0 ? 12 : 8}⚡)`}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="td-overdrive-mobile-btn"
+                      onClick={activateOverdrive}
+                      disabled={hud.overdrivePct < 100 || hud.overdriveActive}
+                      aria-label="Kích hoạt Hội Tụ Hỏa Lực"
+                      className={`min-h-[44px] px-2.5 rounded-xl font-mono font-bold text-[11px] inline-flex items-center justify-center gap-1 shrink-0 cursor-pointer tabular-nums ${
+                        hud.overdriveActive
+                          ? 'bg-gradient-to-r from-rose-600 to-amber-500 text-white'
+                          : hud.overdrivePct >= 100
+                            ? 'bg-amber-400 hover:bg-amber-300 text-[#070B14] shadow-[0_0_12px_rgba(251,191,36,0.5)]'
+                            : 'bg-slate-900 border border-slate-700 text-slate-400 cursor-not-allowed'
+                      }`}
+                    >
+                      <Flame className="w-3.5 h-3.5 shrink-0" />
+                      <span>{hud.overdriveActive ? '×3.8!' : `${hud.overdrivePct}%`}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedVariant((v) => (v === 'alpha' ? 'omega' : 'alpha'))}
+                      aria-label={`Đổi biến thể Alpha/Omega (đang chọn ${selectedVariant === 'alpha' ? 'Alpha' : 'Omega'})`}
+                      className={`min-w-[44px] min-h-[44px] rounded-xl border text-xs font-mono font-bold flex items-center justify-center cursor-pointer shrink-0 ${
+                        selectedVariant === 'alpha'
+                          ? 'border-sky-400/70 bg-sky-500/20 text-sky-200'
+                          : 'border-amber-400/70 bg-amber-500/20 text-amber-200'
+                      }`}
+                    >
+                      {selectedVariant === 'alpha' ? 'α' : 'ω'}
+                    </button>
+                  </div>
+                )}
+
+                {/* Dock Header: Mode Tabs (Kho / Chi tiết) in Sidebar Theater OR Portrait Mobile */}
                 {useSidebarTheater ? (
                   <div className="shrink-0 px-1.5 py-1 border-b border-slate-800/90 flex items-center justify-between gap-1 overflow-hidden">
                     <div className="flex items-center gap-1 flex-1 min-w-0" role="tablist" aria-label="Chuyển bảng Kho súng và Chi tiết tháp">
@@ -6771,10 +8268,10 @@ export function PrismTdGameSection({
                         className={`flex-1 min-w-0 min-h-[38px] px-1 rounded-lg border text-[11px] font-bold transition-colors cursor-pointer whitespace-nowrap ${
                           sidebarTab === 'arsenal'
                             ? 'bg-amber-400/15 border-amber-400 text-amber-200'
-                            : 'bg-slate-900 border-slate-700/80 text-slate-400 hover:text-white'
+                            : 'bg-slate-900 border-slate-700/80 text-slate-300 hover:text-white'
                         }`}
                       >
-                        {isCompactTheater ? 'Kho' : `Kho (${availableGuns.length})`}
+                        {isCompactTheater ? `Kho (${availableGuns.length})` : `Kho (${availableGuns.length})`}
                       </button>
                       <button
                         type="button"
@@ -6787,10 +8284,10 @@ export function PrismTdGameSection({
                             ? 'bg-sky-500/20 border-sky-400 text-sky-200'
                             : selectedGun
                               ? 'bg-slate-900 border-amber-400/50 text-amber-200 hover:border-amber-300'
-                              : 'bg-slate-900 border-slate-700/80 text-slate-500 hover:text-slate-300'
+                              : 'bg-slate-900 border-slate-700/80 text-slate-300 hover:text-white'
                         }`}
                       >
-                        {selectedGun ? (isCompactTheater ? `Lv.${selectedGun.level}` : `Tháp Lv${selectedGun.level}`) : 'Chi tiết'}
+                        {selectedGun ? `Tháp Lv.${selectedGun.level}` : isCompactTheater ? 'Kỹ năng' : 'Chi tiết'}
                       </button>
                     </div>
                     {isCompactTheater && (
@@ -6800,7 +8297,7 @@ export function PrismTdGameSection({
                           onClick={() => setSelectedVariant((v) => (v === 'alpha' ? 'omega' : 'alpha'))}
                           aria-label={`Đổi biến thể Alpha/Omega (đang chọn ${selectedVariant === 'alpha' ? 'Alpha' : 'Omega'})`}
                           title={selectedVariant === 'alpha' ? 'Đang chọn α Alpha · Bấm đổi ω Omega' : 'Đang chọn ω Omega · Bấm đổi α Alpha'}
-                          className={`min-w-[32px] min-h-[38px] px-1 rounded-lg border text-xs font-mono font-bold flex items-center justify-center cursor-pointer ${
+                          className={`min-w-[34px] min-h-[38px] px-1 rounded-lg border text-xs font-mono font-bold flex items-center justify-center cursor-pointer ${
                             selectedVariant === 'alpha'
                               ? 'border-sky-400/70 bg-sky-500/20 text-sky-200'
                               : 'border-amber-400/70 bg-amber-500/20 text-amber-200'
@@ -6821,10 +8318,43 @@ export function PrismTdGameSection({
                       </div>
                     )}
                   </div>
+                ) : isPortraitMobile ? (
+                  <div className="flex items-center gap-1.5" role="tablist" aria-label="Chuyển Kho súng và Chi tiết kỹ năng">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={sidebarTab === 'arsenal'}
+                      data-testid="td-tab-arsenal"
+                      onClick={() => setSidebarTab('arsenal')}
+                      className={`flex-1 min-h-[38px] px-2 rounded-lg border text-xs font-bold transition-colors cursor-pointer ${
+                        sidebarTab === 'arsenal'
+                          ? 'bg-amber-400/15 border-amber-400 text-amber-200'
+                          : 'bg-slate-900 border-slate-700/80 text-slate-300'
+                      }`}
+                    >
+                      Kho Súng ({availableGuns.length})
+                    </button>
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-selected={sidebarTab === 'inspector'}
+                      data-testid="td-tab-inspector"
+                      onClick={() => setSidebarTab('inspector')}
+                      className={`flex-1 min-h-[38px] px-2 rounded-lg border text-xs font-bold transition-colors cursor-pointer ${
+                        sidebarTab === 'inspector'
+                          ? 'bg-sky-500/20 border-sky-400 text-sky-200'
+                          : selectedGun
+                            ? 'bg-slate-900 border-amber-400/50 text-amber-200'
+                            : 'bg-slate-900 border-slate-700/80 text-slate-300'
+                      }`}
+                    >
+                      {selectedGun ? `Tháp Lv.${selectedGun.level} (Nâng)` : 'Kỹ Năng Lv3·5·7'}
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-mono uppercase tracking-[0.08em] text-slate-400">
-                      Kho {availableGuns.length} Súng (13 Công · 2 Điện · 4 Thuần Hỗ Trợ)
+                      Kho {availableGuns.length} Súng (Công · Điện · Thuần Hỗ Trợ)
                     </span>
                     <div className="flex items-center gap-1.5" role="group" aria-label="Biến thể mặc định khi đặt súng">
                       <button
@@ -6853,13 +8383,13 @@ export function PrismTdGameSection({
                   </div>
                 )}
 
-                {/* Scrollable Middle: Tabbed Content in Sidebar Theater, Stacked in Standard Mode */}
+                {/* Scrollable Middle: Tabbed Content in Sidebar Theater & Portrait Mobile, Stacked in Standard Desktop */}
                 <div
                   ref={sidebarScrollRef}
                   className={
                     useSidebarTheater
                       ? 'flex-1 min-h-0 overflow-y-auto overscroll-contain touch-pan-y p-2 mobile-ls:p-1.5 space-y-2'
-                      : 'space-y-2.5'
+                      : 'space-y-2'
                   }
                 >
                   {/* SELECTED GUN INSPECTOR (Dedicated Tab in Sidebar Theater) */}
@@ -6878,6 +8408,7 @@ export function PrismTdGameSection({
                             </h3>
                             <p className="text-[11px] font-mono text-slate-400 mt-0.5 truncate mobile-ls:hidden">
                               {selectedProfile.tierLabel} · {selectedProfile.variantSpec.shortTag}
+                              {selectedSpec.exclusiveMapId ? ' · ★ ĐỘC QUYỀN MÀN' : ''}
                             </p>
                           </div>
                           <span
@@ -7206,18 +8737,64 @@ export function PrismTdGameSection({
                         </div>
                       </div>
                     ) : (
-                      <div className="rounded-xl border border-dashed border-slate-700/80 bg-[#080E1C] p-4 text-center space-y-2">
-                        <p className="text-xs font-semibold text-slate-200">Chưa chọn tháp trên bản đồ</p>
-                        <p className="text-[11px] text-slate-400 leading-relaxed">
-                          Chạm vào một tháp đã đặt trên lưới để xem DMG, DPS, Tầm bắn và nâng cấp Lv1→Lv7.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setSidebarTab('arsenal')}
-                          className="min-h-[42px] px-4 rounded-xl bg-amber-400 text-[#070B14] font-bold text-xs cursor-pointer"
-                        >
-                          Mở Kho Súng
-                        </button>
+                      <div
+                        data-testid="td-shop-skill-inspector"
+                        className="rounded-xl border border-slate-700/80 bg-[#080E1C] p-2.5 space-y-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <PrismTdGunGlyph
+                              type={selectedToolSpec.type}
+                              color={selectedToolSpec.accentColor}
+                              className="w-6 h-6 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <h3 className="text-xs font-bold text-white truncate">{selectedToolSpec.name}</h3>
+                              <p className="text-[10px] font-mono text-amber-300 tabular-nums">
+                                Giá {selectedToolSpec.cost}⚡ · {selectedVariant === 'alpha' ? 'α Alpha' : 'ω Omega'}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSidebarTab('arsenal')}
+                            className="min-h-[34px] px-2.5 rounded-lg bg-amber-400 text-[#070B14] font-bold text-[11px] cursor-pointer shrink-0"
+                          >
+                            Đổi Súng
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-cyan-200 leading-snug">{selectedToolSpec.roleClue}</p>
+                        <div className="space-y-1">
+                          {selectedToolRoadmap
+                            .filter((step) => step.milestone !== null)
+                            .map((step) => (
+                              <div
+                                key={step.level}
+                                className={`rounded-lg border px-2 py-1 text-[10px] ${
+                                  step.level === MAX_GUN_LEVEL
+                                    ? 'border-amber-400/50 bg-amber-950/20'
+                                    : 'border-cyan-500/35 bg-slate-900/80'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-1 font-mono font-bold">
+                                  <span className={step.level === MAX_GUN_LEVEL ? 'text-amber-300' : 'text-cyan-300'}>
+                                    {step.level === MAX_GUN_LEVEL ? '✦' : '★'} LV.{step.level} · {step.powerMultiplierLabel}
+                                  </span>
+                                  <span className="text-[9px] text-slate-400">
+                                    {selectedToolSpec.category === 'support' ? `Tầm ${step.rangeTiles}ô` : `DMG ${step.damage}`}
+                                  </span>
+                                </div>
+                                <div className="font-semibold text-white truncate">{step.milestone!.name}</div>
+                                <p className="text-[9px] text-slate-300 leading-snug">{step.milestone!.summary}</p>
+                              </div>
+                            ))}
+                        </div>
+                        <div className="rounded-lg border border-slate-800 bg-slate-950/80 px-2 py-1 text-[10px] font-mono">
+                          <span style={{ color: selectedToolSpec.overheatSkill.color }} className="font-bold block">
+                            🔥 Quá Nhiệt: {selectedToolSpec.overheatSkill.name}
+                          </span>
+                          <span className="text-[9px] text-slate-400">{selectedToolSpec.overheatSkill.summary}</span>
+                        </div>
                       </div>
                     )
                   )}
@@ -7269,11 +8846,11 @@ export function PrismTdGameSection({
                     </div>
                   )}
 
-                  {/* ARSENAL TAB (Visible on Sidebar Theater when 'arsenal' active, or always in Standard Mode) */}
-                  {(!useSidebarTheater || sidebarTab === 'arsenal') && (
+                  {/* ARSENAL TAB (Visible on Sidebar Theater or Portrait Mobile when 'arsenal' active, or always in Standard Desktop) */}
+                  {((!useSidebarTheater && !isPortraitMobile) || sidebarTab === 'arsenal') && (
                     <>
-                      {useSidebarTheater && (
-                        /* Single sleek row: 4-col fit on mobile-ls (zero clipping of 'Hỗ trợ') + inline α/ω on desktop lg+ */
+                      {(useSidebarTheater || isPortraitMobile) && (
+                        /* Single sleek row: 4-col fit on mobile (zero clipping of 'Hỗ trợ') + inline α/ω on desktop lg+ */
                         <div className="flex items-center gap-1">
                           <div className="grid grid-cols-4 gap-1 flex-1 min-w-0">
                             {(
@@ -7298,7 +8875,7 @@ export function PrismTdGameSection({
                               </button>
                             ))}
                           </div>
-                          {!isCompactTheater && (
+                          {!isCompactTheater && !isPortraitMobile && (
                             <div className="inline-flex items-center rounded-lg border border-slate-700/80 bg-slate-900 p-0.5 shrink-0" role="group" aria-label="Biến thể mặc định khi đặt súng">
                               <button
                                 type="button"
@@ -7329,15 +8906,17 @@ export function PrismTdGameSection({
                         </div>
                       )}
 
-                      {/* Arsenal Grid (Clean SVG glyph + unclipped name + cost⚡ on mobile-ls; rich metadata on desktop) */}
+                      {/* Arsenal Grid (Clean 2-row horizontal dock on Portrait Mobile; 2-col on mobile-ls; 3-col/4-col on desktop) */}
                       <div
                         className={
                           useSidebarTheater
                             ? 'flex flex-nowrap overflow-x-auto gap-1.5 pb-1 mobile-ls:grid mobile-ls:grid-cols-2 mobile-ls:overflow-visible mobile-ls:pb-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:pb-0'
-                            : 'flex flex-nowrap overflow-x-auto gap-1.5 pb-1 md:grid md:grid-cols-4 md:overflow-visible md:pb-0'
+                            : isPortraitMobile
+                              ? 'grid grid-rows-2 grid-flow-col auto-cols-[minmax(108px,1fr)] overflow-x-auto gap-1.5 pb-1'
+                              : 'flex flex-nowrap overflow-x-auto gap-1.5 pb-1 md:grid md:grid-cols-4 md:overflow-visible md:pb-0'
                         }
                       >
-                        {(useSidebarTheater ? filteredArsenalGuns : availableGuns).map((item) => {
+                        {(useSidebarTheater || isPortraitMobile ? filteredArsenalGuns : availableGuns).map((item) => {
                           const isActive = selectedTool === item.type;
                           const canAfford = hud.energy >= item.cost;
                           const isElectric = isElectricGunType(item.type);
@@ -7415,19 +8994,19 @@ export function PrismTdGameSection({
                                   <div className="flex items-center justify-between gap-1 text-[11px] font-bold leading-tight">
                                     <span className="whitespace-nowrap lg:truncate">
                                       <span className="hidden lg:inline">[{item.hotkey.toUpperCase()}] </span>
-                                      {isCompactTheater
+                                      {isCompactTheater || isPortraitMobile
                                         ? getGunMobileShortName(item.type)
                                         : isApexAttack || isTranscendent || isSupremeSupport
                                           ? item.name
                                           : item.shortName}
                                     </span>
-                                    {!isCompactTheater && (
+                                    {!isCompactTheater && !isPortraitMobile && (
                                       <span className={`font-mono shrink-0 tabular-nums ${costClass}`}>
                                         {item.cost}⚡
                                       </span>
                                     )}
                                   </div>
-                                  {isCompactTheater && (
+                                  {(isCompactTheater || isPortraitMobile) && (
                                     <div className={`text-[10px] font-mono font-bold tabular-nums leading-tight mt-0.5 ${costClass}`}>
                                       {item.cost}⚡
                                     </div>
@@ -7435,7 +9014,7 @@ export function PrismTdGameSection({
                                 </div>
                               </div>
                               <p
-                                className={`mobile-ls:hidden text-[9px] truncate mt-0.5 ${
+                                className={`mobile-ls:hidden ${isPortraitMobile ? 'hidden' : ''} text-[9px] truncate mt-0.5 ${
                                   isApexAttack
                                     ? 'text-fuchsia-200/90 font-semibold'
                                     : isTranscendent
@@ -7449,27 +9028,52 @@ export function PrismTdGameSection({
                                             : 'text-slate-400'
                                 }`}
                               >
-                                {isElectric
-                                  ? '⚡ Hệ Điện'
-                                  : isSupremeSupport
-                                    ? `✦ Thuần Hỗ Trợ 500⚡ · ${item.roleClue}`
-                                    : isSupport
-                                      ? '✦ Thuần Hỗ Trợ'
-                                      : isApexAttack
-                                        ? `✦ Tối Thượng 1200⚡ · ${item.roleClue}`
-                                        : isTranscendent
-                                          ? `✦ Siêu Phẩm 700⚡ · ${item.roleClue}`
-                                          : item.roleClue}
+                                {item.exclusiveMapId
+                                  ? `★ ĐỘC QUYỀN · ${item.roleClue}`
+                                  : isElectric
+                                    ? '⚡ Hệ Điện'
+                                    : isSupremeSupport
+                                      ? `✦ Thuần Hỗ Trợ 500⚡ · ${item.roleClue}`
+                                      : isSupport
+                                        ? '✦ Thuần Hỗ Trợ'
+                                        : isApexAttack
+                                          ? `✦ Tối Thượng 1200⚡ · ${item.roleClue}`
+                                          : isTranscendent
+                                            ? `✦ Siêu Phẩm 700⚡ · ${item.roleClue}`
+                                            : item.roleClue}
                               </p>
                             </button>
                           );
                         })}
                       </div>
 
-                      {/* Arsenal Selected Gun Preview: Lv1..Lv7 Power & Lv3/Lv5/Lv7 Skills BEFORE placing */}
+                      {/* Mobile Compact Selected Tool Bar + Jump to Kỹ năng Lv3·5·7 */}
+                      {(isCompactTheater || isPortraitMobile) && (
+                        <div className="lg:hidden rounded-lg border border-slate-800 bg-[#080E1C] px-2 py-1.5 flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-bold text-white truncate">
+                              {selectedToolSpec.name} ({selectedToolSpec.cost}⚡)
+                            </div>
+                            <div className="text-[9px] font-mono text-cyan-300 truncate">
+                              {selectedToolSpec.roleClue}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSidebarTab('inspector')}
+                            className="min-h-[32px] px-2 rounded-lg border border-sky-400/50 bg-sky-500/15 text-sky-200 text-[10px] font-mono font-bold whitespace-nowrap shrink-0 cursor-pointer"
+                          >
+                            Lv3·5·7
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Desktop Full Arsenal Selected Gun Preview (hidden on compact mobile to avoid overflow/scroll bloat) */}
                       <div
                         data-testid="td-arsenal-preview"
-                        className="rounded-xl border border-slate-800 bg-[#080E1C] p-2.5 space-y-2"
+                        className={`${
+                          isCompactTheater || isPortraitMobile ? 'hidden lg:block' : 'block'
+                        } rounded-xl border border-slate-800 bg-[#080E1C] p-2.5 space-y-2`}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-1.5">
                           <div className="flex items-center gap-1.5 min-w-0">
@@ -7480,6 +9084,11 @@ export function PrismTdGameSection({
                             <span className="text-xs font-bold text-white truncate">
                               {selectedToolSpec.name}
                             </span>
+                            {selectedToolSpec.exclusiveMapId && (
+                              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-400/15 border border-amber-400/50 text-amber-200 shrink-0">
+                                ★ ĐỘC QUYỀN MÀN
+                              </span>
+                            )}
                             <span className="text-[10px] font-mono text-slate-400 shrink-0">
                               ({selectedToolSpec.cost}⚡ · {selectedVariant === 'alpha' ? 'α' : 'ω'})
                             </span>
@@ -7534,7 +9143,8 @@ export function PrismTdGameSection({
                   )}
 
                   {/* Embedded (non-sidebar / Portrait & Standard Desktop) Selected Gun Inspector */}
-                  {!useSidebarTheater && selectedGun && selectedProfile && selectedSpec && (
+                  {!useSidebarTheater && (!isPortraitMobile || sidebarTab === 'inspector') && (
+                    selectedGun && selectedProfile && selectedSpec ? (
                     <div
                       data-testid="td-gun-inspector"
                       className="rounded-xl border bg-gradient-to-br from-slate-900/95 via-[#0E1729] to-slate-950 p-3 space-y-3 transition-all"
@@ -7883,10 +9493,72 @@ export function PrismTdGameSection({
                         </div>
                       </div>
                     </div>
+                    ) : isPortraitMobile ? (
+                      <div
+                        data-testid="td-shop-skill-inspector"
+                        className="rounded-xl border border-slate-700/80 bg-[#080E1C] p-2.5 space-y-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <PrismTdGunGlyph
+                              type={selectedToolSpec.type}
+                              color={selectedToolSpec.accentColor}
+                              className="w-6 h-6 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <h3 className="text-xs font-bold text-white truncate">{selectedToolSpec.name}</h3>
+                              <p className="text-[10px] font-mono text-amber-300 tabular-nums">
+                                Giá {selectedToolSpec.cost}⚡ · {selectedVariant === 'alpha' ? 'α Alpha' : 'ω Omega'}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSidebarTab('arsenal')}
+                            className="min-h-[34px] px-2.5 rounded-lg bg-amber-400 text-[#070B14] font-bold text-[11px] cursor-pointer shrink-0"
+                          >
+                            Kho Súng
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-cyan-200 leading-snug">{selectedToolSpec.roleClue}</p>
+                        <div className="grid grid-cols-1 gap-1.5">
+                          {selectedToolRoadmap
+                            .filter((step) => step.milestone !== null)
+                            .map((step) => (
+                              <div
+                                key={step.level}
+                                className={`rounded-lg border px-2 py-1.5 text-[10px] ${
+                                  step.level === MAX_GUN_LEVEL
+                                    ? 'border-amber-400/50 bg-amber-950/20'
+                                    : 'border-cyan-500/35 bg-slate-900/80'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between gap-1 font-mono font-bold">
+                                  <span className={step.level === MAX_GUN_LEVEL ? 'text-amber-300' : 'text-cyan-300'}>
+                                    {step.level === MAX_GUN_LEVEL ? '✦' : '★'} LV.{step.level} · {step.powerMultiplierLabel}
+                                  </span>
+                                  <span className="text-[9px] text-slate-400">
+                                    {selectedToolSpec.category === 'support' ? `Tầm ${step.rangeTiles}ô` : `DMG ${step.damage}`}
+                                  </span>
+                                </div>
+                                <div className="font-semibold text-white truncate">{step.milestone!.name}</div>
+                                <p className="text-[9px] text-slate-300 leading-snug">{step.milestone!.summary}</p>
+                              </div>
+                            ))}
+                        </div>
+                        <div className="rounded-lg border border-slate-800 bg-slate-950/80 px-2 py-1 text-[10px] font-mono">
+                          <span style={{ color: selectedToolSpec.overheatSkill.color }} className="font-bold block">
+                            🔥 Quá Nhiệt: {selectedToolSpec.overheatSkill.name}
+                          </span>
+                          <span className="text-[9px] text-slate-400">{selectedToolSpec.overheatSkill.summary}</span>
+                        </div>
+                      </div>
+                    ) : null
                   )}
                 </div>
 
-                {/* Pinned Bottom Action Bar (min-h 44px Early Wave CTA + Ready Hỏa Lực Quick Trigger) */}
+                {/* Pinned Bottom Action Bar (Rendered in Sidebar Theater OR Standard Desktop; Portrait Mobile uses immediate bar right under Canvas!) */}
+                {(useSidebarTheater || !isPortraitMobile) && (
                 <div
                   className={
                     useSidebarTheater
@@ -7935,6 +9607,7 @@ export function PrismTdGameSection({
                     )}
                   </div>
                 </div>
+                )}
               </div>
             )}
           </div>

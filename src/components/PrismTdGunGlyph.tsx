@@ -7,7 +7,7 @@ interface PrismTdGunGlyphProps {
 }
 
 /**
- * Lightweight, crisp tactical SVG silhouettes for all 19 towers so mobile gun cards
+ * Lightweight, crisp tactical SVG silhouettes for all 25 towers so mobile gun cards
  * read at a glance without cramped micro-copy.
  */
 export function PrismTdGunGlyph({ type, color, className = 'w-6 h-6' }: PrismTdGunGlyphProps) {
@@ -123,6 +123,14 @@ export function PrismTdGunGlyph({ type, color, className = 'w-6 h-6' }: PrismTdG
           <polyline points="14,8.5 14,14 18.5,16.5" fill="none" stroke="#F8FAFC" strokeWidth="1.7" strokeLinecap="round" />
         </svg>
       );
+    case 'aegis_bastion':
+      return (
+        <svg viewBox="0 0 28 28" className={className} aria-hidden="true">
+          <polygon points="14,3 23,8 23,18 14,25 5,18 5,8" fill="#081C2E" stroke={color} strokeWidth="1.7" />
+          <polygon points="14,6.5 19.5,10 19.5,16.5 14,21 8.5,16.5 8.5,10" fill={color} fillOpacity="0.28" stroke="#FDE047" strokeWidth="1.1" />
+          <polygon points="14,6 16.2,14 14,22 11.8,14" fill="#FFFFFF" />
+        </svg>
+      );
     case 'astral_ark':
       return (
         <svg viewBox="0 0 28 28" className={className} aria-hidden="true">
@@ -172,6 +180,63 @@ export function PrismTdGunGlyph({ type, color, className = 'w-6 h-6' }: PrismTdG
           <circle cx="14" cy="14" r="6" fill="none" stroke={color} strokeWidth="1.2" strokeOpacity="0.7" />
           <line x1="14" y1="14" x2="21" y2="8.5" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
           <circle cx="14" cy="14" r="2.2" fill="#FDE047" />
+        </svg>
+      );
+    case 'prism_refract':
+      return (
+        <svg viewBox="0 0 28 28" className={className} aria-hidden="true">
+          <polygon points="14,4 23,19.5 5,19.5" fill="#0B1222" stroke={color} strokeWidth="1.6" strokeLinejoin="round" />
+          <line x1="3" y1="12" x2="11" y2="14" stroke="#FFFFFF" strokeWidth="1.7" />
+          <line x1="16" y1="14" x2="25" y2="8" stroke="#38BDF8" strokeWidth="1.5" />
+          <line x1="16" y1="14" x2="25.5" y2="14" stroke="#FDE047" strokeWidth="1.5" />
+          <line x1="16" y1="14" x2="25" y2="20" stroke="#E879F9" strokeWidth="1.5" />
+          <circle cx="14" cy="14" r="2.2" fill="#FFFFFF" />
+        </svg>
+      );
+    case 'hyperion':
+      return (
+        <svg viewBox="0 0 28 28" className={className} aria-hidden="true">
+          <rect x="4" y="5" width="20" height="18" rx="4" fill="#1F0812" stroke={color} strokeWidth="1.6" />
+          <rect x="13" y="9.5" width="12.5" height="3.2" rx="1" fill={color} />
+          <rect x="13" y="15.3" width="12.5" height="3.2" rx="1" fill={color} />
+          <circle cx="11" cy="14" r="4.2" fill="#0F172A" stroke="#FDE047" strokeWidth="1.4" />
+          <circle cx="11" cy="14" r="1.8" fill="#FFFFFF" />
+        </svg>
+      );
+    case 'aurora_spire':
+      return (
+        <svg viewBox="0 0 28 28" className={className} aria-hidden="true">
+          <circle cx="14" cy="14" r="10.5" fill="#04191B" stroke={color} strokeWidth="1.6" />
+          <polygon points="14,5 18,14 14,23 10,14" fill={color} fillOpacity="0.82" stroke="#E0F2FE" strokeWidth="1" />
+          <path d="M5 10 Q14 5 23 10" fill="none" stroke="#67E8F9" strokeWidth="1.3" />
+          <circle cx="14" cy="14" r="2.3" fill="#FFFFFF" />
+        </svg>
+      );
+    case 'aurelia_cannon':
+      return (
+        <svg viewBox="0 0 28 28" className={className} aria-hidden="true">
+          <circle cx="14" cy="14" r="10.5" fill="#1C1403" stroke={color} strokeWidth="1.7" />
+          <polygon points="14,3.5 16.8,11 24.5,14 16.8,17 14,24.5 11.2,17 3.5,14 11.2,11" fill={color} fillOpacity="0.85" />
+          <circle cx="14" cy="14" r="2.6" fill="#FFFFFF" />
+        </svg>
+      );
+    case 'paradox_scythe':
+      return (
+        <svg viewBox="0 0 28 28" className={className} aria-hidden="true">
+          <circle cx="14" cy="14" r="10.5" fill="#061424" stroke={color} strokeWidth="1.6" />
+          <path d="M8 10 A8.5 8.5 0 0 1 22 14 A6.5 6.5 0 0 0 10 12 Z" fill={color} />
+          <path d="M20 18 A8.5 8.5 0 0 1 6 14 A6.5 6.5 0 0 0 18 16 Z" fill="#C084FC" />
+          <circle cx="14" cy="14" r="2.4" fill="#FFFFFF" />
+        </svg>
+      );
+    case 'nebula_core':
+      return (
+        <svg viewBox="0 0 28 28" className={className} aria-hidden="true">
+          <circle cx="14" cy="14" r="10.5" fill="#150726" stroke={color} strokeWidth="1.6" />
+          <circle cx="14" cy="14" r="6.5" fill="none" stroke="#38BDF8" strokeWidth="1.3" strokeDasharray="3 2" />
+          <circle cx="14" cy="14" r="3.4" fill={color} />
+          <circle cx="8" cy="9" r="1.5" fill="#FEF08A" />
+          <circle cx="20" cy="19" r="1.5" fill="#67E8F9" />
         </svg>
       );
     case 'quantum_prism':

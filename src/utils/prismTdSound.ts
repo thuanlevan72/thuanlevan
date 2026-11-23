@@ -500,14 +500,20 @@ const SFX_MIN_GAP_MS: Partial<Record<PrismSfxKind, number>> = {
   mortar: 135,
   missile: 120,
   railgun: 130,
+  prism_refract: 145,
   orbital: 240,
+  hyperion: 195,
   singularity: 220,
   mothership: 150,
   supernova: 170,
   chronos: 185,
   astral_ark: 195,
+  aurelia_cannon: 165,
+  paradox_scythe: 170,
+  nebula_core: 205,
   tesla: 110,
   tempest: 125,
+  aurora_spire: 185,
   beacon: 220,
   cryo: 150,
   radar: 190,
@@ -824,6 +830,20 @@ export function playPrismSfx(
         playSubKick(ctx, bus, 86, 22, 0.34, 0.3 * mix);
         break;
 
+      case 'aegis_bastion':
+        playStableTone(ctx, bus, 493.88, 0.16, 0.08 * mix, 'triangle', 0, 0.004);
+        playStableTone(ctx, bus, 739.99, 0.19, 0.075 * mix, 'sine', 0.025, 0.004);
+        playFoleyBuffer(ctx, bus, bus.buffers.steel, {
+          filterType: 'bandpass',
+          cutoffHz: 2600,
+          q: 0.95,
+          rate: jitter(1.06, 0.06),
+          dur: 0.14,
+          vol: 0.26 * mix,
+        });
+        playSubKick(ctx, bus, 94, 30, 0.2, 0.24 * mix);
+        break;
+
       case 'astral_ark':
         // 1000-energy apex void prism cannon: crystal harmonic + hypersonic capacitor crack + sub impact
         playStableTone(ctx, bus, 523.25, 0.16, 0.085 * mix, 'sine', 0, 0.003);
@@ -838,7 +858,71 @@ export function playPrismSfx(
         playSubKick(ctx, bus, 94, 22, 0.38, 0.32 * mix);
         break;
 
-      // ---- ELECTRIC / LIGHTNING WEAPONS (2) ----
+      case 'prism_refract':
+        playStableTone(ctx, bus, 740, 0.12, 0.08 * mix, 'sine', 0, 0.003);
+        playStableTone(ctx, bus, 1108.73, 0.14, 0.065 * mix, 'triangle', 0.02, 0.003);
+        playFoleyBuffer(ctx, bus, bus.buffers.ice, {
+          filterType: 'highpass',
+          cutoffHz: 1800,
+          rate: jitter(1.12, 0.06),
+          dur: 0.11,
+          vol: 0.2 * mix,
+        });
+        break;
+
+      case 'hyperion':
+        playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
+          filterType: 'lowpass',
+          cutoffHz: 2200,
+          rate: jitter(0.82, 0.04),
+          dur: 0.32,
+          vol: 0.36 * mix,
+        });
+        playSubKick(ctx, bus, 92, 24, 0.34, 0.32 * mix);
+        playBoltClick(ctx, bus, 2600, 0.12 * mix, 0.04);
+        break;
+
+      case 'aurelia_cannon':
+        playStableTone(ctx, bus, 659.25, 0.13, 0.085 * mix, 'triangle', 0, 0.003);
+        playStableTone(ctx, bus, 987.77, 0.16, 0.07 * mix, 'sine', 0.025, 0.003);
+        playFoleyBuffer(ctx, bus, bus.buffers.steel, {
+          filterType: 'bandpass',
+          cutoffHz: 2700,
+          q: 0.9,
+          rate: 1.06,
+          dur: 0.13,
+          vol: 0.24 * mix,
+        });
+        playSubKick(ctx, bus, 92, 30, 0.22, 0.22 * mix);
+        break;
+
+      case 'paradox_scythe':
+        playFoleyBuffer(ctx, bus, bus.buffers.steel, {
+          filterType: 'bandpass',
+          cutoffHz: 2200,
+          q: 1.1,
+          rate: jitter(1.1, 0.07),
+          dur: 0.15,
+          vol: 0.28 * mix,
+        });
+        playStableTone(ctx, bus, 554.37, 0.12, 0.07 * mix, 'sine', 0, 0.004);
+        playSubKick(ctx, bus, 88, 32, 0.18, 0.18 * mix);
+        break;
+
+      case 'nebula_core':
+        playStableTone(ctx, bus, 440, 0.18, 0.08 * mix, 'sine', 0, 0.004);
+        playStableTone(ctx, bus, 880, 0.22, 0.07 * mix, 'triangle', 0.03, 0.004);
+        playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
+          filterType: 'lowpass',
+          cutoffHz: 1750,
+          rate: 0.88,
+          dur: 0.34,
+          vol: 0.34 * mix,
+        });
+        playSubKick(ctx, bus, 90, 22, 0.4, 0.32 * mix);
+        break;
+
+      // ---- ELECTRIC / LIGHTNING WEAPONS (3) ----
       case 'tesla':
         playElectricArc(ctx, bus, 0.24 * mix, 0.095, 0);
         break;
@@ -853,6 +937,12 @@ export function playPrismSfx(
           vol: 0.22 * mix,
           delay: 0.012,
         });
+        break;
+
+      case 'aurora_spire':
+        playElectricArc(ctx, bus, 0.26 * mix, 0.12, 0);
+        playStableTone(ctx, bus, 587.33, 0.15, 0.075 * mix, 'sine', 0.01, 0.004);
+        playSubKick(ctx, bus, 94, 34, 0.18, 0.18 * mix);
         break;
 
       // ---- PURE SUPPORT TOWERS (3) ----
@@ -1129,6 +1219,22 @@ export function playOverheatSkillSfx(
         playSubKick(ctx, bus, 90, 20, 0.54, 0.36 * mix, 0.02);
         break;
 
+      case 'aegis_citadel_overcharge':
+        playStableTone(ctx, bus, 392.0, 0.22, 0.1 * mix, 'triangle', 0, 0.004);
+        playStableTone(ctx, bus, 587.33, 0.26, 0.105 * mix, 'sine', 0.04, 0.004);
+        playStableTone(ctx, bus, 783.99, 0.34, 0.11 * mix, 'sine', 0.08, 0.004);
+        playFoleyBuffer(ctx, bus, bus.buffers.steel, {
+          filterType: 'bandpass',
+          cutoffHz: 2800,
+          q: 1.0,
+          rate: 0.96,
+          dur: 0.22,
+          vol: 0.3 * mix,
+          delay: 0.02,
+        });
+        playSubKick(ctx, bus, 96, 24, 0.42, 0.32 * mix, 0.02);
+        break;
+
       case 'void_cataclysm':
         playStableTone(ctx, bus, 659.25, 0.22, 0.1 * mix, 'sine', 0, 0.004);
         playStableTone(ctx, bus, 987.77, 0.28, 0.1 * mix, 'triangle', 0.04, 0.004);
@@ -1149,6 +1255,85 @@ export function playOverheatSkillSfx(
         playStableTone(ctx, bus, 783.99, 0.24, 0.095 * mix, 'triangle', 0.05, 0.004);
         playStableTone(ctx, bus, 1174.66, 0.28, 0.1 * mix, 'sine', 0.1, 0.004);
         playSubKick(ctx, bus, 92, 40, 0.22, 0.18 * mix);
+        break;
+
+      case 'prism_nova_spectrum':
+        playStableTone(ctx, bus, 659.25, 0.18, 0.09 * mix, 'sine', 0, 0.004);
+        playStableTone(ctx, bus, 987.77, 0.22, 0.095 * mix, 'triangle', 0.04, 0.004);
+        playStableTone(ctx, bus, 1318.51, 0.26, 0.09 * mix, 'sine', 0.08, 0.004);
+        playFoleyBuffer(ctx, bus, bus.buffers.ice, {
+          filterType: 'highpass',
+          cutoffHz: 1500,
+          rate: 1.1,
+          dur: 0.18,
+          vol: 0.24 * mix,
+        });
+        break;
+
+      case 'hyperion_doomsday_salvo':
+        for (let i = 0; i < 3; i++) {
+          playFoleyBuffer(ctx, bus, bus.buffers.heavyCannon, {
+            filterType: 'lowpass',
+            cutoffHz: 2400,
+            rate: 0.84 - i * 0.04,
+            dur: 0.3,
+            vol: 0.34 * mix,
+            delay: i * 0.08,
+          });
+          playSubKick(ctx, bus, 94, 22, 0.32, 0.3 * mix, i * 0.08);
+        }
+        break;
+
+      case 'aurora_magnetic_collapse':
+        playElectricArc(ctx, bus, 0.28 * mix, 0.14, 0);
+        playElectricArc(ctx, bus, 0.24 * mix, 0.12, 0.07);
+        playStableTone(ctx, bus, 587.33, 0.24, 0.1 * mix, 'sine', 0.02, 0.004);
+        playSubKick(ctx, bus, 92, 26, 0.32, 0.24 * mix, 0.02);
+        break;
+
+      case 'aurelia_solar_judgement':
+        playStableTone(ctx, bus, 587.33, 0.2, 0.1 * mix, 'triangle', 0, 0.004);
+        playStableTone(ctx, bus, 880, 0.24, 0.1 * mix, 'sine', 0.04, 0.004);
+        playStableTone(ctx, bus, 1174.66, 0.28, 0.11 * mix, 'sine', 0.08, 0.004);
+        playFoleyBuffer(ctx, bus, bus.buffers.steel, {
+          filterType: 'bandpass',
+          cutoffHz: 2900,
+          q: 0.9,
+          rate: 1.08,
+          dur: 0.18,
+          vol: 0.26 * mix,
+        });
+        break;
+
+      case 'paradox_chrono_reap':
+        for (let i = 0; i < 3; i++) {
+          playFoleyBuffer(ctx, bus, bus.buffers.steel, {
+            filterType: 'bandpass',
+            cutoffHz: 2400 + i * 250,
+            q: 1.1,
+            rate: 1.05 + i * 0.07,
+            dur: 0.14,
+            vol: 0.26 * mix,
+            delay: i * 0.06,
+          });
+        }
+        playStableTone(ctx, bus, 739.99, 0.24, 0.1 * mix, 'sine', 0.02, 0.004);
+        playSubKick(ctx, bus, 90, 24, 0.34, 0.26 * mix);
+        break;
+
+      case 'nebula_cosmic_collapse':
+        playStableTone(ctx, bus, 440, 0.24, 0.1 * mix, 'sine', 0, 0.004);
+        playStableTone(ctx, bus, 659.25, 0.28, 0.1 * mix, 'triangle', 0.04, 0.004);
+        playStableTone(ctx, bus, 987.77, 0.34, 0.11 * mix, 'sine', 0.08, 0.004);
+        playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
+          filterType: 'lowpass',
+          cutoffHz: 1850,
+          rate: 0.8,
+          dur: 0.44,
+          vol: 0.36 * mix,
+          delay: 0.03,
+        });
+        playSubKick(ctx, bus, 96, 20, 0.5, 0.35 * mix, 0.02);
         break;
 
       default:

@@ -1,4 +1,5 @@
 import {
+  AuroraPylonFx,
   CarrierDrone,
   ChronoField,
   ChronoSlashFx,
@@ -51,6 +52,14 @@ export interface OverheatFx {
     | 'chrono_collapse'
     | 'void_cataclysm'
     | 'quantum_singularity'
+    | 'prism_web'
+    | 'doomsday_blast'
+    | 'aurora_storm'
+    | 'solar_bounty'
+    | 'paradox_rift'
+    | 'nebula_swarm'
+    | 'aegis_nova'
+    | 'phase2_surge'
     | 'overdrive_apex';
   x: number;
   y: number;
@@ -516,6 +525,126 @@ export function drawOverheatSpecialFx(
       ctx.lineWidth = 1.8;
       drawPolygon(ctx, 0, 0, 8, curR * 0.68, animTime * 1.4);
       ctx.stroke();
+    } else if (fx.kind === 'prism_web') {
+      ctx.translate(fx.x, fx.y);
+      const expand = 0.25 + (1 - t) * 0.75;
+      const curR = fx.radius * expand;
+      ctx.globalAlpha = t * 0.9;
+      const hues = ['#38BDF8', '#FDE047', '#E879F9', '#34D399', '#FB7185', '#67E8F9'];
+      for (let i = 0; i < 6; i++) {
+        const a = (i * Math.PI) / 3 + animTime * 2.2;
+        ctx.strokeStyle = hues[i % hues.length];
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(Math.cos(a) * curR, Math.sin(a) * curR);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.lineWidth = 1.8;
+      drawPolygon(ctx, 0, 0, 3, curR * 0.55, animTime * 2);
+      ctx.stroke();
+    } else if (fx.kind === 'doomsday_blast' || fx.kind === 'phase2_surge') {
+      ctx.translate(fx.x, fx.y);
+      const expand = 0.2 + (1 - t) * 0.85;
+      const curR = fx.radius * expand;
+      ctx.globalAlpha = t * 0.92;
+      const dg = ctx.createRadialGradient(0, 0, 6, 0, 0, curR);
+      dg.addColorStop(0, '#FFFFFF');
+      dg.addColorStop(0.28, fx.kind === 'phase2_surge' ? '#FDE047' : '#FB7185');
+      dg.addColorStop(0.66, fx.kind === 'phase2_surge' ? 'rgba(239, 68, 68, 0.42)' : 'rgba(225, 29, 72, 0.36)');
+      dg.addColorStop(1, 'rgba(225, 29, 72, 0)');
+      ctx.fillStyle = dg;
+      ctx.beginPath();
+      ctx.arc(0, 0, curR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = fx.color || '#F43F5E';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, curR, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (fx.kind === 'aegis_nova') {
+      ctx.translate(fx.x, fx.y);
+      const expand = 0.24 + (1 - t) * 0.78;
+      const curR = fx.radius * expand;
+      ctx.globalAlpha = t * 0.92;
+      const ag = ctx.createRadialGradient(0, 0, 8, 0, 0, curR);
+      ag.addColorStop(0, 'rgba(255, 255, 255, 0.85)');
+      ag.addColorStop(0.28, 'rgba(56, 189, 248, 0.44)');
+      ag.addColorStop(0.66, 'rgba(250, 204, 21, 0.22)');
+      ag.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = ag;
+      ctx.beginPath();
+      ctx.arc(0, 0, curR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#FDE047';
+      ctx.lineWidth = 3;
+      drawPolygon(ctx, 0, 0, 6, curR * 0.92, animTime * 1.3);
+      ctx.stroke();
+      ctx.strokeStyle = '#38BDF8';
+      ctx.lineWidth = 2.2;
+      drawPolygon(ctx, 0, 0, 6, curR * 0.68, -animTime * 1.6);
+      ctx.stroke();
+    } else if (fx.kind === 'aurora_storm') {
+      ctx.translate(fx.x, fx.y);
+      const expand = 0.3 + (1 - t) * 0.7;
+      const curR = fx.radius * expand;
+      ctx.globalAlpha = t * 0.88;
+      ctx.strokeStyle = '#2DD4BF';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.arc(0, 0, curR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = '#67E8F9';
+      ctx.lineWidth = 1.8;
+      drawPolygon(ctx, 0, 0, 4, curR * 0.72, animTime * 3.4);
+      ctx.stroke();
+    } else if (fx.kind === 'solar_bounty') {
+      ctx.translate(fx.x, fx.y);
+      const expand = 0.25 + (1 - t) * 0.75;
+      const curR = fx.radius * expand;
+      ctx.globalAlpha = t * 0.9;
+      ctx.strokeStyle = '#FACC15';
+      ctx.lineWidth = 2.6;
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4 + animTime * 2.8;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * 10, Math.sin(a) * 10);
+        ctx.lineTo(Math.cos(a) * curR, Math.sin(a) * curR);
+        ctx.stroke();
+      }
+    } else if (fx.kind === 'paradox_rift') {
+      ctx.translate(fx.x, fx.y);
+      const expand = 0.25 + (1 - t) * 0.75;
+      const curR = fx.radius * expand;
+      ctx.globalAlpha = t * 0.9;
+      ctx.strokeStyle = '#67E8F9';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(0, 0, curR, animTime * 4, animTime * 4 + Math.PI * 1.45);
+      ctx.stroke();
+      ctx.strokeStyle = '#C084FC';
+      ctx.beginPath();
+      ctx.arc(0, 0, curR * 0.74, -animTime * 5, -animTime * 5 + Math.PI * 1.45);
+      ctx.stroke();
+    } else if (fx.kind === 'nebula_swarm') {
+      ctx.translate(fx.x, fx.y);
+      const expand = 0.22 + (1 - t) * 0.8;
+      const curR = fx.radius * expand;
+      ctx.globalAlpha = t * 0.9;
+      const ng = ctx.createRadialGradient(0, 0, 6, 0, 0, curR);
+      ng.addColorStop(0, '#FFFFFF');
+      ng.addColorStop(0.32, '#F0ABFC');
+      ng.addColorStop(0.7, 'rgba(56, 189, 248, 0.28)');
+      ng.addColorStop(1, 'rgba(139, 92, 246, 0)');
+      ctx.fillStyle = ng;
+      ctx.beginPath();
+      ctx.arc(0, 0, curR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#F0ABFC';
+      ctx.lineWidth = 2.4;
+      drawPolygon(ctx, 0, 0, 5, curR * 0.84, animTime * 2);
+      ctx.stroke();
     }
 
     ctx.restore();
@@ -536,7 +665,8 @@ export function drawRailBeamEnhanced(
 
   const isSupernovaBeam = rb.variant === 'supernova';
   const isAstralBeam = rb.variant === 'astral_ark';
-  const beamScale = isAstralBeam ? 1.62 : isSupernovaBeam ? 1.48 : 1;
+  const isPrismBeam = rb.variant === 'prism_refract';
+  const beamScale = isAstralBeam ? 1.62 : isSupernovaBeam ? 1.48 : isPrismBeam ? 1.18 : 1;
 
   ctx.strokeStyle = rb.color;
   ctx.lineWidth = (17 + rTier * 4.2) * beamScale * rb.alpha;
@@ -549,9 +679,11 @@ export function drawRailBeamEnhanced(
     ? '#F0ABFC'
     : isSupernovaBeam
       ? '#FDE047'
-      : rTier >= 3
-        ? '#FDE047'
-        : '#E879F9';
+      : isPrismBeam
+        ? '#67E8F9'
+        : rTier >= 3
+          ? '#FDE047'
+          : '#E879F9';
   ctx.lineWidth = (7.5 + rTier * 2) * beamScale * rb.alpha;
   ctx.beginPath();
   ctx.moveTo(rb.x1, rb.y1);
@@ -566,7 +698,7 @@ export function drawRailBeamEnhanced(
   ctx.stroke();
 
   const beamAngle = Math.atan2(rb.y2 - rb.y1, rb.x2 - rb.x1);
-  const ringCount = (isAstralBeam ? 6 : isSupernovaBeam ? 5 : 3) + rTier;
+  const ringCount = (isAstralBeam ? 6 : isSupernovaBeam ? 5 : isPrismBeam ? 4 : 3) + rTier;
   for (let m = 1; m <= ringCount; m++) {
     const frac = 0.06 + m * 0.11;
     const rx = rb.x1 + (rb.x2 - rb.x1) * frac;
@@ -578,10 +710,12 @@ export function drawRailBeamEnhanced(
       ? '#67E8F9'
       : isSupernovaBeam
         ? '#FEF08A'
-        : rTier >= 3
-          ? '#38BDF8'
-          : '#FEF08A';
-    ctx.lineWidth = isAstralBeam || isSupernovaBeam ? 2.4 : 2;
+        : isPrismBeam
+          ? (m % 2 === 0 ? '#E879F9' : '#FDE047')
+          : rTier >= 3
+            ? '#38BDF8'
+            : '#FEF08A';
+    ctx.lineWidth = isAstralBeam || isSupernovaBeam || isPrismBeam ? 2.4 : 2;
     ctx.beginPath();
     ctx.ellipse(0, 0, 5.5, (16 + rTier * 3 - m * 1.6) * (1.25 - rb.alpha * 0.4), 0, 0, Math.PI * 2);
     ctx.stroke();
@@ -705,7 +839,118 @@ export function drawProjectileEnhanced(
     return;
   }
 
+  if (pr.kind === 'paradox_scythe') {
+    ctx.rotate(animTime * 24 + pr.id);
+    const scR = 13 + pr.visualTier * 1.3;
+    ctx.strokeStyle = pr.isReturning ? '#C084FC' : '#67E8F9';
+    ctx.fillStyle = 'rgba(103, 232, 249, 0.34)';
+    ctx.lineWidth = 2.2;
+    for (let b = 0; b < 2; b++) {
+      ctx.save();
+      ctx.rotate(b * Math.PI);
+      ctx.beginPath();
+      ctx.arc(0, 0, scR, -0.75, 1.35);
+      ctx.arc(2.5, 0, scR * 0.62, 1.35, -0.75, true);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(0, 0, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
+
+  if (pr.kind === 'nebula_meteor') {
+    const mR = 12 + pr.visualTier * 1.4;
+    const mg = ctx.createRadialGradient(0, 0, 1.5, 0, 0, mR);
+    mg.addColorStop(0, '#FFFFFF');
+    mg.addColorStop(0.35, '#F0ABFC');
+    mg.addColorStop(0.78, pr.color || '#A855F7');
+    mg.addColorStop(1, 'rgba(168, 85, 247, 0)');
+    ctx.fillStyle = mg;
+    ctx.beginPath();
+    ctx.arc(0, 0, mR, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.rotate(animTime * 14 + pr.id);
+    ctx.strokeStyle = '#38BDF8';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, mR * 1.05, 4.4, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
   ctx.rotate(Math.atan2(pr.vy, pr.vx));
+
+  if (pr.kind === 'hyperion_shell') {
+    const s = 1 + pr.visualTier * 0.1;
+    ctx.scale(s, s);
+    const hg = ctx.createLinearGradient(-16, 0, 14, 0);
+    hg.addColorStop(0, 'rgba(244, 63, 94, 0)');
+    hg.addColorStop(0.45, '#F43F5E');
+    hg.addColorStop(1, '#FEF08A');
+    ctx.fillStyle = hg;
+    ctx.beginPath();
+    ctx.moveTo(15, 0);
+    ctx.lineTo(-10, -6.5);
+    ctx.lineTo(-6, 0);
+    ctx.lineTo(-10, 6.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#FDE047';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  if (pr.kind === 'golden_lance') {
+    const s = 1 + pr.visualTier * 0.08;
+    ctx.scale(s, s);
+    ctx.fillStyle = '#FEF08A';
+    ctx.strokeStyle = '#F59E0B';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(17, 0);
+    ctx.lineTo(-4, -4.5);
+    ctx.lineTo(-13, 0);
+    ctx.lineTo(-4, 4.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(-5, -1.2, 16, 2.4);
+    ctx.restore();
+    return;
+  }
+
+  if (pr.kind === 'aegis_lance') {
+    const s = 1 + pr.visualTier * 0.09;
+    ctx.scale(s, s);
+    ctx.fillStyle = pr.color === '#FDE047' ? '#FEF08A' : '#38BDF8';
+    ctx.strokeStyle = pr.color === '#FDE047' ? '#F59E0B' : '#BAE6FD';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(18, 0);
+    ctx.lineTo(3, -6.5);
+    ctx.lineTo(-10, -4.5);
+    ctx.lineTo(-14, 0);
+    ctx.lineTo(-10, 4.5);
+    ctx.lineTo(3, 6.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(-5, -1.4, 17, 2.8);
+    ctx.restore();
+    return;
+  }
 
   if (pr.kind === 'mortar') {
     ctx.save();
@@ -829,12 +1074,26 @@ export function drawGunTurretSprite(
   if (tier === 4) {
     ctx.save();
     ctx.rotate(animTime * 2.5);
-    ctx.strokeStyle = isOmega ? 'rgba(251, 146, 60, 0.9)' : 'rgba(250, 204, 21, 0.85)';
-    ctx.lineWidth = 2.2;
+    ctx.strokeStyle = isOmega ? 'rgba(251, 146, 60, 0.92)' : 'rgba(250, 204, 21, 0.9)';
+    ctx.lineWidth = 2.4;
     ctx.setLineDash([7, 4]);
     ctx.beginPath();
-    ctx.arc(0, 0, 27.5, 0, Math.PI * 2);
+    ctx.arc(0, 0, 28, 0, Math.PI * 2);
     ctx.stroke();
+    // 4 Orbiting Apex Lv7 Satellites so Lv7 towers stand out unmistakably
+    ctx.setLineDash([]);
+    for (let sat = 0; sat < 4; sat++) {
+      const sa = (sat * Math.PI) / 2;
+      const sx = Math.cos(sa) * 28.5;
+      const sy = Math.sin(sa) * 28.5;
+      ctx.fillStyle = isOmega ? '#FB7185' : '#FEF08A';
+      ctx.strokeStyle = '#070B14';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
     ctx.restore();
 
     ctx.save();
@@ -859,14 +1118,20 @@ export function drawGunTurretSprite(
   }
 
   const baseGrad = ctx.createLinearGradient(-baseRadius, -baseRadius, baseRadius, baseRadius);
-  if (type === 'tesla' || type === 'tempest') {
+  if (type === 'tesla' || type === 'tempest' || type === 'aurora_spire') {
     baseGrad.addColorStop(0, '#0C4A6E');
     baseGrad.addColorStop(1, '#090D16');
   } else if (type === 'beacon' || type === 'cryo' || type === 'radar' || type === 'quantum_prism') {
     baseGrad.addColorStop(0, '#064E3B');
     baseGrad.addColorStop(1, '#090D16');
-  } else if (type === 'astral_ark') {
+  } else if (type === 'astral_ark' || type === 'nebula_core') {
     baseGrad.addColorStop(0, '#4A044E');
+    baseGrad.addColorStop(1, '#090D16');
+  } else if (type === 'aurelia_cannon') {
+    baseGrad.addColorStop(0, '#422006');
+    baseGrad.addColorStop(1, '#090D16');
+  } else if (type === 'paradox_scythe') {
+    baseGrad.addColorStop(0, '#083344');
     baseGrad.addColorStop(1, '#090D16');
   } else if (isOmega) {
     baseGrad.addColorStop(0, tier >= 3 ? '#4C0519' : '#271222');
@@ -1442,6 +1707,134 @@ export function drawGunTurretSprite(
     ctx.beginPath();
     ctx.arc(0, 0, 4.8 + tier * 0.45 + Math.sin(animTime * 8) * 0.9, 0, Math.PI * 2);
     ctx.fill();
+  } else if (type === 'prism_refract') {
+    ctx.save();
+    ctx.rotate(aimAngle);
+    const kick = recoil * 3.5;
+    ctx.fillStyle = '#0F172A';
+    ctx.strokeStyle = isOmega ? '#C084FC' : '#38BDF8';
+    ctx.lineWidth = 2.1;
+    drawPolygon(ctx, -kick * 0.5, 0, 3, 15 + tier * 0.8, 0);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(2 - kick * 0.5, 0, 4.5 + tier * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (type === 'hyperion') {
+    ctx.save();
+    ctx.rotate(aimAngle);
+    const kick = recoil * 5.5;
+    const len = 21 + tier * 2.5;
+    ctx.fillStyle = isOmega ? '#E11D48' : '#FB7185';
+    ctx.fillRect(2 - kick, -8.5, len, 4.8);
+    ctx.fillRect(2 - kick, 3.7, len, 4.8);
+    ctx.fillStyle = '#FDE047';
+    ctx.fillRect(6 - kick, -2, len - 4, 4);
+    ctx.fillStyle = '#2A0510';
+    ctx.strokeStyle = '#FDE047';
+    ctx.lineWidth = 2.2;
+    drawPolygon(ctx, 0, 0, 8, 12.5 + tier * 0.6, Math.PI / 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  } else if (type === 'aurora_spire') {
+    ctx.save();
+    ctx.rotate(animTime * 2.4);
+    ctx.strokeStyle = isOmega ? '#38BDF8' : '#2DD4BF';
+    ctx.lineWidth = 2.1;
+    drawPolygon(ctx, 0, 0, 4, 16 + tier, 0);
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = '#99F6E4';
+    ctx.beginPath();
+    ctx.arc(0, 0, 6 + tier * 0.6 + Math.sin(animTime * 10) * 1, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'aurelia_cannon') {
+    ctx.save();
+    ctx.rotate(aimAngle);
+    const kick = recoil * 4;
+    ctx.fillStyle = '#422006';
+    ctx.strokeStyle = '#FACC15';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(22 + tier * 2 - kick, 0);
+    ctx.lineTo(-4 - kick, -12);
+    ctx.lineTo(-10 - kick, 0);
+    ctx.lineTo(-4 - kick, 12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#FEF08A';
+    ctx.beginPath();
+    ctx.arc(2 - kick, 0, 5.2 + tier * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (type === 'paradox_scythe') {
+    ctx.save();
+    ctx.rotate(-animTime * 3.8);
+    ctx.strokeStyle = isOmega ? '#C084FC' : '#67E8F9';
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.arc(0, 0, 15 + tier * 0.8, 0, Math.PI * 1.2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(0, 0, 15 + tier * 0.8, Math.PI, Math.PI * 2.2);
+    ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = '#E0F2FE';
+    ctx.beginPath();
+    ctx.arc(0, 0, 5.5 + tier * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'aegis_bastion') {
+    ctx.save();
+    ctx.rotate(animTime * 0.85);
+    ctx.strokeStyle = isOmega ? '#FDE047' : '#38BDF8';
+    ctx.lineWidth = 2.4;
+    drawPolygon(ctx, 0, 0, 6, 17 + tier * 1.1, 0);
+    ctx.stroke();
+    ctx.fillStyle = isOmega ? 'rgba(250, 204, 21, 0.14)' : 'rgba(56, 189, 248, 0.16)';
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.rotate(aimAngle);
+    ctx.fillStyle = '#0B1222';
+    ctx.strokeStyle = isOmega ? '#FDE047' : '#7DD3FC';
+    ctx.lineWidth = 1.6;
+    ctx.fillRect(-3, -6.5, 19 + tier, 13);
+    ctx.strokeRect(-3, -6.5, 19 + tier, 13);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(6, -1.8, 12 + tier, 3.6);
+    ctx.restore();
+
+    ctx.fillStyle = isOmega ? '#FDE047' : '#38BDF8';
+    ctx.beginPath();
+    ctx.arc(0, 0, 6 + tier * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (type === 'nebula_core') {
+    ctx.save();
+    ctx.rotate(animTime * 2.1);
+    ctx.strokeStyle = isOmega ? '#FB7185' : '#F0ABFC';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 18 + tier, 7.5, 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = '#38BDF8';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 18 + tier, 7.5, -0.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    const nCore = 6 + tier * 0.65 + Math.sin(animTime * 11) * 1;
+    ctx.fillStyle = '#F0ABFC';
+    ctx.beginPath();
+    ctx.arc(0, 0, nCore, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(0, 0, nCore * 0.48, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   // Variant Tag + Level Badge Pill
@@ -1506,20 +1899,30 @@ export function drawEnemySprite(
   }
 
   // Boss & Super Boss Aura + Telegraphed Interruptible Skill Windup Halo
+  const bossPrimary = en.bossColor || (en.kind === 'super_boss' ? '#FDE047' : '#FB7185');
+  const bossSec = en.bossSecondary || (en.kind === 'super_boss' ? '#38BDF8' : '#F97316');
+  const isPhase2 = (en.bossPhase ?? 1) >= 2;
+
   if (en.kind === 'super_boss' && !isKo) {
     ctx.save();
-    ctx.rotate(animTime * 2.4);
-    ctx.strokeStyle = 'rgba(250, 204, 21, 0.85)';
-    ctx.lineWidth = 2.6;
+    ctx.rotate(animTime * (isPhase2 ? 4.2 : 2.4));
+    ctx.strokeStyle = isPhase2 ? '#EF4444' : bossPrimary;
+    ctx.lineWidth = isPhase2 ? 3.2 : 2.6;
     ctx.setLineDash([10, 5]);
     ctx.beginPath();
-    ctx.arc(0, 0, en.radius + 14, 0, Math.PI * 2);
+    ctx.arc(0, 0, en.radius + (isPhase2 ? 17 : 14), 0, Math.PI * 2);
     ctx.stroke();
+    if (isPhase2) {
+      ctx.strokeStyle = bossSec;
+      ctx.lineWidth = 2;
+      drawPolygon(ctx, 0, 0, 6, en.radius + 12, -animTime * 3.5);
+      ctx.stroke();
+    }
     ctx.restore();
   } else if (en.kind === 'boss' && !isKo) {
     ctx.save();
     ctx.rotate(animTime * 1.8);
-    ctx.strokeStyle = 'rgba(244, 63, 94, 0.72)';
+    ctx.strokeStyle = bossPrimary;
     ctx.lineWidth = 2.2;
     ctx.setLineDash([8, 5]);
     ctx.beginPath();
@@ -1668,8 +2071,8 @@ export function drawEnemySprite(
   const pulse = 0.85 + Math.sin(animTime * 18 + en.id) * 0.18;
 
   if (en.kind === 'super_boss') {
-    // COLOSSUS SUPER BOSS: Layered Dreadnought armor plating, exhaust glow, twin rail turrets & reactor crown
-    ctx.fillStyle = '#F59E0B';
+    // COLOSSUS SUPER BOSS: Layered Dreadnought armor plating, per-map signature palette & Phase-2 rage
+    ctx.fillStyle = isPhase2 ? '#EF4444' : bossSec;
     for (const ty of [-13, 0, 13]) {
       ctx.beginPath();
       ctx.moveTo(-24, ty - 4.5);
@@ -1680,11 +2083,11 @@ export function drawEnemySprite(
     }
 
     const colGrad = ctx.createLinearGradient(-28, -28, 32, 28);
-    colGrad.addColorStop(0, flash ? '#FFFFFF' : '#2A0505');
-    colGrad.addColorStop(0.5, flash ? '#FFFFFF' : '#881337');
-    colGrad.addColorStop(1, flash ? '#FFFFFF' : '#1E1B4B');
+    colGrad.addColorStop(0, flash ? '#FFFFFF' : '#1E0829');
+    colGrad.addColorStop(0.5, flash ? '#FFFFFF' : isPhase2 ? '#9F1239' : '#581C87');
+    colGrad.addColorStop(1, flash ? '#FFFFFF' : '#090D16');
     ctx.fillStyle = colGrad;
-    ctx.strokeStyle = '#FDE047';
+    ctx.strokeStyle = isPhase2 ? '#FDE047' : bossPrimary;
     ctx.lineWidth = 2.8;
     ctx.beginPath();
     ctx.moveTo(34, 0);
@@ -1701,7 +2104,6 @@ export function drawEnemySprite(
     ctx.fill();
     ctx.stroke();
 
-    // Inner beveled armor deck & metallic spine seam
     ctx.strokeStyle = 'rgba(253, 224, 71, 0.42)';
     ctx.lineWidth = 1.4;
     ctx.beginPath();
@@ -1713,8 +2115,7 @@ export function drawEnemySprite(
     ctx.lineTo(14, 12);
     ctx.stroke();
 
-    // Heavy Golden Wing Blades
-    ctx.fillStyle = '#FDE047';
+    ctx.fillStyle = bossPrimary;
     for (const sgn of [-1, 1]) {
       ctx.beginPath();
       ctx.moveTo(35, sgn * 6);
@@ -1724,13 +2125,12 @@ export function drawEnemySprite(
       ctx.fill();
     }
 
-    // Twin Shoulder Turrets
     for (const ty of [-16, 16]) {
       ctx.save();
       ctx.translate(-3, ty);
       ctx.rotate(Math.sin(animTime * 2.8 + ty) * 0.45);
       ctx.fillStyle = '#1E293B';
-      ctx.strokeStyle = '#38BDF8';
+      ctx.strokeStyle = bossSec;
       ctx.lineWidth = 1.6;
       ctx.fillRect(0, -3, 14, 6);
       ctx.beginPath();
@@ -1740,8 +2140,7 @@ export function drawEnemySprite(
       ctx.restore();
     }
 
-    // Imperial Singularity Reactor Core
-    ctx.fillStyle = '#38BDF8';
+    ctx.fillStyle = isPhase2 ? '#FDE047' : bossSec;
     ctx.beginPath();
     ctx.arc(4, 0, 8.2 + Math.sin(animTime * 12) * 1.3, 0, Math.PI * 2);
     ctx.fill();
@@ -1750,7 +2149,7 @@ export function drawEnemySprite(
     ctx.arc(4, 0, 3.8, 0, Math.PI * 2);
     ctx.fill();
   } else if (en.kind === 'boss') {
-    ctx.fillStyle = '#F97316';
+    ctx.fillStyle = bossSec;
     for (const ty of [-11, 11]) {
       ctx.beginPath();
       ctx.moveTo(-20, ty - 4.5);
@@ -1761,11 +2160,11 @@ export function drawEnemySprite(
     }
 
     const hullGrad = ctx.createLinearGradient(-22, -22, 26, 22);
-    hullGrad.addColorStop(0, flash ? '#FFFFFF' : '#4C0519');
-    hullGrad.addColorStop(0.5, flash ? '#FFFFFF' : '#9F1239');
-    hullGrad.addColorStop(1, flash ? '#FFFFFF' : '#1E293B');
+    hullGrad.addColorStop(0, flash ? '#FFFFFF' : '#1E1B4B');
+    hullGrad.addColorStop(0.5, flash ? '#FFFFFF' : bossPrimary);
+    hullGrad.addColorStop(1, flash ? '#FFFFFF' : '#0F172A');
     ctx.fillStyle = hullGrad;
-    ctx.strokeStyle = '#FB7185';
+    ctx.strokeStyle = bossPrimary;
     ctx.lineWidth = 2.4;
     ctx.beginPath();
     ctx.moveTo(27, 0);
@@ -1782,8 +2181,7 @@ export function drawEnemySprite(
     ctx.fill();
     ctx.stroke();
 
-    // Hull reinforcement ribs
-    ctx.strokeStyle = 'rgba(254, 205, 211, 0.35)';
+    ctx.strokeStyle = 'rgba(254, 240, 138, 0.38)';
     ctx.lineWidth = 1.2;
     ctx.beginPath();
     ctx.moveTo(-16, 0);
@@ -1794,7 +2192,7 @@ export function drawEnemySprite(
     ctx.lineTo(11, 9);
     ctx.stroke();
 
-    ctx.fillStyle = '#FDE047';
+    ctx.fillStyle = bossSec;
     ctx.beginPath();
     ctx.moveTo(28, -5);
     ctx.lineTo(18, -11);
@@ -1813,7 +2211,7 @@ export function drawEnemySprite(
       ctx.translate(-3, ty);
       ctx.rotate(Math.sin(animTime * 2.4 + ty) * 0.45);
       ctx.fillStyle = '#334155';
-      ctx.strokeStyle = '#FDE047';
+      ctx.strokeStyle = bossPrimary;
       ctx.lineWidth = 1.4;
       ctx.fillRect(0, -2.5, 11, 5);
       ctx.beginPath();
@@ -1823,7 +2221,7 @@ export function drawEnemySprite(
       ctx.restore();
     }
 
-    ctx.fillStyle = '#FDE047';
+    ctx.fillStyle = bossSec;
     ctx.beginPath();
     ctx.arc(3, 0, 6.2 + Math.sin(animTime * 11) * 1.1, 0, Math.PI * 2);
     ctx.fill();
@@ -2084,18 +2482,78 @@ export function drawEnemySprite(
 
   ctx.restore();
 
+  // Unique Map Boss Emblem Badge (rendered upright above hull)
+  if (!isKo && isBossTier && en.bossEmblem) {
+    ctx.save();
+    ctx.translate(0, -en.radius - 2);
+    ctx.strokeStyle = bossPrimary;
+    ctx.fillStyle = bossSec;
+    ctx.lineWidth = 1.5;
+    if (en.bossEmblem === 'crown') {
+      ctx.beginPath();
+      ctx.moveTo(-8, 2);
+      ctx.lineTo(-9, -6);
+      ctx.lineTo(-4, -2);
+      ctx.lineTo(0, -8);
+      ctx.lineTo(4, -2);
+      ctx.lineTo(9, -6);
+      ctx.lineTo(8, 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else if (en.bossEmblem === 'horns') {
+      ctx.beginPath();
+      ctx.moveTo(-6, 1);
+      ctx.quadraticCurveTo(-12, -5, -8, -10);
+      ctx.moveTo(6, 1);
+      ctx.quadraticCurveTo(12, -5, 8, -10);
+      ctx.stroke();
+    } else if (en.bossEmblem === 'halo') {
+      ctx.beginPath();
+      ctx.ellipse(0, -5, 9, 3.2, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (en.bossEmblem === 'void_star') {
+      drawPolygon(ctx, 0, -5, 4, 6.5, animTime * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (en.bossEmblem === 'frost_crest') {
+      drawPolygon(ctx, 0, -5, 6, 5.8, animTime);
+      ctx.stroke();
+    } else if (en.bossEmblem === 'solar_wings') {
+      ctx.beginPath();
+      ctx.moveTo(-11, -3);
+      ctx.lineTo(-3, -7);
+      ctx.lineTo(0, -4);
+      ctx.lineTo(3, -7);
+      ctx.lineTo(11, -3);
+      ctx.stroke();
+    } else if (en.bossEmblem === 'chrono_dial') {
+      ctx.beginPath();
+      ctx.arc(0, -5, 5.5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   // Segmented Health + Shield Bars + Super Boss / Windup Nameplate
   if (!isKo) {
     if (en.kind === 'super_boss') {
-      const bw = 72;
-      const by = -en.radius - 20;
+      const labelTitle = en.bossTitle ? en.bossTitle.toUpperCase() : 'SIÊU BOSS COLOSSUS';
+      const bw = Math.max(78, Math.min(130, labelTitle.length * 5.2));
+      const by = -en.radius - 23;
       ctx.fillStyle = 'rgba(7, 11, 20, 0.94)';
       ctx.fillRect(-bw / 2 - 2, by - 13, bw + 4, 22);
-      ctx.fillStyle = (en.silencedTimer ?? 0) > 0 ? '#34D399' : en.windupTimer > 0 ? '#38BDF8' : '#FDE047';
+      ctx.fillStyle = (en.silencedTimer ?? 0) > 0 ? '#34D399' : en.windupTimer > 0 ? '#38BDF8' : isPhase2 ? '#F43F5E' : bossPrimary;
       ctx.font = 'bold 8.5px monospace';
       ctx.textAlign = 'center';
       ctx.fillText(
-        en.windupTimer > 0 ? '⚡ TỤ CHIÊU! (NGẮT)' : (en.silencedTimer ?? 0) > 0 ? '✦ CÂM LẶNG · COLOSSUS' : 'SIÊU BOSS COLOSSUS',
+        en.windupTimer > 0
+          ? '⚡ TỤ CHIÊU! (NGẮT)'
+          : (en.silencedTimer ?? 0) > 0
+            ? `✦ CÂM LẶNG · ${labelTitle}`
+            : isPhase2
+              ? `🔥 PHA 2 · ${labelTitle}`
+              : labelTitle,
         0,
         by - 4.5
       );
@@ -2103,7 +2561,7 @@ export function drawEnemySprite(
       const hpRatio = Math.max(0, Math.min(1, en.hp / Math.max(1, en.maxHp)));
       ctx.fillStyle = '#450A0A';
       ctx.fillRect(-bw / 2, by, bw, 5.5);
-      ctx.fillStyle = '#F59E0B';
+      ctx.fillStyle = isPhase2 ? '#EF4444' : '#F59E0B';
       ctx.fillRect(-bw / 2, by, bw * hpRatio, 5.5);
       ctx.fillStyle = '#070B14';
       for (let t = 1; t < 6; t++) {
@@ -2115,15 +2573,20 @@ export function drawEnemySprite(
         ctx.fillRect(-bw / 2, by - 3, bw * sRatio, 2.5);
       }
     } else if (en.kind === 'boss') {
-      const bw = 54;
-      const by = -en.radius - 17;
+      const labelTitle = en.bossTitle ? en.bossTitle.toUpperCase() : 'BOSS DREADNOUGHT';
+      const bw = Math.max(64, Math.min(116, labelTitle.length * 5));
+      const by = -en.radius - 20;
       ctx.fillStyle = 'rgba(7, 11, 20, 0.92)';
       ctx.fillRect(-bw / 2 - 2, by - 12, bw + 4, 20);
-      ctx.fillStyle = (en.silencedTimer ?? 0) > 0 ? '#34D399' : en.windupTimer > 0 ? '#38BDF8' : '#FDA4AF';
+      ctx.fillStyle = (en.silencedTimer ?? 0) > 0 ? '#34D399' : en.windupTimer > 0 ? '#38BDF8' : bossPrimary;
       ctx.font = 'bold 8px monospace';
       ctx.textAlign = 'center';
       ctx.fillText(
-        en.windupTimer > 0 ? '⚡ TỤ CHIÊU!' : (en.silencedTimer ?? 0) > 0 ? '✦ CÂM LẶNG · BOSS' : 'BOSS DREADNOUGHT',
+        en.windupTimer > 0
+          ? '⚡ TỤ CHIÊU!'
+          : (en.silencedTimer ?? 0) > 0
+            ? `✦ CÂM LẶNG · ${labelTitle}`
+            : labelTitle,
         0,
         by - 4
       );
@@ -2539,4 +3002,81 @@ export function drawQuantumEchoArcs(
     ctx.restore();
   }
 }
+
+/**
+ * Renders deployed Aurora Magnetic Storm Pylons on the enemy path + Lv7 cross-pylon lightning arcs.
+ */
+export function drawAuroraPylons(
+  ctx: CanvasRenderingContext2D,
+  pylons: readonly AuroraPylonFx[],
+  animTime: number,
+  alphaScale = 1
+) {
+  const safeScale = Math.max(0.4, Math.min(1, alphaScale));
+  for (let i = 0; i < pylons.length; i++) {
+    const p = pylons[i];
+    const fadeIn = Math.min(1, (p.maxLife - p.life) * 5 + 0.3);
+    const fadeOut = Math.min(1, p.life * 2.2);
+    const visAlpha = Math.min(fadeIn, fadeOut) * safeScale;
+    const isOmega = p.variant === 'omega';
+
+    ctx.save();
+    ctx.translate(p.x, p.y);
+
+    // Subtle electromagnetic storm aura
+    ctx.globalAlpha = visAlpha * 0.34;
+    const ag = ctx.createRadialGradient(0, 0, 6, 0, 0, p.radius);
+    ag.addColorStop(0, isOmega ? 'rgba(56, 189, 248, 0.35)' : 'rgba(45, 212, 191, 0.32)');
+    ag.addColorStop(0.68, 'rgba(34, 211, 238, 0.14)');
+    ag.addColorStop(1, 'rgba(45, 212, 191, 0)');
+    ctx.fillStyle = ag;
+    ctx.beginPath();
+    ctx.arc(0, 0, p.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pulsing magnetic perimeter ring
+    ctx.globalAlpha = visAlpha * 0.85;
+    ctx.strokeStyle = isOmega ? '#38BDF8' : '#2DD4BF';
+    ctx.lineWidth = 1.9;
+    ctx.setLineDash([7, 5]);
+    ctx.lineDashOffset = -animTime * 26;
+    ctx.beginPath();
+    ctx.arc(0, 0, p.radius * 0.92, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Central floating magnetic spire crystal
+    ctx.fillStyle = '#042F2E';
+    ctx.strokeStyle = '#99F6E4';
+    ctx.lineWidth = 2;
+    drawPolygon(ctx, 0, 0, 4, 9 + p.visualTier * 0.9, animTime * 2.2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Lv7 cross-pylon tether link between nearby pylons from same tower
+    if (p.visualTier >= 4) {
+      for (let j = i + 1; j < pylons.length; j++) {
+        const q = pylons[j];
+        if (q.sourceGunId !== p.sourceGunId) continue;
+        ctx.save();
+        ctx.globalAlpha = visAlpha * 0.55;
+        ctx.strokeStyle = '#67E8F9';
+        ctx.lineWidth = 1.8;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(q.x, q.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
+  }
+}
+
 
