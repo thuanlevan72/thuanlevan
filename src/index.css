@@ -194,7 +194,7 @@
 }
 
 /* Edge-to-edge expansion & safe-area support when Game Hub enters Fullscreen or Standalone PWA */
-[data-fullscreen="true"] {
+[data-fullscreen="true"]:not([data-edge-to-edge="true"]) {
   padding-top: max(0.25rem, env(safe-area-inset-top, 0px));
   padding-bottom: max(0.25rem, env(safe-area-inset-bottom, 0px));
   padding-left: max(0.25rem, env(safe-area-inset-left, 0px));

@@ -329,10 +329,12 @@ export function CatFinderGameSection({
     pointers: Map<number, { x: number; y: number }>;
     initDist: number;
     initScale: number;
+    wasPinching: boolean;
   }>({
     pointers: new Map(),
     initDist: 0,
     initScale: 1,
+    wasPinching: false,
   });
 
   const activeStage: CatStageDef = useMemo(
@@ -878,6 +880,7 @@ export function CatFinderGameSection({
       const pts = Array.from(pinchRef.current.pointers.values());
       pinchRef.current.initDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
       pinchRef.current.initScale = panZoom.scale;
+      pinchRef.current.wasPinching = true;
       dragRef.current.active = false;
       return;
     }
@@ -920,6 +923,11 @@ export function CatFinderGameSection({
 
   const handleStagePointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
     pinchRef.current.pointers.delete(e.pointerId);
+    if (pinchRef.current.pointers.size === 0 && pinchRef.current.wasPinching) {
+      window.setTimeout(() => {
+        pinchRef.current.wasPinching = false;
+      }, 150);
+    }
     if (dragRef.current.pointerId === e.pointerId) {
       dragRef.current.active = false;
       window.setTimeout(() => {
@@ -955,18 +963,20 @@ export function CatFinderGameSection({
   return (
     <section
       aria-label="Tìm Mèo và Đồ Xinh"
-      className={`rounded-2xl border border-[#ECCFD5] bg-[#FFF9F2] text-[#43312B] overflow-hidden shadow-[0_14px_38px_-16px_rgba(120,76,65,0.2)] ${
-        isFullscreen ? 'h-full flex-1 flex flex-col min-h-0' : ''
+      className={`bg-[#FFF9F2] text-[#43312B] overflow-hidden ${
+        isFullscreen
+          ? 'rounded-none border-0 shadow-none h-full flex-1 flex flex-col min-h-0'
+          : 'rounded-2xl border border-[#ECCFD5] shadow-[0_14px_38px_-16px_rgba(120,76,65,0.2)]'
       }`}
     >
       {/* TITLE & TOWN MAP SCREEN */}
       {screen === 'TITLE' && (
         <div
-          className={`p-4 sm:p-6 space-y-5 bg-gradient-to-b from-[#FFFDF8] to-[#FFF4EA] ${
-            isFullscreen ? 'flex-1 min-h-0 overflow-y-auto' : ''
+          className={`p-4 sm:p-6 mobile-ls:p-3 space-y-5 mobile-ls:space-y-3 bg-gradient-to-b from-[#FFFDF8] to-[#FFF4EA] ${
+            isFullscreen ? 'flex-1 min-h-0 overflow-y-auto touch-pan-y safe-area-top safe-area-x safe-area-bottom' : ''
           }`}
         >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 border-b border-[#EFE0D2] pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 border-b border-[#EFE0D2] pb-4 mobile-ls:pb-2.5">
             <div className="flex items-center gap-3.5">
               <div className="w-12 h-12 rounded-2xl bg-[#FCE2E6] border-2 border-[#43312B] flex items-center justify-center shrink-0">
                 <Cat className="w-6 h-6 text-[#D95B72]" aria-hidden="true" />
@@ -1018,7 +1028,7 @@ export function CatFinderGameSection({
           </div>
 
           {/* Difficulty Selector (5x / 8x / 10x / 20x Siêu Thần Ánh Xạ) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5" role="radiogroup" aria-label="Chọn độ khó Tìm Mèo">
+          <div className="grid grid-cols-1 sm:grid-cols-2 mobile-ls:grid-cols-4 lg:grid-cols-4 gap-2.5" role="radiogroup" aria-label="Chọn độ khó Tìm Mèo">
             {difficultyList.map((diff) => {
               const active = saveData.difficultyId === diff.id;
               return (
@@ -1172,23 +1182,28 @@ export function CatFinderGameSection({
       {screen === 'PLAYING' && (
         <div
           className={`flex flex-col bg-[#FFF7EE] ${
-            isFullscreen ? 'flex-1 min-h-0' : ''
+            isFullscreen ? 'flex-1 min-h-0 h-full' : ''
           }`}
         >
-          {/* High-Tension Pastel HUD (Responsive on Mobile & Non-overlapping in Fullscreen) */}
-          <div className="shrink-0 flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 mobile-ls:py-1 bg-[#FFFDF8] border-b-2 border-[#EEDFD2]">
-            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-wrap">
+          {/* High-Tension Pastel HUD (Single Slim Row in Mobile Landscape & Safe-Area Ready) */}
+          <div
+            data-testid="cat-hud-bar"
+            className={`shrink-0 flex flex-wrap mobile-ls:flex-nowrap items-center justify-between gap-1.5 sm:gap-2 mobile-ls:gap-1 px-2 sm:px-3 py-1.5 sm:py-2 mobile-ls:py-1 mobile-ls:px-2 bg-[#FFFDF8] border-b-2 border-[#EEDFD2] ${
+              isFullscreen ? 'safe-area-top safe-area-x' : ''
+            }`}
+          >
+            <div className="flex items-center gap-1.5 sm:gap-2 mobile-ls:gap-1 min-w-0 flex-wrap mobile-ls:flex-nowrap">
               <button
                 type="button"
                 aria-label="Quay về bản đồ thị trấn"
                 onClick={() => setScreen('TITLE')}
-                className="min-h-[38px] px-2.5 rounded-xl border-2 border-[#E6D4C4] bg-white hover:border-[#D95B72] inline-flex items-center gap-1 text-xs font-bold cursor-pointer shrink-0"
+                className="min-h-[38px] mobile-ls:min-h-[32px] px-2.5 mobile-ls:px-2 rounded-xl border-2 border-[#E6D4C4] bg-white hover:border-[#D95B72] inline-flex items-center gap-1 text-xs font-bold cursor-pointer shrink-0"
               >
-                <ArrowLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Thị Trấn</span>
+                <ArrowLeft className="w-4 h-4 mobile-ls:w-3.5 mobile-ls:h-3.5" />
+                <span className="hidden lg:inline">Thị Trấn</span>
               </button>
 
-              <span className="hidden xs:inline sm:inline font-bold text-xs sm:text-sm truncate max-w-[110px] sm:max-w-[200px]">
+              <span className="hidden sm:inline mobile-ls:hidden xl:inline font-bold text-xs sm:text-sm truncate max-w-[140px] sm:max-w-[200px]">
                 {activeStage.title}
               </span>
 
@@ -1209,7 +1224,7 @@ export function CatFinderGameSection({
 
               <span
                 data-testid="cat-progress-count"
-                className="px-2 py-0.5 rounded-lg bg-[#FCE7EA] text-[#B84158] text-xs font-mono font-bold tabular-nums shrink-0"
+                className="px-2 mobile-ls:px-1.5 py-0.5 rounded-lg bg-[#FCE7EA] text-[#B84158] text-xs mobile-ls:text-[11px] font-mono font-bold tabular-nums shrink-0"
               >
                 {regularFoundCount}/{regularItems.length}
               </span>
@@ -1218,26 +1233,26 @@ export function CatFinderGameSection({
               <span
                 data-testid="cat-hearts"
                 aria-label={`Còn ${hearts} trên ${diffConfig.maxHearts} trái tim`}
-                className={`px-2 py-0.5 rounded-lg text-xs font-mono font-bold tabular-nums inline-flex items-center gap-1 shrink-0 ${
+                className={`px-2 mobile-ls:px-1.5 py-0.5 rounded-lg text-xs mobile-ls:text-[11px] font-mono font-bold tabular-nums inline-flex items-center gap-1 shrink-0 ${
                   hearts <= 2
                     ? 'bg-rose-100 text-rose-700 animate-pulse'
                     : 'bg-[#FFF0F2] text-[#C83E58]'
                 }`}
               >
-                <Heart className="w-3.5 h-3.5 fill-current" />
+                <Heart className="w-3.5 h-3.5 mobile-ls:w-3 mobile-ls:h-3 fill-current" />
                 {hearts}/{diffConfig.maxHearts}
               </span>
 
               {/* Countdown Timer */}
               <span
                 data-testid="cat-timer"
-                className={`px-2 py-0.5 rounded-lg text-xs font-mono font-extrabold tabular-nums inline-flex items-center gap-1 shrink-0 ${
+                className={`px-2 mobile-ls:px-1.5 py-0.5 rounded-lg text-xs mobile-ls:text-[11px] font-mono font-extrabold tabular-nums inline-flex items-center gap-1 shrink-0 ${
                   remainingSec <= 20
                     ? 'bg-rose-600 text-white animate-pulse'
                     : 'bg-[#F4EBE2] text-[#43312B]'
                 }`}
               >
-                <Clock className="w-3.5 h-3.5" />
+                <Clock className="w-3.5 h-3.5 mobile-ls:w-3 mobile-ls:h-3" />
                 {formatCatTimer(remainingSec)}
               </span>
 
@@ -1260,17 +1275,17 @@ export function CatFinderGameSection({
               )}
             </div>
 
-            <div className="flex items-center gap-1 sm:gap-1.5 font-mono flex-wrap justify-end ml-auto">
+            <div className="flex items-center gap-1 sm:gap-1.5 font-mono flex-wrap mobile-ls:flex-nowrap justify-end ml-auto shrink-0">
               <button
                 type="button"
                 data-testid="cat-hint-btn"
                 disabled={hintsRemaining <= 0}
                 onClick={handleUseHint}
                 aria-label={`Gợi ý vùng tìm (còn ${hintsRemaining}, tốn ${diffConfig.hintCostSec} giây)`}
-                className="min-h-[38px] px-2 sm:px-2.5 rounded-xl border-2 border-[#F4C46A] bg-[#FFF4D6] hover:bg-[#FDE8B0] disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold inline-flex items-center gap-1 cursor-pointer shrink-0"
+                className="min-h-[38px] mobile-ls:min-h-[32px] px-2 sm:px-2.5 mobile-ls:px-1.5 rounded-xl border-2 border-[#F4C46A] bg-[#FFF4D6] hover:bg-[#FDE8B0] disabled:opacity-40 disabled:cursor-not-allowed text-xs mobile-ls:text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer shrink-0"
               >
                 <Search className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Gợi Ý</span>
+                <span className="hidden lg:inline">Gợi Ý</span>
                 <span className="tabular-nums">({hintsRemaining})</span>
               </button>
 
@@ -1281,7 +1296,7 @@ export function CatFinderGameSection({
                   aria-label="Thu nhỏ"
                   onClick={() => applyZoom(panZoom.scale - 0.45)}
                   disabled={panZoom.scale <= CAT_MIN_ZOOM}
-                  className="min-h-[36px] w-8 sm:w-8 flex items-center justify-center disabled:opacity-35 cursor-pointer"
+                  className="min-h-[36px] mobile-ls:min-h-[30px] w-8 mobile-ls:w-7 flex items-center justify-center disabled:opacity-35 cursor-pointer"
                 >
                   <ZoomOut className="w-3.5 h-3.5" />
                 </button>
@@ -1290,7 +1305,7 @@ export function CatFinderGameSection({
                   data-testid="cat-zoom-reset-btn"
                   aria-label="Đưa về 1x"
                   onClick={() => setPanZoom({ scale: 1, panX: 0, panY: 0 })}
-                  className="min-h-[36px] px-1.5 text-[11px] font-bold tabular-nums cursor-pointer"
+                  className="min-h-[36px] mobile-ls:min-h-[30px] px-1.5 mobile-ls:px-1 text-[11px] font-bold tabular-nums cursor-pointer"
                 >
                   {panZoom.scale.toFixed(1)}×
                 </button>
@@ -1300,7 +1315,7 @@ export function CatFinderGameSection({
                   aria-label="Phóng to"
                   onClick={() => applyZoom(panZoom.scale + 0.45)}
                   disabled={panZoom.scale >= CAT_MAX_ZOOM}
-                  className="min-h-[36px] w-8 sm:w-8 flex items-center justify-center disabled:opacity-35 cursor-pointer"
+                  className="min-h-[36px] mobile-ls:min-h-[30px] w-8 mobile-ls:w-7 flex items-center justify-center disabled:opacity-35 cursor-pointer"
                 >
                   <ZoomIn className="w-3.5 h-3.5" />
                 </button>
@@ -1313,22 +1328,26 @@ export function CatFinderGameSection({
                   catFinderAudio.unlock();
                   setBgmOn((v) => !v);
                 }}
-                className={`min-h-[38px] w-9 rounded-xl border-2 flex items-center justify-center cursor-pointer shrink-0 ${
+                className={`min-h-[38px] mobile-ls:min-h-[32px] w-9 mobile-ls:w-8 rounded-xl border-2 flex items-center justify-center cursor-pointer shrink-0 ${
                   bgmOn
                     ? 'border-[#E87084] bg-[#FCE7EA] text-[#B84158]'
                     : 'border-[#E6D4C4] bg-white text-[#7A6258]'
                 }`}
               >
-                <Music className="w-4 h-4" />
+                <Music className="w-4 h-4 mobile-ls:w-3.5 mobile-ls:h-3.5" />
               </button>
 
               <button
                 type="button"
                 aria-label={muted ? 'Bật âm thanh' : 'Tắt âm thanh'}
                 onClick={() => setMuted((v) => !v)}
-                className="min-h-[38px] w-9 rounded-xl border-2 border-[#E6D4C4] bg-white flex items-center justify-center cursor-pointer shrink-0"
+                className="min-h-[38px] mobile-ls:min-h-[32px] w-9 mobile-ls:w-8 rounded-xl border-2 border-[#E6D4C4] bg-white flex items-center justify-center cursor-pointer shrink-0"
               >
-                {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                {muted ? (
+                  <VolumeX className="w-4 h-4 mobile-ls:w-3.5 mobile-ls:h-3.5" />
+                ) : (
+                  <Volume2 className="w-4 h-4 mobile-ls:w-3.5 mobile-ls:h-3.5" />
+                )}
               </button>
 
               {onToggleFullscreen && (
@@ -1338,7 +1357,7 @@ export function CatFinderGameSection({
                   onClick={onToggleFullscreen}
                   aria-label={isFullscreen ? 'Thu nhỏ màn hình (Esc)' : 'Mở toàn màn hình (F11)'}
                   title={isFullscreen ? 'Thoát toàn màn hình (Esc)' : 'Toàn màn hình (F11)'}
-                  className={`min-h-[38px] px-2.5 rounded-xl border-2 text-xs font-bold inline-flex items-center gap-1 cursor-pointer shrink-0 ${
+                  className={`min-h-[38px] mobile-ls:min-h-[32px] px-2.5 mobile-ls:px-2 rounded-xl border-2 text-xs mobile-ls:text-[11px] font-bold inline-flex items-center gap-1 cursor-pointer shrink-0 ${
                     isFullscreen
                       ? 'border-[#0284C7] bg-[#0F172A] text-sky-200 hover:bg-slate-800'
                       : 'border-[#E6D4C4] bg-white text-[#43312B] hover:border-[#D95B72]'
@@ -1347,8 +1366,8 @@ export function CatFinderGameSection({
                   {isFullscreen ? (
                     <>
                       <Minimize2 className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span className="hidden sm:inline">Esc · Thoát</span>
-                      <span className="sm:hidden">Thu nhỏ</span>
+                      <span className="hidden lg:inline">Esc · Thoát</span>
+                      <span className="lg:hidden">Thoát</span>
                     </>
                   ) : (
                     <>
@@ -1361,29 +1380,31 @@ export function CatFinderGameSection({
             </div>
           </div>
 
-          {/* Panoramic Cluttered Scene Viewport */}
-          <div
-            ref={viewportRef}
-            key={shakeCount}
-            data-testid="cat-scene-viewport"
-            onWheel={handleWheelZoom}
-            onPointerDown={handleStagePointerDown}
-            onPointerMove={handleStagePointerMove}
-            onPointerUp={handleStagePointerUp}
-            onPointerCancel={handleStagePointerUp}
-            onClick={(e) => {
-              if (dragRef.current.moved) return;
-              handleMisclick(e.clientX, e.clientY);
-            }}
-            style={{ containerType: 'size' }}
-            className={`relative w-full ${
-              isFullscreen
-                ? 'flex-1 min-h-[240px]'
-                : 'h-[52dvh] min-h-[300px] max-h-[520px] sm:h-[440px] lg:h-[500px] mobile-ls:h-[62dvh] mobile-ls:min-h-[210px]'
-            } bg-[#F5E6D8] overflow-hidden select-none touch-none cursor-crosshair flex items-center justify-center ${
-              shakeCount > 0 ? 'animate-dom-shake' : ''
-            }`}
-          >
+          {/* Responsive Stage + Target Dock (Column in Portrait/Desktop, Side-by-Side Row in Mobile Landscape) */}
+          <div className="flex-1 min-h-0 flex flex-col mobile-ls:flex-row">
+            {/* Panoramic Cluttered Scene Viewport */}
+            <div
+              ref={viewportRef}
+              key={shakeCount}
+              data-testid="cat-scene-viewport"
+              onWheel={handleWheelZoom}
+              onPointerDown={handleStagePointerDown}
+              onPointerMove={handleStagePointerMove}
+              onPointerUp={handleStagePointerUp}
+              onPointerCancel={handleStagePointerUp}
+              onClick={(e) => {
+                if (dragRef.current.moved || pinchRef.current.wasPinching) return;
+                handleMisclick(e.clientX, e.clientY);
+              }}
+              style={{ containerType: 'size' }}
+              className={`relative ${
+                isFullscreen
+                  ? 'flex-1 min-h-[120px] min-w-0'
+                  : 'w-full h-[52dvh] min-h-[260px] max-h-[520px] sm:h-[440px] lg:h-[500px] mobile-ls:flex-1 mobile-ls:w-auto mobile-ls:min-w-0 mobile-ls:h-[min(68dvh,300px)] mobile-ls:min-h-[200px]'
+              } bg-[#F5E6D8] overflow-hidden select-none touch-none cursor-crosshair flex items-center justify-center ${
+                shakeCount > 0 ? 'animate-dom-shake' : ''
+              }`}
+            >
             <div
               data-testid="cat-stage-canvas-box"
               className="relative origin-center transition-transform duration-75 ease-out shrink-0"
@@ -1489,7 +1510,7 @@ export function CatFinderGameSection({
                     aria-label={item.label}
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (dragRef.current.moved) return;
+                      if (dragRef.current.moved || pinchRef.current.wasPinching) return;
                       handleCollectItem(item);
                     }}
                     style={{
@@ -1498,7 +1519,7 @@ export function CatFinderGameSection({
                       width: `${wPct}%`,
                       height: `${hPct}%`,
                     }}
-                    className="absolute z-20 -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-[#E87084] cursor-pointer transition-colors"
+                    className="absolute z-20 -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent hover:bg-white/10 active:bg-white/20 focus-visible:outline-2 focus-visible:outline-[#E87084] cursor-pointer transition-colors"
                   />
                 );
               })}
@@ -1524,7 +1545,7 @@ export function CatFinderGameSection({
                     aria-label={isOpen ? `Đóng ${cov.label}` : `Mở ${cov.label}`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (dragRef.current.moved) return;
+                      if (dragRef.current.moved || pinchRef.current.wasPinching) return;
                       handleToggleCover(cov.id);
                     }}
                     style={{
@@ -1621,15 +1642,19 @@ export function CatFinderGameSection({
             ))}
           </div>
 
-          {/* Target Thumbnail Bar (All Items in x5, Active Queue in x8 / x10 / x20) */}
+          {/* Target Thumbnail Bar (Bottom Row in Portrait/Desktop, Vertical Right Dock in Mobile Landscape) */}
           <div
             aria-label="Thanh vật phẩm cần tìm"
             data-testid="cat-thumbnail-bar"
-            className="shrink-0 bg-[#FFFDF8] border-t-2 border-[#EEDFD2] px-2 sm:px-3 py-2 mobile-ls:py-1.5 flex items-center gap-1.5 sm:gap-2 overflow-x-auto touch-pan-x snap-x snap-mandatory"
+            className={`shrink-0 bg-[#FFFDF8] border-t-2 border-[#EEDFD2] px-2 sm:px-3 py-2 flex flex-row items-center gap-1.5 sm:gap-2 overflow-x-auto touch-pan-x snap-x snap-mandatory mobile-ls:w-[78px] mobile-ls:h-full mobile-ls:flex-col mobile-ls:overflow-y-auto mobile-ls:overflow-x-hidden mobile-ls:touch-pan-y mobile-ls:snap-y mobile-ls:border-t-0 mobile-ls:border-l-2 mobile-ls:py-1.5 mobile-ls:px-1.5 mobile-ls:gap-1.5 ${
+              isFullscreen
+                ? 'safe-area-x pb-[max(0.5rem,env(safe-area-inset-bottom,0px))] mobile-ls:pl-1.5 mobile-ls:pr-[max(0.375rem,env(safe-area-inset-right,0px))] mobile-ls:pb-[max(0.375rem,env(safe-area-inset-bottom,0px))]'
+                : ''
+            }`}
           >
             {diffConfig.activeQueueLimit !== null && (
               <div
-                className={`shrink-0 snap-start px-2.5 py-1.5 rounded-xl text-[11px] font-mono font-bold leading-tight ${
+                className={`shrink-0 snap-start px-2.5 py-1.5 mobile-ls:w-full mobile-ls:px-1 mobile-ls:py-1 mobile-ls:text-center rounded-xl text-[11px] mobile-ls:text-[10px] font-mono font-bold leading-tight ${
                   isGodRayMode
                     ? 'bg-gradient-to-br from-[#7F1D1D] to-[#43312B] text-amber-100 border border-amber-400/50'
                     : 'bg-[#43312B] text-[#FFF8EF]'
@@ -1652,7 +1677,7 @@ export function CatFinderGameSection({
                   data-found={found ? 'true' : 'false'}
                   title={item.label}
                   aria-label={`${item.label}: ${found ? 'Đã tìm thấy' : 'Chưa tìm thấy'}`}
-                  className={`relative shrink-0 snap-start w-12 h-12 sm:w-16 sm:h-16 mobile-ls:w-11 mobile-ls:h-11 rounded-xl sm:rounded-2xl border-2 flex items-center justify-center transition-transform ${
+                  className={`relative shrink-0 snap-start w-12 h-12 sm:w-16 sm:h-16 mobile-ls:w-13 mobile-ls:h-13 rounded-xl sm:rounded-2xl border-2 flex items-center justify-center transition-transform ${
                     found
                       ? 'bg-[#FFF0F3] border-[#E87084] scale-100'
                       : isHinted
@@ -1678,7 +1703,7 @@ export function CatFinderGameSection({
                 data-found={stageSave.foundSecretCat ? 'true' : 'false'}
                 title="Mèo Vàng Bí Mật (ẩn trong tranh)"
                 aria-label={`Mèo Vàng Bí Mật: ${stageSave.foundSecretCat ? 'Đã tìm thấy' : 'Chưa tìm thấy'}`}
-                className={`relative shrink-0 snap-start w-12 h-12 sm:w-16 sm:h-16 mobile-ls:w-11 mobile-ls:h-11 rounded-xl sm:rounded-2xl border-2 border-dashed flex items-center justify-center ml-auto ${
+                className={`relative shrink-0 snap-start w-12 h-12 sm:w-16 sm:h-16 mobile-ls:w-13 mobile-ls:h-13 rounded-xl sm:rounded-2xl border-2 border-dashed flex items-center justify-center ml-auto mobile-ls:ml-0 mobile-ls:mt-auto ${
                   stageSave.foundSecretCat
                     ? 'bg-[#FEF3C7] border-amber-500'
                     : 'bg-[#FAF3E8] border-[#D8C4AD]'
@@ -1691,6 +1716,7 @@ export function CatFinderGameSection({
               </div>
             )}
           </div>
+          </div>
         </div>
       )}
 
@@ -1698,8 +1724,8 @@ export function CatFinderGameSection({
       {screen === 'GAMEOVER' && (
         <div
           data-testid="cat-gameover-screen"
-          className={`p-5 sm:p-8 bg-gradient-to-b from-[#FFF8F6] to-[#FBE4E6] flex flex-col items-center text-center space-y-5 ${
-            isFullscreen ? 'flex-1 min-h-0 overflow-y-auto justify-center' : ''
+          className={`p-5 sm:p-8 mobile-ls:p-3 bg-gradient-to-b from-[#FFF8F6] to-[#FBE4E6] flex flex-col items-center text-center space-y-5 mobile-ls:space-y-3 ${
+            isFullscreen ? 'flex-1 min-h-0 overflow-y-auto touch-pan-y safe-area-top safe-area-x safe-area-bottom justify-start sm:justify-center' : ''
           }`}
         >
           <div className="w-16 h-16 rounded-2xl bg-rose-100 border-2 border-[#43312B] flex items-center justify-center">
@@ -1776,8 +1802,8 @@ export function CatFinderGameSection({
       {screen === 'VICTORY' && (
         <div
           data-testid="cat-victory-screen"
-          className={`p-5 sm:p-8 bg-gradient-to-b from-[#FFFDF8] to-[#FCEEEB] flex flex-col items-center text-center space-y-5 ${
-            isFullscreen ? 'flex-1 min-h-0 overflow-y-auto justify-center' : ''
+          className={`p-5 sm:p-8 mobile-ls:p-3 bg-gradient-to-b from-[#FFFDF8] to-[#FCEEEB] flex flex-col items-center text-center space-y-5 mobile-ls:space-y-3 ${
+            isFullscreen ? 'flex-1 min-h-0 overflow-y-auto touch-pan-y safe-area-top safe-area-x safe-area-bottom justify-start sm:justify-center' : ''
           }`}
         >
           <div className="flex items-center gap-1.5" aria-label="Sao đạt được">

@@ -142,8 +142,8 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     category: 'casual',
     title: 'Tìm Mèo & Đồ Xinh',
     shortTitle: 'Tìm Mèo',
-    subtitle: '24–27 đồ ngụy trang · +44 đồ giả · 3 mức Khó ×5 → Mắt Đại Bàng ×10 · Hộp khóa đôi & Đèn soi',
-    badge: '5 Màn · Khó ×5–×10',
+    subtitle: '24–27 đồ ngụy trang · +44 đồ giả · 4 mức Khó ×5 → Siêu Thần Ánh Xạ ×20',
+    badge: '5 Màn · Khó ×5–×20',
     playable: true,
     gameKey: 'cat_finder',
   },
@@ -493,6 +493,18 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
   }, []);
 
   useEffect(() => {
+    if (!isFullscreen || typeof document === 'undefined') return;
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+    };
+  }, [isFullscreen]);
+
+  useEffect(() => {
     const onKeyCapture = (e: KeyboardEvent) => {
       if (e.key === 'F11') {
         e.preventDefault();
@@ -737,9 +749,12 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
         ref={gameViewportRef}
         data-testid="game-viewport"
         data-fullscreen={isFullscreen ? 'true' : 'false'}
+        data-edge-to-edge={isFullscreen && activeGame === 'cat_finder' ? 'true' : undefined}
         className={
           isFullscreen
-            ? 'fixed inset-0 z-50 w-screen h-[100dvh] bg-[#050811] overflow-y-auto overscroll-none p-1 sm:p-2 flex flex-col'
+            ? activeGame === 'cat_finder'
+              ? 'fixed inset-0 z-50 w-full h-full max-h-[100dvh] bg-[#FFF9F2] overflow-hidden overscroll-none p-0 flex flex-col'
+              : 'fixed inset-0 z-50 w-full h-[100dvh] bg-[#050811] overflow-y-auto overscroll-none p-1 sm:p-2 flex flex-col'
             : 'relative overscroll-none'
         }
       >
