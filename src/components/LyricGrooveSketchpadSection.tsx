@@ -27,11 +27,11 @@ import {
   auditionProgression,
   getLiveAudioFrame,
   type MicPitchSession,
-  seekGroovePlayback,
   startGrooveLoop,
   startMicPitchCapture,
   stopGrooveLoop,
   stopProgressionAudition,
+  warmConcertGrandSamples,
 } from '../utils/lyricGrooveAudio.ts';
 import {
   deleteSketchpadDraft,
@@ -39,10 +39,12 @@ import {
   saveSketchpadDraft,
 } from '../utils/lyricGrooveDb.ts';
 import {
+  alignSectionLyricsToMelody,
   analyzeSectionLyrics,
   ARPEGGIO_PATTERN_META,
   type BackingInstrumentId,
   type BackingPatternId,
+  buildChordTimeline,
   type ConcreteArpeggioPatternId,
   createBlankDraft,
   createStarterDrafts,
@@ -51,9 +53,11 @@ import {
   generateHarmonicMelodyForSection,
   getDiatonicChordForPianoKey,
   getDiatonicChordsForKey,
+  isSectionMelodyMuted,
   KEY_ROOT_OPTIONS,
   type MelodyInstrumentId,
   type MelodyNote,
+  type MelodyPlaybackMode,
   midiToNoteName,
   MOOD_STYLE_OPTIONS,
   type MoodStyleId,
@@ -62,6 +66,7 @@ import {
   PROGRESSION_PRESETS,
   quantizePitchFramesToNotes,
   reorderSongSections,
+  resolveMelodyPlaybackMode,
   SECTION_KIND_OPTIONS,
   type SectionKind,
   type SketchpadDraft,
@@ -137,9 +142,7 @@ export function LyricGrooveSketchpadSection({
     () => createStarterDrafts()[0].id
   );
   const [activeSectionId, setActiveSectionId] = useState<string>(
-    () =>
-      createStarterDrafts()[0].sections[2]?.id ??
-      createStarterDrafts()[0].sections[0].id
+    () => createStarterDrafts()[0].sections[0].id
   );
   const [loopScope, setLoopScope] = useState<'section' | 'song'>('song');
   const [repeatLoop, setRepeatLoop] = useState<boolean>(true);
@@ -203,6 +206,10 @@ export function LyricGrooveSketchpadSection({
   const skipNextRestartRef = useRef<boolean>(false);
 
   useEffect(() => {
+    void warmConcertGrandSamples();
+  }, []);
+
+  useEffect(() => {
     if (!showExportMenu && !showIdeaMenu) return;
     const handlePointerDown = (e: PointerEvent) => {
       if (
@@ -235,8 +242,7 @@ export function LyricGrooveSketchpadSection({
       setDrafts(loaded);
       const first = loaded[0];
       setActiveDraftId(first.id);
-      const defaultSec =
-        first.sections.find((s) => s.kind === 'Chorus') ?? first.sections[0];
+      const defaultSec = first.sections[0];
       if (defaultSec) {
         setActiveSectionId(defaultSec.id);
       }
@@ -276,9 +282,7 @@ export function LyricGrooveSketchpadSection({
 
   useEffect(() => {
     if (!activeDraft.sections.some((s) => s.id === activeSectionId)) {
-      const preferred =
-        activeDraft.sections.find((s) => s.kind === 'Chorus') ??
-        activeDraft.sections[0];
+      const preferred = activeDraft.sections[0];
       if (preferred) setActiveSectionId(preferred.id);
     }
     recordBeatCursorRef.current = 0;
@@ -291,6 +295,12 @@ export function LyricGrooveSketchpadSection({
     activeBackingPattern === 'ballad-arpeggio' ? 'ballad-wave' : activeBackingPattern;
   const activeSustainPedal = activeDraft.sustainPedal ?? true;
   const activeMetronome = activeDraft.metronomeEnabled ?? false;
+  const activeMelodyMode = resolveMelodyPlaybackMode(activeDraft);
+  const isActiveSectionMuted = isSectionMelodyMuted(
+    activeSection,
+    activeMelodyMode,
+    activeDraft.mutedMelodySectionIds
+  );
 
   const updateActiveDraft = useCallback(
     (updater: (prev: SketchpadDraft) => SketchpadDraft) => {
@@ -373,23 +383,23 @@ export function LyricGrooveSketchpadSection({
   );
 
   const sectionChordMarkers = useMemo(() => {
-    const rawLines = activeSection.text
-      .split(/\r?\n/)
-      .filter((l) => l.trim().length > 0);
-    const totalBeats = activeSection.bars * 4;
-    const beatsPerLine = totalBeats / Math.max(1, rawLines.length);
-    const markers: Array<{ symbol: string; beatOffset: number }> = [];
-    sectionAnalysis.lines.forEach((line, idx) => {
-      if (!line.rawLine.trim()) return;
-      line.chords.forEach((ch) => {
-        markers.push({
-          symbol: ch.symbol,
-          beatOffset: idx * beatsPerLine + ch.beatOffset,
-        });
-      });
+    const { events } = buildChordTimeline([activeSection], {
+      backingPattern: activeBackingPattern,
+      chordArpStyles: activeDraft.chordArpStyles,
+      songMood: activeDraft.mood,
+      melodyNotes: sectionMelodyNotes,
     });
-    return markers;
-  }, [activeSection.bars, activeSection.text, sectionAnalysis.lines]);
+    return events.map((ev) => ({
+      symbol: ev.symbol,
+      beatOffset: ev.startBeat,
+    }));
+  }, [
+    activeSection,
+    activeBackingPattern,
+    activeDraft.chordArpStyles,
+    activeDraft.mood,
+    sectionMelodyNotes,
+  ]);
 
   const songTimelineSpans = useMemo(() => {
     const spans: Array<{
@@ -426,6 +436,11 @@ export function LyricGrooveSketchpadSection({
   const activeKaraokeLines = useMemo(
     () => parseSectionKaraokeLines(activeSection),
     [activeSection]
+  );
+
+  const sectionSyncWords = useMemo(
+    () => alignSectionLyricsToMelody(activeSection, sectionMelodyNotes, 0),
+    [activeSection, sectionMelodyNotes]
   );
 
   const clearLivePlayState = useCallback(() => {
@@ -471,6 +486,9 @@ export function LyricGrooveSketchpadSection({
         metronomeEnabled: activeMetronome,
         drumPattern: activeDraft.drumPattern,
         melodyInstrument: activeDraft.melodyInstrument,
+        melodyMuted: activeDraft.melodyMuted ?? false,
+        melodyPlaybackMode: activeMelodyMode,
+        mutedMelodySectionIds: activeDraft.mutedMelodySectionIds ?? [],
         repeatLoop,
         startBeatOffset: startBeat,
         volumeGain: 0.9,
@@ -554,6 +572,9 @@ export function LyricGrooveSketchpadSection({
       activeMetronome,
       activeDraft.drumPattern,
       activeDraft.melodyInstrument,
+      activeDraft.melodyMuted,
+      activeMelodyMode,
+      activeDraft.mutedMelodySectionIds,
       repeatLoop,
       clearLivePlayState,
     ]
@@ -608,15 +629,11 @@ export function LyricGrooveSketchpadSection({
       const beatNum = Math.floor(localBeat % 4) + 1;
       setLiveBeatIndicator(`Ô ${barNum} · ${beatNum}`);
 
-      if (isPlaying && loopScope === 'song' && repeatLoop) {
-        seekGroovePlayback(targetBeat, activeDraft.bpm);
-      } else {
-        skipNextRestartRef.current = true;
-        setLoopScope('song');
-        void launchLoopPlayback('song', targetBeat);
-      }
+      skipNextRestartRef.current = true;
+      setLoopScope('song');
+      void launchLoopPlayback('song', targetBeat);
     },
-    [isPlaying, loopScope, repeatLoop, activeDraft.bpm, launchLoopPlayback, songTimelineSpans.spans]
+    [launchLoopPlayback, songTimelineSpans.spans]
   );
 
   // Live 60fps audio spectrum visualizer inside Synchronized Song Stage
@@ -711,6 +728,9 @@ export function LyricGrooveSketchpadSection({
     activeMetronome,
     activeDraft.drumPattern,
     activeDraft.melodyInstrument,
+    activeDraft.melodyMuted,
+    activeMelodyMode,
+    activeDraft.mutedMelodySectionIds,
     repeatLoop,
   ]);
 
@@ -1422,7 +1442,17 @@ export function LyricGrooveSketchpadSection({
             <select
               id="draft-selector"
               value={activeDraft.id}
-              onChange={(e) => setActiveDraftId(e.target.value)}
+              onChange={(e) => {
+                const nextId = e.target.value;
+                stopGrooveLoop();
+                setIsPlaying(false);
+                clearLivePlayState();
+                setActiveDraftId(nextId);
+                const nextDraft = drafts.find((d) => d.id === nextId);
+                if (nextDraft?.sections[0]) {
+                  setActiveSectionId(nextDraft.sections[0].id);
+                }
+              }}
               className="max-w-[215px] truncate rounded-lg border border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] px-2.5 py-1.5 text-xs font-medium text-[#0F172A] dark:text-[#E2E8F0]"
             >
               {drafts.map((d) => (
@@ -1685,12 +1715,41 @@ export function LyricGrooveSketchpadSection({
               className="rounded-md border border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] px-2 py-1 text-xs font-medium text-[#0F172A] dark:text-[#F1F5F9]"
             >
               <option value="none">Trống: Tắt</option>
+              <option value="ballad">Trống: Ballad (+ Strings)</option>
               <option value="lofi">Trống: Lo-fi</option>
               <option value="boombap">Trống: Boom-bap</option>
             </select>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <select
+              data-testid="melody-mode-select"
+              aria-label="Chế độ phát nốt nhạc"
+              value={activeMelodyMode}
+              onChange={(e) => {
+                const nextMode = e.target.value as MelodyPlaybackMode;
+                updateActiveDraft((d) => ({
+                  ...d,
+                  melodyPlaybackMode: nextMode,
+                  melodyMuted: nextMode !== 'all',
+                  mutedMelodySectionIds:
+                    nextMode === 'all' ? [] : d.mutedMelodySectionIds ?? [],
+                }));
+              }}
+              title="Chọn chế độ phát nốt giai điệu hoặc tắt hết để chỉ nghe hợp âm"
+              className={`rounded-md border px-2 py-1 text-[11px] font-medium transition-colors cursor-pointer ${
+                activeMelodyMode === 'off'
+                  ? 'border-amber-500/80 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300'
+                  : activeMelodyMode === 'intro-only'
+                  ? 'border-emerald-500/70 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
+                  : 'border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] text-[#0F172A] dark:text-[#F1F5F9]'
+              }`}
+            >
+              <option value="all">Nốt nhạc: Bật tất cả</option>
+              <option value="intro-only">Nốt nhạc: Chỉ Intro (Beat)</option>
+              <option value="off">Tắt hết nốt (Chỉ hợp âm)</option>
+            </select>
+
             <button
               type="button"
               data-testid="sustain-pedal-toggle"
@@ -1884,6 +1943,8 @@ export function LyricGrooveSketchpadSection({
           backingPattern={activeBackingPattern}
           chordArpStyles={activeDraft.chordArpStyles}
           songMood={activeDraft.mood}
+          melodyPlaybackMode={activeMelodyMode}
+          mutedMelodySectionIds={activeDraft.mutedMelodySectionIds}
           loopScope={loopScope}
           activeSectionId={activeSection.id}
           isPlaying={isPlaying}
@@ -1902,10 +1963,19 @@ export function LyricGrooveSketchpadSection({
             </div>
           ) : (
             activeKaraokeLines.map((line) => {
+              const lineWords = sectionSyncWords.filter(
+                (w) => w.lineIndex === line.lineIndex
+              );
+              const lineStart =
+                lineWords.length > 0 ? lineWords[0].startBeat : line.startBeat;
+              const lineEnd =
+                lineWords.length > 0
+                  ? Math.max(line.endBeat, lineWords[lineWords.length - 1].endBeat)
+                  : line.endBeat;
               const isCurrentLine =
                 isPlaying &&
-                sectionBeatLocal >= line.startBeat &&
-                sectionBeatLocal < line.endBeat;
+                sectionBeatLocal >= lineStart - 0.04 &&
+                sectionBeatLocal < lineEnd + 0.04;
               return (
                 <div
                   key={line.lineIndex}
@@ -1916,10 +1986,17 @@ export function LyricGrooveSketchpadSection({
                   }`}
                 >
                   {line.segments.map((seg, sIdx) => {
+                    const segWords = lineWords.filter((w) => w.segIndex === sIdx);
+                    const segStart =
+                      segWords.length > 0 ? segWords[0].startBeat : seg.startBeat;
+                    const segEnd =
+                      segWords.length > 0
+                        ? segWords[segWords.length - 1].endBeat
+                        : seg.endBeat;
                     const isCurrentSeg =
-                      isCurrentLine &&
-                      sectionBeatLocal >= seg.startBeat &&
-                      sectionBeatLocal < seg.endBeat;
+                      isPlaying &&
+                      sectionBeatLocal >= segStart - 0.04 &&
+                      sectionBeatLocal < segEnd + 0.04;
                     return (
                       <span
                         key={`${line.lineIndex}-${sIdx}`}
@@ -1938,18 +2015,43 @@ export function LyricGrooveSketchpadSection({
                             [{seg.chordSymbol}]
                           </button>
                         )}
-                        {seg.lyricText && (
-                          <span
-                            className={`text-sm ${
-                              isCurrentSeg
-                                ? 'font-bold text-emerald-700 dark:text-emerald-300'
-                                : isCurrentLine
-                                ? 'font-semibold text-[#070B14] dark:text-[#F1F5F9]'
-                                : 'text-[#334155] dark:text-[#CBD5E1]'
-                            }`}
-                          >
-                            {seg.lyricText}
+                        {segWords.length > 0 ? (
+                          <span className="inline-flex flex-wrap items-baseline gap-x-1 text-sm">
+                            {segWords.map((w) => {
+                              const isCurrentWord =
+                                isPlaying &&
+                                sectionBeatLocal >= w.startBeat - 0.04 &&
+                                sectionBeatLocal < w.endBeat + 0.04;
+                              return (
+                                <span
+                                  key={`${w.lineIndex}-${w.segIndex}-${w.wordIndex}`}
+                                  className={`transition-colors ${
+                                    isCurrentWord
+                                      ? 'font-bold text-emerald-700 dark:text-emerald-300 underline decoration-emerald-500/70 underline-offset-4'
+                                      : isCurrentLine
+                                      ? 'font-semibold text-[#070B14] dark:text-[#F1F5F9]'
+                                      : 'text-[#334155] dark:text-[#CBD5E1]'
+                                  }`}
+                                >
+                                  {w.text}
+                                </span>
+                              );
+                            })}
                           </span>
+                        ) : (
+                          seg.lyricText && (
+                            <span
+                              className={`text-sm ${
+                                isCurrentSeg
+                                  ? 'font-bold text-emerald-700 dark:text-emerald-300'
+                                  : isCurrentLine
+                                  ? 'font-semibold text-[#070B14] dark:text-[#F1F5F9]'
+                                  : 'text-[#334155] dark:text-[#CBD5E1]'
+                              }`}
+                            >
+                              {seg.lyricText}
+                            </span>
+                          )
                         )}
                       </span>
                     );
@@ -1970,6 +2072,11 @@ export function LyricGrooveSketchpadSection({
             {activeDraft.sections.map((sec, idx) => {
               const isSelected = sec.id === activeSection.id;
               const isCurrentlyPlaying = isPlaying && playingSectionId === sec.id;
+              const isSecMuted = isSectionMelodyMuted(
+                sec,
+                activeMelodyMode,
+                activeDraft.mutedMelodySectionIds
+              );
               return (
                 <button
                   key={sec.id}
@@ -1986,7 +2093,24 @@ export function LyricGrooveSketchpadSection({
                     }
                     setDraggedSectionIdx(null);
                   }}
-                  onClick={() => setActiveSectionId(sec.id)}
+                  onClick={() => {
+                    setActiveSectionId(sec.id);
+                    const span = songTimelineSpans.spans.find((s) => s.id === sec.id);
+                    if (loopScope === 'song' && span) {
+                      if (isPlaying) {
+                        handleSeekTimelineBeat(span.start, sec.id);
+                      } else {
+                        playheadBeatRef.current = span.start;
+                        setSongBeatPos(span.start);
+                        setSectionBeatLocal(0);
+                        setLiveBeatIndicator('Ô 1 · 1');
+                      }
+                    } else if (!isPlaying) {
+                      playheadBeatRef.current = 0;
+                      setSectionBeatLocal(0);
+                      setLiveBeatIndicator('Ô 1 · 1');
+                    }
+                  }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                     isSelected
                       ? 'border-[#0284C7] bg-[#0284C7] text-white'
@@ -1995,6 +2119,7 @@ export function LyricGrooveSketchpadSection({
                 >
                   {idx + 1}. {sec.kind} · {sec.bars} ô
                   {isCurrentlyPlaying ? ' ♪' : ''}
+                  {isSecMuted ? ' · Chỉ HÂ' : ''}
                 </button>
               );
             })}
@@ -2549,19 +2674,92 @@ export function LyricGrooveSketchpadSection({
               <span>Giai Điệu &amp; Đàn Grand Piano</span>
             </h2>
 
-            <button
-              type="button"
-              onClick={() =>
-                updateActiveDraft((d) => ({ ...d, scaleSnap: !d.scaleSnap }))
-              }
-              className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                activeDraft.scaleSnap
-                  ? 'border-emerald-500/70 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300'
-                  : 'border-[#CBD8E6] dark:border-[#1F3557] text-[#475569] dark:text-[#94A3B8]'
-              }`}
-            >
-              Khóa tông: {activeDraft.scaleSnap ? 'BẬT' : 'TẮT'}
-            </button>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                data-testid="section-melody-mute-btn"
+                onClick={() =>
+                  updateActiveDraft((d) => {
+                    const mode = resolveMelodyPlaybackMode(d);
+                    const currentMuted = d.mutedMelodySectionIds ?? [];
+                    const secIsMuted = isSectionMelodyMuted(
+                      activeSection,
+                      mode,
+                      currentMuted
+                    );
+                    if (secIsMuted) {
+                      if (mode === 'off') {
+                        const otherIds = d.sections
+                          .filter((s) => s.id !== activeSection.id)
+                          .map((s) => s.id);
+                        return {
+                          ...d,
+                          melodyPlaybackMode: 'all',
+                          melodyMuted: false,
+                          mutedMelodySectionIds: otherIds,
+                        };
+                      }
+                      if (
+                        mode === 'intro-only' &&
+                        activeSection.kind !== 'Intro' &&
+                        activeSection.kind !== 'Interlude'
+                      ) {
+                        const otherNonHookIds = d.sections
+                          .filter(
+                            (s) =>
+                              s.id !== activeSection.id &&
+                              s.kind !== 'Intro' &&
+                              s.kind !== 'Interlude'
+                          )
+                          .map((s) => s.id);
+                        return {
+                          ...d,
+                          melodyPlaybackMode: 'all',
+                          melodyMuted: false,
+                          mutedMelodySectionIds: Array.from(
+                            new Set([...currentMuted, ...otherNonHookIds])
+                          ),
+                        };
+                      }
+                      return {
+                        ...d,
+                        mutedMelodySectionIds: currentMuted.filter(
+                          (id) => id !== activeSection.id
+                        ),
+                      };
+                    }
+                    return {
+                      ...d,
+                      mutedMelodySectionIds: currentMuted.includes(activeSection.id)
+                        ? currentMuted
+                        : [...currentMuted, activeSection.id],
+                    };
+                  })
+                }
+                title="Bật hoặc tắt riêng nốt nhạc ở đoạn đang chọn (chỉ giữ lại hợp âm)"
+                className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  isActiveSectionMuted
+                    ? 'border-amber-500/80 bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300'
+                    : 'border-[#CBD8E6] dark:border-[#1F3557] text-[#475569] dark:text-[#94A3B8] hover:border-[#0284C7]'
+                }`}
+              >
+                {isActiveSectionMuted ? 'Đoạn này: Chỉ hợp âm' : 'Đoạn này: Bật nốt'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  updateActiveDraft((d) => ({ ...d, scaleSnap: !d.scaleSnap }))
+                }
+                className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  activeDraft.scaleSnap
+                    ? 'border-emerald-500/70 bg-emerald-50/70 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300'
+                    : 'border-[#CBD8E6] dark:border-[#1F3557] text-[#475569] dark:text-[#94A3B8]'
+                }`}
+              >
+                Khóa tông: {activeDraft.scaleSnap ? 'BẬT' : 'TẮT'}
+              </button>
+            </div>
           </div>
 
           {/* Primary Creative Melody Controls: Auto-Compose + Mic Hum */}
@@ -2688,11 +2886,13 @@ export function LyricGrooveSketchpadSection({
             melodyInstrument={activeDraft.melodyInstrument}
             notes={sectionMelodyNotes}
             chordMarkers={sectionChordMarkers}
+            lyricWords={sectionSyncWords}
             playheadBeatRef={playheadBeatRef}
             sectionStartBeat={activeSectionStartBeat}
             activeChordSymbol={liveChordInfo?.symbol ?? null}
             isPlaying={isPlaying}
             isRecording={isRecording}
+            isMelodyMuted={isActiveSectionMuted}
             liveWaveformRef={liveWaveformRef}
             liveDetectedMidiRef={liveDetectedMidiRef}
             onAddNote={addMelodyNote}

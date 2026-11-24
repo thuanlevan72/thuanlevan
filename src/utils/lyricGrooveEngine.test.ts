@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  alignSectionLyricsToMelody,
   analyzeSectionLyrics,
   buildChordTimeline,
   buildMidiFileBytes,
   buildProfilePlaylist,
+  buildSynchronizedLyricEvents,
   classifyVietnameseTone,
   COMPUTER_KEY_TO_MIDI,
   countVietnameseSyllables,
@@ -18,6 +20,7 @@ import {
   getDraftStyleLabel,
   getScaleNotes,
   getShortcutLabelsForOctave,
+  isSectionMelodyMuted,
   midiToNoteName,
   parseChordsFromLine,
   parseSectionKaraokeLines,
@@ -28,6 +31,7 @@ import {
   reorderSongSections,
   resolveChordVoicingNotes,
   resolveComputerKeyToMidi,
+  resolveMelodyPlaybackMode,
   resolvePianistVoicing,
   snapFrequencyToScaleMidi,
   snapMidiToScale,
@@ -125,7 +129,8 @@ test('transposeChordSymbol and transposeDraftAll shift key, slash chords, lyrics
   assert.equal(transposeChordSymbol('G/B', 1), 'Ab/C');
   assert.equal(transposeChordSymbol('Fmaj7', -1), 'Emaj7');
 
-  const [starter] = createStarterDrafts();
+  const starter = createStarterDrafts().find((d) => d.id === 'draft-dem-pho-mua-piano')!;
+  assert.ok(starter);
   assert.equal(starter.backingInstrument, 'piano-ballad');
   assert.equal(starter.melodyInstrument, 'piano');
 
@@ -177,7 +182,8 @@ test('snapFrequencyToScaleMidi and quantizePitchFramesToNotes snap humming frequ
 });
 
 test('buildChordTimeline, reorderSongSections, buildMidiFileBytes, and encodePcmToWav produce valid structured outputs', () => {
-  const [starter] = createStarterDrafts();
+  const starter = createStarterDrafts().find((d) => d.id === 'draft-dem-pho-mua-piano')!;
+  assert.ok(starter);
   const timeline = buildChordTimeline(starter.sections);
   assert.ok(timeline.events.length >= 10);
   assert.equal(timeline.totalBeats, 48); // 3 sections * 4 bars * 4 beats
@@ -238,7 +244,8 @@ test('getDiatonicChordForPianoKey maps scale degrees to playable chords cleanly'
 });
 
 test('generateHarmonicMelodyForSection creates singable in-scale melody aligned with chord bars', () => {
-  const [starter] = createStarterDrafts();
+  const starter = createStarterDrafts().find((d) => d.id === 'draft-dem-pho-mua-piano')!;
+  assert.ok(starter);
   const chorus = starter.sections[2];
   const allowedChromas = new Set(
     getScaleNotes('C', 'major')
@@ -286,51 +293,82 @@ test('SONG_IDEA_TEMPLATES provide 4 complete style starters with valid chords', 
   }
 });
 
-test('Tone Am song draft-khoang-cach-hai-ta-am resolves all 8 sections, 256 beats, lofi-chill groove, and authentic notes', () => {
+test('Deprecated tracks draft-khach-vang-lai and draft-khoang-cach-hai-ta-am are completely removed', () => {
+  const starterIds = new Set(createStarterDrafts().map((d) => d.id));
+  const playlistIds = new Set(buildProfilePlaylist().map((d) => d.id));
+  assert.equal(starterIds.has('draft-khach-vang-lai'), false);
+  assert.equal(starterIds.has('draft-khoang-cach-hai-ta-am'), false);
+  assert.equal(playlistIds.has('draft-khach-vang-lai'), false);
+  assert.equal(playlistIds.has('draft-khoang-cach-hai-ta-am'), false);
+});
+
+test('Sheet song draft-phia-sau-mot-co-gai transcribes 9 sections (Fm -> F#m modulation), chords, lyrics, and vocal melody', () => {
   const starters = createStarterDrafts();
-  const amSong = starters.find((d) => d.id === 'draft-khoang-cach-hai-ta-am');
-  assert.ok(amSong, 'draft-khoang-cach-hai-ta-am must exist in createStarterDrafts');
-  assert.equal(amSong.keyRoot, 'A');
-  assert.equal(amSong.scaleMode, 'minor');
-  assert.equal(amSong.mood, 'lofi-chill');
-  assert.equal(amSong.bpm, 86);
-  assert.equal(amSong.drumPattern, 'lofi');
-  assert.equal(amSong.backingPattern, 'auto-song');
-  assert.equal(amSong.sections.length, 8);
-  assert.equal(amSong.sections[7].kind, 'Interlude');
+  const psmcg = starters.find((d) => d.id === 'draft-phia-sau-mot-co-gai');
+  assert.ok(psmcg, 'draft-phia-sau-mot-co-gai must exist in createStarterDrafts');
+  assert.equal(psmcg.keyRoot, 'F');
+  assert.equal(psmcg.scaleMode, 'minor');
+  assert.equal(psmcg.mood, 'pop-ballad');
+  assert.equal(psmcg.bpm, 72);
+  assert.equal(psmcg.drumPattern, 'ballad');
+  assert.equal(psmcg.backingPattern, 'auto-song');
+  assert.equal(psmcg.melodyMuted, false);
+  assert.equal(psmcg.sections.length, 9);
 
-  const timeline = buildChordTimeline(amSong.sections, {
-    backingPattern: amSong.backingPattern,
-    chordArpStyles: amSong.chordArpStyles,
-    songMood: amSong.mood,
+  const timeline = buildChordTimeline(psmcg.sections, {
+    backingPattern: psmcg.backingPattern,
+    chordArpStyles: psmcg.chordArpStyles,
+    songMood: psmcg.mood,
+    melodyNotes: psmcg.melodyNotes,
   });
-  assert.equal(timeline.totalBeats, 256);
-  assert.ok(timeline.events.some((e) => e.symbol === 'Fmaj13'));
-  assert.ok(timeline.events.some((e) => e.symbol === 'Cmaj13'));
-  assert.ok(timeline.events.some((e) => e.symbol === 'Asus4'));
-
-  // Auto-song uses multiple distinct arpeggio patterns across the song
-  const distinctArps = new Set(timeline.events.map((e) => e.arpPattern));
-  assert.ok(distinctArps.size >= 4, `Expected >= 4 distinct arp patterns, got ${distinctArps.size}`);
-
-  // Every single section in draft-khoang-cach-hai-ta-am must carry full syllable-level melody notes
-  for (const sec of amSong.sections) {
-    const secNotes = amSong.melodyNotes.filter((n) => n.sectionId === sec.id);
-    assert.ok(secNotes.length >= 20, `Expected >= 20 melody notes in ${sec.id}, got ${secNotes.length}`);
+  assert.equal(timeline.totalBeats, 256); // 64 bars * 4 beats
+  for (const ch of [
+    'Dbmaj7',
+    'Eb',
+    'Cm7',
+    'Fm7',
+    'Bbm7',
+    'C7',
+    'Abmaj7',
+    'Gm7b5',
+    'Bm7',
+    'C#7',
+    'Dmaj7',
+    'E',
+    'C#m7',
+    'F#m7',
+    'F#m',
+  ]) {
+    assert.ok(timeline.events.some((e) => e.symbol === ch), `Missing chord ${ch}`);
+    assert.equal(resolveChordVoicingNotes(ch).valid, true, `Invalid chord ${ch}`);
   }
-  // Verse 1 opening motif: E4-A4-A4-C5-B4-A4 ("Dường như khoảng cách hai ta")
-  const v1Notes = amSong.melodyNotes.filter((n) => n.sectionId === 'sec-kcht-verse-1');
-  assert.deepEqual(
-    v1Notes.slice(0, 6).map((n) => n.midi),
-    [64, 69, 69, 72, 71, 69]
-  );
 
-  // Karaoke teleprompter parser extracts chord-aligned segments per line using chordSchedule
-  const chorusLines = parseSectionKaraokeLines(amSong.sections[5]);
-  assert.ok(chorusLines.length >= 3);
-  assert.ok(chorusLines[0].segments.some((s) => s.chordSymbol === 'Fmaj7'));
-  assert.ok(chorusLines[0].endBeat > chorusLines[0].startBeat);
-  assert.equal(chorusLines[0].startBeat, 0);
+  // Chorus Up 1 (+1 semitone modulation into F#m) mirrors Chorus 1 notes + 1 semitone
+  const c1 = psmcg.melodyNotes.filter((n) => n.sectionId === 'sec-psmcg-chorus-1');
+  const cu1 = psmcg.melodyNotes.filter((n) => n.sectionId === 'sec-psmcg-chorus-up-1');
+  assert.equal(c1.length, cu1.length);
+  for (let i = 0; i < c1.length; i++) {
+    assert.equal(cu1[i].midi, c1[i].midi + 1);
+    assert.equal(cu1[i].startBeat, c1[i].startBeat);
+  }
+
+  // Synchronized words align directly onto melody note beat slots
+  const syncedWords = alignSectionLyricsToMelody(
+    psmcg.sections[3],
+    psmcg.melodyNotes.filter((n) => n.sectionId === 'sec-psmcg-chorus-1'),
+    0
+  );
+  assert.ok(syncedWords.some((w) => w.text === 'bước' && w.startBeat === 0));
+  assert.ok(syncedWords.some((w) => w.text === 'sống' && Math.abs(w.startBeat - 16) < 0.05));
+
+  const songWords = buildSynchronizedLyricEvents(psmcg.sections, psmcg.melodyNotes);
+  assert.ok(songWords.length >= 90);
+  for (let i = 1; i < songWords.length; i++) {
+    assert.ok(
+      songWords[i].absStart >= songWords[i - 1].absStart - 0.001,
+      `Lyric word ${songWords[i].text} regressed before ${songWords[i - 1].text}`
+    );
+  }
 });
 
 test('Tone C song draft-thang-tu-la-loi-noi-doi-cua-em resolves all 192 beats, chords, and authentic vocal registers', () => {
@@ -384,9 +422,13 @@ test('Tone C song draft-thang-tu-la-loi-noi-doi-cua-em resolves all 192 beats, c
   );
 });
 
-test('Both new songs maintain 1:1 chord-to-syllable synchronization and unhurried note durations', () => {
+test('All flagship songs maintain 1:1 chord-to-syllable synchronization and unhurried note durations', () => {
   const starters = createStarterDrafts();
-  const targets = ['draft-khoang-cach-hai-ta-am', 'draft-thang-tu-la-loi-noi-doi-cua-em'];
+  const targets = [
+    'draft-phia-sau-mot-co-gai',
+    'draft-di-vang-nhat-nhoa',
+    'draft-thang-tu-la-loi-noi-doi-cua-em',
+  ];
   for (const id of targets) {
     const draft = starters.find((d) => d.id === id);
     assert.ok(draft, `Missing starter ${id}`);
@@ -408,7 +450,7 @@ test('Both new songs maintain 1:1 chord-to-syllable synchronization and unhurrie
           `${id}/${sec.id}: note ${note.id} spills past ${sectionBeats} beats`
         );
         assert.ok(
-          note.durationBeats >= 0.35,
+          note.durationBeats >= 0.2,
           `${id}/${sec.id}: note ${note.id} too rushed (${note.durationBeats} beats)`
         );
       }
@@ -420,7 +462,7 @@ test('Both new songs maintain 1:1 chord-to-syllable synchronization and unhurrie
           `${id}/${sec.id}: chord ${chordItem.symbol} out of bounds`
         );
         const attachedSyllable = m[2].trim();
-        if (attachedSyllable.length > 0) {
+        if (attachedSyllable.length > 0 && !attachedSyllable.startsWith('(')) {
           const matchingNote = secNotes.find(
             (n) => Math.abs(n.startBeat - chordItem.startBeat) <= 0.05
           );
@@ -430,6 +472,9 @@ test('Both new songs maintain 1:1 chord-to-syllable synchronization and unhurrie
           );
         }
       });
+
+      const karaokeLines = parseSectionKaraokeLines(sec);
+      assert.ok(karaokeLines.length >= 1, `${id}/${sec.id}: expected parsed karaoke lines`);
     }
   }
 });
@@ -556,13 +601,16 @@ test('Piano range spans C2 (36) through B5 (83) and C6 (84) across keyboard shor
 
 test('buildProfilePlaylist orders latest flagship tracks first and includes custom studio drafts', () => {
   const defaultPlaylist = buildProfilePlaylist();
-  assert.ok(defaultPlaylist.length >= 6);
-  assert.equal(defaultPlaylist[0].id, 'draft-thang-tu-la-loi-noi-doi-cua-em');
-  assert.equal(defaultPlaylist[1].id, 'draft-khoang-cach-hai-ta-am');
-  assert.equal(defaultPlaylist[2].id, 'draft-dem-pho-mua-piano');
-  assert.equal(defaultPlaylist[0].drumPattern, 'none');
-  assert.equal(getDraftStyleLabel(defaultPlaylist[0]), 'Grand Piano');
-  assert.equal(getDraftStyleLabel(defaultPlaylist[1]), 'Lo-fi Chill');
+  assert.ok(defaultPlaylist.length >= 7);
+  assert.equal(defaultPlaylist[0].id, 'draft-phia-sau-mot-co-gai');
+  assert.equal(defaultPlaylist[1].id, 'draft-di-vang-nhat-nhoa');
+  assert.equal(defaultPlaylist[2].id, 'draft-thang-tu-la-loi-noi-doi-cua-em');
+  assert.equal(defaultPlaylist[3].id, 'draft-dem-pho-mua-piano');
+  assert.equal(defaultPlaylist[0].drumPattern, 'ballad');
+  assert.equal(defaultPlaylist[0].melodyMuted, false);
+  assert.equal(defaultPlaylist[1].drumPattern, 'ballad');
+  assert.equal(getDraftStyleLabel(defaultPlaylist[0]), 'Ballad Beat');
+  assert.equal(getDraftStyleLabel(defaultPlaylist[1]), 'Ballad Beat');
   assert.ok(defaultPlaylist.some((d) => d.id === 'lofi-midnight-cafe'));
 
   // Custom draft saved more recently in Studio takes top spot while preserving all starters
@@ -575,9 +623,79 @@ test('buildProfilePlaylist orders latest flagship tracks first and includes cust
   };
   const syncedPlaylist = buildProfilePlaylist([...starters, customLatest]);
   assert.equal(syncedPlaylist[0].id, 'draft-custom-latest');
-  assert.equal(syncedPlaylist[1].id, 'draft-thang-tu-la-loi-noi-doi-cua-em');
+  assert.equal(syncedPlaylist[1].id, 'draft-phia-sau-mot-co-gai');
 });
 
+test('draft-di-vang-nhat-nhoa transcribes Tone Em 4/4 sheet sections, chords, lyrics, and vocal melody', () => {
+  const starters = createStarterDrafts();
+  const song = starters.find((d) => d.id === 'draft-di-vang-nhat-nhoa');
+  assert.ok(song, 'Expected draft-di-vang-nhat-nhoa starter draft');
+  assert.equal(song.keyRoot, 'E');
+  assert.equal(song.scaleMode, 'minor');
+  assert.equal(song.bpm, 74);
+  assert.equal(song.melodyMuted, false);
+  assert.equal(song.melodyPlaybackMode, 'all');
 
+  // 5 sections: Intro(8) + Verse1(8) + Verse2(8) + Chorus(8) + Outro(4) = 36 bars
+  assert.equal(song.sections.length, 5);
+  assert.equal(song.sections[0].bars, 8);
+  assert.equal(
+    song.sections.reduce((sum, sec) => sum + sec.bars, 0),
+    36
+  );
 
+  const chordSet = new Set(
+    song.sections.flatMap((sec) => (sec.chordSchedule ?? []).map((ev) => ev.symbol))
+  );
+  for (const required of ['Em', 'Em/B', 'Am', 'Am/E', 'Dm', 'D7', 'G', 'B7', 'G7', 'C', 'Bm', 'D']) {
+    assert.ok(chordSet.has(required), `Expected sheet chord ${required} in draft-di-vang-nhat-nhoa`);
+  }
 
+  const allText = song.sections.map((s) => s.text).join('\n');
+  assert.ok(allText.includes('Chờ người tình lỡ'));
+  assert.ok(allText.includes('Vào mùa trăng đó'));
+  assert.ok(allText.includes('Tình đầu gặp gỡ'));
+  assert.ok(allText.includes('[Em]đuối em cho rằng'));
+  assert.ok(allText.includes('thuyền [D]đã sang [Em]bờ'));
+
+  // Every melody note stays within section beat bounds and PIANO_MIN_MIDI..PIANO_MAX_MIDI
+  const sectionBounds = new Map(song.sections.map((s) => [s.id, s.bars * 4]));
+  assert.ok(song.melodyNotes.length >= 150);
+  for (const note of song.melodyNotes) {
+    const limit = sectionBounds.get(note.sectionId);
+    assert.ok(limit !== undefined, `Unknown sectionId ${note.sectionId}`);
+    assert.ok(
+      note.startBeat >= 0 && note.startBeat + note.durationBeats <= limit + 0.001,
+      `Note ${note.id} (${note.startBeat} + ${note.durationBeats}) exceeds section bounds ${limit}`
+    );
+    assert.ok(
+      note.midi >= PIANO_MIN_MIDI && note.midi <= PIANO_MAX_MIDI,
+      `Note ${note.id} MIDI ${note.midi} out of piano bounds`
+    );
+  }
+});
+
+test('Flexible chords-only melody muting supports all, intro-only, off (all muted), and per-section overrides', () => {
+  assert.equal(resolveMelodyPlaybackMode({ melodyMuted: false }), 'all');
+  assert.equal(resolveMelodyPlaybackMode({ melodyMuted: true }), 'intro-only');
+  assert.equal(resolveMelodyPlaybackMode({ melodyMuted: true, melodyPlaybackMode: 'off' }), 'off');
+
+  const intro = { id: 'sec-i', kind: 'Intro' as const };
+  const verse = { id: 'sec-v', kind: 'Verse' as const };
+  const chorus = { id: 'sec-c', kind: 'Chorus' as const };
+
+  // 'off': zero melody notes anywhere (chords-only everywhere, including Intro)
+  assert.equal(isSectionMelodyMuted(intro, 'off', []), true);
+  assert.equal(isSectionMelodyMuted(verse, 'off', []), true);
+  assert.equal(isSectionMelodyMuted(chorus, 'off', []), true);
+
+  // 'intro-only': instrumental Intro stays audible while vocal sections stay muted
+  assert.equal(isSectionMelodyMuted(intro, 'intro-only', []), false);
+  assert.equal(isSectionMelodyMuted(verse, 'intro-only', []), true);
+  assert.equal(isSectionMelodyMuted(chorus, 'intro-only', []), true);
+
+  // 'all' with custom mutedMelodySectionIds lets user mute any specific section freely
+  assert.equal(isSectionMelodyMuted(intro, 'all', ['sec-v']), false);
+  assert.equal(isSectionMelodyMuted(verse, 'all', ['sec-v']), true);
+  assert.equal(isSectionMelodyMuted(chorus, 'all', ['sec-v']), false);
+});

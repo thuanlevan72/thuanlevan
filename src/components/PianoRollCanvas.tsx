@@ -29,8 +29,10 @@ interface PianoRollCanvasProps {
   activeChordSymbol?: string | null;
   isPlaying: boolean;
   isRecording: boolean;
+  isMelodyMuted?: boolean;
   liveWaveformRef: React.MutableRefObject<Float32Array | null>;
   liveDetectedMidiRef: React.MutableRefObject<number | null>;
+  lyricWords?: Array<{ text: string; startBeat: number; endBeat: number }>;
   onAddNote: (note: MelodyNote) => void;
   onRemoveNote: (noteId: string) => void;
   onResizeNoteDuration: (noteId: string, durationBeats: number) => void;
@@ -41,6 +43,7 @@ const MAX_MIDI = PIANO_MAX_MIDI; // C6 (84, includes B5 = 83)
 const TOTAL_ROWS = MAX_MIDI - MIN_MIDI + 1; // 49 rows
 const KEY_GUTTER_W = 46;
 const HEADER_H = 44; // top bar: waveform + beat numbers
+const LYRIC_STRIP_H = 22; // bottom bar: beat-synced Vietnamese syllables
 
 export function PianoRollCanvas({
   theme,
@@ -58,8 +61,10 @@ export function PianoRollCanvas({
   activeChordSymbol = null,
   isPlaying,
   isRecording,
+  isMelodyMuted = false,
   liveWaveformRef,
   liveDetectedMidiRef,
+  lyricWords = [],
   onAddNote,
   onRemoveNote,
   onResizeNoteDuration,
@@ -126,7 +131,7 @@ export function PianoRollCanvas({
     ctx.fillRect(0, 0, cssWidth, cssHeight);
 
     const gridW = Math.max(120, cssWidth - KEY_GUTTER_W);
-    const gridH = Math.max(120, cssHeight - HEADER_H);
+    const gridH = Math.max(120, cssHeight - HEADER_H - LYRIC_STRIP_H);
     const rowH = gridH / TOTAL_ROWS;
     const beatW = gridW / totalBeats;
 
@@ -276,7 +281,7 @@ export function PianoRollCanvas({
       ctx.lineWidth = isBar ? 1.4 : 1;
       ctx.beginPath();
       ctx.moveTo(x, HEADER_H);
-      ctx.lineTo(x, cssHeight);
+      ctx.lineTo(x, cssHeight - LYRIC_STRIP_H);
       ctx.stroke();
     }
 
@@ -292,12 +297,16 @@ export function PianoRollCanvas({
       const chroma = ((n.midi % 12) + 12) % 12;
       const inScale = scaleChromas.has(chroma);
       const isNoteSounding =
+        !isMelodyMuted &&
         isPlaying &&
         isPlayheadInSection &&
         localBeat >= n.startBeat &&
         localBeat < n.startBeat + n.durationBeats;
 
       ctx.save();
+      if (isMelodyMuted) {
+        ctx.globalAlpha = 0.34;
+      }
       if (isNoteSounding) {
         ctx.shadowColor = isDark ? '#34D399' : '#0EA5E9';
         ctx.shadowBlur = 10;
@@ -319,13 +328,12 @@ export function PianoRollCanvas({
         ctx.lineWidth = 1.4;
         ctx.stroke();
       }
-      ctx.restore();
-
       if (w > 22 && h >= 8) {
         ctx.fillStyle = isNoteSounding && isDark ? '#06281E' : '#FFFFFF';
         ctx.font = '700 9px "JetBrains Mono", monospace';
         ctx.fillText(midiToNoteName(n.midi), x + 4, y + h - 2);
       }
+      ctx.restore();
     });
 
     // 5. Live Detected Vocal Pitch Indicator
@@ -364,6 +372,47 @@ export function PianoRollCanvas({
     ctx.lineTo(cssWidth, HEADER_H);
     ctx.stroke();
 
+    // 7. Bottom Synchronized Lyric Strip aligned to beat columns
+    const yStrip = cssHeight - LYRIC_STRIP_H;
+    ctx.fillStyle = isDark ? '#0A1322' : '#F8FAFC';
+    ctx.fillRect(0, yStrip, cssWidth, LYRIC_STRIP_H);
+    ctx.strokeStyle = isDark ? '#1E293B' : '#CBD5E1';
+    ctx.beginPath();
+    ctx.moveTo(0, yStrip);
+    ctx.lineTo(cssWidth, yStrip);
+    ctx.stroke();
+
+    ctx.fillStyle = textMuted;
+    ctx.font = '700 9px "JetBrains Mono", monospace';
+    ctx.fillText('CA TỪ', 6, yStrip + 14.5);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(KEY_GUTTER_W, yStrip, gridW, LYRIC_STRIP_H);
+    ctx.clip();
+    let lastLyricX = KEY_GUTTER_W - 2;
+    lyricWords.forEach((word) => {
+      if (word.startBeat >= totalBeats || !word.text) return;
+      const rawX = KEY_GUTTER_W + word.startBeat * beatW + 2;
+      const drawX = Math.max(rawX, lastLyricX + 3);
+      if (drawX > cssWidth - 6) return;
+      const isCurrentWord =
+        isPlayheadInSection &&
+        localBeat >= word.startBeat &&
+        localBeat < word.endBeat;
+      ctx.font = isCurrentWord ? '700 10px sans-serif' : '500 9.5px sans-serif';
+      ctx.fillStyle = isCurrentWord
+        ? isDark
+          ? '#34D399'
+          : '#0284C7'
+        : isDark
+        ? '#CBD5E1'
+        : '#334155';
+      ctx.fillText(word.text, drawX, yStrip + 14.5);
+      lastLyricX = drawX + ctx.measureText(word.text).width;
+    });
+    ctx.restore();
+
     ctx.restore();
   };
 
@@ -393,10 +442,10 @@ export function PianoRollCanvas({
     const rect = canvas.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
-    if (x < KEY_GUTTER_W || y < HEADER_H) return null;
+    if (x < KEY_GUTTER_W || y < HEADER_H || y > rect.height - LYRIC_STRIP_H) return null;
 
     const gridW = Math.max(120, rect.width - KEY_GUTTER_W);
-    const gridH = Math.max(120, rect.height - HEADER_H);
+    const gridH = Math.max(120, rect.height - HEADER_H - LYRIC_STRIP_H);
     const rowH = gridH / TOTAL_ROWS;
     const beatW = gridW / totalBeats;
 
@@ -481,7 +530,10 @@ export function PianoRollCanvas({
           Bấm hoặc kéo trên lưới để vẽ nốt · Bấm lại vào nốt để xóa
         </span>
         <span className="font-mono font-medium text-[#0369A1] dark:text-[#38BDF8]">
-          {hoverInfo ?? `${notes.length} nốt nhạc`}
+          {hoverInfo ??
+            (isMelodyMuted
+              ? `Đang tắt nốt (Chỉ hợp âm · ${notes.length} nốt)`
+              : `${notes.length} nốt nhạc`)}
         </span>
       </div>
     </div>

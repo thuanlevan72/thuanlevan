@@ -18,7 +18,7 @@ export type ConcreteArpeggioPatternId =
   | 'pop-comp';
 export type ArpeggioPatternId = 'auto-song' | ConcreteArpeggioPatternId;
 export type BackingPatternId = 'ballad-arpeggio' | ArpeggioPatternId;
-export type DrumPatternId = 'none' | 'lofi' | 'boombap';
+export type DrumPatternId = 'none' | 'lofi' | 'boombap' | 'ballad';
 export type MelodyInstrumentId = 'piano' | 'synth' | 'guitar';
 export type SectionKind =
   | 'Intro'
@@ -54,6 +54,8 @@ export interface MelodyNote {
   velocity: number;
 }
 
+export type MelodyPlaybackMode = 'all' | 'intro-only' | 'off';
+
 export interface SketchpadDraft {
   id: string;
   title: string;
@@ -68,10 +70,45 @@ export interface SketchpadDraft {
   metronomeEnabled?: boolean;
   drumPattern: DrumPatternId;
   melodyInstrument: MelodyInstrumentId;
+  melodyMuted?: boolean;
+  melodyPlaybackMode?: MelodyPlaybackMode;
+  mutedMelodySectionIds?: string[];
   scaleSnap: boolean;
   sections: SongSection[];
   melodyNotes: MelodyNote[];
   updatedAt: number;
+}
+
+export function resolveMelodyPlaybackMode(
+  draft: Pick<SketchpadDraft, 'melodyPlaybackMode' | 'melodyMuted'>
+): MelodyPlaybackMode {
+  if (
+    draft.melodyPlaybackMode === 'all' ||
+    draft.melodyPlaybackMode === 'intro-only' ||
+    draft.melodyPlaybackMode === 'off'
+  ) {
+    return draft.melodyPlaybackMode;
+  }
+  return draft.melodyMuted ? 'intro-only' : 'all';
+}
+
+export function isSectionMelodyMuted(
+  section: Pick<SongSection, 'id' | 'kind'>,
+  mode: MelodyPlaybackMode,
+  mutedSectionIds?: string[]
+): boolean {
+  if (mode === 'off') return true;
+  if (Array.isArray(mutedSectionIds) && mutedSectionIds.includes(section.id)) {
+    return true;
+  }
+  if (
+    mode === 'intro-only' &&
+    section.kind !== 'Intro' &&
+    section.kind !== 'Interlude'
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export interface AnchoredChord {
@@ -840,6 +877,172 @@ export function parseSectionKaraokeLines(section: SongSection): KaraokeLine[] {
       segments,
     };
   });
+}
+
+export interface SynchronizedLyricWord {
+  text: string;
+  chordSymbol: string | null;
+  sectionId: string;
+  lineIndex: number;
+  segIndex: number;
+  wordIndex: number;
+  startBeat: number;
+  endBeat: number;
+  absStart: number;
+  absEnd: number;
+}
+
+/**
+ * Aligns every Vietnamese word/syllable inside a section directly onto its MelodyNote beat slots
+ * within each [Chord] segment so Audio, Chords, Piano Roll, and Timeline Lyrics stay 100% locked.
+ */
+export function alignSectionLyricsToMelody(
+  section: SongSection,
+  sectionMelodyNotes: MelodyNote[],
+  sectionAbsStartBeat = 0
+): SynchronizedLyricWord[] {
+  const karaokeLines = parseSectionKaraokeLines(section);
+  if (karaokeLines.length === 0) return [];
+
+  const sortedNotes = [...sectionMelodyNotes]
+    .filter((n) => n.sectionId === section.id)
+    .sort((a, b) => a.startBeat - b.startBeat);
+
+  const sectionLimit = section.bars * 4;
+  const wordsOut: SynchronizedLyricWord[] = [];
+
+  karaokeLines.forEach((line) => {
+    line.segments.forEach((seg, segIndex) => {
+      const tokens = seg.lyricText
+        .trim()
+        .split(/\s+/)
+        .filter((w) => w.length > 0);
+      if (tokens.length === 0) return;
+
+      const segStart = Math.max(0, Math.min(sectionLimit, seg.startBeat));
+      const segEnd = Math.max(segStart + 0.25, Math.min(sectionLimit, seg.endBeat));
+      const notesInSeg = sortedNotes.filter(
+        (n) => n.startBeat >= segStart - 0.15 && n.startBeat < segEnd - 0.04
+      );
+
+      // Pure descriptive parenthetical cues like "(Dạo: Chủ đề điệp khúc)" stay intact on segment start
+      const isCueLabel =
+        seg.lyricText.trim().startsWith('(') && seg.lyricText.trim().includes(')');
+      if (isCueLabel) {
+        const startBeat = notesInSeg[0]?.startBeat ?? segStart;
+        wordsOut.push({
+          text: seg.lyricText.trim(),
+          chordSymbol: seg.chordSymbol,
+          sectionId: section.id,
+          lineIndex: line.lineIndex,
+          segIndex,
+          wordIndex: 0,
+          startBeat,
+          endBeat: segEnd,
+          absStart: sectionAbsStartBeat + startBeat,
+          absEnd: sectionAbsStartBeat + segEnd,
+        });
+        return;
+      }
+
+      if (notesInSeg.length > 0) {
+        for (let wIdx = 0; wIdx < tokens.length; wIdx++) {
+          const mappedIdx =
+            tokens.length === 1
+              ? 0
+              : notesInSeg.length === tokens.length
+              ? wIdx
+              : Math.min(
+                  notesInSeg.length - 1,
+                  Math.floor((wIdx * notesInSeg.length) / tokens.length)
+                );
+          const anchorNote = notesInSeg[mappedIdx];
+          const nextMappedIdx =
+            wIdx + 1 < tokens.length
+              ? notesInSeg.length === tokens.length
+                ? wIdx + 1
+                : Math.min(
+                    notesInSeg.length - 1,
+                    Math.floor(((wIdx + 1) * notesInSeg.length) / tokens.length)
+                  )
+              : -1;
+
+          let wStart = anchorNote.startBeat;
+          if (wIdx > 0 && wordsOut.length > 0) {
+            const prevSameSeg = wordsOut[wordsOut.length - 1];
+            if (
+              prevSameSeg.sectionId === section.id &&
+              prevSameSeg.lineIndex === line.lineIndex &&
+              prevSameSeg.segIndex === segIndex &&
+              wStart <= prevSameSeg.startBeat + 0.05
+            ) {
+              // Spread evenly within remaining slot when multiple words share 1 sustained note
+              const remainingSpan = Math.max(0.25, segEnd - prevSameSeg.startBeat);
+              const remainingWords = tokens.length - wIdx + 1;
+              wStart = prevSameSeg.startBeat + remainingSpan / remainingWords;
+              prevSameSeg.endBeat = wStart;
+              prevSameSeg.absEnd = sectionAbsStartBeat + wStart;
+            }
+          }
+
+          const rawEnd =
+            nextMappedIdx >= 0 && notesInSeg[nextMappedIdx].startBeat > wStart + 0.05
+              ? notesInSeg[nextMappedIdx].startBeat
+              : Math.min(segEnd, Math.max(wStart + 0.25, anchorNote.startBeat + anchorNote.durationBeats));
+
+          wordsOut.push({
+            text: tokens[wIdx],
+            chordSymbol: wIdx === 0 ? seg.chordSymbol : null,
+            sectionId: section.id,
+            lineIndex: line.lineIndex,
+            segIndex,
+            wordIndex: wIdx,
+            startBeat: wStart,
+            endBeat: Math.max(wStart + 0.15, rawEnd),
+            absStart: sectionAbsStartBeat + wStart,
+            absEnd: sectionAbsStartBeat + Math.max(wStart + 0.15, rawEnd),
+          });
+        }
+      } else {
+        const span = Math.max(0.25, segEnd - segStart);
+        const step = span / tokens.length;
+        tokens.forEach((word, wIdx) => {
+          const wStart = segStart + wIdx * step;
+          const wEnd = wStart + step;
+          wordsOut.push({
+            text: word,
+            chordSymbol: wIdx === 0 ? seg.chordSymbol : null,
+            sectionId: section.id,
+            lineIndex: line.lineIndex,
+            segIndex,
+            wordIndex: wIdx,
+            startBeat: wStart,
+            endBeat: wEnd,
+            absStart: sectionAbsStartBeat + wStart,
+            absEnd: sectionAbsStartBeat + wEnd,
+          });
+        });
+      }
+    });
+  });
+
+  return wordsOut;
+}
+
+/**
+ * Builds song-wide word/syllable events locked to melody notes across all ordered sections.
+ */
+export function buildSynchronizedLyricEvents(
+  sections: SongSection[],
+  melodyNotes: MelodyNote[]
+): SynchronizedLyricWord[] {
+  const allWords: SynchronizedLyricWord[] = [];
+  let cursor = 0;
+  sections.forEach((sec) => {
+    allWords.push(...alignSectionLyricsToMelody(sec, melodyNotes, cursor));
+    cursor += sec.bars * 4;
+  });
+  return allWords;
 }
 
 /**
@@ -2269,6 +2472,773 @@ export function createStarterDrafts(): SketchpadDraft[] {
   const now = Date.now();
   return [
     {
+      id: 'draft-phia-sau-mot-co-gai',
+      title: 'Phía Sau Một Cô Gái — Soobin Hoàng Sơn (Sheet Fm → F#m)',
+      keyRoot: 'F',
+      scaleMode: 'minor',
+      mood: 'pop-ballad',
+      bpm: 72,
+      backingInstrument: 'piano-ballad',
+      backingPattern: 'auto-song',
+      sustainPedal: true,
+      metronomeEnabled: false,
+      drumPattern: 'ballad',
+      melodyInstrument: 'piano',
+      melodyMuted: false,
+      melodyPlaybackMode: 'all',
+      mutedMelodySectionIds: [],
+      scaleSnap: true,
+      updatedAt: now + 60_000,
+      sections: [
+        {
+          id: 'sec-psmcg-intro',
+          kind: 'Intro',
+          label: 'Intro — Piano Chủ Đề (Tone Fm · 4/4)',
+          bars: 8,
+          text:
+            '[Dbmaj7](Dạo Piano: F5-Eb5-Ab5-G5) [Eb]... [Cm7]... [Fm7]...\n' +
+            '[Bbm7](Điệp khúc dạo) [Cm7]... [Fm7]... Nhiều khi',
+          chordSchedule: [
+            { symbol: 'Dbmaj7', startBeat: 0, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'Eb', startBeat: 4, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Cm7', startBeat: 8, durationBeats: 4, arpPattern: 'falling-arp' },
+            { symbol: 'Fm7', startBeat: 12, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Bbm7', startBeat: 16, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'Cm7', startBeat: 20, durationBeats: 4, arpPattern: 'falling-arp' },
+            { symbol: 'Fm7', startBeat: 24, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Fm7', startBeat: 28, durationBeats: 4, arpPattern: 'pinch-plucked' },
+          ],
+        },
+        {
+          id: 'sec-psmcg-verse-1',
+          kind: 'Verse',
+          label: 'Verse — Anh Mong Được Một Lần Nói Ra',
+          bars: 8,
+          text:
+            '[Dbmaj7]anh mong được một lần nói [Eb]ra hết tất cả thay\n' +
+            '[Fm7]vì... Ngồi lặng\n' +
+            '[Bbm7]im nghe em kể về anh ta [C7]bằng đôi mắt lấp\n' +
+            '[Fm7]lánh... Đôi',
+          chordSchedule: [
+            { symbol: 'Dbmaj7', startBeat: 0, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Eb', startBeat: 4, durationBeats: 4, arpPattern: 'pinch-plucked' },
+            { symbol: 'Fm7', startBeat: 8, durationBeats: 8, arpPattern: 'rising-arp' },
+            { symbol: 'Bbm7', startBeat: 16, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'C7', startBeat: 20, durationBeats: 4, arpPattern: 'pinch-plucked' },
+            { symbol: 'Fm7', startBeat: 24, durationBeats: 8, arpPattern: 'rising-arp' },
+          ],
+        },
+        {
+          id: 'sec-psmcg-pre',
+          kind: 'Pre-Chorus',
+          label: 'Pre-Chorus — Đôi Lúc Em Tránh Ánh Mắt',
+          bars: 8,
+          text:
+            '[Bbm7]lúc em tránh ánh mắt của anh [Eb] vì dường như lúc nào\n' +
+            '[Abmaj7] em cũng hiểu thấu lòng anh. [Dbmaj7] Không\n' +
+            '[Gm7b5]thể ngắt lời càng không [C7]thể để giọt lệ nào được\n' +
+            '[Fm7]rơi. Nếu anh lùi',
+          chordSchedule: [
+            { symbol: 'Bbm7', startBeat: 0, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'Eb', startBeat: 4, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'Abmaj7', startBeat: 8, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'Dbmaj7', startBeat: 12, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Gm7b5', startBeat: 16, durationBeats: 4, arpPattern: 'pinch-plucked' },
+            { symbol: 'C7', startBeat: 20, durationBeats: 4, arpPattern: 'falling-arp' },
+            { symbol: 'Fm7', startBeat: 24, durationBeats: 8, arpPattern: 'rich-block' },
+          ],
+        },
+        {
+          id: 'sec-psmcg-chorus-1',
+          kind: 'Chorus',
+          label: 'Điệp Khúc 1 — Cả Nguồn Sống Bỗng Chốc Thu Bé Lại',
+          bars: 8,
+          text:
+            '[Dbmaj7]bước về sau, để [Eb]thấy em rõ hơn để có thể\n' +
+            '[Cm7]ngắm em từ xa âu [Fm7]yếm hơn. Cả nguồn\n' +
+            '[Bbm7]sống bỗng chốc thu bé lại [C7] vừa bằng một cô\n' +
+            '[Fm7]gái. [Eb] Hay anh vẫn',
+          chordSchedule: [
+            { symbol: 'Dbmaj7', startBeat: 0, durationBeats: 4, arpPattern: 'rich-block' },
+            { symbol: 'Eb', startBeat: 4, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Cm7', startBeat: 8, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'Fm7', startBeat: 12, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Bbm7', startBeat: 16, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'C7', startBeat: 20, durationBeats: 4, arpPattern: 'pinch-plucked' },
+            { symbol: 'Fm7', startBeat: 24, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'Eb', startBeat: 28, durationBeats: 4, arpPattern: 'rich-block' },
+          ],
+        },
+        {
+          id: 'sec-psmcg-chorus-2',
+          kind: 'Chorus',
+          label: 'Điệp Khúc 2 — Ánh Mắt Anh Hồn Nhiên Đến Lạ',
+          bars: 8,
+          text:
+            '[Dbmaj7]sẽ lặng lẽ kế [Eb] bên, dù không nắm\n' +
+            '[Cm7]tay nhưng đường chung mãi [Fm7]mãi. [Fm7] Và từ\n' +
+            '[Bbm7]ấy ánh mắt anh hồn [Cm7]nhiên đến\n' +
+            '[Fm7]lạ.',
+          chordSchedule: [
+            { symbol: 'Dbmaj7', startBeat: 0, durationBeats: 4, arpPattern: 'rich-block' },
+            { symbol: 'Eb', startBeat: 4, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Cm7', startBeat: 8, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'Fm7', startBeat: 12, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Fm7', startBeat: 16, durationBeats: 4, arpPattern: 'falling-arp' },
+            { symbol: 'Bbm7', startBeat: 20, durationBeats: 4, arpPattern: 'rich-block' },
+            { symbol: 'Cm7', startBeat: 24, durationBeats: 4, arpPattern: 'pinch-plucked' },
+            { symbol: 'Fm7', startBeat: 28, durationBeats: 4, arpPattern: 'rising-arp' },
+          ],
+        },
+        {
+          id: 'sec-psmcg-bridge',
+          kind: 'Bridge',
+          label: 'Giang Tấu — Chuyển Tông Fm → F#m (+½ Cung)',
+          bars: 4,
+          text:
+            '[Bbm] (Dạo chuyển tông)\n' +
+            '[Cm] (Nâng cao trào)\n' +
+            '[Bm7] (Lên tông F#m)\n' +
+            '[C#7] Nếu anh lùi',
+          chordSchedule: [
+            { symbol: 'Bbm', startBeat: 0, durationBeats: 4, arpPattern: 'rich-block' },
+            { symbol: 'Cm', startBeat: 4, durationBeats: 4, arpPattern: 'rich-block' },
+            { symbol: 'Bm7', startBeat: 8, durationBeats: 4, arpPattern: 'rich-block' },
+            { symbol: 'C#7', startBeat: 12, durationBeats: 4, arpPattern: 'pinch-plucked' },
+          ],
+        },
+        {
+          id: 'sec-psmcg-chorus-up-1',
+          kind: 'Chorus',
+          label: 'Điệp Khúc Cao Trào (Tone F#m) — Bước Về Sau',
+          bars: 8,
+          text:
+            '[Dmaj7]bước về sau, để [E]thấy em rõ hơn để có thể\n' +
+            '[C#m7]ngắm em từ xa âu [F#m7]yếm hơn. Cả nguồn\n' +
+            '[Bm7]sống bỗng chốc thu bé lại [C#7] vừa bằng một cô\n' +
+            '[F#m7]gái. [E] Hay anh vẫn',
+          chordSchedule: [
+            { symbol: 'Dmaj7', startBeat: 0, durationBeats: 4, arpPattern: 'rich-block' },
+            { symbol: 'E', startBeat: 4, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'C#m7', startBeat: 8, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'F#m7', startBeat: 12, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Bm7', startBeat: 16, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'C#7', startBeat: 20, durationBeats: 4, arpPattern: 'pinch-plucked' },
+            { symbol: 'F#m7', startBeat: 24, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'E', startBeat: 28, durationBeats: 4, arpPattern: 'rich-block' },
+          ],
+        },
+        {
+          id: 'sec-psmcg-chorus-up-2',
+          kind: 'Chorus',
+          label: 'Điệp Khúc Cuối (Tone F#m) — Hồn Nhiên Đến Lạ',
+          bars: 8,
+          text:
+            '[Dmaj7]sẽ lặng lẽ kế [E] bên, dù không nắm\n' +
+            '[C#m7]tay nhưng đường chung mãi [F#m7]mãi. [F#m7] Và từ\n' +
+            '[Bm7]ấy ánh mắt anh hồn [C#m7]nhiên đến\n' +
+            '[F#m7]lạ.',
+          chordSchedule: [
+            { symbol: 'Dmaj7', startBeat: 0, durationBeats: 4, arpPattern: 'rich-block' },
+            { symbol: 'E', startBeat: 4, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'C#m7', startBeat: 8, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'F#m7', startBeat: 12, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'F#m7', startBeat: 16, durationBeats: 4, arpPattern: 'falling-arp' },
+            { symbol: 'Bm7', startBeat: 20, durationBeats: 4, arpPattern: 'rich-block' },
+            { symbol: 'C#m7', startBeat: 24, durationBeats: 4, arpPattern: 'pinch-plucked' },
+            { symbol: 'F#m7', startBeat: 28, durationBeats: 4, arpPattern: 'rising-arp' },
+          ],
+        },
+        {
+          id: 'sec-psmcg-outro',
+          kind: 'Outro',
+          label: 'Outro — Vì Sao Anh Không Thể Gặp Em Sớm Hơn',
+          bars: 4,
+          text: '[C#7] Vì [Dmaj7]sao anh không thể gặp được [E]em sớm [F#m]hơn.',
+          chordSchedule: [
+            { symbol: 'C#7', startBeat: 0, durationBeats: 4, arpPattern: 'rich-block' },
+            { symbol: 'Dmaj7', startBeat: 4, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'E', startBeat: 8, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'F#m', startBeat: 12, durationBeats: 4, arpPattern: 'rising-arp' },
+          ],
+        },
+      ],
+      melodyNotes: [
+        // 1. Intro (8 bars = 32 beats, Tone Fm — F5-Eb5-Ab5-G5 motif)
+        { id: 'psmi-1', sectionId: 'sec-psmcg-intro', midi: 77, startBeat: 0.0, durationBeats: 1.5, velocity: 0.84 },
+        { id: 'psmi-2', sectionId: 'sec-psmcg-intro', midi: 75, startBeat: 1.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'psmi-3', sectionId: 'sec-psmcg-intro', midi: 80, startBeat: 2.0, durationBeats: 1.0, velocity: 0.88 },
+        { id: 'psmi-4', sectionId: 'sec-psmcg-intro', midi: 79, startBeat: 3.0, durationBeats: 1.0, velocity: 0.84 },
+        { id: 'psmi-5', sectionId: 'sec-psmcg-intro', midi: 77, startBeat: 4.0, durationBeats: 1.5, velocity: 0.84 },
+        { id: 'psmi-6', sectionId: 'sec-psmcg-intro', midi: 75, startBeat: 5.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'psmi-7', sectionId: 'sec-psmcg-intro', midi: 75, startBeat: 6.0, durationBeats: 1.0, velocity: 0.82 },
+        { id: 'psmi-8', sectionId: 'sec-psmcg-intro', midi: 75, startBeat: 7.0, durationBeats: 1.0, velocity: 0.8 },
+        { id: 'psmi-9', sectionId: 'sec-psmcg-intro', midi: 75, startBeat: 8.0, durationBeats: 1.5, velocity: 0.84 },
+        { id: 'psmi-10', sectionId: 'sec-psmcg-intro', midi: 73, startBeat: 9.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'psmi-11', sectionId: 'sec-psmcg-intro', midi: 73, startBeat: 10.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'psmi-12', sectionId: 'sec-psmcg-intro', midi: 72, startBeat: 10.5, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'psmi-13', sectionId: 'sec-psmcg-intro', midi: 70, startBeat: 11.0, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'psmi-14', sectionId: 'sec-psmcg-intro', midi: 68, startBeat: 11.5, durationBeats: 0.5, velocity: 0.76 },
+        { id: 'psmi-15', sectionId: 'sec-psmcg-intro', midi: 68, startBeat: 12.0, durationBeats: 1.0, velocity: 0.78 },
+        { id: 'psmi-16', sectionId: 'sec-psmcg-intro', midi: 65, startBeat: 13.0, durationBeats: 0.5, velocity: 0.74 },
+        { id: 'psmi-17', sectionId: 'sec-psmcg-intro', midi: 65, startBeat: 13.5, durationBeats: 0.5, velocity: 0.74 },
+        { id: 'psmi-18', sectionId: 'sec-psmcg-intro', midi: 65, startBeat: 14.0, durationBeats: 0.5, velocity: 0.74 },
+        { id: 'psmi-19', sectionId: 'sec-psmcg-intro', midi: 67, startBeat: 14.5, durationBeats: 0.5, velocity: 0.76 },
+        { id: 'psmi-20', sectionId: 'sec-psmcg-intro', midi: 68, startBeat: 15.0, durationBeats: 1.0, velocity: 0.78 },
+        { id: 'psmi-21', sectionId: 'sec-psmcg-intro', midi: 68, startBeat: 16.0, durationBeats: 1.5, velocity: 0.8 },
+        { id: 'psmi-22', sectionId: 'sec-psmcg-intro', midi: 70, startBeat: 17.5, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'psmi-23', sectionId: 'sec-psmcg-intro', midi: 72, startBeat: 18.0, durationBeats: 1.0, velocity: 0.82 },
+        { id: 'psmi-24', sectionId: 'sec-psmcg-intro', midi: 75, startBeat: 19.0, durationBeats: 1.0, velocity: 0.84 },
+        { id: 'psmi-25', sectionId: 'sec-psmcg-intro', midi: 73, startBeat: 20.0, durationBeats: 1.5, velocity: 0.82 },
+        { id: 'psmi-26', sectionId: 'sec-psmcg-intro', midi: 73, startBeat: 21.5, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'psmi-27', sectionId: 'sec-psmcg-intro', midi: 70, startBeat: 22.0, durationBeats: 1.5, velocity: 0.8 },
+        { id: 'psmi-28', sectionId: 'sec-psmcg-intro', midi: 68, startBeat: 23.5, durationBeats: 0.5, velocity: 0.76 },
+        { id: 'psmi-29', sectionId: 'sec-psmcg-intro', midi: 68, startBeat: 24.0, durationBeats: 4.0, velocity: 0.8 },
+        { id: 'psmi-30', sectionId: 'sec-psmcg-intro', midi: 68, startBeat: 28.0, durationBeats: 2.0, velocity: 0.72 },
+        { id: 'psmi-31', sectionId: 'sec-psmcg-intro', midi: 65, startBeat: 31.0, durationBeats: 0.5, velocity: 0.78 }, // Nhiều
+        { id: 'psmi-32', sectionId: 'sec-psmcg-intro', midi: 67, startBeat: 31.5, durationBeats: 0.5, velocity: 0.8 }, // khi
+
+        // 2. Verse 1 (8 bars = 32 beats)
+        { id: 'psmv-1', sectionId: 'sec-psmcg-verse-1', midi: 68, startBeat: 0.0, durationBeats: 0.5, velocity: 0.82 }, // anh
+        { id: 'psmv-2', sectionId: 'sec-psmcg-verse-1', midi: 68, startBeat: 0.5, durationBeats: 0.5, velocity: 0.8 }, // mong
+        { id: 'psmv-3', sectionId: 'sec-psmcg-verse-1', midi: 68, startBeat: 1.0, durationBeats: 0.5, velocity: 0.8 }, // được
+        { id: 'psmv-4', sectionId: 'sec-psmcg-verse-1', midi: 72, startBeat: 1.5, durationBeats: 0.5, velocity: 0.86 }, // một
+        { id: 'psmv-5', sectionId: 'sec-psmcg-verse-1', midi: 72, startBeat: 2.0, durationBeats: 1.0, velocity: 0.86 }, // lần
+        { id: 'psmv-6', sectionId: 'sec-psmcg-verse-1', midi: 70, startBeat: 3.0, durationBeats: 1.0, velocity: 0.82 }, // nói
+        { id: 'psmv-7', sectionId: 'sec-psmcg-verse-1', midi: 70, startBeat: 4.0, durationBeats: 1.5, velocity: 0.84 }, // ra
+        { id: 'psmv-8', sectionId: 'sec-psmcg-verse-1', midi: 72, startBeat: 5.5, durationBeats: 0.5, velocity: 0.86 }, // hết
+        { id: 'psmv-9', sectionId: 'sec-psmcg-verse-1', midi: 72, startBeat: 6.0, durationBeats: 0.5, velocity: 0.84 }, // tất
+        { id: 'psmv-10', sectionId: 'sec-psmcg-verse-1', midi: 70, startBeat: 6.5, durationBeats: 0.5, velocity: 0.82 }, // cả
+        { id: 'psmv-11', sectionId: 'sec-psmcg-verse-1', midi: 68, startBeat: 7.0, durationBeats: 1.0, velocity: 0.8 }, // thay
+        { id: 'psmv-12', sectionId: 'sec-psmcg-verse-1', midi: 67, startBeat: 8.0, durationBeats: 5.5, velocity: 0.82 }, // vì...
+        { id: 'psmv-13', sectionId: 'sec-psmcg-verse-1', midi: 65, startBeat: 15.0, durationBeats: 0.5, velocity: 0.78 }, // Ngồi
+        { id: 'psmv-14', sectionId: 'sec-psmcg-verse-1', midi: 67, startBeat: 15.5, durationBeats: 0.5, velocity: 0.8 }, // lặng
+        { id: 'psmv-15', sectionId: 'sec-psmcg-verse-1', midi: 68, startBeat: 16.0, durationBeats: 0.5, velocity: 0.82 }, // im
+        { id: 'psmv-16', sectionId: 'sec-psmcg-verse-1', midi: 68, startBeat: 16.5, durationBeats: 0.5, velocity: 0.8 }, // nghe
+        { id: 'psmv-17', sectionId: 'sec-psmcg-verse-1', midi: 68, startBeat: 17.0, durationBeats: 0.5, velocity: 0.8 }, // em
+        { id: 'psmv-18', sectionId: 'sec-psmcg-verse-1', midi: 68, startBeat: 17.5, durationBeats: 0.5, velocity: 0.8 }, // kể
+        { id: 'psmv-19', sectionId: 'sec-psmcg-verse-1', midi: 67, startBeat: 18.0, durationBeats: 1.0, velocity: 0.78 }, // về
+        { id: 'psmv-20', sectionId: 'sec-psmcg-verse-1', midi: 68, startBeat: 19.0, durationBeats: 0.5, velocity: 0.8 }, // anh
+        { id: 'psmv-21', sectionId: 'sec-psmcg-verse-1', midi: 70, startBeat: 19.5, durationBeats: 0.5, velocity: 0.84 }, // ta
+        { id: 'psmv-22', sectionId: 'sec-psmcg-verse-1', midi: 70, startBeat: 20.0, durationBeats: 0.5, velocity: 0.84 }, // bằng
+        { id: 'psmv-23', sectionId: 'sec-psmcg-verse-1', midi: 68, startBeat: 20.5, durationBeats: 0.5, velocity: 0.8 }, // đôi
+        { id: 'psmv-24', sectionId: 'sec-psmcg-verse-1', midi: 67, startBeat: 21.0, durationBeats: 2.0, velocity: 0.8 }, // mắt
+        { id: 'psmv-25', sectionId: 'sec-psmcg-verse-1', midi: 64, startBeat: 23.0, durationBeats: 1.0, velocity: 0.78 }, // lấp
+        { id: 'psmv-26', sectionId: 'sec-psmcg-verse-1', midi: 65, startBeat: 24.0, durationBeats: 6.0, velocity: 0.8 }, // lánh...
+        { id: 'psmv-27', sectionId: 'sec-psmcg-verse-1', midi: 70, startBeat: 31.5, durationBeats: 0.5, velocity: 0.82 }, // Đôi
+
+        // 3. Pre-Chorus (8 bars = 32 beats)
+        { id: 'psmp-1', sectionId: 'sec-psmcg-pre', midi: 72, startBeat: 0.0, durationBeats: 0.5, velocity: 0.86 }, // lúc
+        { id: 'psmp-2', sectionId: 'sec-psmcg-pre', midi: 72, startBeat: 0.5, durationBeats: 0.5, velocity: 0.84 }, // em
+        { id: 'psmp-3', sectionId: 'sec-psmcg-pre', midi: 72, startBeat: 1.0, durationBeats: 0.5, velocity: 0.84 }, // tránh
+        { id: 'psmp-4', sectionId: 'sec-psmcg-pre', midi: 72, startBeat: 1.5, durationBeats: 0.5, velocity: 0.84 }, // ánh
+        { id: 'psmp-5', sectionId: 'sec-psmcg-pre', midi: 72, startBeat: 2.0, durationBeats: 1.0, velocity: 0.86 }, // mắt
+        { id: 'psmp-6', sectionId: 'sec-psmcg-pre', midi: 70, startBeat: 3.0, durationBeats: 0.5, velocity: 0.82 }, // của
+        { id: 'psmp-7', sectionId: 'sec-psmcg-pre', midi: 72, startBeat: 3.5, durationBeats: 2.0, velocity: 0.86 }, // anh
+        { id: 'psmp-8', sectionId: 'sec-psmcg-pre', midi: 73, startBeat: 5.5, durationBeats: 0.5, velocity: 0.88 }, // vì
+        { id: 'psmp-9', sectionId: 'sec-psmcg-pre', midi: 72, startBeat: 6.0, durationBeats: 0.5, velocity: 0.84 }, // dường
+        { id: 'psmp-10', sectionId: 'sec-psmcg-pre', midi: 72, startBeat: 6.5, durationBeats: 0.5, velocity: 0.84 }, // như
+        { id: 'psmp-11', sectionId: 'sec-psmcg-pre', midi: 73, startBeat: 7.0, durationBeats: 0.5, velocity: 0.88 }, // lúc
+        { id: 'psmp-12', sectionId: 'sec-psmcg-pre', midi: 72, startBeat: 7.5, durationBeats: 1.5, velocity: 0.86 }, // nào
+        { id: 'psmp-13', sectionId: 'sec-psmcg-pre', midi: 70, startBeat: 9.0, durationBeats: 0.5, velocity: 0.84 }, // em
+        { id: 'psmp-14', sectionId: 'sec-psmcg-pre', midi: 70, startBeat: 9.5, durationBeats: 0.5, velocity: 0.82 }, // cũng
+        { id: 'psmp-15', sectionId: 'sec-psmcg-pre', midi: 70, startBeat: 10.0, durationBeats: 0.5, velocity: 0.84 }, // hiểu
+        { id: 'psmp-16', sectionId: 'sec-psmcg-pre', midi: 68, startBeat: 10.5, durationBeats: 0.5, velocity: 0.8 }, // thấu
+        { id: 'psmp-17', sectionId: 'sec-psmcg-pre', midi: 65, startBeat: 11.0, durationBeats: 0.5, velocity: 0.78 }, // lòng
+        { id: 'psmp-18', sectionId: 'sec-psmcg-pre', midi: 67, startBeat: 11.5, durationBeats: 3.5, velocity: 0.82 }, // anh.
+        { id: 'psmp-19', sectionId: 'sec-psmcg-pre', midi: 67, startBeat: 15.5, durationBeats: 0.5, velocity: 0.82 }, // Không
+        { id: 'psmp-20', sectionId: 'sec-psmcg-pre', midi: 68, startBeat: 16.0, durationBeats: 0.5, velocity: 0.82 }, // thể
+        { id: 'psmp-21', sectionId: 'sec-psmcg-pre', midi: 68, startBeat: 16.5, durationBeats: 0.5, velocity: 0.82 }, // ngắt
+        { id: 'psmp-22', sectionId: 'sec-psmcg-pre', midi: 68, startBeat: 17.0, durationBeats: 1.5, velocity: 0.84 }, // lời
+        { id: 'psmp-23', sectionId: 'sec-psmcg-pre', midi: 67, startBeat: 18.5, durationBeats: 0.5, velocity: 0.8 }, // càng
+        { id: 'psmp-24', sectionId: 'sec-psmcg-pre', midi: 68, startBeat: 19.0, durationBeats: 1.0, velocity: 0.82 }, // không
+        { id: 'psmp-25', sectionId: 'sec-psmcg-pre', midi: 67, startBeat: 20.0, durationBeats: 0.5, velocity: 0.8 }, // thể
+        { id: 'psmp-26', sectionId: 'sec-psmcg-pre', midi: 67, startBeat: 20.5, durationBeats: 0.5, velocity: 0.8 }, // để
+        { id: 'psmp-27', sectionId: 'sec-psmcg-pre', midi: 65, startBeat: 21.0, durationBeats: 0.5, velocity: 0.78 }, // giọt
+        { id: 'psmp-28', sectionId: 'sec-psmcg-pre', midi: 65, startBeat: 21.5, durationBeats: 0.5, velocity: 0.78 }, // lệ
+        { id: 'psmp-29', sectionId: 'sec-psmcg-pre', midi: 65, startBeat: 22.0, durationBeats: 1.5, velocity: 0.8 }, // nào
+        { id: 'psmp-30', sectionId: 'sec-psmcg-pre', midi: 64, startBeat: 23.5, durationBeats: 0.5, velocity: 0.78 }, // được
+        { id: 'psmp-31', sectionId: 'sec-psmcg-pre', midi: 65, startBeat: 24.0, durationBeats: 3.0, velocity: 0.82 }, // rơi.
+        { id: 'psmp-32', sectionId: 'sec-psmcg-pre', midi: 68, startBeat: 29.5, durationBeats: 0.5, velocity: 0.84 }, // Nếu
+        { id: 'psmp-33', sectionId: 'sec-psmcg-pre', midi: 67, startBeat: 30.0, durationBeats: 1.0, velocity: 0.82 }, // anh
+        { id: 'psmp-34', sectionId: 'sec-psmcg-pre', midi: 65, startBeat: 31.0, durationBeats: 1.0, velocity: 0.8 }, // lùi
+
+        // 4. Chorus 1 (8 bars = 32 beats, Tone Fm)
+        { id: 'psmc1-1', sectionId: 'sec-psmcg-chorus-1', midi: 75, startBeat: 0.0, durationBeats: 1.5, velocity: 0.9 }, // bước
+        { id: 'psmc1-2', sectionId: 'sec-psmcg-chorus-1', midi: 77, startBeat: 1.5, durationBeats: 1.0, velocity: 0.92 }, // về
+        { id: 'psmc1-3', sectionId: 'sec-psmcg-chorus-1', midi: 75, startBeat: 2.5, durationBeats: 1.0, velocity: 0.88 }, // sau,
+        { id: 'psmc1-4', sectionId: 'sec-psmcg-chorus-1', midi: 68, startBeat: 3.5, durationBeats: 0.5, velocity: 0.82 }, // để
+        { id: 'psmc1-5', sectionId: 'sec-psmcg-chorus-1', midi: 72, startBeat: 4.0, durationBeats: 0.5, velocity: 0.86 }, // thấy
+        { id: 'psmc1-6', sectionId: 'sec-psmcg-chorus-1', midi: 72, startBeat: 4.5, durationBeats: 0.5, velocity: 0.86 }, // em
+        { id: 'psmc1-7', sectionId: 'sec-psmcg-chorus-1', midi: 72, startBeat: 5.0, durationBeats: 0.5, velocity: 0.86 }, // rõ
+        { id: 'psmc1-8', sectionId: 'sec-psmcg-chorus-1', midi: 70, startBeat: 5.5, durationBeats: 1.0, velocity: 0.84 }, // hơn
+        { id: 'psmc1-9', sectionId: 'sec-psmcg-chorus-1', midi: 72, startBeat: 6.5, durationBeats: 0.5, velocity: 0.86 }, // để
+        { id: 'psmc1-10', sectionId: 'sec-psmcg-chorus-1', midi: 75, startBeat: 7.0, durationBeats: 0.5, velocity: 0.88 }, // có
+        { id: 'psmc1-11', sectionId: 'sec-psmcg-chorus-1', midi: 79, startBeat: 7.5, durationBeats: 0.5, velocity: 0.92 }, // thể
+        { id: 'psmc1-12', sectionId: 'sec-psmcg-chorus-1', midi: 75, startBeat: 8.0, durationBeats: 1.0, velocity: 0.88 }, // ngắm
+        { id: 'psmc1-13', sectionId: 'sec-psmcg-chorus-1', midi: 79, startBeat: 9.0, durationBeats: 0.5, velocity: 0.92 }, // em
+        { id: 'psmc1-14', sectionId: 'sec-psmcg-chorus-1', midi: 77, startBeat: 9.5, durationBeats: 0.5, velocity: 0.9 }, // từ
+        { id: 'psmc1-15', sectionId: 'sec-psmcg-chorus-1', midi: 75, startBeat: 10.0, durationBeats: 1.5, velocity: 0.88 }, // xa
+        { id: 'psmc1-16', sectionId: 'sec-psmcg-chorus-1', midi: 73, startBeat: 11.5, durationBeats: 0.5, velocity: 0.84 }, // âu
+        { id: 'psmc1-17', sectionId: 'sec-psmcg-chorus-1', midi: 72, startBeat: 12.0, durationBeats: 1.0, velocity: 0.86 }, // yếm
+        { id: 'psmc1-18', sectionId: 'sec-psmcg-chorus-1', midi: 70, startBeat: 13.0, durationBeats: 1.5, velocity: 0.82 }, // hơn.
+        { id: 'psmc1-19', sectionId: 'sec-psmcg-chorus-1', midi: 68, startBeat: 15.0, durationBeats: 0.5, velocity: 0.82 }, // Cả
+        { id: 'psmc1-20', sectionId: 'sec-psmcg-chorus-1', midi: 68, startBeat: 15.5, durationBeats: 0.5, velocity: 0.84 }, // nguồn
+        { id: 'psmc1-21', sectionId: 'sec-psmcg-chorus-1', midi: 77, startBeat: 16.0, durationBeats: 1.0, velocity: 0.92 }, // sống
+        { id: 'psmc1-22', sectionId: 'sec-psmcg-chorus-1', midi: 77, startBeat: 17.0, durationBeats: 0.5, velocity: 0.9 }, // bỗng
+        { id: 'psmc1-23', sectionId: 'sec-psmcg-chorus-1', midi: 77, startBeat: 17.5, durationBeats: 0.5, velocity: 0.92 }, // chốc
+        { id: 'psmc1-24', sectionId: 'sec-psmcg-chorus-1', midi: 79, startBeat: 18.0, durationBeats: 0.5, velocity: 0.94 }, // (luyến)
+        { id: 'psmc1-25', sectionId: 'sec-psmcg-chorus-1', midi: 77, startBeat: 18.5, durationBeats: 0.5, velocity: 0.9 }, // thu
+        { id: 'psmc1-26', sectionId: 'sec-psmcg-chorus-1', midi: 75, startBeat: 19.0, durationBeats: 0.5, velocity: 0.88 }, // bé
+        { id: 'psmc1-27', sectionId: 'sec-psmcg-chorus-1', midi: 73, startBeat: 19.5, durationBeats: 2.0, velocity: 0.86 }, // lại
+        { id: 'psmc1-28', sectionId: 'sec-psmcg-chorus-1', midi: 68, startBeat: 21.5, durationBeats: 0.5, velocity: 0.84 }, // vừa
+        { id: 'psmc1-29', sectionId: 'sec-psmcg-chorus-1', midi: 68, startBeat: 22.0, durationBeats: 0.5, velocity: 0.84 }, // bằng
+        { id: 'psmc1-30', sectionId: 'sec-psmcg-chorus-1', midi: 68, startBeat: 22.5, durationBeats: 0.5, velocity: 0.84 }, // một
+        { id: 'psmc1-31', sectionId: 'sec-psmcg-chorus-1', midi: 70, startBeat: 23.0, durationBeats: 1.0, velocity: 0.86 }, // cô
+        { id: 'psmc1-32', sectionId: 'sec-psmcg-chorus-1', midi: 72, startBeat: 24.0, durationBeats: 3.5, velocity: 0.88 }, // gái.
+        { id: 'psmc1-33', sectionId: 'sec-psmcg-chorus-1', midi: 68, startBeat: 29.5, durationBeats: 0.5, velocity: 0.84 }, // Hay
+        { id: 'psmc1-34', sectionId: 'sec-psmcg-chorus-1', midi: 67, startBeat: 30.0, durationBeats: 1.0, velocity: 0.82 }, // anh
+        { id: 'psmc1-35', sectionId: 'sec-psmcg-chorus-1', midi: 65, startBeat: 31.0, durationBeats: 1.0, velocity: 0.8 }, // vẫn
+
+        // 5. Chorus 2 (8 bars = 32 beats, Tone Fm)
+        { id: 'psmc2-1', sectionId: 'sec-psmcg-chorus-2', midi: 75, startBeat: 0.0, durationBeats: 1.5, velocity: 0.9 }, // sẽ
+        { id: 'psmc2-2', sectionId: 'sec-psmcg-chorus-2', midi: 77, startBeat: 1.5, durationBeats: 0.5, velocity: 0.92 }, // lặng
+        { id: 'psmc2-3', sectionId: 'sec-psmcg-chorus-2', midi: 79, startBeat: 2.0, durationBeats: 1.5, velocity: 0.94 }, // lẽ
+        { id: 'psmc2-4', sectionId: 'sec-psmcg-chorus-2', midi: 77, startBeat: 3.5, durationBeats: 1.0, velocity: 0.9 }, // kế
+        { id: 'psmc2-5', sectionId: 'sec-psmcg-chorus-2', midi: 75, startBeat: 4.5, durationBeats: 0.5, velocity: 0.88 }, // bên,
+        { id: 'psmc2-6', sectionId: 'sec-psmcg-chorus-2', midi: 73, startBeat: 5.0, durationBeats: 1.0, velocity: 0.86 }, // dù
+        { id: 'psmc2-7', sectionId: 'sec-psmcg-chorus-2', midi: 75, startBeat: 6.0, durationBeats: 1.0, velocity: 0.88 }, // không
+        { id: 'psmc2-8', sectionId: 'sec-psmcg-chorus-2', midi: 77, startBeat: 7.0, durationBeats: 1.0, velocity: 0.9 }, // nắm
+        { id: 'psmc2-9', sectionId: 'sec-psmcg-chorus-2', midi: 75, startBeat: 8.0, durationBeats: 1.0, velocity: 0.88 }, // tay
+        { id: 'psmc2-10', sectionId: 'sec-psmcg-chorus-2', midi: 75, startBeat: 9.0, durationBeats: 0.5, velocity: 0.88 }, // nhưng
+        { id: 'psmc2-11', sectionId: 'sec-psmcg-chorus-2', midi: 75, startBeat: 9.5, durationBeats: 0.5, velocity: 0.88 }, // đường
+        { id: 'psmc2-12', sectionId: 'sec-psmcg-chorus-2', midi: 75, startBeat: 10.0, durationBeats: 1.5, velocity: 0.88 }, // chung
+        { id: 'psmc2-13', sectionId: 'sec-psmcg-chorus-2', midi: 80, startBeat: 11.5, durationBeats: 0.5, velocity: 0.94 }, // mãi
+        { id: 'psmc2-14', sectionId: 'sec-psmcg-chorus-2', midi: 80, startBeat: 12.0, durationBeats: 1.0, velocity: 0.92 }, // mãi.
+        { id: 'psmc2-15', sectionId: 'sec-psmcg-chorus-2', midi: 79, startBeat: 13.0, durationBeats: 0.5, velocity: 0.88 },
+        { id: 'psmc2-16', sectionId: 'sec-psmcg-chorus-2', midi: 77, startBeat: 13.5, durationBeats: 0.5, velocity: 0.86 },
+        { id: 'psmc2-17', sectionId: 'sec-psmcg-chorus-2', midi: 75, startBeat: 14.0, durationBeats: 2.0, velocity: 0.86 },
+        { id: 'psmc2-18', sectionId: 'sec-psmcg-chorus-2', midi: 75, startBeat: 16.0, durationBeats: 2.0, velocity: 0.82 },
+        { id: 'psmc2-19', sectionId: 'sec-psmcg-chorus-2', midi: 68, startBeat: 19.0, durationBeats: 0.5, velocity: 0.84 }, // Và
+        { id: 'psmc2-20', sectionId: 'sec-psmcg-chorus-2', midi: 70, startBeat: 19.5, durationBeats: 0.5, velocity: 0.86 }, // từ
+        { id: 'psmc2-21', sectionId: 'sec-psmcg-chorus-2', midi: 72, startBeat: 20.0, durationBeats: 1.0, velocity: 0.88 }, // ấy
+        { id: 'psmc2-22', sectionId: 'sec-psmcg-chorus-2', midi: 73, startBeat: 21.0, durationBeats: 0.5, velocity: 0.88 }, // ánh
+        { id: 'psmc2-23', sectionId: 'sec-psmcg-chorus-2', midi: 75, startBeat: 21.5, durationBeats: 1.0, velocity: 0.9 }, // mắt
+        { id: 'psmc2-24', sectionId: 'sec-psmcg-chorus-2', midi: 73, startBeat: 22.5, durationBeats: 0.5, velocity: 0.88 }, // anh
+        { id: 'psmc2-25', sectionId: 'sec-psmcg-chorus-2', midi: 72, startBeat: 23.0, durationBeats: 1.0, velocity: 0.86 }, // hồn
+        { id: 'psmc2-26', sectionId: 'sec-psmcg-chorus-2', midi: 73, startBeat: 24.0, durationBeats: 2.0, velocity: 0.88 }, // nhiên
+        { id: 'psmc2-27', sectionId: 'sec-psmcg-chorus-2', midi: 75, startBeat: 26.0, durationBeats: 2.0, velocity: 0.9 }, // đến
+        { id: 'psmc2-28', sectionId: 'sec-psmcg-chorus-2', midi: 77, startBeat: 28.0, durationBeats: 4.0, velocity: 0.92 }, // lạ.
+
+        // 6. Bridge (4 bars = 16 beats — Modulation Fm -> F#m)
+        { id: 'psmb-1', sectionId: 'sec-psmcg-bridge', midi: 68, startBeat: 0.0, durationBeats: 1.0, velocity: 0.78 },
+        { id: 'psmb-2', sectionId: 'sec-psmcg-bridge', midi: 70, startBeat: 1.0, durationBeats: 1.0, velocity: 0.8 },
+        { id: 'psmb-3', sectionId: 'sec-psmcg-bridge', midi: 72, startBeat: 2.0, durationBeats: 2.0, velocity: 0.82 },
+        { id: 'psmb-4', sectionId: 'sec-psmcg-bridge', midi: 72, startBeat: 4.0, durationBeats: 1.0, velocity: 0.82 },
+        { id: 'psmb-5', sectionId: 'sec-psmcg-bridge', midi: 73, startBeat: 5.0, durationBeats: 1.0, velocity: 0.84 },
+        { id: 'psmb-6', sectionId: 'sec-psmcg-bridge', midi: 75, startBeat: 6.0, durationBeats: 2.0, velocity: 0.86 },
+        { id: 'psmb-7', sectionId: 'sec-psmcg-bridge', midi: 74, startBeat: 8.0, durationBeats: 1.0, velocity: 0.86 },
+        { id: 'psmb-8', sectionId: 'sec-psmcg-bridge', midi: 76, startBeat: 9.0, durationBeats: 1.0, velocity: 0.88 },
+        { id: 'psmb-9', sectionId: 'sec-psmcg-bridge', midi: 78, startBeat: 10.0, durationBeats: 2.0, velocity: 0.9 },
+        { id: 'psmb-10', sectionId: 'sec-psmcg-bridge', midi: 73, startBeat: 12.0, durationBeats: 1.0, velocity: 0.86 },
+        { id: 'psmb-11', sectionId: 'sec-psmcg-bridge', midi: 69, startBeat: 13.5, durationBeats: 0.5, velocity: 0.86 }, // Nếu (F#m)
+        { id: 'psmb-12', sectionId: 'sec-psmcg-bridge', midi: 68, startBeat: 14.0, durationBeats: 1.0, velocity: 0.84 }, // anh
+        { id: 'psmb-13', sectionId: 'sec-psmcg-bridge', midi: 66, startBeat: 15.0, durationBeats: 1.0, velocity: 0.82 }, // lùi
+
+        // 7. Chorus Up 1 (8 bars = 32 beats, Tone F#m, exact +1 semitone)
+        { id: 'psmu1-1', sectionId: 'sec-psmcg-chorus-up-1', midi: 76, startBeat: 0.0, durationBeats: 1.5, velocity: 0.92 }, // bước
+        { id: 'psmu1-2', sectionId: 'sec-psmcg-chorus-up-1', midi: 78, startBeat: 1.5, durationBeats: 1.0, velocity: 0.94 }, // về
+        { id: 'psmu1-3', sectionId: 'sec-psmcg-chorus-up-1', midi: 76, startBeat: 2.5, durationBeats: 1.0, velocity: 0.9 }, // sau,
+        { id: 'psmu1-4', sectionId: 'sec-psmcg-chorus-up-1', midi: 69, startBeat: 3.5, durationBeats: 0.5, velocity: 0.84 }, // để
+        { id: 'psmu1-5', sectionId: 'sec-psmcg-chorus-up-1', midi: 73, startBeat: 4.0, durationBeats: 0.5, velocity: 0.88 }, // thấy
+        { id: 'psmu1-6', sectionId: 'sec-psmcg-chorus-up-1', midi: 73, startBeat: 4.5, durationBeats: 0.5, velocity: 0.88 }, // em
+        { id: 'psmu1-7', sectionId: 'sec-psmcg-chorus-up-1', midi: 73, startBeat: 5.0, durationBeats: 0.5, velocity: 0.88 }, // rõ
+        { id: 'psmu1-8', sectionId: 'sec-psmcg-chorus-up-1', midi: 71, startBeat: 5.5, durationBeats: 1.0, velocity: 0.86 }, // hơn
+        { id: 'psmu1-9', sectionId: 'sec-psmcg-chorus-up-1', midi: 73, startBeat: 6.5, durationBeats: 0.5, velocity: 0.88 }, // để
+        { id: 'psmu1-10', sectionId: 'sec-psmcg-chorus-up-1', midi: 76, startBeat: 7.0, durationBeats: 0.5, velocity: 0.9 }, // có
+        { id: 'psmu1-11', sectionId: 'sec-psmcg-chorus-up-1', midi: 80, startBeat: 7.5, durationBeats: 0.5, velocity: 0.94 }, // thể
+        { id: 'psmu1-12', sectionId: 'sec-psmcg-chorus-up-1', midi: 76, startBeat: 8.0, durationBeats: 1.0, velocity: 0.9 }, // ngắm
+        { id: 'psmu1-13', sectionId: 'sec-psmcg-chorus-up-1', midi: 80, startBeat: 9.0, durationBeats: 0.5, velocity: 0.94 }, // em
+        { id: 'psmu1-14', sectionId: 'sec-psmcg-chorus-up-1', midi: 78, startBeat: 9.5, durationBeats: 0.5, velocity: 0.92 }, // từ
+        { id: 'psmu1-15', sectionId: 'sec-psmcg-chorus-up-1', midi: 76, startBeat: 10.0, durationBeats: 1.5, velocity: 0.9 }, // xa
+        { id: 'psmu1-16', sectionId: 'sec-psmcg-chorus-up-1', midi: 74, startBeat: 11.5, durationBeats: 0.5, velocity: 0.86 }, // âu
+        { id: 'psmu1-17', sectionId: 'sec-psmcg-chorus-up-1', midi: 73, startBeat: 12.0, durationBeats: 1.0, velocity: 0.88 }, // yếm
+        { id: 'psmu1-18', sectionId: 'sec-psmcg-chorus-up-1', midi: 71, startBeat: 13.0, durationBeats: 1.5, velocity: 0.84 }, // hơn.
+        { id: 'psmu1-19', sectionId: 'sec-psmcg-chorus-up-1', midi: 69, startBeat: 15.0, durationBeats: 0.5, velocity: 0.84 }, // Cả
+        { id: 'psmu1-20', sectionId: 'sec-psmcg-chorus-up-1', midi: 69, startBeat: 15.5, durationBeats: 0.5, velocity: 0.86 }, // nguồn
+        { id: 'psmu1-21', sectionId: 'sec-psmcg-chorus-up-1', midi: 78, startBeat: 16.0, durationBeats: 1.0, velocity: 0.94 }, // sống
+        { id: 'psmu1-22', sectionId: 'sec-psmcg-chorus-up-1', midi: 78, startBeat: 17.0, durationBeats: 0.5, velocity: 0.92 }, // bỗng
+        { id: 'psmu1-23', sectionId: 'sec-psmcg-chorus-up-1', midi: 78, startBeat: 17.5, durationBeats: 0.5, velocity: 0.94 }, // chốc
+        { id: 'psmu1-24', sectionId: 'sec-psmcg-chorus-up-1', midi: 80, startBeat: 18.0, durationBeats: 0.5, velocity: 0.95 },
+        { id: 'psmu1-25', sectionId: 'sec-psmcg-chorus-up-1', midi: 78, startBeat: 18.5, durationBeats: 0.5, velocity: 0.92 }, // thu
+        { id: 'psmu1-26', sectionId: 'sec-psmcg-chorus-up-1', midi: 76, startBeat: 19.0, durationBeats: 0.5, velocity: 0.9 }, // bé
+        { id: 'psmu1-27', sectionId: 'sec-psmcg-chorus-up-1', midi: 74, startBeat: 19.5, durationBeats: 2.0, velocity: 0.88 }, // lại
+        { id: 'psmu1-28', sectionId: 'sec-psmcg-chorus-up-1', midi: 69, startBeat: 21.5, durationBeats: 0.5, velocity: 0.86 }, // vừa
+        { id: 'psmu1-29', sectionId: 'sec-psmcg-chorus-up-1', midi: 69, startBeat: 22.0, durationBeats: 0.5, velocity: 0.86 }, // bằng
+        { id: 'psmu1-30', sectionId: 'sec-psmcg-chorus-up-1', midi: 69, startBeat: 22.5, durationBeats: 0.5, velocity: 0.86 }, // một
+        { id: 'psmu1-31', sectionId: 'sec-psmcg-chorus-up-1', midi: 71, startBeat: 23.0, durationBeats: 1.0, velocity: 0.88 }, // cô
+        { id: 'psmu1-32', sectionId: 'sec-psmcg-chorus-up-1', midi: 73, startBeat: 24.0, durationBeats: 3.5, velocity: 0.9 }, // gái.
+        { id: 'psmu1-33', sectionId: 'sec-psmcg-chorus-up-1', midi: 69, startBeat: 29.5, durationBeats: 0.5, velocity: 0.86 }, // Hay
+        { id: 'psmu1-34', sectionId: 'sec-psmcg-chorus-up-1', midi: 68, startBeat: 30.0, durationBeats: 1.0, velocity: 0.84 }, // anh
+        { id: 'psmu1-35', sectionId: 'sec-psmcg-chorus-up-1', midi: 66, startBeat: 31.0, durationBeats: 1.0, velocity: 0.82 }, // vẫn
+
+        // 8. Chorus Up 2 (8 bars = 32 beats, Tone F#m, exact +1 semitone)
+        { id: 'psmu2-1', sectionId: 'sec-psmcg-chorus-up-2', midi: 76, startBeat: 0.0, durationBeats: 1.5, velocity: 0.92 }, // sẽ
+        { id: 'psmu2-2', sectionId: 'sec-psmcg-chorus-up-2', midi: 78, startBeat: 1.5, durationBeats: 0.5, velocity: 0.94 }, // lặng
+        { id: 'psmu2-3', sectionId: 'sec-psmcg-chorus-up-2', midi: 80, startBeat: 2.0, durationBeats: 1.5, velocity: 0.95 }, // lẽ
+        { id: 'psmu2-4', sectionId: 'sec-psmcg-chorus-up-2', midi: 78, startBeat: 3.5, durationBeats: 1.0, velocity: 0.92 }, // kế
+        { id: 'psmu2-5', sectionId: 'sec-psmcg-chorus-up-2', midi: 76, startBeat: 4.5, durationBeats: 0.5, velocity: 0.9 }, // bên,
+        { id: 'psmu2-6', sectionId: 'sec-psmcg-chorus-up-2', midi: 74, startBeat: 5.0, durationBeats: 1.0, velocity: 0.88 }, // dù
+        { id: 'psmu2-7', sectionId: 'sec-psmcg-chorus-up-2', midi: 76, startBeat: 6.0, durationBeats: 1.0, velocity: 0.9 }, // không
+        { id: 'psmu2-8', sectionId: 'sec-psmcg-chorus-up-2', midi: 78, startBeat: 7.0, durationBeats: 1.0, velocity: 0.92 }, // nắm
+        { id: 'psmu2-9', sectionId: 'sec-psmcg-chorus-up-2', midi: 76, startBeat: 8.0, durationBeats: 1.0, velocity: 0.9 }, // tay
+        { id: 'psmu2-10', sectionId: 'sec-psmcg-chorus-up-2', midi: 76, startBeat: 9.0, durationBeats: 0.5, velocity: 0.9 }, // nhưng
+        { id: 'psmu2-11', sectionId: 'sec-psmcg-chorus-up-2', midi: 76, startBeat: 9.5, durationBeats: 0.5, velocity: 0.9 }, // đường
+        { id: 'psmu2-12', sectionId: 'sec-psmcg-chorus-up-2', midi: 76, startBeat: 10.0, durationBeats: 1.5, velocity: 0.9 }, // chung
+        { id: 'psmu2-13', sectionId: 'sec-psmcg-chorus-up-2', midi: 81, startBeat: 11.5, durationBeats: 0.5, velocity: 0.95 }, // mãi
+        { id: 'psmu2-14', sectionId: 'sec-psmcg-chorus-up-2', midi: 81, startBeat: 12.0, durationBeats: 1.0, velocity: 0.94 }, // mãi.
+        { id: 'psmu2-15', sectionId: 'sec-psmcg-chorus-up-2', midi: 80, startBeat: 13.0, durationBeats: 0.5, velocity: 0.9 },
+        { id: 'psmu2-16', sectionId: 'sec-psmcg-chorus-up-2', midi: 78, startBeat: 13.5, durationBeats: 0.5, velocity: 0.88 },
+        { id: 'psmu2-17', sectionId: 'sec-psmcg-chorus-up-2', midi: 76, startBeat: 14.0, durationBeats: 2.0, velocity: 0.88 },
+        { id: 'psmu2-18', sectionId: 'sec-psmcg-chorus-up-2', midi: 76, startBeat: 16.0, durationBeats: 2.0, velocity: 0.84 },
+        { id: 'psmu2-19', sectionId: 'sec-psmcg-chorus-up-2', midi: 69, startBeat: 19.0, durationBeats: 0.5, velocity: 0.86 }, // Và
+        { id: 'psmu2-20', sectionId: 'sec-psmcg-chorus-up-2', midi: 71, startBeat: 19.5, durationBeats: 0.5, velocity: 0.88 }, // từ
+        { id: 'psmu2-21', sectionId: 'sec-psmcg-chorus-up-2', midi: 73, startBeat: 20.0, durationBeats: 1.0, velocity: 0.9 }, // ấy
+        { id: 'psmu2-22', sectionId: 'sec-psmcg-chorus-up-2', midi: 74, startBeat: 21.0, durationBeats: 0.5, velocity: 0.9 }, // ánh
+        { id: 'psmu2-23', sectionId: 'sec-psmcg-chorus-up-2', midi: 76, startBeat: 21.5, durationBeats: 1.0, velocity: 0.92 }, // mắt
+        { id: 'psmu2-24', sectionId: 'sec-psmcg-chorus-up-2', midi: 74, startBeat: 22.5, durationBeats: 0.5, velocity: 0.9 }, // anh
+        { id: 'psmu2-25', sectionId: 'sec-psmcg-chorus-up-2', midi: 73, startBeat: 23.0, durationBeats: 1.0, velocity: 0.88 }, // hồn
+        { id: 'psmu2-26', sectionId: 'sec-psmcg-chorus-up-2', midi: 74, startBeat: 24.0, durationBeats: 2.0, velocity: 0.9 }, // nhiên
+        { id: 'psmu2-27', sectionId: 'sec-psmcg-chorus-up-2', midi: 76, startBeat: 26.0, durationBeats: 2.0, velocity: 0.92 }, // đến
+        { id: 'psmu2-28', sectionId: 'sec-psmcg-chorus-up-2', midi: 78, startBeat: 28.0, durationBeats: 4.0, velocity: 0.94 }, // lạ.
+
+        // 9. Outro (4 bars = 16 beats, Tone F#m)
+        { id: 'psmo-1', sectionId: 'sec-psmcg-outro', midi: 69, startBeat: 3.5, durationBeats: 0.5, velocity: 0.82 }, // Vì
+        { id: 'psmo-2', sectionId: 'sec-psmcg-outro', midi: 74, startBeat: 4.0, durationBeats: 0.5, velocity: 0.86 }, // sao
+        { id: 'psmo-3', sectionId: 'sec-psmcg-outro', midi: 74, startBeat: 4.5, durationBeats: 0.5, velocity: 0.84 }, // anh
+        { id: 'psmo-4', sectionId: 'sec-psmcg-outro', midi: 74, startBeat: 5.0, durationBeats: 0.5, velocity: 0.84 }, // không
+        { id: 'psmo-5', sectionId: 'sec-psmcg-outro', midi: 74, startBeat: 5.5, durationBeats: 0.5, velocity: 0.84 }, // thể
+        { id: 'psmo-6', sectionId: 'sec-psmcg-outro', midi: 76, startBeat: 6.0, durationBeats: 0.5, velocity: 0.86 }, // (luyến)
+        { id: 'psmo-7', sectionId: 'sec-psmcg-outro', midi: 73, startBeat: 6.5, durationBeats: 0.5, velocity: 0.84 }, // gặp
+        { id: 'psmo-8', sectionId: 'sec-psmcg-outro', midi: 71, startBeat: 7.0, durationBeats: 1.0, velocity: 0.82 }, // được
+        { id: 'psmo-9', sectionId: 'sec-psmcg-outro', midi: 71, startBeat: 8.0, durationBeats: 2.0, velocity: 0.82 }, // em
+        { id: 'psmo-10', sectionId: 'sec-psmcg-outro', midi: 76, startBeat: 10.0, durationBeats: 2.0, velocity: 0.84 }, // sớm
+        { id: 'psmo-11', sectionId: 'sec-psmcg-outro', midi: 78, startBeat: 12.0, durationBeats: 4.0, velocity: 0.86 }, // hơn.
+      ],
+    },
+    {
+      id: 'draft-di-vang-nhat-nhoa',
+      title: 'Dĩ Vãng Nhạt Nhòa (Sheet Tone Em · Beat Ballad)',
+      keyRoot: 'E',
+      scaleMode: 'minor',
+      mood: 'pop-ballad',
+      bpm: 74,
+      backingInstrument: 'piano-ballad',
+      backingPattern: 'auto-song',
+      sustainPedal: true,
+      metronomeEnabled: false,
+      drumPattern: 'ballad',
+      melodyInstrument: 'piano',
+      melodyMuted: false,
+      melodyPlaybackMode: 'all',
+      mutedMelodySectionIds: [],
+      scaleSnap: true,
+      updatedAt: now + 45_000,
+      sections: [
+        {
+          id: 'sec-dvnn-intro',
+          kind: 'Intro',
+          label: 'Intro — Chủ Đề Điệp Khúc (Tone Em · 4/4)',
+          bars: 8,
+          text:
+            '[Em](Dạo: Chủ đề điệp khúc) [Am]... [C]... [D] [G7]\n' +
+            '[Em](Trống & Bass vào nhịp) [Bm]... [C] [D] [Em] [B7]',
+          chordSchedule: [
+            { symbol: 'Em', startBeat: 0, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'Am', startBeat: 4, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'C', startBeat: 8, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'D', startBeat: 12, durationBeats: 2, arpPattern: 'falling-arp' },
+            { symbol: 'G7', startBeat: 14, durationBeats: 2, arpPattern: 'pinch-plucked' },
+            { symbol: 'Em', startBeat: 16, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Bm', startBeat: 20, durationBeats: 4, arpPattern: 'falling-arp' },
+            { symbol: 'C', startBeat: 24, durationBeats: 2, arpPattern: 'rising-arp' },
+            { symbol: 'D', startBeat: 26, durationBeats: 2, arpPattern: 'pinch-plucked' },
+            { symbol: 'Em', startBeat: 28, durationBeats: 2, arpPattern: 'ballad-wave' },
+            { symbol: 'B7', startBeat: 30, durationBeats: 2, arpPattern: 'rich-block' },
+          ],
+        },
+        {
+          id: 'sec-dvnn-verse-1',
+          kind: 'Verse',
+          label: 'Lời 1 — Chờ Người Tình Lỡ',
+          bars: 8,
+          text:
+            '[Em]Chờ người tình lỡ. Là tình [Em/B]đầu tình rực rỡ. Tình trong dĩ\n' +
+            '[Am]vãng nhạt nhòa... [Am/E]\n' +
+            '[Dm]Vào mùa trăng đó. [D7]Nàng từ phương xa về như giấc\n' +
+            '[G]mơ... [B7]',
+          chordSchedule: [
+            { symbol: 'Em', startBeat: 0, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Em/B', startBeat: 4, durationBeats: 4, arpPattern: 'pinch-plucked' },
+            { symbol: 'Am', startBeat: 8, durationBeats: 4, arpPattern: 'falling-arp' },
+            { symbol: 'Am/E', startBeat: 12, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Dm', startBeat: 16, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'D7', startBeat: 20, durationBeats: 4, arpPattern: 'pinch-plucked' },
+            { symbol: 'G', startBeat: 24, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'B7', startBeat: 28, durationBeats: 4, arpPattern: 'rich-block' },
+          ],
+        },
+        {
+          id: 'sec-dvnn-verse-2',
+          kind: 'Verse',
+          label: 'Lời 2 — Tình Đầu Gặp Gỡ',
+          bars: 8,
+          text:
+            '[Em]Tình đầu gặp gỡ. Rồi trọn [Em/B]đời còn nhớ tình tha thiết\n' +
+            '[Am]đắm say... [Am/E] [G7] Ánh\n' +
+            '[C]mắt ngây thơ như ru hồn. Rũ [Am]áo phong sương em [Bm]vui tình\n' +
+            '[Em]duyên... [Em/B] Lúc đắm',
+          chordSchedule: [
+            { symbol: 'Em', startBeat: 0, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Em/B', startBeat: 4, durationBeats: 4, arpPattern: 'pinch-plucked' },
+            { symbol: 'Am', startBeat: 8, durationBeats: 4, arpPattern: 'falling-arp' },
+            { symbol: 'Am/E', startBeat: 12, durationBeats: 2, arpPattern: 'ballad-wave' },
+            { symbol: 'G7', startBeat: 14, durationBeats: 2, arpPattern: 'pinch-plucked' },
+            { symbol: 'C', startBeat: 16, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'Am', startBeat: 20, durationBeats: 2, arpPattern: 'falling-arp' },
+            { symbol: 'Bm', startBeat: 22, durationBeats: 2, arpPattern: 'pinch-plucked' },
+            { symbol: 'Em', startBeat: 24, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Em/B', startBeat: 28, durationBeats: 4, arpPattern: 'rich-block' },
+          ],
+        },
+        {
+          id: 'sec-dvnn-chorus',
+          kind: 'Chorus',
+          label: 'ĐK — Lúc Đắm Đuối Em Cho Rằng',
+          bars: 8,
+          text:
+            '[Em]đuối em cho rằng tình ta như ánh [Am]trăng rằm. Chứ đâu\n' +
+            '[C]biết dòng đời lắm nhiều con sóng [D]phũ phàng... [G7] Cho lứa\n' +
+            '[Em]đôi chia phôi đợi chờ cho nhau mãi [Bm]thương nhớ... Cho đến\n' +
+            '[C]nay em thuyền [D]đã sang [Em]bờ.',
+          chordSchedule: [
+            { symbol: 'Em', startBeat: 0, durationBeats: 4, arpPattern: 'rich-block' },
+            { symbol: 'Am', startBeat: 4, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'C', startBeat: 8, durationBeats: 4, arpPattern: 'rising-arp' },
+            { symbol: 'D', startBeat: 12, durationBeats: 2, arpPattern: 'falling-arp' },
+            { symbol: 'G7', startBeat: 14, durationBeats: 2, arpPattern: 'pinch-plucked' },
+            { symbol: 'Em', startBeat: 16, durationBeats: 4, arpPattern: 'rich-block' },
+            { symbol: 'Bm', startBeat: 20, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'C', startBeat: 24, durationBeats: 2, arpPattern: 'rising-arp' },
+            { symbol: 'D', startBeat: 26, durationBeats: 2, arpPattern: 'pinch-plucked' },
+            { symbol: 'Em', startBeat: 28, durationBeats: 4, arpPattern: 'rich-block' },
+          ],
+        },
+        {
+          id: 'sec-dvnn-outro',
+          kind: 'Outro',
+          label: 'Outro — Thuyền Đã Sang Bờ',
+          bars: 4,
+          text: '[Am]Cho đến nay em [Bm]thuyền đã sang [Em]bờ... [Em]',
+          chordSchedule: [
+            { symbol: 'Am', startBeat: 0, durationBeats: 4, arpPattern: 'falling-arp' },
+            { symbol: 'Bm', startBeat: 4, durationBeats: 4, arpPattern: 'pinch-plucked' },
+            { symbol: 'Em', startBeat: 8, durationBeats: 4, arpPattern: 'ballad-wave' },
+            { symbol: 'Em', startBeat: 12, durationBeats: 4, arpPattern: 'falling-arp' },
+          ],
+        },
+      ],
+      melodyNotes: [
+        // 1. Intro (8 bars = 32 beats — iconic Chorus-theme Piano Intro in singing octave B4..E5/E4..E5)
+        // Bars 1–4: "Lúc đắm đuối em cho rằng tình ta như ánh trăng rằm / Chứ đâu biết dòng đời lắm nhiều con sóng phũ phàng"
+        { id: 'dvnni-1', sectionId: 'sec-dvnn-intro', midi: 71, startBeat: 0.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnni-2', sectionId: 'sec-dvnn-intro', midi: 67, startBeat: 0.5, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'dvnni-3', sectionId: 'sec-dvnn-intro', midi: 67, startBeat: 1.0, durationBeats: 0.5, velocity: 0.76 },
+        { id: 'dvnni-4', sectionId: 'sec-dvnn-intro', midi: 64, startBeat: 1.5, durationBeats: 0.5, velocity: 0.74 },
+        { id: 'dvnni-5', sectionId: 'sec-dvnn-intro', midi: 64, startBeat: 2.0, durationBeats: 0.5, velocity: 0.74 },
+        { id: 'dvnni-6', sectionId: 'sec-dvnn-intro', midi: 67, startBeat: 2.5, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'dvnni-7', sectionId: 'sec-dvnn-intro', midi: 69, startBeat: 3.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnni-8', sectionId: 'sec-dvnn-intro', midi: 71, startBeat: 3.5, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnni-9', sectionId: 'sec-dvnn-intro', midi: 69, startBeat: 4.0, durationBeats: 1.5, velocity: 0.82 },
+        { id: 'dvnni-10', sectionId: 'sec-dvnn-intro', midi: 64, startBeat: 5.5, durationBeats: 1.5, velocity: 0.76 },
+        { id: 'dvnni-11', sectionId: 'sec-dvnn-intro', midi: 67, startBeat: 7.0, durationBeats: 0.5, velocity: 0.76 },
+        { id: 'dvnni-12', sectionId: 'sec-dvnn-intro', midi: 66, startBeat: 7.5, durationBeats: 0.5, velocity: 0.74 },
+        { id: 'dvnni-13', sectionId: 'sec-dvnn-intro', midi: 71, startBeat: 8.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnni-14', sectionId: 'sec-dvnn-intro', midi: 72, startBeat: 8.5, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnni-15', sectionId: 'sec-dvnn-intro', midi: 72, startBeat: 9.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnni-16', sectionId: 'sec-dvnn-intro', midi: 67, startBeat: 9.5, durationBeats: 1.0, velocity: 0.8 },
+        { id: 'dvnni-17', sectionId: 'sec-dvnn-intro', midi: 66, startBeat: 10.5, durationBeats: 0.5, velocity: 0.76 },
+        { id: 'dvnni-18', sectionId: 'sec-dvnn-intro', midi: 67, startBeat: 11.0, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'dvnni-19', sectionId: 'sec-dvnn-intro', midi: 69, startBeat: 11.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnni-20', sectionId: 'sec-dvnn-intro', midi: 64, startBeat: 12.0, durationBeats: 1.5, velocity: 0.78 },
+        { id: 'dvnni-21', sectionId: 'sec-dvnn-intro', midi: 62, startBeat: 13.5, durationBeats: 1.5, velocity: 0.76 },
+        { id: 'dvnni-22', sectionId: 'sec-dvnn-intro', midi: 71, startBeat: 15.0, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'dvnni-23', sectionId: 'sec-dvnn-intro', midi: 72, startBeat: 15.5, durationBeats: 0.5, velocity: 0.8 },
+        // Bars 5–8: "Cho lứa đôi chia phôi đợi chờ cho nhau mãi thương nhớ / Cho đến nay em thuyền đã sang bờ" + turnaround
+        { id: 'dvnni-24', sectionId: 'sec-dvnn-intro', midi: 71, startBeat: 16.0, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'dvnni-25', sectionId: 'sec-dvnn-intro', midi: 67, startBeat: 16.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnni-26', sectionId: 'sec-dvnn-intro', midi: 67, startBeat: 17.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnni-27', sectionId: 'sec-dvnn-intro', midi: 64, startBeat: 17.5, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'dvnni-28', sectionId: 'sec-dvnn-intro', midi: 64, startBeat: 18.0, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'dvnni-29', sectionId: 'sec-dvnn-intro', midi: 66, startBeat: 18.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnni-30', sectionId: 'sec-dvnn-intro', midi: 67, startBeat: 19.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnni-31', sectionId: 'sec-dvnn-intro', midi: 71, startBeat: 19.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'dvnni-32', sectionId: 'sec-dvnn-intro', midi: 69, startBeat: 20.0, durationBeats: 1.5, velocity: 0.84 },
+        { id: 'dvnni-33', sectionId: 'sec-dvnn-intro', midi: 76, startBeat: 21.5, durationBeats: 0.5, velocity: 0.88 },
+        { id: 'dvnni-34', sectionId: 'sec-dvnn-intro', midi: 74, startBeat: 22.0, durationBeats: 1.0, velocity: 0.84 },
+        { id: 'dvnni-35', sectionId: 'sec-dvnn-intro', midi: 71, startBeat: 23.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnni-36', sectionId: 'sec-dvnn-intro', midi: 72, startBeat: 23.5, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnni-37', sectionId: 'sec-dvnn-intro', midi: 71, startBeat: 24.0, durationBeats: 0.75, velocity: 0.84 },
+        { id: 'dvnni-38', sectionId: 'sec-dvnn-intro', midi: 67, startBeat: 24.75, durationBeats: 0.75, velocity: 0.8 },
+        { id: 'dvnni-39', sectionId: 'sec-dvnn-intro', midi: 64, startBeat: 25.5, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'dvnni-40', sectionId: 'sec-dvnn-intro', midi: 67, startBeat: 26.0, durationBeats: 1.0, velocity: 0.82 },
+        { id: 'dvnni-41', sectionId: 'sec-dvnn-intro', midi: 66, startBeat: 27.0, durationBeats: 1.0, velocity: 0.8 },
+        { id: 'dvnni-42', sectionId: 'sec-dvnn-intro', midi: 64, startBeat: 28.0, durationBeats: 2.0, velocity: 0.82 },
+        { id: 'dvnni-43', sectionId: 'sec-dvnn-intro', midi: 66, startBeat: 30.0, durationBeats: 1.0, velocity: 0.76 },
+        { id: 'dvnni-44', sectionId: 'sec-dvnn-intro', midi: 71, startBeat: 31.0, durationBeats: 1.0, velocity: 0.78 },
+
+        // 2. Verse 1 (8 bars = 32 beats, 100% sheet-verified Tone Em)
+        // Bar 1 [Em]: B3 B3 B3 G4 | B3 B3
+        { id: 'dvnnv1-1', sectionId: 'sec-dvnn-verse-1', midi: 59, startBeat: 0.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnnv1-2', sectionId: 'sec-dvnn-verse-1', midi: 59, startBeat: 0.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnnv1-3', sectionId: 'sec-dvnn-verse-1', midi: 59, startBeat: 1.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnnv1-4', sectionId: 'sec-dvnn-verse-1', midi: 67, startBeat: 1.5, durationBeats: 2.0, velocity: 0.88 },
+        { id: 'dvnnv1-5', sectionId: 'sec-dvnn-verse-1', midi: 59, startBeat: 3.5, durationBeats: 0.25, velocity: 0.76 },
+        { id: 'dvnnv1-6', sectionId: 'sec-dvnn-verse-1', midi: 59, startBeat: 3.75, durationBeats: 0.25, velocity: 0.76 },
+        // Bar 2 [Em/B]: B3 B3 B3 G4 | G4 A4 B4
+        { id: 'dvnnv1-7', sectionId: 'sec-dvnn-verse-1', midi: 59, startBeat: 4.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnnv1-8', sectionId: 'sec-dvnn-verse-1', midi: 59, startBeat: 4.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnnv1-9', sectionId: 'sec-dvnn-verse-1', midi: 59, startBeat: 5.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnnv1-10', sectionId: 'sec-dvnn-verse-1', midi: 67, startBeat: 5.5, durationBeats: 1.0, velocity: 0.86 },
+        { id: 'dvnnv1-11', sectionId: 'sec-dvnn-verse-1', midi: 67, startBeat: 6.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'dvnnv1-12', sectionId: 'sec-dvnn-verse-1', midi: 69, startBeat: 7.0, durationBeats: 0.5, velocity: 0.86 },
+        { id: 'dvnnv1-13', sectionId: 'sec-dvnn-verse-1', midi: 71, startBeat: 7.5, durationBeats: 0.5, velocity: 0.88 },
+        // Bar 3–4 [Am] -> [Am/E]: C5 C4 D4 C4 (tie across barline)
+        { id: 'dvnnv1-14', sectionId: 'sec-dvnn-verse-1', midi: 72, startBeat: 8.0, durationBeats: 1.5, velocity: 0.9 },
+        { id: 'dvnnv1-15', sectionId: 'sec-dvnn-verse-1', midi: 60, startBeat: 9.5, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'dvnnv1-16', sectionId: 'sec-dvnn-verse-1', midi: 62, startBeat: 10.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnnv1-17', sectionId: 'sec-dvnn-verse-1', midi: 60, startBeat: 10.5, durationBeats: 5.0, velocity: 0.84 },
+        // Bar 5 [Dm]: B3 B3 B3 F4 ("Vào mùa trăng đó")
+        { id: 'dvnnv1-18', sectionId: 'sec-dvnn-verse-1', midi: 59, startBeat: 16.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnnv1-19', sectionId: 'sec-dvnn-verse-1', midi: 59, startBeat: 16.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnnv1-20', sectionId: 'sec-dvnn-verse-1', midi: 59, startBeat: 17.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnnv1-21', sectionId: 'sec-dvnn-verse-1', midi: 65, startBeat: 17.5, durationBeats: 2.5, velocity: 0.86 },
+        // Bar 6 [D7]: F#4 F#4 G4 A4 | G4 A4 C5 ("Nàng từ phương xa về như giấc")
+        { id: 'dvnnv1-22', sectionId: 'sec-dvnn-verse-1', midi: 66, startBeat: 20.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnnv1-23', sectionId: 'sec-dvnn-verse-1', midi: 66, startBeat: 20.5, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnnv1-24', sectionId: 'sec-dvnn-verse-1', midi: 67, startBeat: 21.0, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'dvnnv1-25', sectionId: 'sec-dvnn-verse-1', midi: 69, startBeat: 21.5, durationBeats: 1.0, velocity: 0.88 },
+        { id: 'dvnnv1-26', sectionId: 'sec-dvnn-verse-1', midi: 67, startBeat: 22.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'dvnnv1-27', sectionId: 'sec-dvnn-verse-1', midi: 69, startBeat: 23.0, durationBeats: 0.5, velocity: 0.86 },
+        { id: 'dvnnv1-28', sectionId: 'sec-dvnn-verse-1', midi: 72, startBeat: 23.5, durationBeats: 0.5, velocity: 0.88 },
+        // Bar 7–8 [G] -> [B7]: B4 ("mơ.")
+        { id: 'dvnnv1-29', sectionId: 'sec-dvnn-verse-1', midi: 71, startBeat: 24.0, durationBeats: 6.0, velocity: 0.88 },
+
+        // 3. Verse 2 (8 bars = 32 beats, 100% sheet-verified Tone Em)
+        // Bar 9 [Em]: B3 B3 B3 G4 | B3 B3
+        { id: 'dvnnv2-1', sectionId: 'sec-dvnn-verse-2', midi: 59, startBeat: 0.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnnv2-2', sectionId: 'sec-dvnn-verse-2', midi: 59, startBeat: 0.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnnv2-3', sectionId: 'sec-dvnn-verse-2', midi: 59, startBeat: 1.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnnv2-4', sectionId: 'sec-dvnn-verse-2', midi: 67, startBeat: 1.5, durationBeats: 2.0, velocity: 0.88 },
+        { id: 'dvnnv2-5', sectionId: 'sec-dvnn-verse-2', midi: 59, startBeat: 3.5, durationBeats: 0.25, velocity: 0.76 },
+        { id: 'dvnnv2-6', sectionId: 'sec-dvnn-verse-2', midi: 59, startBeat: 3.75, durationBeats: 0.25, velocity: 0.76 },
+        // Bar 10 [Em/B]: B3 B3 G4 | G4 A4 B4
+        { id: 'dvnnv2-7', sectionId: 'sec-dvnn-verse-2', midi: 59, startBeat: 4.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnnv2-8', sectionId: 'sec-dvnn-verse-2', midi: 59, startBeat: 4.5, durationBeats: 1.0, velocity: 0.82 },
+        { id: 'dvnnv2-9', sectionId: 'sec-dvnn-verse-2', midi: 67, startBeat: 5.5, durationBeats: 1.0, velocity: 0.86 },
+        { id: 'dvnnv2-10', sectionId: 'sec-dvnn-verse-2', midi: 67, startBeat: 6.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'dvnnv2-11', sectionId: 'sec-dvnn-verse-2', midi: 69, startBeat: 7.0, durationBeats: 0.5, velocity: 0.86 },
+        { id: 'dvnnv2-12', sectionId: 'sec-dvnn-verse-2', midi: 71, startBeat: 7.5, durationBeats: 0.5, velocity: 0.88 },
+        // Bar 11–12 [Am] -> [Am/E] -> [G7]: A4 ("đắm") A4 ("say.") ... B4 ("Ánh")
+        { id: 'dvnnv2-13', sectionId: 'sec-dvnn-verse-2', midi: 69, startBeat: 8.0, durationBeats: 1.5, velocity: 0.88 },
+        { id: 'dvnnv2-14', sectionId: 'sec-dvnn-verse-2', midi: 69, startBeat: 9.5, durationBeats: 4.5, velocity: 0.86 },
+        { id: 'dvnnv2-15', sectionId: 'sec-dvnn-verse-2', midi: 71, startBeat: 15.5, durationBeats: 0.5, velocity: 0.86 },
+        // Bar 13 [C]: B4 G4 G4 E4 E4 C4 A4 ("mắt ngây thơ như ru hồn. Rũ")
+        { id: 'dvnnv2-16', sectionId: 'sec-dvnn-verse-2', midi: 71, startBeat: 16.0, durationBeats: 0.5, velocity: 0.88 },
+        { id: 'dvnnv2-17', sectionId: 'sec-dvnn-verse-2', midi: 67, startBeat: 16.5, durationBeats: 0.5, velocity: 0.85 },
+        { id: 'dvnnv2-18', sectionId: 'sec-dvnn-verse-2', midi: 67, startBeat: 17.0, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'dvnnv2-19', sectionId: 'sec-dvnn-verse-2', midi: 64, startBeat: 17.5, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnnv2-20', sectionId: 'sec-dvnn-verse-2', midi: 64, startBeat: 18.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnnv2-21', sectionId: 'sec-dvnn-verse-2', midi: 60, startBeat: 18.5, durationBeats: 1.0, velocity: 0.82 },
+        { id: 'dvnnv2-22', sectionId: 'sec-dvnn-verse-2', midi: 69, startBeat: 19.5, durationBeats: 0.5, velocity: 0.86 },
+        // Bar 14 [Am] -> [Bm]: A4 F#4 F#4 D4 D4 B3 ("áo phong sương em vui tình")
+        { id: 'dvnnv2-23', sectionId: 'sec-dvnn-verse-2', midi: 69, startBeat: 20.0, durationBeats: 0.5, velocity: 0.86 },
+        { id: 'dvnnv2-24', sectionId: 'sec-dvnn-verse-2', midi: 66, startBeat: 20.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'dvnnv2-25', sectionId: 'sec-dvnn-verse-2', midi: 66, startBeat: 21.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnnv2-26', sectionId: 'sec-dvnn-verse-2', midi: 62, startBeat: 21.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'dvnnv2-27', sectionId: 'sec-dvnn-verse-2', midi: 62, startBeat: 22.0, durationBeats: 1.0, velocity: 0.82 },
+        { id: 'dvnnv2-28', sectionId: 'sec-dvnn-verse-2', midi: 59, startBeat: 23.0, durationBeats: 1.0, velocity: 0.8 },
+        // Bar 15–16 [Em] -> [Em/B]: E4 ("duyên.") + pickup B4 B4 ("Lúc đắm")
+        { id: 'dvnnv2-29', sectionId: 'sec-dvnn-verse-2', midi: 64, startBeat: 24.0, durationBeats: 7.0, velocity: 0.86 },
+        { id: 'dvnnv2-30', sectionId: 'sec-dvnn-verse-2', midi: 71, startBeat: 31.5, durationBeats: 0.25, velocity: 0.84 },
+        { id: 'dvnnv2-31', sectionId: 'sec-dvnn-verse-2', midi: 71, startBeat: 31.75, durationBeats: 0.25, velocity: 0.86 },
+
+        // 4. Chorus (8 bars = 32 beats, 100% sheet-verified Page 2)
+        // Bar 17 [Em]: B4 G4 G4 E4 E4 G4 A4 B4
+        { id: 'dvnnc-1', sectionId: 'sec-dvnn-chorus', midi: 71, startBeat: 0.0, durationBeats: 0.5, velocity: 0.9 },
+        { id: 'dvnnc-2', sectionId: 'sec-dvnn-chorus', midi: 67, startBeat: 0.5, durationBeats: 0.5, velocity: 0.86 },
+        { id: 'dvnnc-3', sectionId: 'sec-dvnn-chorus', midi: 67, startBeat: 1.0, durationBeats: 0.5, velocity: 0.85 },
+        { id: 'dvnnc-4', sectionId: 'sec-dvnn-chorus', midi: 64, startBeat: 1.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'dvnnc-5', sectionId: 'sec-dvnn-chorus', midi: 64, startBeat: 2.0, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'dvnnc-6', sectionId: 'sec-dvnn-chorus', midi: 67, startBeat: 2.5, durationBeats: 0.5, velocity: 0.86 },
+        { id: 'dvnnc-7', sectionId: 'sec-dvnn-chorus', midi: 69, startBeat: 3.0, durationBeats: 0.5, velocity: 0.88 },
+        { id: 'dvnnc-8', sectionId: 'sec-dvnn-chorus', midi: 71, startBeat: 3.5, durationBeats: 0.5, velocity: 0.9 },
+        // Bar 18 [Am]: A4 D4 G4 A4 ("trăng rằm. Chứ đâu")
+        { id: 'dvnnc-9', sectionId: 'sec-dvnn-chorus', midi: 69, startBeat: 4.0, durationBeats: 1.5, velocity: 0.9 },
+        { id: 'dvnnc-10', sectionId: 'sec-dvnn-chorus', midi: 62, startBeat: 5.5, durationBeats: 2.0, velocity: 0.85 },
+        { id: 'dvnnc-11', sectionId: 'sec-dvnn-chorus', midi: 67, startBeat: 7.5, durationBeats: 0.25, velocity: 0.82 },
+        { id: 'dvnnc-12', sectionId: 'sec-dvnn-chorus', midi: 69, startBeat: 7.75, durationBeats: 0.25, velocity: 0.84 },
+        // Bar 19 [C]: B4 C4 C4 G4 F#4 G4 A4 ("biết dòng đời lắm nhiều con sóng")
+        { id: 'dvnnc-13', sectionId: 'sec-dvnn-chorus', midi: 71, startBeat: 8.0, durationBeats: 0.5, velocity: 0.9 },
+        { id: 'dvnnc-14', sectionId: 'sec-dvnn-chorus', midi: 60, startBeat: 8.5, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnnc-15', sectionId: 'sec-dvnn-chorus', midi: 60, startBeat: 9.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'dvnnc-16', sectionId: 'sec-dvnn-chorus', midi: 67, startBeat: 9.5, durationBeats: 1.0, velocity: 0.88 },
+        { id: 'dvnnc-17', sectionId: 'sec-dvnn-chorus', midi: 66, startBeat: 10.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'dvnnc-18', sectionId: 'sec-dvnn-chorus', midi: 67, startBeat: 11.0, durationBeats: 0.5, velocity: 0.86 },
+        { id: 'dvnnc-19', sectionId: 'sec-dvnn-chorus', midi: 69, startBeat: 11.5, durationBeats: 0.5, velocity: 0.88 },
+        // Bar 20 [D] -> [G7]: E4(1.5 "phũ") D4(2.0 "phàng.") B4 C5 ("Cho lứa")
+        { id: 'dvnnc-20', sectionId: 'sec-dvnn-chorus', midi: 64, startBeat: 12.0, durationBeats: 1.5, velocity: 0.86 },
+        { id: 'dvnnc-21', sectionId: 'sec-dvnn-chorus', midi: 62, startBeat: 13.5, durationBeats: 2.0, velocity: 0.86 },
+        { id: 'dvnnc-22', sectionId: 'sec-dvnn-chorus', midi: 71, startBeat: 15.5, durationBeats: 0.25, velocity: 0.86 },
+        { id: 'dvnnc-23', sectionId: 'sec-dvnn-chorus', midi: 72, startBeat: 15.75, durationBeats: 0.25, velocity: 0.88 },
+        // Bar 21 [Em]: B4 G4 G4 E4 E4 F#4 G4 B4
+        { id: 'dvnnc-24', sectionId: 'sec-dvnn-chorus', midi: 71, startBeat: 16.0, durationBeats: 0.5, velocity: 0.9 },
+        { id: 'dvnnc-25', sectionId: 'sec-dvnn-chorus', midi: 67, startBeat: 16.5, durationBeats: 0.5, velocity: 0.86 },
+        { id: 'dvnnc-26', sectionId: 'sec-dvnn-chorus', midi: 67, startBeat: 17.0, durationBeats: 0.5, velocity: 0.85 },
+        { id: 'dvnnc-27', sectionId: 'sec-dvnn-chorus', midi: 64, startBeat: 17.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'dvnnc-28', sectionId: 'sec-dvnn-chorus', midi: 64, startBeat: 18.0, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'dvnnc-29', sectionId: 'sec-dvnn-chorus', midi: 66, startBeat: 18.5, durationBeats: 0.5, velocity: 0.86 },
+        { id: 'dvnnc-30', sectionId: 'sec-dvnn-chorus', midi: 67, startBeat: 19.0, durationBeats: 0.5, velocity: 0.88 },
+        { id: 'dvnnc-31', sectionId: 'sec-dvnn-chorus', midi: 71, startBeat: 19.5, durationBeats: 0.5, velocity: 0.9 },
+        // Bar 22 [Bm]: A4 E5 D5 | B4 C5 ("thương nhớ... Cho đến")
+        { id: 'dvnnc-32', sectionId: 'sec-dvnn-chorus', midi: 69, startBeat: 20.0, durationBeats: 1.5, velocity: 0.9 },
+        { id: 'dvnnc-33', sectionId: 'sec-dvnn-chorus', midi: 76, startBeat: 21.5, durationBeats: 0.5, velocity: 0.94 },
+        { id: 'dvnnc-34', sectionId: 'sec-dvnn-chorus', midi: 74, startBeat: 22.0, durationBeats: 0.75, velocity: 0.9 },
+        { id: 'dvnnc-35', sectionId: 'sec-dvnn-chorus', midi: 71, startBeat: 23.5, durationBeats: 0.25, velocity: 0.86 },
+        { id: 'dvnnc-36', sectionId: 'sec-dvnn-chorus', midi: 72, startBeat: 23.75, durationBeats: 0.25, velocity: 0.88 },
+        // Bar 23–24 [C] -> [D] -> [Em]: B4(0.75 "nay") G4(0.75 "em") E4(0.5 "thuyền") G4(1.0 "đã") F#4(1.0 "sang") E4(4.0 "bờ.")
+        { id: 'dvnnc-37', sectionId: 'sec-dvnn-chorus', midi: 71, startBeat: 24.0, durationBeats: 0.75, velocity: 0.9 },
+        { id: 'dvnnc-38', sectionId: 'sec-dvnn-chorus', midi: 67, startBeat: 24.75, durationBeats: 0.75, velocity: 0.86 },
+        { id: 'dvnnc-39', sectionId: 'sec-dvnn-chorus', midi: 64, startBeat: 25.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'dvnnc-40', sectionId: 'sec-dvnn-chorus', midi: 67, startBeat: 26.0, durationBeats: 1.0, velocity: 0.88 },
+        { id: 'dvnnc-41', sectionId: 'sec-dvnn-chorus', midi: 66, startBeat: 27.0, durationBeats: 1.0, velocity: 0.88 },
+        { id: 'dvnnc-42', sectionId: 'sec-dvnn-chorus', midi: 64, startBeat: 28.0, durationBeats: 4.0, velocity: 0.9 },
+
+        // 5. Outro (4 bars = 16 beats — expressive piano echo of "Cho đến nay em thuyền đã sang bờ")
+        { id: 'dvnno-1', sectionId: 'sec-dvnn-outro', midi: 71, startBeat: 0.0, durationBeats: 0.75, velocity: 0.82 },
+        { id: 'dvnno-2', sectionId: 'sec-dvnn-outro', midi: 72, startBeat: 0.75, durationBeats: 0.75, velocity: 0.82 },
+        { id: 'dvnno-3', sectionId: 'sec-dvnn-outro', midi: 69, startBeat: 1.5, durationBeats: 1.5, velocity: 0.8 },
+        { id: 'dvnno-4', sectionId: 'sec-dvnn-outro', midi: 67, startBeat: 3.0, durationBeats: 1.0, velocity: 0.78 },
+        { id: 'dvnno-5', sectionId: 'sec-dvnn-outro', midi: 71, startBeat: 4.0, durationBeats: 1.0, velocity: 0.8 },
+        { id: 'dvnno-6', sectionId: 'sec-dvnn-outro', midi: 69, startBeat: 5.0, durationBeats: 1.0, velocity: 0.78 },
+        { id: 'dvnno-7', sectionId: 'sec-dvnn-outro', midi: 67, startBeat: 6.0, durationBeats: 1.0, velocity: 0.76 },
+        { id: 'dvnno-8', sectionId: 'sec-dvnn-outro', midi: 66, startBeat: 7.0, durationBeats: 1.0, velocity: 0.76 },
+        { id: 'dvnno-9', sectionId: 'sec-dvnn-outro', midi: 64, startBeat: 8.0, durationBeats: 2.0, velocity: 0.8 },
+        { id: 'dvnno-10', sectionId: 'sec-dvnn-outro', midi: 71, startBeat: 10.0, durationBeats: 2.0, velocity: 0.78 },
+        { id: 'dvnno-11', sectionId: 'sec-dvnn-outro', midi: 76, startBeat: 12.0, durationBeats: 4.0, velocity: 0.78 },
+      ],
+    },
+    {
       id: 'draft-dem-pho-mua-piano',
       title: 'Đêm Phố Mưa (Grand Piano Ballad)',
       keyRoot: 'C',
@@ -2348,439 +3318,6 @@ export function createStarterDrafts(): SketchpadDraft[] {
         { id: 'gp9', sectionId: 'sec-piano-chorus', midi: 74, startBeat: 9.5, durationBeats: 0.5, velocity: 0.8 },
         { id: 'gp10', sectionId: 'sec-piano-chorus', midi: 76, startBeat: 10, durationBeats: 2, velocity: 0.9 },
         { id: 'gp11', sectionId: 'sec-piano-chorus', midi: 72, startBeat: 12, durationBeats: 3.5, velocity: 0.86 },
-      ],
-    },
-    {
-      id: 'draft-khoang-cach-hai-ta-am',
-      title: 'Khoảng Cách Hai Ta · Em Đau Lắm Đấy (Tone Am)',
-      keyRoot: 'A',
-      scaleMode: 'minor',
-      mood: 'lofi-chill',
-      bpm: 86,
-      backingInstrument: 'piano-ballad',
-      backingPattern: 'auto-song',
-      sustainPedal: true,
-      metronomeEnabled: false,
-      drumPattern: 'lofi',
-      melodyInstrument: 'piano',
-      scaleSnap: true,
-      updatedAt: now + 10_000,
-      sections: [
-        {
-          id: 'sec-kcht-intro',
-          kind: 'Intro',
-          label: 'Intro — Canon Lofi (Am)',
-          bars: 8,
-          text:
-            '[Fmaj7] [G] [Em7] [Am7] [Dm7] [G] [Cmaj7]\n' +
-            '[Fmaj7] [G] [Em7] [Am7] [Dm7] [G] [Asus4] [A]',
-          chordSchedule: [
-            { symbol: 'Fmaj7', startBeat: 0, durationBeats: 2, arpPattern: 'rising-arp' },
-            { symbol: 'G', startBeat: 2, durationBeats: 2, arpPattern: 'lofi-broken' },
-            { symbol: 'Em7', startBeat: 4, durationBeats: 2, arpPattern: 'ballad-wave' },
-            { symbol: 'Am7', startBeat: 6, durationBeats: 2, arpPattern: 'falling-arp' },
-            { symbol: 'Dm7', startBeat: 8, durationBeats: 2, arpPattern: 'lofi-broken' },
-            { symbol: 'G', startBeat: 10, durationBeats: 2, arpPattern: 'rising-arp' },
-            { symbol: 'Cmaj7', startBeat: 12, durationBeats: 4, arpPattern: 'falling-arp' },
-            { symbol: 'Fmaj7', startBeat: 16, durationBeats: 2, arpPattern: 'ballad-wave' },
-            { symbol: 'G', startBeat: 18, durationBeats: 2, arpPattern: 'lofi-broken' },
-            { symbol: 'Em7', startBeat: 20, durationBeats: 2, arpPattern: 'pinch-plucked' },
-            { symbol: 'Am7', startBeat: 22, durationBeats: 2, arpPattern: 'falling-arp' },
-            { symbol: 'Dm7', startBeat: 24, durationBeats: 2, arpPattern: 'lofi-broken' },
-            { symbol: 'G', startBeat: 26, durationBeats: 2, arpPattern: 'rising-arp' },
-            { symbol: 'Asus4', startBeat: 28, durationBeats: 2, arpPattern: 'ballad-wave' },
-            { symbol: 'A', startBeat: 30, durationBeats: 2, arpPattern: 'rich-block' },
-          ],
-        },
-        {
-          id: 'sec-kcht-verse-1',
-          kind: 'Verse',
-          label: 'Verse 1 — Dường Như Khoảng Cách',
-          bars: 8,
-          text:
-            'Dường [Am]như khoảng cách hai ta\n' +
-            'Làm [Em7]em gục ngã anh à\n' +
-            'Từ [Fmaj7]lâu anh muốn để [G]lại\n' +
-            'Sau lưng [Am]tất cả',
-          chordSchedule: [
-            { symbol: 'Am', startBeat: 0.75, durationBeats: 7.25, arpPattern: 'lofi-broken' },
-            { symbol: 'Em7', startBeat: 8.75, durationBeats: 7.25, arpPattern: 'pinch-plucked' },
-            { symbol: 'Fmaj7', startBeat: 16.75, durationBeats: 3.25, arpPattern: 'ballad-wave' },
-            { symbol: 'G', startBeat: 20.0, durationBeats: 4.0, arpPattern: 'falling-arp' },
-            { symbol: 'Am', startBeat: 25.5, durationBeats: 6.5, arpPattern: 'lofi-broken' },
-          ],
-        },
-        {
-          id: 'sec-kcht-verse-2',
-          kind: 'Verse',
-          label: 'Verse 2 — Lòng Anh Ao Ước',
-          bars: 8,
-          text:
-            'Lòng [Am]anh ao ước một người\n' +
-            'Sẽ [Em7]cho anh những tiếng cười\n' +
-            'Nào ngờ [Fmaj7]đâu sau tiếng cười [G]ấy\n' +
-            'Nỗi đau [Am]nhận lấy',
-          chordSchedule: [
-            { symbol: 'Am', startBeat: 0.75, durationBeats: 7.25, arpPattern: 'pinch-plucked' },
-            { symbol: 'Em7', startBeat: 8.75, durationBeats: 7.25, arpPattern: 'lofi-broken' },
-            { symbol: 'Fmaj7', startBeat: 17.3, durationBeats: 2.95, arpPattern: 'rising-arp' },
-            { symbol: 'G', startBeat: 20.25, durationBeats: 3.75, arpPattern: 'falling-arp' },
-            { symbol: 'Am', startBeat: 25.5, durationBeats: 6.5, arpPattern: 'ballad-wave' },
-          ],
-        },
-        {
-          id: 'sec-kcht-pre-1',
-          kind: 'Pre-Chorus',
-          label: 'Pre-Chorus 1 — Em Đau Lắm Đấy',
-          bars: 8,
-          text:
-            'Ngày anh [Fmaj7]đi nắng vẫn soi lối\n' +
-            'Cớ sao lòng [Em7]em có những bão giông\n' +
-            'Nhìn anh [Dm7]bước đi bên người [G]ấy\n' +
-            'Em đau [Cmaj7]lắm đấy',
-          chordSchedule: [
-            { symbol: 'Fmaj7', startBeat: 1.3, durationBeats: 6.7, arpPattern: 'rising-arp' },
-            { symbol: 'Em7', startBeat: 9.8, durationBeats: 6.2, arpPattern: 'lofi-broken' },
-            { symbol: 'Dm7', startBeat: 17.3, durationBeats: 3.1, arpPattern: 'ballad-wave' },
-            { symbol: 'G', startBeat: 20.4, durationBeats: 3.6, arpPattern: 'rising-arp' },
-            { symbol: 'Cmaj7', startBeat: 25.5, durationBeats: 6.5, arpPattern: 'falling-arp' },
-          ],
-        },
-        {
-          id: 'sec-kcht-pre-2',
-          kind: 'Pre-Chorus',
-          label: 'Pre-Chorus 2 — Chẳng Sao Đâu',
-          bars: 8,
-          text:
-            'Đừng lo [Fmaj7]lắng một người như [G]em\n' +
-            'Chẳng sao [Em7]đâu nỗi buồn qua [Am7]nhanh\n' +
-            'Nào ngờ [Dm7]quên một người thầm [Em7]yêu\n' +
-            'Lại khó [Am]thế này',
-          chordSchedule: [
-            { symbol: 'Fmaj7', startBeat: 1.3, durationBeats: 3.2, arpPattern: 'ballad-wave' },
-            { symbol: 'G', startBeat: 4.5, durationBeats: 3.5, arpPattern: 'rising-arp' },
-            { symbol: 'Em7', startBeat: 9.3, durationBeats: 3.2, arpPattern: 'pinch-plucked' },
-            { symbol: 'Am7', startBeat: 12.5, durationBeats: 3.5, arpPattern: 'falling-arp' },
-            { symbol: 'Dm7', startBeat: 17.3, durationBeats: 3.2, arpPattern: 'lofi-broken' },
-            { symbol: 'Em7', startBeat: 20.5, durationBeats: 3.5, arpPattern: 'rising-arp' },
-            { symbol: 'Am', startBeat: 25.5, durationBeats: 6.5, arpPattern: 'rich-block' },
-          ],
-        },
-        {
-          id: 'sec-kcht-chorus-1',
-          kind: 'Chorus',
-          label: 'Chorus 1 — Nhìn Người Mình Yêu',
-          bars: 8,
-          text:
-            'Nhìn người mình [Fmaj7]yêu đau đớn như [G]vậy\n' +
-            'Lòng em vỡ [Em7]tan sau lưng anh [Am]đấy\n' +
-            'Người dành nhớ [Dm7]thương, cả đời vấn [G]vương\n' +
-            'Cô ta đâu [Cmaj7]thấy',
-          chordSchedule: [
-            { symbol: 'Fmaj7', startBeat: 1.8, durationBeats: 3.1, arpPattern: 'rich-block' },
-            { symbol: 'G', startBeat: 4.9, durationBeats: 3.1, arpPattern: 'rising-arp' },
-            { symbol: 'Em7', startBeat: 9.8, durationBeats: 3.1, arpPattern: 'ballad-wave' },
-            { symbol: 'Am', startBeat: 12.9, durationBeats: 3.1, arpPattern: 'falling-arp' },
-            { symbol: 'Dm7', startBeat: 17.8, durationBeats: 3.6, arpPattern: 'ballad-wave' },
-            { symbol: 'G', startBeat: 21.4, durationBeats: 2.6, arpPattern: 'rising-arp' },
-            { symbol: 'Cmaj7', startBeat: 25.5, durationBeats: 6.5, arpPattern: 'rich-block' },
-          ],
-        },
-        {
-          id: 'sec-kcht-chorus-2',
-          kind: 'Chorus',
-          label: 'Chorus 2 — Chạy Về Bên Em',
-          bars: 8,
-          text:
-            'Chạy về bên [Fmaj7]em, em vẫn ở [G]đây\n' +
-            'Chẳng đành nhìn [Em7]anh nước mắt rơi [Am7]đầy\n' +
-            'Ôm những cơn [Dm7]đau nỗi buồn em [Em7]giấu âm thầm phía [Fmaj7]sau\n' +
-            'Dối [Em7]lòng em chẳng sao [Asus4]đâu [A]',
-          chordSchedule: [
-            { symbol: 'Fmaj7', startBeat: 1.8, durationBeats: 3.4, arpPattern: 'rich-block' },
-            { symbol: 'G', startBeat: 5.2, durationBeats: 2.8, arpPattern: 'rising-arp' },
-            { symbol: 'Em7', startBeat: 9.8, durationBeats: 3.1, arpPattern: 'ballad-wave' },
-            { symbol: 'Am7', startBeat: 12.9, durationBeats: 3.1, arpPattern: 'falling-arp' },
-            { symbol: 'Dm7', startBeat: 17.65, durationBeats: 2.5, arpPattern: 'pinch-plucked' },
-            { symbol: 'Em7', startBeat: 20.15, durationBeats: 2.5, arpPattern: 'rising-arp' },
-            { symbol: 'Fmaj7', startBeat: 22.65, durationBeats: 1.35, arpPattern: 'ballad-wave' },
-            { symbol: 'Em7', startBeat: 24.75, durationBeats: 3.0, arpPattern: 'falling-arp' },
-            { symbol: 'Asus4', startBeat: 27.75, durationBeats: 2.0, arpPattern: 'rising-arp' },
-            { symbol: 'A', startBeat: 29.75, durationBeats: 2.25, arpPattern: 'rich-block' },
-          ],
-        },
-        {
-          id: 'sec-kcht-interlude',
-          kind: 'Interlude',
-          label: 'Interlude — Chẳng Biết Đâu',
-          bars: 8,
-          text:
-            '[Fmaj13]Chẳng biết đâu, em chẳng biết [Cmaj13]đâu\n' +
-            'Nỗi [Fmaj13]buồn anh in [Am9]sâu\n' +
-            'Nơi bỏ chạy [Fmaj7]quay lưng, em thật sự [G]đau lòng nhớ về [Cmaj7]anh [Am]\n' +
-            'Nơi bình yên [Dm7]nơi đây chỉ có [Em7]em chờ [Fmaj7]anh [G] [Asus4] [A]',
-          chordSchedule: [
-            { symbol: 'Fmaj13', startBeat: 0.0, durationBeats: 5.1, arpPattern: 'lofi-broken' },
-            { symbol: 'Cmaj13', startBeat: 5.1, durationBeats: 2.9, arpPattern: 'falling-arp' },
-            { symbol: 'Fmaj13', startBeat: 8.75, durationBeats: 2.75, arpPattern: 'rising-arp' },
-            { symbol: 'Am9', startBeat: 11.5, durationBeats: 4.5, arpPattern: 'lofi-broken' },
-            { symbol: 'Fmaj7', startBeat: 17.5, durationBeats: 2.95, arpPattern: 'ballad-wave' },
-            { symbol: 'G', startBeat: 20.45, durationBeats: 2.15, arpPattern: 'rising-arp' },
-            { symbol: 'Cmaj7', startBeat: 22.6, durationBeats: 0.7, arpPattern: 'pinch-plucked' },
-            { symbol: 'Am', startBeat: 23.3, durationBeats: 0.7, arpPattern: 'falling-arp' },
-            { symbol: 'Dm7', startBeat: 25.5, durationBeats: 2.1, arpPattern: 'lofi-broken' },
-            { symbol: 'Em7', startBeat: 27.6, durationBeats: 1.2, arpPattern: 'rising-arp' },
-            { symbol: 'Fmaj7', startBeat: 28.8, durationBeats: 0.85, arpPattern: 'ballad-wave' },
-            { symbol: 'G', startBeat: 29.65, durationBeats: 0.75, arpPattern: 'falling-arp' },
-            { symbol: 'Asus4', startBeat: 30.4, durationBeats: 0.8, arpPattern: 'pinch-plucked' },
-            { symbol: 'A', startBeat: 31.2, durationBeats: 0.8, arpPattern: 'rich-block' },
-          ],
-        },
-      ],
-      melodyNotes: [
-        // 1. Intro (8 bars = 32 beats, 35 notes — iconic Canon-Am Lofi hook)
-        { id: 'kci-1', sectionId: 'sec-kcht-intro', midi: 76, startBeat: 0, durationBeats: 1.0, velocity: 0.76 },
-        { id: 'kci-2', sectionId: 'sec-kcht-intro', midi: 74, startBeat: 1.0, durationBeats: 0.5, velocity: 0.72 },
-        { id: 'kci-3', sectionId: 'sec-kcht-intro', midi: 72, startBeat: 1.5, durationBeats: 0.5, velocity: 0.74 },
-        { id: 'kci-4', sectionId: 'sec-kcht-intro', midi: 71, startBeat: 2.0, durationBeats: 1.0, velocity: 0.75 },
-        { id: 'kci-5', sectionId: 'sec-kcht-intro', midi: 74, startBeat: 3.0, durationBeats: 1.0, velocity: 0.76 },
-        { id: 'kci-6', sectionId: 'sec-kcht-intro', midi: 72, startBeat: 4.0, durationBeats: 1.0, velocity: 0.75 },
-        { id: 'kci-7', sectionId: 'sec-kcht-intro', midi: 71, startBeat: 5.0, durationBeats: 0.5, velocity: 0.72 },
-        { id: 'kci-8', sectionId: 'sec-kcht-intro', midi: 69, startBeat: 5.5, durationBeats: 0.5, velocity: 0.7 },
-        { id: 'kci-9', sectionId: 'sec-kcht-intro', midi: 72, startBeat: 6.0, durationBeats: 1.25, velocity: 0.78 },
-        { id: 'kci-10', sectionId: 'sec-kcht-intro', midi: 69, startBeat: 7.25, durationBeats: 0.75, velocity: 0.72 },
-        { id: 'kci-11', sectionId: 'sec-kcht-intro', midi: 69, startBeat: 8.0, durationBeats: 1.0, velocity: 0.74 },
-        { id: 'kci-12', sectionId: 'sec-kcht-intro', midi: 72, startBeat: 9.0, durationBeats: 0.5, velocity: 0.74 },
-        { id: 'kci-13', sectionId: 'sec-kcht-intro', midi: 74, startBeat: 9.5, durationBeats: 0.5, velocity: 0.76 },
-        { id: 'kci-14', sectionId: 'sec-kcht-intro', midi: 71, startBeat: 10.0, durationBeats: 1.0, velocity: 0.75 },
-        { id: 'kci-15', sectionId: 'sec-kcht-intro', midi: 74, startBeat: 11.0, durationBeats: 1.0, velocity: 0.76 },
-        { id: 'kci-16', sectionId: 'sec-kcht-intro', midi: 72, startBeat: 12.0, durationBeats: 2.0, velocity: 0.8 },
-        { id: 'kci-17', sectionId: 'sec-kcht-intro', midi: 76, startBeat: 14.5, durationBeats: 1.25, velocity: 0.74 },
-        { id: 'kci-18', sectionId: 'sec-kcht-intro', midi: 77, startBeat: 16.0, durationBeats: 0.75, velocity: 0.78 },
-        { id: 'kci-19', sectionId: 'sec-kcht-intro', midi: 76, startBeat: 16.75, durationBeats: 0.75, velocity: 0.76 },
-        { id: 'kci-20', sectionId: 'sec-kcht-intro', midi: 74, startBeat: 17.5, durationBeats: 0.5, velocity: 0.74 },
-        { id: 'kci-21', sectionId: 'sec-kcht-intro', midi: 74, startBeat: 18.0, durationBeats: 1.25, velocity: 0.76 },
-        { id: 'kci-22', sectionId: 'sec-kcht-intro', midi: 71, startBeat: 19.25, durationBeats: 0.75, velocity: 0.72 },
-        { id: 'kci-23', sectionId: 'sec-kcht-intro', midi: 72, startBeat: 20.0, durationBeats: 1.0, velocity: 0.76 },
-        { id: 'kci-24', sectionId: 'sec-kcht-intro', midi: 71, startBeat: 21.0, durationBeats: 1.0, velocity: 0.74 },
-        { id: 'kci-25', sectionId: 'sec-kcht-intro', midi: 69, startBeat: 22.0, durationBeats: 1.25, velocity: 0.76 },
-        { id: 'kci-26', sectionId: 'sec-kcht-intro', midi: 72, startBeat: 23.25, durationBeats: 0.75, velocity: 0.72 },
-        { id: 'kci-27', sectionId: 'sec-kcht-intro', midi: 74, startBeat: 24.0, durationBeats: 0.75, velocity: 0.76 },
-        { id: 'kci-28', sectionId: 'sec-kcht-intro', midi: 72, startBeat: 24.75, durationBeats: 0.75, velocity: 0.74 },
-        { id: 'kci-29', sectionId: 'sec-kcht-intro', midi: 69, startBeat: 25.5, durationBeats: 0.5, velocity: 0.72 },
-        { id: 'kci-30', sectionId: 'sec-kcht-intro', midi: 71, startBeat: 26.0, durationBeats: 1.25, velocity: 0.76 },
-        { id: 'kci-31', sectionId: 'sec-kcht-intro', midi: 74, startBeat: 27.25, durationBeats: 0.75, velocity: 0.74 },
-        { id: 'kci-32', sectionId: 'sec-kcht-intro', midi: 69, startBeat: 28.0, durationBeats: 1.0, velocity: 0.74 },
-        { id: 'kci-33', sectionId: 'sec-kcht-intro', midi: 74, startBeat: 29.0, durationBeats: 1.0, velocity: 0.76 },
-        { id: 'kci-34', sectionId: 'sec-kcht-intro', midi: 73, startBeat: 30.0, durationBeats: 1.25, velocity: 0.78 },
-        { id: 'kci-35', sectionId: 'sec-kcht-intro', midi: 69, startBeat: 31.25, durationBeats: 0.75, velocity: 0.72 },
-
-        // 2. Verse 1 (8 bars = 32 beats, 8 beats per lyric line — locked 1:1 with chordSchedule)
-        { id: 'kcv1-1', sectionId: 'sec-kcht-verse-1', midi: 64, startBeat: 0.0, durationBeats: 0.75, velocity: 0.78 },
-        { id: 'kcv1-2', sectionId: 'sec-kcht-verse-1', midi: 69, startBeat: 0.75, durationBeats: 0.75, velocity: 0.84 },
-        { id: 'kcv1-3', sectionId: 'sec-kcht-verse-1', midi: 69, startBeat: 1.5, durationBeats: 0.75, velocity: 0.8 },
-        { id: 'kcv1-4', sectionId: 'sec-kcht-verse-1', midi: 72, startBeat: 2.25, durationBeats: 0.75, velocity: 0.86 },
-        { id: 'kcv1-5', sectionId: 'sec-kcht-verse-1', midi: 71, startBeat: 3.0, durationBeats: 0.75, velocity: 0.82 },
-        { id: 'kcv1-6', sectionId: 'sec-kcht-verse-1', midi: 69, startBeat: 3.75, durationBeats: 2.5, velocity: 0.8 },
-        { id: 'kcv1-7', sectionId: 'sec-kcht-verse-1', midi: 64, startBeat: 8.0, durationBeats: 0.75, velocity: 0.76 },
-        { id: 'kcv1-8', sectionId: 'sec-kcht-verse-1', midi: 67, startBeat: 8.75, durationBeats: 0.75, velocity: 0.82 },
-        { id: 'kcv1-9', sectionId: 'sec-kcht-verse-1', midi: 67, startBeat: 9.5, durationBeats: 0.75, velocity: 0.78 },
-        { id: 'kcv1-10', sectionId: 'sec-kcht-verse-1', midi: 71, startBeat: 10.25, durationBeats: 0.75, velocity: 0.84 },
-        { id: 'kcv1-11', sectionId: 'sec-kcht-verse-1', midi: 69, startBeat: 11.0, durationBeats: 0.75, velocity: 0.8 },
-        { id: 'kcv1-12', sectionId: 'sec-kcht-verse-1', midi: 67, startBeat: 11.75, durationBeats: 2.5, velocity: 0.78 },
-        { id: 'kcv1-13', sectionId: 'sec-kcht-verse-1', midi: 64, startBeat: 16.0, durationBeats: 0.75, velocity: 0.76 },
-        { id: 'kcv1-14', sectionId: 'sec-kcht-verse-1', midi: 65, startBeat: 16.75, durationBeats: 0.75, velocity: 0.82 },
-        { id: 'kcv1-15', sectionId: 'sec-kcht-verse-1', midi: 69, startBeat: 17.5, durationBeats: 0.75, velocity: 0.82 },
-        { id: 'kcv1-16', sectionId: 'sec-kcht-verse-1', midi: 69, startBeat: 18.25, durationBeats: 0.75, velocity: 0.8 },
-        { id: 'kcv1-17', sectionId: 'sec-kcht-verse-1', midi: 67, startBeat: 19.0, durationBeats: 1.0, velocity: 0.78 },
-        { id: 'kcv1-18', sectionId: 'sec-kcht-verse-1', midi: 67, startBeat: 20.0, durationBeats: 2.5, velocity: 0.82 },
-        { id: 'kcv1-19', sectionId: 'sec-kcht-verse-1', midi: 64, startBeat: 24.0, durationBeats: 0.75, velocity: 0.76 },
-        { id: 'kcv1-20', sectionId: 'sec-kcht-verse-1', midi: 67, startBeat: 24.75, durationBeats: 0.75, velocity: 0.8 },
-        { id: 'kcv1-21', sectionId: 'sec-kcht-verse-1', midi: 69, startBeat: 25.5, durationBeats: 1.0, velocity: 0.84 },
-        { id: 'kcv1-22', sectionId: 'sec-kcht-verse-1', midi: 69, startBeat: 26.5, durationBeats: 3.75, velocity: 0.82 },
-
-        // 3. Verse 2 (8 bars = 32 beats)
-        { id: 'kcv2-1', sectionId: 'sec-kcht-verse-2', midi: 64, startBeat: 0.0, durationBeats: 0.75, velocity: 0.78 },
-        { id: 'kcv2-2', sectionId: 'sec-kcht-verse-2', midi: 69, startBeat: 0.75, durationBeats: 0.75, velocity: 0.84 },
-        { id: 'kcv2-3', sectionId: 'sec-kcht-verse-2', midi: 69, startBeat: 1.5, durationBeats: 0.75, velocity: 0.8 },
-        { id: 'kcv2-4', sectionId: 'sec-kcht-verse-2', midi: 72, startBeat: 2.25, durationBeats: 0.75, velocity: 0.86 },
-        { id: 'kcv2-5', sectionId: 'sec-kcht-verse-2', midi: 71, startBeat: 3.0, durationBeats: 0.75, velocity: 0.82 },
-        { id: 'kcv2-6', sectionId: 'sec-kcht-verse-2', midi: 69, startBeat: 3.75, durationBeats: 2.5, velocity: 0.8 },
-        { id: 'kcv2-7', sectionId: 'sec-kcht-verse-2', midi: 64, startBeat: 8.0, durationBeats: 0.75, velocity: 0.76 },
-        { id: 'kcv2-8', sectionId: 'sec-kcht-verse-2', midi: 67, startBeat: 8.75, durationBeats: 0.75, velocity: 0.82 },
-        { id: 'kcv2-9', sectionId: 'sec-kcht-verse-2', midi: 67, startBeat: 9.5, durationBeats: 0.75, velocity: 0.78 },
-        { id: 'kcv2-10', sectionId: 'sec-kcht-verse-2', midi: 71, startBeat: 10.25, durationBeats: 0.75, velocity: 0.84 },
-        { id: 'kcv2-11', sectionId: 'sec-kcht-verse-2', midi: 69, startBeat: 11.0, durationBeats: 0.75, velocity: 0.8 },
-        { id: 'kcv2-12', sectionId: 'sec-kcht-verse-2', midi: 67, startBeat: 11.75, durationBeats: 2.5, velocity: 0.78 },
-        { id: 'kcv2-13', sectionId: 'sec-kcht-verse-2', midi: 64, startBeat: 16.0, durationBeats: 0.65, velocity: 0.76 },
-        { id: 'kcv2-14', sectionId: 'sec-kcht-verse-2', midi: 64, startBeat: 16.65, durationBeats: 0.65, velocity: 0.76 },
-        { id: 'kcv2-15', sectionId: 'sec-kcht-verse-2', midi: 65, startBeat: 17.3, durationBeats: 0.85, velocity: 0.82 },
-        { id: 'kcv2-16', sectionId: 'sec-kcht-verse-2', midi: 69, startBeat: 18.15, durationBeats: 0.65, velocity: 0.84 },
-        { id: 'kcv2-17', sectionId: 'sec-kcht-verse-2', midi: 69, startBeat: 18.8, durationBeats: 0.65, velocity: 0.82 },
-        { id: 'kcv2-18', sectionId: 'sec-kcht-verse-2', midi: 67, startBeat: 19.45, durationBeats: 0.8, velocity: 0.8 },
-        { id: 'kcv2-19', sectionId: 'sec-kcht-verse-2', midi: 67, startBeat: 20.25, durationBeats: 2.5, velocity: 0.84 },
-        { id: 'kcv2-20', sectionId: 'sec-kcht-verse-2', midi: 64, startBeat: 24.0, durationBeats: 0.75, velocity: 0.78 },
-        { id: 'kcv2-21', sectionId: 'sec-kcht-verse-2', midi: 67, startBeat: 24.75, durationBeats: 0.75, velocity: 0.8 },
-        { id: 'kcv2-22', sectionId: 'sec-kcht-verse-2', midi: 69, startBeat: 25.5, durationBeats: 1.0, velocity: 0.84 },
-        { id: 'kcv2-23', sectionId: 'sec-kcht-verse-2', midi: 69, startBeat: 26.5, durationBeats: 3.75, velocity: 0.82 },
-
-        // 4. Pre-Chorus 1 (8 bars = 32 beats)
-        { id: 'kcp1-1', sectionId: 'sec-kcht-pre-1', midi: 69, startBeat: 0.0, durationBeats: 0.65, velocity: 0.8 },
-        { id: 'kcp1-2', sectionId: 'sec-kcht-pre-1', midi: 69, startBeat: 0.65, durationBeats: 0.65, velocity: 0.82 },
-        { id: 'kcp1-3', sectionId: 'sec-kcht-pre-1', midi: 72, startBeat: 1.3, durationBeats: 1.0, velocity: 0.86 },
-        { id: 'kcp1-4', sectionId: 'sec-kcht-pre-1', midi: 72, startBeat: 2.3, durationBeats: 0.7, velocity: 0.84 },
-        { id: 'kcp1-5', sectionId: 'sec-kcht-pre-1', midi: 71, startBeat: 3.0, durationBeats: 0.75, velocity: 0.82 },
-        { id: 'kcp1-6', sectionId: 'sec-kcht-pre-1', midi: 69, startBeat: 3.75, durationBeats: 0.75, velocity: 0.8 },
-        { id: 'kcp1-7', sectionId: 'sec-kcht-pre-1', midi: 72, startBeat: 4.5, durationBeats: 2.25, velocity: 0.86 },
-        { id: 'kcp1-8', sectionId: 'sec-kcht-pre-1', midi: 67, startBeat: 8.0, durationBeats: 0.6, velocity: 0.78 },
-        { id: 'kcp1-9', sectionId: 'sec-kcht-pre-1', midi: 67, startBeat: 8.6, durationBeats: 0.6, velocity: 0.8 },
-        { id: 'kcp1-10', sectionId: 'sec-kcht-pre-1', midi: 69, startBeat: 9.2, durationBeats: 0.6, velocity: 0.82 },
-        { id: 'kcp1-11', sectionId: 'sec-kcht-pre-1', midi: 71, startBeat: 9.8, durationBeats: 0.9, velocity: 0.86 },
-        { id: 'kcp1-12', sectionId: 'sec-kcht-pre-1', midi: 71, startBeat: 10.7, durationBeats: 0.7, velocity: 0.84 },
-        { id: 'kcp1-13', sectionId: 'sec-kcht-pre-1', midi: 69, startBeat: 11.4, durationBeats: 0.7, velocity: 0.8 },
-        { id: 'kcp1-14', sectionId: 'sec-kcht-pre-1', midi: 67, startBeat: 12.1, durationBeats: 0.75, velocity: 0.78 },
-        { id: 'kcp1-15', sectionId: 'sec-kcht-pre-1', midi: 71, startBeat: 12.85, durationBeats: 2.0, velocity: 0.84 },
-        { id: 'kcp1-16', sectionId: 'sec-kcht-pre-1', midi: 65, startBeat: 16.0, durationBeats: 0.65, velocity: 0.78 },
-        { id: 'kcp1-17', sectionId: 'sec-kcht-pre-1', midi: 65, startBeat: 16.65, durationBeats: 0.65, velocity: 0.8 },
-        { id: 'kcp1-18', sectionId: 'sec-kcht-pre-1', midi: 69, startBeat: 17.3, durationBeats: 0.85, velocity: 0.84 },
-        { id: 'kcp1-19', sectionId: 'sec-kcht-pre-1', midi: 69, startBeat: 18.15, durationBeats: 0.75, velocity: 0.82 },
-        { id: 'kcp1-20', sectionId: 'sec-kcht-pre-1', midi: 67, startBeat: 18.9, durationBeats: 0.75, velocity: 0.8 },
-        { id: 'kcp1-21', sectionId: 'sec-kcht-pre-1', midi: 65, startBeat: 19.65, durationBeats: 0.75, velocity: 0.78 },
-        { id: 'kcp1-22', sectionId: 'sec-kcht-pre-1', midi: 67, startBeat: 20.4, durationBeats: 2.35, velocity: 0.84 },
-        { id: 'kcp1-23', sectionId: 'sec-kcht-pre-1', midi: 64, startBeat: 24.0, durationBeats: 0.75, velocity: 0.8 },
-        { id: 'kcp1-24', sectionId: 'sec-kcht-pre-1', midi: 67, startBeat: 24.75, durationBeats: 0.75, velocity: 0.84 },
-        { id: 'kcp1-25', sectionId: 'sec-kcht-pre-1', midi: 72, startBeat: 25.5, durationBeats: 1.25, velocity: 0.88 },
-        { id: 'kcp1-26', sectionId: 'sec-kcht-pre-1', midi: 72, startBeat: 26.75, durationBeats: 3.5, velocity: 0.86 },
-
-        // 5. Pre-Chorus 2 (8 bars = 32 beats)
-        { id: 'kcp2-1', sectionId: 'sec-kcht-pre-2', midi: 69, startBeat: 0.0, durationBeats: 0.65, velocity: 0.8 },
-        { id: 'kcp2-2', sectionId: 'sec-kcht-pre-2', midi: 69, startBeat: 0.65, durationBeats: 0.65, velocity: 0.82 },
-        { id: 'kcp2-3', sectionId: 'sec-kcht-pre-2', midi: 72, startBeat: 1.3, durationBeats: 0.95, velocity: 0.86 },
-        { id: 'kcp2-4', sectionId: 'sec-kcht-pre-2', midi: 72, startBeat: 2.25, durationBeats: 0.7, velocity: 0.84 },
-        { id: 'kcp2-5', sectionId: 'sec-kcht-pre-2', midi: 74, startBeat: 2.95, durationBeats: 0.75, velocity: 0.88 },
-        { id: 'kcp2-6', sectionId: 'sec-kcht-pre-2', midi: 71, startBeat: 3.7, durationBeats: 0.8, velocity: 0.84 },
-        { id: 'kcp2-7', sectionId: 'sec-kcht-pre-2', midi: 74, startBeat: 4.5, durationBeats: 2.25, velocity: 0.88 },
-        { id: 'kcp2-8', sectionId: 'sec-kcht-pre-2', midi: 67, startBeat: 8.0, durationBeats: 0.65, velocity: 0.8 },
-        { id: 'kcp2-9', sectionId: 'sec-kcht-pre-2', midi: 67, startBeat: 8.65, durationBeats: 0.65, velocity: 0.8 },
-        { id: 'kcp2-10', sectionId: 'sec-kcht-pre-2', midi: 71, startBeat: 9.3, durationBeats: 0.95, velocity: 0.84 },
-        { id: 'kcp2-11', sectionId: 'sec-kcht-pre-2', midi: 71, startBeat: 10.25, durationBeats: 0.7, velocity: 0.84 },
-        { id: 'kcp2-12', sectionId: 'sec-kcht-pre-2', midi: 72, startBeat: 10.95, durationBeats: 0.75, velocity: 0.86 },
-        { id: 'kcp2-13', sectionId: 'sec-kcht-pre-2', midi: 69, startBeat: 11.7, durationBeats: 0.8, velocity: 0.82 },
-        { id: 'kcp2-14', sectionId: 'sec-kcht-pre-2', midi: 72, startBeat: 12.5, durationBeats: 2.25, velocity: 0.86 },
-        { id: 'kcp2-15', sectionId: 'sec-kcht-pre-2', midi: 65, startBeat: 16.0, durationBeats: 0.65, velocity: 0.8 },
-        { id: 'kcp2-16', sectionId: 'sec-kcht-pre-2', midi: 65, startBeat: 16.65, durationBeats: 0.65, velocity: 0.8 },
-        { id: 'kcp2-17', sectionId: 'sec-kcht-pre-2', midi: 69, startBeat: 17.3, durationBeats: 0.95, velocity: 0.84 },
-        { id: 'kcp2-18', sectionId: 'sec-kcht-pre-2', midi: 69, startBeat: 18.25, durationBeats: 0.7, velocity: 0.84 },
-        { id: 'kcp2-19', sectionId: 'sec-kcht-pre-2', midi: 71, startBeat: 18.95, durationBeats: 0.75, velocity: 0.86 },
-        { id: 'kcp2-20', sectionId: 'sec-kcht-pre-2', midi: 67, startBeat: 19.7, durationBeats: 0.8, velocity: 0.82 },
-        { id: 'kcp2-21', sectionId: 'sec-kcht-pre-2', midi: 69, startBeat: 20.5, durationBeats: 2.25, velocity: 0.86 },
-        { id: 'kcp2-22', sectionId: 'sec-kcht-pre-2', midi: 64, startBeat: 24.0, durationBeats: 0.75, velocity: 0.8 },
-        { id: 'kcp2-23', sectionId: 'sec-kcht-pre-2', midi: 67, startBeat: 24.75, durationBeats: 0.75, velocity: 0.84 },
-        { id: 'kcp2-24', sectionId: 'sec-kcht-pre-2', midi: 69, startBeat: 25.5, durationBeats: 1.25, velocity: 0.88 },
-        { id: 'kcp2-25', sectionId: 'sec-kcht-pre-2', midi: 69, startBeat: 26.75, durationBeats: 3.5, velocity: 0.86 },
-
-        // 6. Chorus 1 (8 bars = 32 beats)
-        { id: 'kc1-1', sectionId: 'sec-kcht-chorus-1', midi: 72, startBeat: 0.0, durationBeats: 0.6, velocity: 0.86 },
-        { id: 'kc1-2', sectionId: 'sec-kcht-chorus-1', midi: 74, startBeat: 0.6, durationBeats: 0.6, velocity: 0.88 },
-        { id: 'kc1-3', sectionId: 'sec-kcht-chorus-1', midi: 76, startBeat: 1.2, durationBeats: 0.6, velocity: 0.9 },
-        { id: 'kc1-4', sectionId: 'sec-kcht-chorus-1', midi: 79, startBeat: 1.8, durationBeats: 1.0, velocity: 0.94 },
-        { id: 'kc1-5', sectionId: 'sec-kcht-chorus-1', midi: 79, startBeat: 2.8, durationBeats: 0.7, velocity: 0.92 },
-        { id: 'kc1-6', sectionId: 'sec-kcht-chorus-1', midi: 77, startBeat: 3.5, durationBeats: 0.7, velocity: 0.9 },
-        { id: 'kc1-7', sectionId: 'sec-kcht-chorus-1', midi: 76, startBeat: 4.2, durationBeats: 0.7, velocity: 0.88 },
-        { id: 'kc1-8', sectionId: 'sec-kcht-chorus-1', midi: 74, startBeat: 4.9, durationBeats: 2.0, velocity: 0.88 },
-        { id: 'kc1-9', sectionId: 'sec-kcht-chorus-1', midi: 71, startBeat: 8.0, durationBeats: 0.6, velocity: 0.84 },
-        { id: 'kc1-10', sectionId: 'sec-kcht-chorus-1', midi: 72, startBeat: 8.6, durationBeats: 0.6, velocity: 0.86 },
-        { id: 'kc1-11', sectionId: 'sec-kcht-chorus-1', midi: 74, startBeat: 9.2, durationBeats: 0.6, velocity: 0.88 },
-        { id: 'kc1-12', sectionId: 'sec-kcht-chorus-1', midi: 76, startBeat: 9.8, durationBeats: 1.0, velocity: 0.92 },
-        { id: 'kc1-13', sectionId: 'sec-kcht-chorus-1', midi: 76, startBeat: 10.8, durationBeats: 0.7, velocity: 0.9 },
-        { id: 'kc1-14', sectionId: 'sec-kcht-chorus-1', midi: 74, startBeat: 11.5, durationBeats: 0.7, velocity: 0.88 },
-        { id: 'kc1-15', sectionId: 'sec-kcht-chorus-1', midi: 72, startBeat: 12.2, durationBeats: 0.7, velocity: 0.86 },
-        { id: 'kc1-16', sectionId: 'sec-kcht-chorus-1', midi: 72, startBeat: 12.9, durationBeats: 2.0, velocity: 0.88 },
-        { id: 'kc1-17', sectionId: 'sec-kcht-chorus-1', midi: 69, startBeat: 16.0, durationBeats: 0.6, velocity: 0.84 },
-        { id: 'kc1-18', sectionId: 'sec-kcht-chorus-1', midi: 71, startBeat: 16.6, durationBeats: 0.6, velocity: 0.86 },
-        { id: 'kc1-19', sectionId: 'sec-kcht-chorus-1', midi: 72, startBeat: 17.2, durationBeats: 0.6, velocity: 0.88 },
-        { id: 'kc1-20', sectionId: 'sec-kcht-chorus-1', midi: 74, startBeat: 17.8, durationBeats: 1.25, velocity: 0.9 },
-        { id: 'kc1-21', sectionId: 'sec-kcht-chorus-1', midi: 74, startBeat: 19.4, durationBeats: 0.65, velocity: 0.88 },
-        { id: 'kc1-22', sectionId: 'sec-kcht-chorus-1', midi: 72, startBeat: 20.05, durationBeats: 0.65, velocity: 0.86 },
-        { id: 'kc1-23', sectionId: 'sec-kcht-chorus-1', midi: 71, startBeat: 20.7, durationBeats: 0.7, velocity: 0.84 },
-        { id: 'kc1-24', sectionId: 'sec-kcht-chorus-1', midi: 74, startBeat: 21.4, durationBeats: 1.85, velocity: 0.88 },
-        { id: 'kc1-25', sectionId: 'sec-kcht-chorus-1', midi: 71, startBeat: 24.0, durationBeats: 0.75, velocity: 0.84 },
-        { id: 'kc1-26', sectionId: 'sec-kcht-chorus-1', midi: 72, startBeat: 24.75, durationBeats: 0.75, velocity: 0.88 },
-        { id: 'kc1-27', sectionId: 'sec-kcht-chorus-1', midi: 76, startBeat: 25.5, durationBeats: 1.0, velocity: 0.92 },
-        { id: 'kc1-28', sectionId: 'sec-kcht-chorus-1', midi: 76, startBeat: 26.5, durationBeats: 3.75, velocity: 0.88 },
-
-        // 7. Chorus 2 (8 bars = 32 beats)
-        { id: 'kc2-1', sectionId: 'sec-kcht-chorus-2', midi: 72, startBeat: 0.0, durationBeats: 0.6, velocity: 0.86 },
-        { id: 'kc2-2', sectionId: 'sec-kcht-chorus-2', midi: 74, startBeat: 0.6, durationBeats: 0.6, velocity: 0.88 },
-        { id: 'kc2-3', sectionId: 'sec-kcht-chorus-2', midi: 76, startBeat: 1.2, durationBeats: 0.6, velocity: 0.9 },
-        { id: 'kc2-4', sectionId: 'sec-kcht-chorus-2', midi: 79, startBeat: 1.8, durationBeats: 1.1, velocity: 0.94 },
-        { id: 'kc2-5', sectionId: 'sec-kcht-chorus-2', midi: 77, startBeat: 3.2, durationBeats: 0.65, velocity: 0.9 },
-        { id: 'kc2-6', sectionId: 'sec-kcht-chorus-2', midi: 76, startBeat: 3.85, durationBeats: 0.65, velocity: 0.88 },
-        { id: 'kc2-7', sectionId: 'sec-kcht-chorus-2', midi: 74, startBeat: 4.5, durationBeats: 0.7, velocity: 0.86 },
-        { id: 'kc2-8', sectionId: 'sec-kcht-chorus-2', midi: 74, startBeat: 5.2, durationBeats: 1.8, velocity: 0.88 },
-        { id: 'kc2-9', sectionId: 'sec-kcht-chorus-2', midi: 71, startBeat: 8.0, durationBeats: 0.6, velocity: 0.84 },
-        { id: 'kc2-10', sectionId: 'sec-kcht-chorus-2', midi: 72, startBeat: 8.6, durationBeats: 0.6, velocity: 0.86 },
-        { id: 'kc2-11', sectionId: 'sec-kcht-chorus-2', midi: 74, startBeat: 9.2, durationBeats: 0.6, velocity: 0.88 },
-        { id: 'kc2-12', sectionId: 'sec-kcht-chorus-2', midi: 76, startBeat: 9.8, durationBeats: 1.0, velocity: 0.92 },
-        { id: 'kc2-13', sectionId: 'sec-kcht-chorus-2', midi: 76, startBeat: 10.8, durationBeats: 0.7, velocity: 0.9 },
-        { id: 'kc2-14', sectionId: 'sec-kcht-chorus-2', midi: 74, startBeat: 11.5, durationBeats: 0.7, velocity: 0.88 },
-        { id: 'kc2-15', sectionId: 'sec-kcht-chorus-2', midi: 72, startBeat: 12.2, durationBeats: 0.7, velocity: 0.86 },
-        { id: 'kc2-16', sectionId: 'sec-kcht-chorus-2', midi: 72, startBeat: 12.9, durationBeats: 2.0, velocity: 0.88 },
-        { id: 'kc2-17', sectionId: 'sec-kcht-chorus-2', midi: 69, startBeat: 16.0, durationBeats: 0.55, velocity: 0.84 },
-        { id: 'kc2-18', sectionId: 'sec-kcht-chorus-2', midi: 71, startBeat: 16.55, durationBeats: 0.55, velocity: 0.86 },
-        { id: 'kc2-19', sectionId: 'sec-kcht-chorus-2', midi: 72, startBeat: 17.1, durationBeats: 0.55, velocity: 0.88 },
-        { id: 'kc2-20', sectionId: 'sec-kcht-chorus-2', midi: 74, startBeat: 17.65, durationBeats: 0.85, velocity: 0.9 },
-        { id: 'kc2-21', sectionId: 'sec-kcht-chorus-2', midi: 72, startBeat: 18.5, durationBeats: 0.55, velocity: 0.88 },
-        { id: 'kc2-22', sectionId: 'sec-kcht-chorus-2', midi: 71, startBeat: 19.05, durationBeats: 0.55, velocity: 0.86 },
-        { id: 'kc2-23', sectionId: 'sec-kcht-chorus-2', midi: 69, startBeat: 19.6, durationBeats: 0.55, velocity: 0.84 },
-        { id: 'kc2-24', sectionId: 'sec-kcht-chorus-2', midi: 71, startBeat: 20.15, durationBeats: 0.85, velocity: 0.88 },
-        { id: 'kc2-25', sectionId: 'sec-kcht-chorus-2', midi: 72, startBeat: 21.0, durationBeats: 0.55, velocity: 0.88 },
-        { id: 'kc2-26', sectionId: 'sec-kcht-chorus-2', midi: 71, startBeat: 21.55, durationBeats: 0.55, velocity: 0.86 },
-        { id: 'kc2-27', sectionId: 'sec-kcht-chorus-2', midi: 69, startBeat: 22.1, durationBeats: 0.55, velocity: 0.84 },
-        { id: 'kc2-28', sectionId: 'sec-kcht-chorus-2', midi: 69, startBeat: 22.65, durationBeats: 1.15, velocity: 0.86 },
-        { id: 'kc2-29', sectionId: 'sec-kcht-chorus-2', midi: 67, startBeat: 24.0, durationBeats: 0.75, velocity: 0.82 },
-        { id: 'kc2-30', sectionId: 'sec-kcht-chorus-2', midi: 69, startBeat: 24.75, durationBeats: 0.75, velocity: 0.84 },
-        { id: 'kc2-31', sectionId: 'sec-kcht-chorus-2', midi: 67, startBeat: 25.5, durationBeats: 0.75, velocity: 0.82 },
-        { id: 'kc2-32', sectionId: 'sec-kcht-chorus-2', midi: 64, startBeat: 26.25, durationBeats: 0.75, velocity: 0.8 },
-        { id: 'kc2-33', sectionId: 'sec-kcht-chorus-2', midi: 69, startBeat: 27.0, durationBeats: 0.75, velocity: 0.86 },
-        { id: 'kc2-34', sectionId: 'sec-kcht-chorus-2', midi: 69, startBeat: 27.75, durationBeats: 3.5, velocity: 0.88 },
-
-        // 8. Interlude (8 bars = 32 beats)
-        { id: 'kcin-1', sectionId: 'sec-kcht-interlude', midi: 72, startBeat: 0.0, durationBeats: 0.7, velocity: 0.84 },
-        { id: 'kcin-2', sectionId: 'sec-kcht-interlude', midi: 71, startBeat: 0.7, durationBeats: 0.7, velocity: 0.8 },
-        { id: 'kcin-3', sectionId: 'sec-kcht-interlude', midi: 69, startBeat: 1.4, durationBeats: 1.35, velocity: 0.84 },
-        { id: 'kcin-4', sectionId: 'sec-kcht-interlude', midi: 72, startBeat: 3.15, durationBeats: 0.65, velocity: 0.82 },
-        { id: 'kcin-5', sectionId: 'sec-kcht-interlude', midi: 71, startBeat: 3.8, durationBeats: 0.65, velocity: 0.8 },
-        { id: 'kcin-6', sectionId: 'sec-kcht-interlude', midi: 69, startBeat: 4.45, durationBeats: 0.65, velocity: 0.82 },
-        { id: 'kcin-7', sectionId: 'sec-kcht-interlude', midi: 69, startBeat: 5.1, durationBeats: 2.0, velocity: 0.84 },
-        { id: 'kcin-8', sectionId: 'sec-kcht-interlude', midi: 67, startBeat: 8.0, durationBeats: 0.75, velocity: 0.8 },
-        { id: 'kcin-9', sectionId: 'sec-kcht-interlude', midi: 69, startBeat: 8.75, durationBeats: 1.0, velocity: 0.84 },
-        { id: 'kcin-10', sectionId: 'sec-kcht-interlude', midi: 71, startBeat: 9.75, durationBeats: 0.85, velocity: 0.84 },
-        { id: 'kcin-11', sectionId: 'sec-kcht-interlude', midi: 72, startBeat: 10.6, durationBeats: 0.9, velocity: 0.86 },
-        { id: 'kcin-12', sectionId: 'sec-kcht-interlude', midi: 69, startBeat: 11.5, durationBeats: 2.75, velocity: 0.84 },
-        { id: 'kcin-13', sectionId: 'sec-kcht-interlude', midi: 69, startBeat: 16.0, durationBeats: 0.5, velocity: 0.82 },
-        { id: 'kcin-14', sectionId: 'sec-kcht-interlude', midi: 71, startBeat: 16.5, durationBeats: 0.5, velocity: 0.84 },
-        { id: 'kcin-15', sectionId: 'sec-kcht-interlude', midi: 72, startBeat: 17.0, durationBeats: 0.5, velocity: 0.86 },
-        { id: 'kcin-16', sectionId: 'sec-kcht-interlude', midi: 74, startBeat: 17.5, durationBeats: 0.65, velocity: 0.88 },
-        { id: 'kcin-17', sectionId: 'sec-kcht-interlude', midi: 72, startBeat: 18.15, durationBeats: 0.8, velocity: 0.86 },
-        { id: 'kcin-18', sectionId: 'sec-kcht-interlude', midi: 71, startBeat: 18.95, durationBeats: 0.5, velocity: 0.84 },
-        { id: 'kcin-19', sectionId: 'sec-kcht-interlude', midi: 69, startBeat: 19.45, durationBeats: 0.5, velocity: 0.82 },
-        { id: 'kcin-20', sectionId: 'sec-kcht-interlude', midi: 71, startBeat: 19.95, durationBeats: 0.5, velocity: 0.84 },
-        { id: 'kcin-21', sectionId: 'sec-kcht-interlude', midi: 72, startBeat: 20.45, durationBeats: 0.65, velocity: 0.86 },
-        { id: 'kcin-22', sectionId: 'sec-kcht-interlude', midi: 71, startBeat: 21.1, durationBeats: 0.5, velocity: 0.84 },
-        { id: 'kcin-23', sectionId: 'sec-kcht-interlude', midi: 69, startBeat: 21.6, durationBeats: 0.5, velocity: 0.82 },
-        { id: 'kcin-24', sectionId: 'sec-kcht-interlude', midi: 69, startBeat: 22.1, durationBeats: 0.5, velocity: 0.82 },
-        { id: 'kcin-25', sectionId: 'sec-kcht-interlude', midi: 72, startBeat: 22.6, durationBeats: 1.2, velocity: 0.86 },
-        { id: 'kcin-26', sectionId: 'sec-kcht-interlude', midi: 65, startBeat: 24.0, durationBeats: 0.5, velocity: 0.8 },
-        { id: 'kcin-27', sectionId: 'sec-kcht-interlude', midi: 67, startBeat: 24.5, durationBeats: 0.5, velocity: 0.82 },
-        { id: 'kcin-28', sectionId: 'sec-kcht-interlude', midi: 69, startBeat: 25.0, durationBeats: 0.5, velocity: 0.84 },
-        { id: 'kcin-29', sectionId: 'sec-kcht-interlude', midi: 71, startBeat: 25.5, durationBeats: 0.6, velocity: 0.86 },
-        { id: 'kcin-30', sectionId: 'sec-kcht-interlude', midi: 72, startBeat: 26.1, durationBeats: 0.5, velocity: 0.88 },
-        { id: 'kcin-31', sectionId: 'sec-kcht-interlude', midi: 71, startBeat: 26.6, durationBeats: 0.5, velocity: 0.84 },
-        { id: 'kcin-32', sectionId: 'sec-kcht-interlude', midi: 69, startBeat: 27.1, durationBeats: 0.5, velocity: 0.82 },
-        { id: 'kcin-33', sectionId: 'sec-kcht-interlude', midi: 71, startBeat: 27.6, durationBeats: 0.6, velocity: 0.86 },
-        { id: 'kcin-34', sectionId: 'sec-kcht-interlude', midi: 72, startBeat: 28.2, durationBeats: 0.6, velocity: 0.88 },
-        { id: 'kcin-35', sectionId: 'sec-kcht-interlude', midi: 69, startBeat: 28.8, durationBeats: 2.5, velocity: 0.86 },
       ],
     },
     {
@@ -3409,6 +3946,9 @@ export function createBlankDraft(index = 1): SketchpadDraft {
     metronomeEnabled: false,
     drumPattern: 'none',
     melodyInstrument: 'piano',
+    melodyMuted: false,
+    melodyPlaybackMode: 'all',
+    mutedMelodySectionIds: [],
     scaleSnap: true,
     updatedAt: Date.now(),
     sections: [
@@ -3465,6 +4005,9 @@ export function createMidnightCafeLofiTrack(updatedAt = Date.now() - 90_000): Sk
 }
 
 export function getDraftStyleLabel(draft: SketchpadDraft): string {
+  if (draft.backingInstrument === 'piano-ballad' && draft.drumPattern === 'ballad') {
+    return 'Ballad Beat';
+  }
   if (draft.backingInstrument === 'piano-ballad' && draft.drumPattern === 'none') {
     return 'Grand Piano';
   }
@@ -3484,8 +4027,9 @@ export function getDraftStyleLabel(draft: SketchpadDraft): string {
 }
 
 const STARTER_PLAYLIST_PRIORITY: Record<string, number> = {
+  'draft-phia-sau-mot-co-gai': 9,
+  'draft-di-vang-nhat-nhoa': 8,
   'draft-thang-tu-la-loi-noi-doi-cua-em': 6,
-  'draft-khoang-cach-hai-ta-am': 5,
   'draft-dem-pho-mua-piano': 4,
   'draft-mua-ban-cong': 3,
   'draft-anh-den-do-thi': 2,

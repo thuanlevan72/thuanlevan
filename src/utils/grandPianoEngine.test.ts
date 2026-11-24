@@ -3,8 +3,11 @@ import test from 'node:test';
 import {
   computePianoFilterCurve,
   computePianoStereoPan,
+  computeSampledTimbreCurve,
+  findNearestPianoSample,
   getPianoRegisterProfile,
   midiToFrequency,
+  PIANO_SAMPLE_MANIFEST,
 } from './grandPianoEngine.ts';
 
 test('midiToFrequency returns exact 12-TET pitch frequencies across piano registers', () => {
@@ -12,6 +15,40 @@ test('midiToFrequency returns exact 12-TET pitch frequencies across piano regist
   assert.ok(Math.abs(midiToFrequency(60) - 261.625565) < 0.001); // C4
   assert.equal(midiToFrequency(57), 220); // A3
   assert.equal(midiToFrequency(81), 880); // A5
+});
+
+test('PIANO_SAMPLE_MANIFEST covers full 88-key range with valid self-hosted MP3 URLs', () => {
+  assert.equal(PIANO_SAMPLE_MANIFEST.length, 30);
+  assert.equal(PIANO_SAMPLE_MANIFEST[0].midi, 21); // A0
+  assert.equal(PIANO_SAMPLE_MANIFEST[PIANO_SAMPLE_MANIFEST.length - 1].midi, 108); // C8
+  for (const sample of PIANO_SAMPLE_MANIFEST) {
+    assert.ok(sample.url.startsWith('/audio/piano/'));
+    assert.ok(sample.url.endsWith('.mp3'));
+  }
+});
+
+test('findNearestPianoSample maps every key from C2..C6 within +/-2 semitones of real recording', () => {
+  const c4 = findNearestPianoSample(60);
+  assert.equal(c4.sample.key, 'C4');
+  assert.equal(c4.semitoneOffset, 0);
+  assert.equal(c4.playbackRate, 1);
+
+  const d4 = findNearestPianoSample(62);
+  assert.ok(Math.abs(d4.semitoneOffset) <= 2);
+  assert.ok(d4.playbackRate > 0.89 && d4.playbackRate < 1.13);
+
+  for (let midi = 21; midi <= 108; midi++) {
+    const match = findNearestPianoSample(midi);
+    assert.ok(Math.abs(match.semitoneOffset) <= 2, `Expected offset <= 2 for midi ${midi}`);
+  }
+});
+
+test('computeSampledTimbreCurve opens shimmer cleanly on forte while keeping pianissimo warm', () => {
+  const soft = computeSampledTimbreCurve(261.63, 0.22, false);
+  const loud = computeSampledTimbreCurve(261.63, 0.92, true);
+  assert.ok(loud.attackCutoffHz > soft.attackCutoffHz);
+  assert.ok(loud.sustainCutoffHz > soft.sustainCutoffHz);
+  assert.ok(loud.attackCutoffHz >= 10000);
 });
 
 test('getPianoRegisterProfile assigns distinct acoustic harmonic profiles per register band', () => {
@@ -27,10 +64,12 @@ test('getPianoRegisterProfile assigns distinct acoustic harmonic profiles per re
   assert.equal(alto.band, 'alto');
   assert.equal(treble.band, 'treble');
 
-  // Bass strings sustain significantly longer and carry stronger 2nd/3rd copper-wound harmonics than treble
   assert.ok(lowBass.decaySec > tenor.decaySec && tenor.decaySec > treble.decaySec);
+  assert.ok(lowBass.strikeDecaySec > tenor.strikeDecaySec && tenor.strikeDecaySec > treble.strikeDecaySec);
   assert.ok(lowBass.harmonics[1] > lowBass.harmonics[0]);
   assert.equal(tenor.harmonics[0], 1);
+  assert.equal(tenor.coreHarmonics[1], 0);
+  assert.ok(tenor.strikeHarmonics.length >= 6);
   assert.ok(lowBass.inharmonicityCents > treble.inharmonicityCents);
 });
 

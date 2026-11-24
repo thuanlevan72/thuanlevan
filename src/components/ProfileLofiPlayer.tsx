@@ -17,12 +17,14 @@ import {
   setMasterVolume,
   startGrooveLoop,
   stopGrooveLoop,
+  warmConcertGrandSamples,
 } from '../utils/lyricGrooveAudio.ts';
 import { loadAllSketchpadDrafts } from '../utils/lyricGrooveDb.ts';
 import {
   buildProfilePlaylist,
   createStarterDrafts,
   getDraftStyleLabel,
+  resolveMelodyPlaybackMode,
   type SketchpadDraft,
 } from '../utils/lyricGrooveEngine.ts';
 import { type ThemeMode } from '../utils/portfolioLogic.ts';
@@ -61,8 +63,9 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
     }
   }, []);
 
-  // Sync playlist with the latest drafts from Studio / IndexedDB on mount
+  // Pre-warm Concert Grand Piano MP3 sample bytes & sync playlist on mount
   useEffect(() => {
+    void warmConcertGrandSamples();
     let cancelled = false;
     void loadAllSketchpadDrafts().then((loaded) => {
       if (cancelled || !Array.isArray(loaded) || loaded.length === 0) return;
@@ -102,6 +105,9 @@ export function ProfileLofiPlayer({ theme, onOpenStudio }: ProfileLofiPlayerProp
         metronomeEnabled: false,
         drumPattern: track.drumPattern,
         melodyInstrument: track.melodyInstrument,
+        melodyMuted: track.melodyMuted ?? false,
+        melodyPlaybackMode: resolveMelodyPlaybackMode(track),
+        mutedMelodySectionIds: track.mutedMelodySectionIds ?? [],
         repeatLoop: true,
         volumeGain: targetVol,
         onChordTrigger: (ev) => {

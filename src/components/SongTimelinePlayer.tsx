@@ -4,11 +4,13 @@ import {
   ARPEGGIO_PATTERN_META,
   type BackingPatternId,
   buildChordTimeline,
+  buildSynchronizedLyricEvents,
   type ConcreteArpeggioPatternId,
+  isSectionMelodyMuted,
   type MelodyNote,
+  type MelodyPlaybackMode,
   midiToNoteName,
   type MoodStyleId,
-  parseSectionKaraokeLines,
   type SongSection,
 } from '../utils/lyricGrooveEngine.ts';
 import { type ThemeMode } from '../utils/portfolioLogic.ts';
@@ -21,6 +23,8 @@ interface SongTimelinePlayerProps {
   backingPattern?: BackingPatternId;
   chordArpStyles?: Record<string, ConcreteArpeggioPatternId>;
   songMood?: MoodStyleId;
+  melodyPlaybackMode?: MelodyPlaybackMode;
+  mutedMelodySectionIds?: string[];
   loopScope: 'section' | 'song';
   activeSectionId: string;
   isPlaying: boolean;
@@ -34,6 +38,7 @@ interface TimelineNoteItem {
   noteName: string;
   absStart: number;
   absEnd: number;
+  muted: boolean;
 }
 
 interface TimelineLyricItem {
@@ -69,6 +74,8 @@ export function SongTimelinePlayer({
   backingPattern,
   chordArpStyles,
   songMood,
+  melodyPlaybackMode = 'all',
+  mutedMelodySectionIds,
   loopScope,
   activeSectionId,
   isPlaying,
@@ -98,6 +105,11 @@ export function SongTimelinePlayer({
       const secDur = sec.bars * 4;
       const startBeat = cursor;
       const endBeat = cursor + secDur;
+      const isSecMuted = isSectionMelodyMuted(
+        sec,
+        melodyPlaybackMode,
+        mutedMelodySectionIds
+      );
       sectionItems.push({
         id: sec.id,
         index: idx,
@@ -118,24 +130,21 @@ export function SongTimelinePlayer({
           noteName: midiToNoteName(n.midi),
           absStart: startBeat + n.startBeat,
           absEnd: startBeat + n.startBeat + n.durationBeats,
-        });
-      });
-
-      const karaokeLines = parseSectionKaraokeLines(sec);
-      karaokeLines.forEach((line) => {
-        line.segments.forEach((seg) => {
-          const cleanLyric = seg.lyricText.trim();
-          if (!cleanLyric && !seg.chordSymbol) return;
-          lyricItems.push({
-            text: cleanLyric,
-            chordSymbol: seg.chordSymbol,
-            absStart: startBeat + seg.startBeat,
-            absEnd: startBeat + Math.max(seg.startBeat + 0.5, seg.endBeat),
-          });
+          muted: isSecMuted,
         });
       });
 
       cursor = endBeat;
+    });
+
+    const syncWords = buildSynchronizedLyricEvents(effectiveSections, melodyNotes);
+    syncWords.forEach((w) => {
+      lyricItems.push({
+        text: w.text,
+        chordSymbol: w.chordSymbol,
+        absStart: w.absStart,
+        absEnd: w.absEnd,
+      });
     });
 
     const { events: chordEvents, totalBeats } = buildChordTimeline(effectiveSections, {
@@ -153,7 +162,17 @@ export function SongTimelinePlayer({
       midiLow: Math.max(36, minMidi - 2),
       midiHigh: Math.min(84, maxMidi + 2),
     };
-  }, [sections, melodyNotes, backingPattern, chordArpStyles, songMood, loopScope, activeSectionId]);
+  }, [
+    sections,
+    melodyNotes,
+    backingPattern,
+    chordArpStyles,
+    songMood,
+    melodyPlaybackMode,
+    mutedMelodySectionIds,
+    loopScope,
+    activeSectionId,
+  ]);
 
   const drawTimeline = () => {
     const canvas = canvasRef.current;
@@ -403,10 +422,16 @@ export function SongTimelinePlayer({
       const y = yMelody + padY + (1 - normPitch) * (usableH - noteH);
 
       const isSounding =
-        isPlaying && rawPlayhead >= n.absStart && rawPlayhead < n.absEnd;
+        !n.muted &&
+        isPlaying &&
+        rawPlayhead >= n.absStart &&
+        rawPlayhead < n.absEnd;
       const alreadyPassed = (isPlaying || rawPlayhead > 0) && n.absEnd <= rawPlayhead;
 
       ctx.save();
+      if (n.muted) {
+        ctx.globalAlpha = 0.24;
+      }
       if (isSounding) {
         ctx.shadowColor = '#34D399';
         ctx.shadowBlur = 14;
@@ -426,13 +451,13 @@ export function SongTimelinePlayer({
       ctx.roundRect(x, y, w, noteH, 4);
       ctx.fill();
       ctx.stroke();
-      ctx.restore();
 
       if (w >= 20) {
         ctx.fillStyle = '#FFFFFF';
         ctx.font = '700 9px "JetBrains Mono", monospace';
         ctx.fillText(n.noteName, x + 4, y + noteH - 2.5);
       }
+      ctx.restore();
     });
 
     // 5. Lyric Phrases + Live Audio Waveform in Bottom Lane
@@ -456,14 +481,29 @@ export function SongTimelinePlayer({
       ctx.restore();
     }
 
+    let lastDrawnX = GUTTER_W - 2;
     timelineData.lyricItems.forEach((item) => {
       if (item.absEnd < camStart || item.absStart > camEnd || !item.text) return;
-      const x = beatToX(item.absStart) + 3;
+      const rawX = beatToX(item.absStart) + 2;
+      const drawX = Math.max(rawX, lastDrawnX + 4);
+      if (drawX > cssWidth - 8) return;
+
       const isCurrent =
-        isPlaying && rawPlayhead >= item.absStart && rawPlayhead < item.absEnd;
+        (isPlaying || rawPlayhead > 0) &&
+        rawPlayhead >= item.absStart &&
+        rawPlayhead < item.absEnd;
       const passed = (isPlaying || rawPlayhead > 0) && item.absEnd <= rawPlayhead;
 
-      ctx.font = isCurrent ? '700 12.5px sans-serif' : '500 11.5px sans-serif';
+      ctx.font = isCurrent ? '700 11.5px sans-serif' : '500 10.5px sans-serif';
+      if (isCurrent) {
+        const tw = ctx.measureText(item.text).width;
+        ctx.fillStyle = isDark
+          ? 'rgba(16, 185, 129, 0.22)'
+          : 'rgba(2, 132, 199, 0.14)';
+        ctx.beginPath();
+        ctx.roundRect(drawX - 3, yLyric + 7, tw + 6, 17, 4);
+        ctx.fill();
+      }
       ctx.fillStyle = isCurrent
         ? isDark
           ? '#34D399'
@@ -475,7 +515,8 @@ export function SongTimelinePlayer({
         : isDark
         ? '#E2E8F0'
         : '#1E293B';
-      ctx.fillText(item.text, x, yLyric + 21);
+      ctx.fillText(item.text, drawX, yLyric + 20);
+      lastDrawnX = drawX + ctx.measureText(item.text).width;
     });
 
     // 6. Bright Vertical Sweeping Playhead Line + Top Needle Triangle
