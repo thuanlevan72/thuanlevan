@@ -1,6 +1,7 @@
 import {
   ArrowLeft,
   ArrowRight,
+  BookOpen,
   ChevronDown,
   Copy,
   Download,
@@ -31,6 +32,7 @@ import {
   startMicPitchCapture,
   stopGrooveLoop,
   stopProgressionAudition,
+  warmAcousticGuitarSamples,
   warmConcertGrandSamples,
 } from '../utils/lyricGrooveAudio.ts';
 import {
@@ -61,12 +63,17 @@ import {
   midiToNoteName,
   MOOD_STYLE_OPTIONS,
   type MoodStyleId,
+  normalizeKeyRoot,
   parseSectionKaraokeLines,
   type PitchFrame,
   PROGRESSION_PRESETS,
   quantizePitchFramesToNotes,
   reorderSongSections,
+  resolveBeatsPerBar,
   resolveMelodyPlaybackMode,
+  resolvePairedInstrumentsForBacking,
+  resolvePairedInstrumentsForMelody,
+  RHYTHM_STYLE_META,
   SECTION_KIND_OPTIONS,
   type SectionKind,
   type SketchpadDraft,
@@ -75,8 +82,10 @@ import {
   type SongIdeaTemplate,
   type SongSection,
   suggestNextChords,
+  type TimeSignatureId,
   transposeChordSymbol,
   transposeDraftAll,
+  transposeDraftToKey,
   updateBarChordInSectionText,
 } from '../utils/lyricGrooveEngine.ts';
 import {
@@ -89,6 +98,7 @@ import { type ThemeMode } from '../utils/portfolioLogic.ts';
 import { GrandPianoKeyboard } from './GrandPianoKeyboard.tsx';
 import { PianoRollCanvas } from './PianoRollCanvas.tsx';
 import { SongTimelinePlayer } from './SongTimelinePlayer.tsx';
+import { SongwritingGuideModal } from './SongwritingGuideModal.tsx';
 
 interface LyricGrooveSketchpadSectionProps {
   theme: ThemeMode;
@@ -177,6 +187,8 @@ export function LyricGrooveSketchpadSection({
   const [showToneMarkers, setShowToneMarkers] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showIdeaMenu, setShowIdeaMenu] = useState(false);
+  const [showGrooveLibrary, setShowGrooveLibrary] = useState(false);
+  const [showGuideModal, setShowGuideModal] = useState(false);
 
   const [chordVoicings, setChordVoicings] = useState<Record<string, number>>({});
   const [draggedSectionIdx, setDraggedSectionIdx] = useState<number | null>(null);
@@ -207,6 +219,7 @@ export function LyricGrooveSketchpadSection({
 
   useEffect(() => {
     void warmConcertGrandSamples();
+    void warmAcousticGuitarSamples();
   }, []);
 
   useEffect(() => {
@@ -289,6 +302,8 @@ export function LyricGrooveSketchpadSection({
     setSelectedBarIndex(0);
   }, [activeDraft, activeSectionId]);
 
+  const activeTimeSignature: TimeSignatureId = activeDraft.timeSignature ?? '4/4';
+  const beatsPerBar = resolveBeatsPerBar(activeTimeSignature);
   const activeBackingPattern: BackingPatternId =
     activeDraft.backingPattern ?? 'auto-song';
   const activeBackingSelectValue =
@@ -325,8 +340,8 @@ export function LyricGrooveSketchpadSection({
   );
 
   const sectionAnalysis = useMemo(
-    () => analyzeSectionLyrics(activeSection),
-    [activeSection]
+    () => analyzeSectionLyrics(activeSection, beatsPerBar),
+    [activeSection, beatsPerBar]
   );
 
   const diatonicPalette = useMemo(
@@ -348,6 +363,7 @@ export function LyricGrooveSketchpadSection({
           backingPattern: activeBackingPattern,
           chordArpStyles: activeDraft.chordArpStyles,
           songMood: activeDraft.mood,
+          beatsPerBar,
         }
       ),
     [
@@ -357,6 +373,7 @@ export function LyricGrooveSketchpadSection({
       activeBackingPattern,
       activeDraft.chordArpStyles,
       activeDraft.mood,
+      beatsPerBar,
     ]
   );
 
@@ -388,6 +405,7 @@ export function LyricGrooveSketchpadSection({
       chordArpStyles: activeDraft.chordArpStyles,
       songMood: activeDraft.mood,
       melodyNotes: sectionMelodyNotes,
+      beatsPerBar,
     });
     return events.map((ev) => ({
       symbol: ev.symbol,
@@ -399,6 +417,7 @@ export function LyricGrooveSketchpadSection({
     activeDraft.chordArpStyles,
     activeDraft.mood,
     sectionMelodyNotes,
+    beatsPerBar,
   ]);
 
   const songTimelineSpans = useMemo(() => {
@@ -412,7 +431,7 @@ export function LyricGrooveSketchpadSection({
     }> = [];
     let cursor = 0;
     activeDraft.sections.forEach((sec) => {
-      const dur = sec.bars * 4;
+      const dur = sec.bars * beatsPerBar;
       spans.push({
         id: sec.id,
         label: sec.label,
@@ -423,8 +442,8 @@ export function LyricGrooveSketchpadSection({
       });
       cursor += dur;
     });
-    return { spans, totalBeats: Math.max(4, cursor) };
-  }, [activeDraft.sections]);
+    return { spans, totalBeats: Math.max(beatsPerBar, cursor) };
+  }, [activeDraft.sections, beatsPerBar]);
 
   const activeSectionStartBeat = useMemo(() => {
     if (loopScope === 'section') return 0;
@@ -434,13 +453,13 @@ export function LyricGrooveSketchpadSection({
   }, [loopScope, songTimelineSpans.spans, activeSection.id]);
 
   const activeKaraokeLines = useMemo(
-    () => parseSectionKaraokeLines(activeSection),
-    [activeSection]
+    () => parseSectionKaraokeLines(activeSection, beatsPerBar),
+    [activeSection, beatsPerBar]
   );
 
   const sectionSyncWords = useMemo(
-    () => alignSectionLyricsToMelody(activeSection, sectionMelodyNotes, 0),
-    [activeSection, sectionMelodyNotes]
+    () => alignSectionLyricsToMelody(activeSection, sectionMelodyNotes, 0, beatsPerBar),
+    [activeSection, sectionMelodyNotes, beatsPerBar]
   );
 
   const clearLivePlayState = useCallback(() => {
@@ -478,6 +497,8 @@ export function LyricGrooveSketchpadSection({
         sections: scopeSections,
         melodyNotes: activeDraft.melodyNotes,
         bpm: activeDraft.bpm,
+        timeSignature: activeTimeSignature,
+        beatsPerBar,
         backingInstrument: activeDraft.backingInstrument,
         backingPattern: activeBackingPattern,
         chordArpStyles: activeDraft.chordArpStyles,
@@ -538,8 +559,8 @@ export function LyricGrooveSketchpadSection({
         onProgressBeat: (beatInLoop, _totalBeats, curSecId, detail) => {
           playheadBeatRef.current = beatInLoop;
           const localBeat = detail ? detail.beatInSection : beatInLoop;
-          const barNum = Math.floor(localBeat / 4) + 1;
-          const beatNum = Math.floor(localBeat % 4) + 1;
+          const barNum = Math.floor(localBeat / beatsPerBar) + 1;
+          const beatNum = Math.floor(localBeat % beatsPerBar) + 1;
           setLiveBeatIndicator(`Ô ${barNum} · ${beatNum}`);
           setSectionBeatLocal(localBeat);
           setSongBeatPos(beatInLoop);
@@ -564,6 +585,8 @@ export function LyricGrooveSketchpadSection({
       activeDraft.sections,
       activeDraft.melodyNotes,
       activeDraft.bpm,
+      activeTimeSignature,
+      beatsPerBar,
       activeDraft.backingInstrument,
       activeBackingPattern,
       activeDraft.chordArpStyles,
@@ -625,15 +648,15 @@ export function LyricGrooveSketchpadSection({
       playheadBeatRef.current = targetBeat;
       setSongBeatPos(targetBeat);
       setSectionBeatLocal(localBeat);
-      const barNum = Math.floor(localBeat / 4) + 1;
-      const beatNum = Math.floor(localBeat % 4) + 1;
+      const barNum = Math.floor(localBeat / beatsPerBar) + 1;
+      const beatNum = Math.floor(localBeat % beatsPerBar) + 1;
       setLiveBeatIndicator(`Ô ${barNum} · ${beatNum}`);
 
       skipNextRestartRef.current = true;
       setLoopScope('song');
       void launchLoopPlayback('song', targetBeat);
     },
-    [launchLoopPlayback, songTimelineSpans.spans]
+    [launchLoopPlayback, songTimelineSpans.spans, beatsPerBar]
   );
 
   // Live 60fps audio spectrum visualizer inside Synchronized Song Stage
@@ -720,6 +743,8 @@ export function LyricGrooveSketchpadSection({
     activeDraft.sections,
     activeDraft.melodyNotes,
     activeDraft.bpm,
+    activeTimeSignature,
+    beatsPerBar,
     activeDraft.backingInstrument,
     activeBackingPattern,
     activeDraft.chordArpStyles,
@@ -792,7 +817,12 @@ export function LyricGrooveSketchpadSection({
 
   // Swap selected bar chord cleanly in 1 click without touching lyrics
   const handleSetBarChord = (barIndex: number, symbol: string) => {
-    const nextText = updateBarChordInSectionText(activeSection, barIndex, symbol);
+    const nextText = updateBarChordInSectionText(
+      activeSection,
+      barIndex,
+      symbol,
+      beatsPerBar
+    );
     updateActiveDraft((d) => ({
       ...d,
       sections: d.sections.map((sec) =>
@@ -852,6 +882,29 @@ export function LyricGrooveSketchpadSection({
       activeSustainPedal,
       activeBackingPattern
     );
+  };
+
+  const handleChangeKeyRoot = (nextKeyRoot: string) => {
+    const currentKey = normalizeKeyRoot(activeDraft.keyRoot);
+    const targetKey = normalizeKeyRoot(nextKeyRoot);
+    const { draft: transposedDraft, semitones } = transposeDraftToKey(
+      activeDraft,
+      targetKey
+    );
+    updateActiveDraft((d) => transposeDraftToKey(d, targetKey).draft);
+    if (semitones !== 0) {
+      const nextAnchor = transposeChordSymbol(selectedAnchorChord, semitones);
+      setSelectedAnchorChord(nextAnchor);
+      setLiveHighlightChord({ symbol: nextAnchor, shift: 0 });
+      setLivePitchLabel(`Đã chuyển tông toàn bài ${currentKey} → ${transposedDraft.keyRoot}`);
+      void auditionChord(
+        nextAnchor,
+        activeDraft.backingInstrument,
+        0,
+        activeSustainPedal,
+        activeBackingPattern
+      );
+    }
   };
 
   const handleAuditionPreset = (presetId: string, chords: string[]) => {
@@ -918,7 +971,8 @@ export function LyricGrooveSketchpadSection({
       activeSection,
       activeDraft.keyRoot,
       activeDraft.scaleMode,
-      nextSeed
+      nextSeed,
+      beatsPerBar
     );
     updateActiveDraft((d) => ({
       ...d,
@@ -951,15 +1005,19 @@ export function LyricGrooveSketchpadSection({
       updatedSection,
       tpl.keyRoot,
       tpl.scaleMode,
-      0
+      0,
+      4
     );
+    const paired = resolvePairedInstrumentsForBacking(tpl.backingInstrument);
     updateActiveDraft((d) => ({
       ...d,
       keyRoot: tpl.keyRoot,
       scaleMode: tpl.scaleMode,
+      timeSignature: '4/4',
       mood: tpl.mood,
       bpm: tpl.bpm,
-      backingInstrument: tpl.backingInstrument,
+      backingInstrument: paired.backingInstrument,
+      melodyInstrument: paired.melodyInstrument,
       backingPattern: tpl.backingPattern,
       drumPattern: tpl.drumPattern,
       sustainPedal: true,
@@ -971,7 +1029,9 @@ export function LyricGrooveSketchpadSection({
         ...autoNotes,
       ],
     }));
-    setLivePitchLabel(`Đã áp dụng mẫu "${tpl.label}" + giai điệu Grand Piano`);
+    setLivePitchLabel(
+      `Đã áp dụng mẫu "${tpl.label}" (${paired.backingInstrument === 'guitar-strum' ? 'Guitar Acoustic' : 'Grand Piano'})`
+    );
     const firstBar = extractSectionBarSlots(updatedSection)[0]?.primaryChord;
     if (firstBar) {
       setSelectedAnchorChord(firstBar);
@@ -1051,7 +1111,7 @@ export function LyricGrooveSketchpadSection({
         frames,
         activeDraft.bpm,
         activeSection.id,
-        activeSection.bars * 4,
+        activeSection.bars * beatsPerBar,
         activeDraft.keyRoot,
         activeDraft.scaleMode,
         activeDraft.scaleSnap
@@ -1127,7 +1187,7 @@ export function LyricGrooveSketchpadSection({
       simulatedFrames,
       activeDraft.bpm,
       activeSection.id,
-      activeSection.bars * 4,
+      activeSection.bars * beatsPerBar,
       activeDraft.keyRoot,
       activeDraft.scaleMode,
       activeDraft.scaleSnap
@@ -1183,13 +1243,21 @@ export function LyricGrooveSketchpadSection({
 
   const handleMoodChange = (nextMood: MoodStyleId) => {
     const preset = MOOD_STYLE_OPTIONS.find((m) => m.id === nextMood);
-    updateActiveDraft((d) => ({
-      ...d,
-      mood: nextMood,
-      bpm: preset ? preset.defaultBpm : d.bpm,
-      backingInstrument: preset ? preset.defaultBacking : d.backingInstrument,
-      drumPattern: preset ? preset.defaultDrums : d.drumPattern,
-    }));
+    updateActiveDraft((d) => {
+      const nextBacking = preset ? preset.defaultBacking : d.backingInstrument;
+      const paired = resolvePairedInstrumentsForBacking(
+        nextBacking,
+        d.melodyInstrument
+      );
+      return {
+        ...d,
+        mood: nextMood,
+        bpm: preset ? preset.defaultBpm : d.bpm,
+        backingInstrument: paired.backingInstrument,
+        melodyInstrument: paired.melodyInstrument,
+        drumPattern: preset ? preset.defaultDrums : d.drumPattern,
+      };
+    });
   };
 
   const addMelodyNote = useCallback(
@@ -1240,7 +1308,7 @@ export function LyricGrooveSketchpadSection({
       void auditionMidiNote(midi, activeDraft.melodyInstrument, activeSustainPedal);
       if (!recordKeysToRoll) return;
 
-      const totalSecBeats = activeSection.bars * 4;
+      const totalSecBeats = activeSection.bars * beatsPerBar;
       const startBeat = isPlaying
         ? Math.floor((playheadBeatRef.current % totalSecBeats) * 4) / 4
         : recordBeatCursorRef.current % totalSecBeats;
@@ -1266,6 +1334,7 @@ export function LyricGrooveSketchpadSection({
       activeSustainPedal,
       recordKeysToRoll,
       activeSection.bars,
+      beatsPerBar,
       activeSection.id,
       isPlaying,
       addMelodyNote,
@@ -1294,8 +1363,22 @@ export function LyricGrooveSketchpadSection({
           </h1>
         </div>
 
-        {/* Clean Primary Header Actions: 1-Click Song Idea + Export Dropdown + Theme */}
+        {/* Clean Primary Header Actions: Handbook + 1-Click Song Idea + Export Dropdown + Theme */}
         <div ref={headerMenusRef} className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            data-testid="open-guide-modal-btn"
+            onClick={() => {
+              setShowIdeaMenu(false);
+              setShowExportMenu(false);
+              setShowGuideModal(true);
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-emerald-500/40 bg-emerald-50/75 dark:bg-emerald-950/45 text-emerald-700 dark:text-emerald-300 hover:border-emerald-500 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>Sách hướng dẫn</span>
+          </button>
+
           {/* 1-Click Songwriting Idea Menu */}
           <div className="relative">
             <button
@@ -1451,6 +1534,15 @@ export function LyricGrooveSketchpadSection({
                 const nextDraft = drafts.find((d) => d.id === nextId);
                 if (nextDraft?.sections[0]) {
                   setActiveSectionId(nextDraft.sections[0].id);
+                  const firstChord = extractSectionBarSlots(
+                    nextDraft.sections[0],
+                    `${nextDraft.keyRoot}maj7`,
+                    { beatsPerBar: resolveBeatsPerBar(nextDraft.timeSignature) }
+                  )[0]?.primaryChord;
+                  if (firstChord) {
+                    setSelectedAnchorChord(firstChord);
+                    setLiveHighlightChord({ symbol: firstChord, shift: 0 });
+                  }
                 }
               }}
               className="max-w-[215px] truncate rounded-lg border border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] px-2.5 py-1.5 text-xs font-medium text-[#0F172A] dark:text-[#E2E8F0]"
@@ -1602,10 +1694,9 @@ export function LyricGrooveSketchpadSection({
               </label>
               <select
                 id="key-root-select"
-                value={activeDraft.keyRoot}
-                onChange={(e) =>
-                  updateActiveDraft((d) => ({ ...d, keyRoot: e.target.value }))
-                }
+                data-testid="key-root-select"
+                value={normalizeKeyRoot(activeDraft.keyRoot)}
+                onChange={(e) => handleChangeKeyRoot(e.target.value)}
                 className="rounded-md border border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] px-1.5 py-1 text-xs font-mono font-semibold text-[#0F172A] dark:text-[#F1F5F9]"
               >
                 {KEY_ROOT_OPTIONS.map((k) => (
@@ -1652,6 +1743,26 @@ export function LyricGrooveSketchpadSection({
               </div>
             </div>
 
+            {/* Time Signature */}
+            <select
+              id="time-signature-select"
+              data-testid="time-signature-select"
+              aria-label="Số chỉ nhịp"
+              value={activeTimeSignature}
+              onChange={(e) =>
+                updateActiveDraft((d) => ({
+                  ...d,
+                  timeSignature: e.target.value as TimeSignatureId,
+                }))
+              }
+              className="rounded-md border border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] px-2 py-1 text-xs font-mono font-semibold text-[#0F172A] dark:text-[#F1F5F9]"
+            >
+              <option value="4/4">Nhịp 4/4</option>
+              <option value="2/4">Nhịp 2/4</option>
+              <option value="3/4">Nhịp 3/4</option>
+              <option value="6/8">Nhịp 6/8</option>
+            </select>
+
             {/* Mood */}
             <select
               id="mood-style-select"
@@ -1667,61 +1778,110 @@ export function LyricGrooveSketchpadSection({
               ))}
             </select>
 
-            {/* Backing Sound Select + Pattern + Drums */}
+            {/* Backing & Melody Instrument Select + 10 Core Arpeggios + Rhythm Styles */}
             <select
-              aria-label="Nhạc cụ đệm"
+              data-testid="backing-instrument-select"
+              aria-label="Nhạc cụ"
               value={activeDraft.backingInstrument}
-              onChange={(e) =>
-                updateActiveDraft((d) => ({
-                  ...d,
-                  backingInstrument: e.target.value as BackingInstrumentId,
-                }))
-              }
+              onChange={(e) => {
+                const nextInst = e.target.value as BackingInstrumentId;
+                updateActiveDraft((d) => {
+                  const paired = resolvePairedInstrumentsForBacking(
+                    nextInst,
+                    d.melodyInstrument
+                  );
+                  return {
+                    ...d,
+                    backingInstrument: paired.backingInstrument,
+                    melodyInstrument: paired.melodyInstrument,
+                  };
+                });
+              }}
               className="rounded-md border border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] px-2 py-1 text-xs font-medium text-[#0F172A] dark:text-[#F1F5F9]"
             >
-              <option value="piano-ballad">Đệm: Grand Piano</option>
-              <option value="rhodes">Đệm: Rhodes EP</option>
-              <option value="guitar-strum">Đệm: Guitar Acoustic</option>
+              <option value="piano-ballad">Nhạc cụ: Grand Piano</option>
+              <option value="rhodes">Nhạc cụ: Rhodes EP</option>
+              <option value="guitar-strum">Nhạc cụ: Guitar Acoustic</option>
             </select>
 
             <select
+              data-testid="backing-pattern-select"
               aria-label="Kiểu rải hợp âm"
               value={activeBackingSelectValue}
-              onChange={(e) =>
+              onChange={(e) => {
+                const nextPattern = e.target.value as BackingPatternId;
+                const patMeta = ARPEGGIO_PATTERN_META.find((p) => p.id === nextPattern);
                 updateActiveDraft((d) => ({
                   ...d,
-                  backingPattern: e.target.value as BackingPatternId,
-                }))
-              }
-              className="rounded-md border border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] px-2 py-1 text-xs font-medium text-[#0F172A] dark:text-[#F1F5F9]"
+                  backingPattern: nextPattern,
+                  timeSignature: patMeta?.recommendedMeter ?? d.timeSignature,
+                }));
+              }}
+              className="rounded-md border border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] px-2 py-1 text-xs font-medium text-[#0F172A] dark:text-[#F1F5F9] max-w-[205px]"
             >
               <option value="auto-song">Rải: Theo bài (Đa kiểu)</option>
-              {ARPEGGIO_PATTERN_META.map((pat) => (
-                <option key={pat.id} value={pat.id}>
-                  Rải: {pat.label}
-                </option>
-              ))}
+              <optgroup label="Nhóm 4/4 (6 kiểu cốt lõi)">
+                {ARPEGGIO_PATTERN_META.filter((p) => p.group === 'Nhóm 4/4').map((pat) => (
+                  <option key={pat.id} value={pat.id}>
+                    {pat.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Nhóm 3/4 & 6/8 (4 kiểu cốt lõi)">
+                {ARPEGGIO_PATTERN_META.filter((p) => p.group === 'Nhóm 3/4 & 6/8').map((pat) => (
+                  <option key={pat.id} value={pat.id}>
+                    {pat.label}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Studio mở rộng">
+                {ARPEGGIO_PATTERN_META.filter((p) => p.group === 'Studio mở rộng').map((pat) => (
+                  <option key={pat.id} value={pat.id}>
+                    {pat.label}
+                  </option>
+                ))}
+              </optgroup>
             </select>
 
             <select
-              aria-label="Kiểu trống"
+              data-testid="rhythm-style-select"
+              aria-label="Điệu đệm hát"
               value={activeDraft.drumPattern}
-              onChange={(e) =>
+              onChange={(e) => {
+                const nextStyle = e.target.value as DrumPatternId;
+                const meta = RHYTHM_STYLE_META.find((s) => s.id === nextStyle);
                 updateActiveDraft((d) => ({
                   ...d,
-                  drumPattern: e.target.value as DrumPatternId,
-                }))
-              }
-              className="rounded-md border border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] px-2 py-1 text-xs font-medium text-[#0F172A] dark:text-[#F1F5F9]"
+                  drumPattern: nextStyle,
+                  timeSignature: meta ? meta.meter : d.timeSignature,
+                }));
+              }}
+              className="rounded-md border border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] px-2 py-1 text-xs font-medium text-[#0F172A] dark:text-[#F1F5F9] max-w-[195px]"
             >
-              <option value="none">Trống: Tắt</option>
-              <option value="ballad">Trống: Ballad (+ Strings)</option>
-              <option value="lofi">Trống: Lo-fi</option>
-              <option value="boombap">Trống: Boom-bap</option>
+              <option value="none">Điệu: Tắt trống</option>
+              <optgroup label="Cơ bản (Legacy)">
+                <option value="ballad">Điệu: Ballad Beat (+ Strings)</option>
+                <option value="lofi">Điệu: Lo-fi Beat</option>
+                <option value="boombap">Điệu: Boom-bap</option>
+              </optgroup>
+              {[
+                'Nhóm 1 · Nhạc nhẹ, Trữ tình & Nhạc trẻ',
+                'Nhóm 2 · Nhạc Bolero & Nhạc xưa',
+                'Nhóm 3 · Nhạc sôi động, Tiết tấu nhanh',
+                'Nhóm 4 · Nhạc 3 phách & 6 phách',
+              ].map((grpName) => (
+                <optgroup key={grpName} label={grpName}>
+                  {RHYTHM_STYLE_META.filter((s) => s.group === grpName).map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.label} ({st.meter})
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
             </select>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 min-w-0 max-w-full">
             <select
               data-testid="melody-mode-select"
               aria-label="Chế độ phát nốt nhạc"
@@ -1786,6 +1946,20 @@ export function LyricGrooveSketchpadSection({
               Nhịp đếm: {activeMetronome ? 'BẬT' : 'TẮT'}
             </button>
 
+            <button
+              type="button"
+              data-testid="toggle-groove-library-btn"
+              onClick={() => setShowGrooveLibrary((v) => !v)}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                showGrooveLibrary
+                  ? 'border-[#0284C7] bg-[#0284C7] text-white'
+                  : 'border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] text-[#0369A1] dark:text-[#38BDF8] hover:border-[#0284C7]'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>10 Rải · {RHYTHM_STYLE_META.length} Điệu</span>
+            </button>
+
             <div className="flex items-center gap-1.5 pl-1 border-l border-[#E2E8F0] dark:border-[#1E314E]">
               <input
                 id="bpm-slider"
@@ -1805,6 +1979,181 @@ export function LyricGrooveSketchpadSection({
             </div>
           </div>
         </div>
+
+        {/* Interactive 10 Core Arpeggios & 20 Rhythm Styles Reference + 1-Click Apply Drawer */}
+        {showGrooveLibrary && (
+          <div
+            data-testid="groove-library-panel"
+            className="pt-3 border-t border-[#E9F0F8] dark:border-[#152339] space-y-4"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="font-sans text-xs font-bold uppercase tracking-wider text-[#0369A1] dark:text-[#38BDF8]">
+                  Thư viện 10 Kiểu Rải Hợp Âm &amp; {RHYTHM_STYLE_META.length} Điệu Đệm Hát Phổ Thông
+                </h3>
+                <p className="text-[11px] text-[#475569] dark:text-[#94A3B8]">
+                  Ký hiệu dây guitar: B = Bass 4/5/6; 3, 2, 1 = ba dây dưới (Piano: tay trái Bass, tay phải rải hợp âm). Bấm để nghe thử &amp; áp dụng ngay.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGrooveLibrary(false)}
+                className="px-2.5 py-1 rounded-md text-[11px] font-medium border border-[#CBD8E6] dark:border-[#1F3557] text-[#475569] dark:text-[#94A3B8] hover:text-[#070B14] dark:hover:text-white cursor-pointer"
+              >
+                Thu gọn
+              </button>
+            </div>
+
+            {/* I. 10 Core Arpeggio Patterns */}
+            <div className="space-y-2.5">
+              <div className="text-xs font-semibold text-[#070B14] dark:text-[#F1F5F9]">
+                I. 10 kiểu rải hợp âm cốt lõi (Arpeggio)
+              </div>
+              {(['Nhóm 4/4', 'Nhóm 3/4 & 6/8'] as const).map((arpGroup) => (
+                <div key={arpGroup} className="space-y-1.5">
+                  <div className="text-[11px] font-semibold text-[#475569] dark:text-[#94A3B8]">
+                    {arpGroup === 'Nhóm 4/4'
+                      ? '1. Nhóm rải nhịp 4/4 (Phổ biến nhất)'
+                      : '2. Nhóm rải nhịp 3/4 và 6/8 (Trữ tình, sâu lắng)'}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {ARPEGGIO_PATTERN_META.filter((p) => p.group === arpGroup).map((pat) => {
+                      const isSelected = activeBackingSelectValue === pat.id;
+                      return (
+                        <div
+                          key={pat.id}
+                          className={`rounded-lg border p-2.5 flex flex-col justify-between gap-1.5 transition-colors ${
+                            isSelected
+                              ? 'border-[#0284C7] bg-sky-50/80 dark:bg-sky-950/45'
+                              : 'border-[#DCE6F2] dark:border-[#1B2B46] bg-[#FAFBFD] dark:bg-[#070D19]'
+                          }`}
+                        >
+                          <div className="space-y-0.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-xs font-semibold text-[#070B14] dark:text-[#F1F5F9]">
+                                {pat.label}
+                              </span>
+                              <span className="font-mono text-[10px] text-[#0369A1] dark:text-[#38BDF8]">
+                                {pat.recommendedMeter ?? '4/4'}
+                              </span>
+                            </div>
+                            {pat.formula && (
+                              <div className="font-mono text-[11px] font-bold text-[#0284C7] dark:text-[#7DD3FC]">
+                                {pat.formula}
+                              </div>
+                            )}
+                            <p className="text-[11px] text-[#475569] dark:text-[#94A3B8] leading-snug">
+                              {pat.desc}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            data-testid={`apply-arp-${pat.id}`}
+                            onClick={() => {
+                              updateActiveDraft((d) => ({
+                                ...d,
+                                backingPattern: pat.id,
+                                timeSignature: pat.recommendedMeter ?? d.timeSignature,
+                              }));
+                              auditionAndHighlightChord(
+                                barSlots[selectedBarIndex]?.primaryChord ?? selectedAnchorChord,
+                                0,
+                                pat.id
+                              );
+                            }}
+                            className={`w-full py-1 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
+                              isSelected
+                                ? 'bg-[#0284C7] text-white'
+                                : 'border border-[#CBD8E6] dark:border-[#1F3557] text-[#0F172A] dark:text-[#E2E8F0] hover:border-[#0284C7]'
+                            }`}
+                          >
+                            {isSelected ? 'Đang dùng · Nghe lại' : 'Áp dụng & Nghe'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* II. 20 Accompaniment Rhythm Styles */}
+            <div className="space-y-2.5 pt-2 border-t border-[#E9F0F8] dark:border-[#152339]">
+              <div className="text-xs font-semibold text-[#070B14] dark:text-[#F1F5F9]">
+                II. {RHYTHM_STYLE_META.length} điệu nhạc đệm hát phổ biến nhất
+              </div>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                {[
+                  'Nhóm 1 · Nhạc nhẹ, Trữ tình & Nhạc trẻ',
+                  'Nhóm 2 · Nhạc Bolero & Nhạc xưa',
+                  'Nhóm 3 · Nhạc sôi động, Tiết tấu nhanh',
+                  'Nhóm 4 · Nhạc 3 phách & 6 phách',
+                ].map((grp) => (
+                  <div
+                    key={grp}
+                    className="rounded-lg border border-[#DCE6F2] dark:border-[#1B2B46] bg-[#FAFBFD] dark:bg-[#070D19] overflow-hidden"
+                  >
+                    <div className="px-3 py-1.5 bg-[#EFF4FA] dark:bg-[#0E192E] border-b border-[#DCE6F2] dark:border-[#1B2B46] text-[11px] font-semibold text-[#0369A1] dark:text-[#38BDF8]">
+                      {grp}
+                    </div>
+                    <div className="divide-y divide-[#E9F0F8] dark:divide-[#152339]">
+                      {RHYTHM_STYLE_META.filter((s) => s.group === grp).map((st) => {
+                        const isSelected = activeDraft.drumPattern === st.id;
+                        return (
+                          <div
+                            key={st.id}
+                            className={`px-3 py-2 flex items-center justify-between gap-2.5 text-xs ${
+                              isSelected ? 'bg-sky-50/75 dark:bg-sky-950/35' : ''
+                            }`}
+                          >
+                            <div className="min-w-0 flex-1 space-y-0.5">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="font-semibold text-[#070B14] dark:text-[#F1F5F9]">
+                                  {st.label}
+                                </span>
+                                <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-white dark:bg-[#0B1220] border border-[#DCE6F2] dark:border-[#1E314E] text-[#0284C7] dark:text-[#38BDF8]">
+                                  {st.meter} · {st.recommendedBpm} BPM
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-[#475569] dark:text-[#94A3B8] leading-snug">
+                                {st.characteristic} — <span className="italic">{st.genres}</span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              data-testid={`apply-rhythm-${st.id}`}
+                              onClick={() => {
+                                updateActiveDraft((d) => ({
+                                  ...d,
+                                  drumPattern: st.id,
+                                  timeSignature: st.meter,
+                                  bpm: st.recommendedBpm,
+                                  backingPattern: st.recommendedArp,
+                                }));
+                                auditionAndHighlightChord(
+                                  barSlots[selectedBarIndex]?.primaryChord ?? selectedAnchorChord,
+                                  0,
+                                  st.recommendedArp
+                                );
+                              }}
+                              className={`px-2.5 py-1 rounded text-[11px] font-semibold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                                isSelected
+                                  ? 'bg-[#0284C7] text-white'
+                                  : 'border border-[#CBD8E6] dark:border-[#1F3557] text-[#0F172A] dark:text-[#E2E8F0] hover:border-[#0284C7]'
+                              }`}
+                            >
+                              {isSelected ? 'Đang bật' : 'Áp dụng'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Live Synchronized Song Stage: Timeline + Active Chord/Note + Karaoke Teleprompter */}
@@ -1885,7 +2234,7 @@ export function LyricGrooveSketchpadSection({
         <div className="space-y-1">
           <div className="flex items-center gap-1 w-full">
             {songTimelineSpans.spans.map((span, idx) => {
-              const widthPct = (span.bars * 4 * 100) / songTimelineSpans.totalBeats;
+              const widthPct = (span.bars * beatsPerBar * 100) / songTimelineSpans.totalBeats;
               const isActiveSec =
                 (isPlaying && playingSectionId === span.id) ||
                 (!isPlaying && activeSection.id === span.id);
@@ -1940,6 +2289,7 @@ export function LyricGrooveSketchpadSection({
           sections={activeDraft.sections}
           melodyNotes={activeDraft.melodyNotes}
           bpm={activeDraft.bpm}
+          beatsPerBar={beatsPerBar}
           backingPattern={activeBackingPattern}
           chordArpStyles={activeDraft.chordArpStyles}
           songMood={activeDraft.mood}
@@ -1950,6 +2300,13 @@ export function LyricGrooveSketchpadSection({
           isPlaying={isPlaying}
           playheadBeatRef={playheadBeatRef}
           onSeekBeat={handleSeekTimelineBeat}
+          onPreviewMidi={(midi) =>
+            void auditionMidiNote(
+              midi,
+              activeDraft.melodyInstrument,
+              activeSustainPedal
+            )
+          }
         />
 
         {/* Synchronized Karaoke Chord & Lyric Teleprompter */}
@@ -2840,11 +3197,19 @@ export function LyricGrooveSketchpadSection({
                 <button
                   key={timbre.id}
                   type="button"
+                  data-testid={`melody-timbre-${timbre.id}`}
                   onClick={() =>
-                    updateActiveDraft((d) => ({
-                      ...d,
-                      melodyInstrument: timbre.id as MelodyInstrumentId,
-                    }))
+                    updateActiveDraft((d) => {
+                      const paired = resolvePairedInstrumentsForMelody(
+                        timbre.id as MelodyInstrumentId,
+                        d.backingInstrument
+                      );
+                      return {
+                        ...d,
+                        backingInstrument: paired.backingInstrument,
+                        melodyInstrument: paired.melodyInstrument,
+                      };
+                    })
                   }
                   className={`px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
                     activeDraft.melodyInstrument === timbre.id
@@ -2879,6 +3244,7 @@ export function LyricGrooveSketchpadSection({
             theme={theme}
             sectionId={activeSection.id}
             bars={activeSection.bars}
+            beatsPerBar={beatsPerBar}
             keyRoot={activeDraft.keyRoot}
             scaleMode={activeDraft.scaleMode}
             scaleSnap={activeDraft.scaleSnap}
@@ -2923,6 +3289,12 @@ export function LyricGrooveSketchpadSection({
             liveHighlightChord?.shift ?? 0
           )
         }
+      />
+
+      <SongwritingGuideModal
+        isOpen={showGuideModal}
+        onClose={() => setShowGuideModal(false)}
+        currentInstrument={activeDraft.backingInstrument}
       />
     </section>
   );

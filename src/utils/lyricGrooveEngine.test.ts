@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   alignSectionLyricsToMelody,
   analyzeSectionLyrics,
+  ARPEGGIO_PATTERN_META,
   buildChordTimeline,
   buildMidiFileBytes,
   buildProfilePlaylist,
@@ -22,6 +23,7 @@ import {
   getShortcutLabelsForOctave,
   isSectionMelodyMuted,
   midiToNoteName,
+  normalizeKeyRoot,
   parseChordsFromLine,
   parseSectionKaraokeLines,
   PIANO_MAX_MIDI,
@@ -29,16 +31,21 @@ import {
   PROGRESSION_PRESETS,
   quantizePitchFramesToNotes,
   reorderSongSections,
+  resolveBeatsPerBar,
   resolveChordVoicingNotes,
   resolveComputerKeyToMidi,
   resolveMelodyPlaybackMode,
+  resolvePairedInstrumentsForBacking,
+  resolvePairedInstrumentsForMelody,
   resolvePianistVoicing,
+  RHYTHM_STYLE_META,
   snapFrequencyToScaleMidi,
   snapMidiToScale,
   SONG_IDEA_TEMPLATES,
   suggestNextChords,
   transposeChordSymbol,
   transposeDraftAll,
+  transposeDraftToKey,
   updateBarChordInSectionText,
 } from './lyricGrooveEngine.ts';
 import { Note } from 'tonal';
@@ -371,55 +378,79 @@ test('Sheet song draft-phia-sau-mot-co-gai transcribes 9 sections (Fm -> F#m mod
   }
 });
 
-test('Tone C song draft-thang-tu-la-loi-noi-doi-cua-em resolves all 192 beats, chords, and authentic vocal registers', () => {
+test('Tone C 2/4 sheet song draft-thang-tu-la-loi-noi-doi-cua-em transcribes all 11 sections, 176 beats, chords, and melody', () => {
   const starters = createStarterDrafts();
   const thangTu = starters.find((d) => d.id === 'draft-thang-tu-la-loi-noi-doi-cua-em');
   assert.ok(thangTu, 'draft-thang-tu-la-loi-noi-doi-cua-em must exist');
   assert.equal(thangTu.keyRoot, 'C');
   assert.equal(thangTu.scaleMode, 'major');
+  assert.equal(thangTu.timeSignature, '2/4');
   assert.equal(thangTu.bpm, 72);
   assert.equal(thangTu.drumPattern, 'none');
   assert.equal(thangTu.backingPattern, 'auto-song');
-  assert.equal(thangTu.sections.length, 7);
+  assert.equal(thangTu.sections.length, 11);
+
+  const beatsPerBar = resolveBeatsPerBar(thangTu.timeSignature);
+  assert.equal(beatsPerBar, 2);
 
   const timeline = buildChordTimeline(thangTu.sections, {
     backingPattern: thangTu.backingPattern,
     chordArpStyles: thangTu.chordArpStyles,
     songMood: thangTu.mood,
+    beatsPerBar,
   });
-  assert.equal(timeline.totalBeats, 192);
-  for (const ch of ['Fmaj7', 'Fm', 'C/E', 'F#dim', 'Fm6', 'Ebdim', 'Asus4', 'A']) {
-    assert.ok(timeline.events.some((e) => e.symbol === ch), `Missing chord ${ch}`);
+  assert.equal(timeline.totalBeats, 176);
+  for (const ch of [
+    'F',
+    'G7/F',
+    'Em',
+    'Am',
+    'Dm7',
+    'G',
+    'Asus4',
+    'A',
+    'Fmaj7',
+    'Cmaj7',
+    'C7/G',
+    'Em7',
+    'C',
+    'Fm',
+    'D#dim7',
+    'C/E',
+    'Ddim7',
+  ]) {
+    assert.ok(timeline.events.some((e) => e.symbol === ch), `Missing sheet chord ${ch}`);
     assert.equal(resolveChordVoicingNotes(ch).valid, true, `Chord ${ch} failed voicing`);
   }
+  assert.equal(resolveChordVoicingNotes('D#°7').valid, true);
+  assert.equal(resolveChordVoicingNotes('D°7').valid, true);
 
   for (const sec of thangTu.sections) {
     const secNotes = thangTu.melodyNotes.filter((n) => n.sectionId === sec.id);
-    assert.ok(secNotes.length >= 10, `Expected >= 10 notes in ${sec.id}, got ${secNotes.length}`);
+    assert.ok(secNotes.length >= 15, `Expected >= 15 notes in ${sec.id}, got ${secNotes.length}`);
   }
 
-  // Verse 1 opening: "Mùa xuân có em như chưa bắt đầu" = A4 B4 C5 B4 A4 G4 A4 E4
-  const v1 = thangTu.melodyNotes.filter((n) => n.sectionId === 'sec-tt-verse-1');
+  // Verse 1A opening: "Mùa xuân có em như chưa bắt đầu" = F4 G4 A4 G4 F4 E4 E4 D4 E4
+  const v1a = thangTu.melodyNotes.filter((n) => n.sectionId === 'sec-tt-verse-1a');
   assert.deepEqual(
-    v1.slice(0, 8).map((n) => n.midi),
-    [69, 71, 72, 71, 69, 67, 69, 64]
+    v1a.slice(0, 9).map((n) => n.midi),
+    [65, 67, 69, 67, 65, 64, 64, 62, 64]
   );
 
-  // Verse 2 warm chest register <= E5 (76)
-  const v2 = thangTu.melodyNotes.filter((n) => n.sectionId === 'sec-tt-verse-2');
-  assert.ok(v2.every((n) => n.midi <= 76), 'Verse 2 notes should stay in chest register <= E5(76)');
-
-  // Chorus 1 ends on sustained A5(81) hold
-  const c1 = thangTu.melodyNotes.filter((n) => n.sectionId === 'sec-tt-chorus-1');
-  assert.equal(c1[c1.length - 1].midi, 81);
-  assert.ok(c1[c1.length - 1].durationBeats >= 2.5);
-
-  // Chorus 2 ends on B4(71) -> C#5(73) Picardy cadence
-  const c2 = thangTu.melodyNotes.filter((n) => n.sectionId === 'sec-tt-chorus-2');
+  // Verse 2A iconic motif: "Khúc nhạc hòa cùng" = E4 A4 G4 A4
+  const v2a = thangTu.melodyNotes.filter((n) => n.sectionId === 'sec-tt-verse-2a');
   assert.deepEqual(
-    c2.slice(-2).map((n) => n.midi),
-    [71, 73]
+    v2a.slice(0, 4).map((n) => n.midi),
+    [64, 69, 67, 69]
   );
+
+  // Chorus 1B (Fine) & 2B end on sustained A5(81) hold
+  const c1b = thangTu.melodyNotes.filter((n) => n.sectionId === 'sec-tt-chorus-1b');
+  assert.equal(c1b[c1b.length - 1].midi, 81);
+  assert.ok(c1b[c1b.length - 1].durationBeats >= 2.5);
+
+  const c2b = thangTu.melodyNotes.filter((n) => n.sectionId === 'sec-tt-chorus-2b');
+  assert.equal(c2b[c2b.length - 1].midi, 81);
 });
 
 test('All flagship songs maintain 1:1 chord-to-syllable synchronization and unhurried note durations', () => {
@@ -432,9 +463,10 @@ test('All flagship songs maintain 1:1 chord-to-syllable synchronization and unhu
   for (const id of targets) {
     const draft = starters.find((d) => d.id === id);
     assert.ok(draft, `Missing starter ${id}`);
+    const beatsPerBar = resolveBeatsPerBar(draft.timeSignature);
     for (const sec of draft.sections) {
       if (sec.kind === 'Intro') continue;
-      const sectionBeats = sec.bars * 4;
+      const sectionBeats = sec.bars * beatsPerBar;
       const sched = sec.chordSchedule ?? [];
       const tagMatches = Array.from(sec.text.matchAll(/\[([^\]]+)\]([^\s[\n]*)/g));
       assert.equal(
@@ -473,7 +505,7 @@ test('All flagship songs maintain 1:1 chord-to-syllable synchronization and unhu
         }
       });
 
-      const karaokeLines = parseSectionKaraokeLines(sec);
+      const karaokeLines = parseSectionKaraokeLines(sec, beatsPerBar);
       assert.ok(karaokeLines.length >= 1, `${id}/${sec.id}: expected parsed karaoke lines`);
     }
   }
@@ -699,3 +731,77 @@ test('Flexible chords-only melody muting supports all, intro-only, off (all mute
   assert.equal(isSectionMelodyMuted(verse, 'all', ['sec-v']), true);
   assert.equal(isSectionMelodyMuted(chorus, 'all', ['sec-v']), false);
 });
+
+test('Core 10 arpeggios, 20 accompaniment rhythm styles, time signatures, and transposeDraftToKey work accurately', () => {
+  const core44 = ARPEGGIO_PATTERN_META.filter((p) => p.group === 'Nhóm 4/4');
+  const core3468 = ARPEGGIO_PATTERN_META.filter((p) => p.group === 'Nhóm 3/4 & 6/8');
+  assert.equal(core44.length, 6);
+  assert.equal(core3468.length, 4);
+
+  assert.equal(RHYTHM_STYLE_META.length, 21);
+  const ballad24 = RHYTHM_STYLE_META.find((s) => s.id === 'ballad-24');
+  assert.ok(ballad24);
+  assert.equal(ballad24.meter, '2/4');
+
+  const bolero = RHYTHM_STYLE_META.find((s) => s.id === 'bolero-44');
+  assert.ok(bolero);
+  assert.equal(bolero.meter, '4/4');
+
+  const slowRock = RHYTHM_STYLE_META.find((s) => s.id === 'slow-rock-68');
+  assert.ok(slowRock);
+  assert.equal(slowRock.meter, '6/8');
+  assert.equal(resolveBeatsPerBar(slowRock.meter), 3);
+  assert.equal(resolveBeatsPerBar('2/4'), 2);
+  assert.equal(resolveBeatsPerBar('3/4'), 3);
+  assert.equal(resolveBeatsPerBar('4/4'), 4);
+
+  const starters = createStarterDrafts();
+  const baseDraft = starters.find((d) => d.id === 'draft-thang-tu-la-loi-noi-doi-cua-em')!;
+  const ballad24Draft = { ...baseDraft, drumPattern: 'ballad-24' as const };
+  assert.equal(getDraftStyleLabel(ballad24Draft), 'Ballad 2/4');
+  const boleroDraft = { ...baseDraft, drumPattern: 'bolero-44' as const };
+  assert.equal(getDraftStyleLabel(boleroDraft), 'Bolero');
+
+  assert.equal(normalizeKeyRoot('C#'), 'Db');
+  assert.equal(normalizeKeyRoot('Gb'), 'F#');
+  const { draft: inD, semitones } = transposeDraftToKey(baseDraft, 'D');
+  assert.equal(semitones, 2);
+  assert.equal(inD.keyRoot, 'D');
+  assert.ok(inD.sections[0].text.includes('[G]'));
+  assert.ok(inD.sections[0].text.includes('[Bm]'));
+  assert.equal(inD.sections[0].chordSchedule?.[0].symbol, 'G');
+  assert.equal(inD.melodyNotes[0].midi, baseDraft.melodyNotes[0].midi + 2);
+});
+
+test('resolvePairedInstrumentsForBacking and resolvePairedInstrumentsForMelody synchronize guitar and piano tones', () => {
+  assert.deepEqual(resolvePairedInstrumentsForBacking('guitar-strum', 'piano'), {
+    backingInstrument: 'guitar-strum',
+    melodyInstrument: 'guitar',
+  });
+  assert.deepEqual(resolvePairedInstrumentsForBacking('piano-ballad', 'guitar'), {
+    backingInstrument: 'piano-ballad',
+    melodyInstrument: 'piano',
+  });
+  assert.deepEqual(resolvePairedInstrumentsForBacking('rhodes', 'synth'), {
+    backingInstrument: 'rhodes',
+    melodyInstrument: 'synth',
+  });
+  assert.deepEqual(resolvePairedInstrumentsForBacking('rhodes', 'guitar'), {
+    backingInstrument: 'rhodes',
+    melodyInstrument: 'piano',
+  });
+
+  assert.deepEqual(resolvePairedInstrumentsForMelody('guitar', 'piano-ballad'), {
+    backingInstrument: 'guitar-strum',
+    melodyInstrument: 'guitar',
+  });
+  assert.deepEqual(resolvePairedInstrumentsForMelody('piano', 'guitar-strum'), {
+    backingInstrument: 'piano-ballad',
+    melodyInstrument: 'piano',
+  });
+  assert.deepEqual(resolvePairedInstrumentsForMelody('synth', 'guitar-strum'), {
+    backingInstrument: 'guitar-strum',
+    melodyInstrument: 'synth',
+  });
+});
+

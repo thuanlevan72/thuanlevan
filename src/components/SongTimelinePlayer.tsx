@@ -20,6 +20,7 @@ interface SongTimelinePlayerProps {
   sections: SongSection[];
   melodyNotes: MelodyNote[];
   bpm: number;
+  beatsPerBar?: number;
   backingPattern?: BackingPatternId;
   chordArpStyles?: Record<string, ConcreteArpeggioPatternId>;
   songMood?: MoodStyleId;
@@ -30,6 +31,7 @@ interface SongTimelinePlayerProps {
   isPlaying: boolean;
   playheadBeatRef: React.MutableRefObject<number>;
   onSeekBeat: (songBeat: number, sectionId: string) => void;
+  onPreviewMidi?: (midi: number) => void;
 }
 
 interface TimelineNoteItem {
@@ -63,14 +65,47 @@ const RULER_H = 30;
 const CHORD_LANE_H = 42;
 const MELODY_LANE_H = 118;
 const LYRIC_LANE_H = 54;
-const TOTAL_CANVAS_H = RULER_H + CHORD_LANE_H + MELODY_LANE_H + LYRIC_LANE_H; // 244px
+const PIANO_LANE_H = 92;
+const TIMELINE_SCROLL_H = RULER_H + CHORD_LANE_H + MELODY_LANE_H + LYRIC_LANE_H; // 244px
+const TOTAL_CANVAS_H = TIMELINE_SCROLL_H + PIANO_LANE_H; // 336px
 const VISIBLE_BEATS = 16; // 4 bars visible smoothly in scrolling window
+
+const PIANO_MIDI_LOW = 36; // C2
+const PIANO_MIDI_HIGH = 84; // C6
+const BLACK_PITCH_CLASSES = new Set([1, 3, 6, 8, 10]);
+
+interface PianoKeyLayoutItem {
+  midi: number;
+  isBlack: boolean;
+  whiteIndex: number;
+  noteName: string;
+}
+
+const PIANO_KEY_LAYOUT: PianoKeyLayoutItem[] = (() => {
+  const items: PianoKeyLayoutItem[] = [];
+  let whiteIdx = -1;
+  for (let midi = PIANO_MIDI_LOW; midi <= PIANO_MIDI_HIGH; midi++) {
+    const isBlack = BLACK_PITCH_CLASSES.has(midi % 12);
+    if (!isBlack) {
+      whiteIdx += 1;
+    }
+    items.push({
+      midi,
+      isBlack,
+      whiteIndex: whiteIdx,
+      noteName: midiToNoteName(midi),
+    });
+  }
+  return items;
+})();
+const TOTAL_WHITE_KEYS = PIANO_KEY_LAYOUT.filter((k) => !k.isBlack).length;
 
 export function SongTimelinePlayer({
   theme,
   sections,
   melodyNotes,
   bpm,
+  beatsPerBar = 4,
   backingPattern,
   chordArpStyles,
   songMood,
@@ -81,6 +116,7 @@ export function SongTimelinePlayer({
   isPlaying,
   playheadBeatRef,
   onSeekBeat,
+  onPreviewMidi,
 }: SongTimelinePlayerProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const cameraStartRef = useRef<number>(0);
@@ -102,7 +138,7 @@ export function SongTimelinePlayer({
     let maxMidi = 76;
 
     effectiveSections.forEach((sec, idx) => {
-      const secDur = sec.bars * 4;
+      const secDur = sec.bars * beatsPerBar;
       const startBeat = cursor;
       const endBeat = cursor + secDur;
       const isSecMuted = isSectionMelodyMuted(
@@ -137,7 +173,7 @@ export function SongTimelinePlayer({
       cursor = endBeat;
     });
 
-    const syncWords = buildSynchronizedLyricEvents(effectiveSections, melodyNotes);
+    const syncWords = buildSynchronizedLyricEvents(effectiveSections, melodyNotes, beatsPerBar);
     syncWords.forEach((w) => {
       lyricItems.push({
         text: w.text,
@@ -152,19 +188,21 @@ export function SongTimelinePlayer({
       chordArpStyles,
       songMood,
       melodyNotes,
+      beatsPerBar,
     });
     return {
       sectionItems,
       chordEvents,
       noteItems,
       lyricItems,
-      totalBeats: Math.max(4, totalBeats),
+      totalBeats: Math.max(beatsPerBar, totalBeats),
       midiLow: Math.max(36, minMidi - 2),
       midiHigh: Math.min(84, maxMidi + 2),
     };
   }, [
     sections,
     melodyNotes,
+    beatsPerBar,
     backingPattern,
     chordArpStyles,
     songMood,
@@ -227,6 +265,7 @@ export function SongTimelinePlayer({
     const yChord = RULER_H;
     const yMelody = RULER_H + CHORD_LANE_H;
     const yLyric = RULER_H + CHORD_LANE_H + MELODY_LANE_H;
+    const yPiano = TIMELINE_SCROLL_H;
 
     ctx.fillStyle = isDark ? '#0B1325' : '#EFF6FF';
     ctx.fillRect(GUTTER_W, yRuler, laneW, RULER_H);
@@ -240,10 +279,13 @@ export function SongTimelinePlayer({
     ctx.fillStyle = isDark ? '#0A1324' : '#F1F5F9';
     ctx.fillRect(GUTTER_W, yLyric, laneW, LYRIC_LANE_H);
 
-    // Clip track lanes to right of gutter
+    ctx.fillStyle = isDark ? '#070E1C' : '#E2E8F0';
+    ctx.fillRect(GUTTER_W, yPiano, laneW, PIANO_LANE_H);
+
+    // Clip scrolling track lanes (lanes 1..4) to right of gutter
     ctx.save();
     ctx.beginPath();
-    ctx.rect(GUTTER_W, 0, laneW, cssHeight);
+    ctx.rect(GUTTER_W, 0, laneW, TIMELINE_SCROLL_H);
     ctx.clip();
 
     // 1. Section Color Bands & Labels in Ruler
@@ -272,7 +314,7 @@ export function SongTimelinePlayer({
         ctx.lineWidth = 1.5;
         ctx.beginPath();
         ctx.moveTo(exactStart, 0);
-        ctx.lineTo(exactStart, cssHeight);
+        ctx.lineTo(exactStart, TIMELINE_SCROLL_H);
         ctx.stroke();
 
         ctx.fillStyle = isCurrentSec
@@ -292,7 +334,7 @@ export function SongTimelinePlayer({
     const lastBeat = Math.min(timelineData.totalBeats, Math.ceil(camEnd));
     for (let b = firstBeat; b <= lastBeat; b++) {
       const bx = beatToX(b);
-      const isBar = b % 4 === 0;
+      const isBar = b % beatsPerBar === 0;
       ctx.strokeStyle = isBar
         ? isDark
           ? 'rgba(148, 163, 184, 0.26)'
@@ -303,17 +345,17 @@ export function SongTimelinePlayer({
       ctx.lineWidth = isBar ? 1.2 : 1;
       ctx.beginPath();
       ctx.moveTo(bx, RULER_H - 12);
-      ctx.lineTo(bx, cssHeight);
+      ctx.lineTo(bx, TIMELINE_SCROLL_H);
       ctx.stroke();
 
       if (isBar && b < timelineData.totalBeats) {
         ctx.fillStyle = isDark ? '#94A3B8' : '#475569';
         ctx.font = '600 9.5px "JetBrains Mono", monospace';
-        ctx.fillText(`Ô ${b / 4 + 1}`, bx + 4, RULER_H - 4);
+        ctx.fillText(`Ô ${b / beatsPerBar + 1}`, bx + 4, RULER_H - 4);
       } else if (b < timelineData.totalBeats) {
         ctx.fillStyle = isDark ? 'rgba(148,163,184,0.45)' : 'rgba(100,116,139,0.55)';
         ctx.font = '500 8.5px "JetBrains Mono", monospace';
-        ctx.fillText(String((b % 4) + 1), bx + 3, RULER_H - 4);
+        ctx.fillText(String((b % beatsPerBar) + 1), bx + 3, RULER_H - 4);
       }
     }
 
@@ -530,7 +572,7 @@ export function SongTimelinePlayer({
         grad.addColorStop(0, 'rgba(16, 185, 129, 0)');
         grad.addColorStop(1, isDark ? 'rgba(52, 211, 153, 0.16)' : 'rgba(2, 132, 199, 0.12)');
         ctx.fillStyle = grad;
-        ctx.fillRect(Math.max(GUTTER_W, px - 26), RULER_H, 26, cssHeight - RULER_H);
+        ctx.fillRect(Math.max(GUTTER_W, px - 26), RULER_H, 26, TIMELINE_SCROLL_H - RULER_H);
       }
 
       ctx.strokeStyle = isDark ? '#34D399' : '#E11D48';
@@ -539,7 +581,7 @@ export function SongTimelinePlayer({
       ctx.shadowBlur = 10;
       ctx.beginPath();
       ctx.moveTo(px, 0);
-      ctx.lineTo(px, cssHeight);
+      ctx.lineTo(px, TIMELINE_SCROLL_H);
       ctx.stroke();
 
       // Playhead cap needle
@@ -553,9 +595,195 @@ export function SongTimelinePlayer({
       ctx.restore();
     }
 
-    ctx.restore(); // End right-of-gutter clip
+    ctx.restore(); // End right-of-gutter scrolling lanes clip
 
-    // 7. Left Track Header Labels Gutter
+    // 7. Live 4-Octave Piano Keyboard Lane (PIANO ĐANG ĐÁNH)
+    const clampedBeatForPiano = Math.max(0, Math.min(Math.max(0, timelineData.totalBeats - 0.01), rawPlayhead));
+    const activeChordEvent =
+      timelineData.chordEvents.find(
+        (ev) => clampedBeatForPiano >= ev.startBeat && clampedBeatForPiano < ev.startBeat + ev.durationBeats
+      ) ?? timelineData.chordEvents[0];
+
+    const bassMidiSet = new Set<number>(activeChordEvent?.bassMidis ?? []);
+    const rhMidiSet = new Set<number>(activeChordEvent?.rightHandMidis ?? []);
+    const activeMelodyItems = timelineData.noteItems.filter(
+      (n) =>
+        !n.muted &&
+        clampedBeatForPiano >= n.absStart - 0.02 &&
+        clampedBeatForPiano < n.absEnd
+    );
+    const melodyMidiSet = new Set<number>(activeMelodyItems.map((n) => n.midi));
+
+    // Top readout strip inside Piano Lane (24px)
+    const statusH = 24;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(GUTTER_W, yPiano, laneW, PIANO_LANE_H);
+    ctx.clip();
+
+    ctx.fillStyle = isDark ? '#0B1528' : '#EFF6FF';
+    ctx.fillRect(GUTTER_W, yPiano, laneW, statusH);
+    ctx.strokeStyle = isDark ? '#1E293B' : '#CBD5E1';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(GUTTER_W, yPiano + statusH);
+    ctx.lineTo(cssWidth, yPiano + statusH);
+    ctx.stroke();
+
+    let readoutX = GUTTER_W + 10;
+    const textY = yPiano + 15.5;
+    if (activeChordEvent) {
+      ctx.fillStyle = isDark ? '#38BDF8' : '#0369A1';
+      ctx.font = '700 11px "JetBrains Mono", monospace';
+      const chordTag = `Hợp âm: ${activeChordEvent.symbol}`;
+      ctx.fillText(chordTag, readoutX, textY);
+      readoutX += ctx.measureText(chordTag).width + 14;
+    }
+
+    const drawRoleLegend = (color: string, label: string) => {
+      if (readoutX > cssWidth - 56) return;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(readoutX + 4, yPiano + 12, 3.8, 0, Math.PI * 2);
+      ctx.fill();
+      readoutX += 11;
+      ctx.fillStyle = isDark ? '#CBD5E1' : '#334155';
+      ctx.font = '600 10px "JetBrains Mono", monospace';
+      ctx.fillText(label, readoutX, textY);
+      readoutX += ctx.measureText(label).width + 12;
+    };
+
+    const bassNames = [...bassMidiSet].sort((a, b) => a - b).map((m) => midiToNoteName(m)).join('·') || '—';
+    const rhNames = [...rhMidiSet].sort((a, b) => a - b).map((m) => midiToNoteName(m)).join('·') || '—';
+    const melNames = [...melodyMidiSet].sort((a, b) => a - b).map((m) => midiToNoteName(m)).join('·') || 'Nghỉ';
+
+    drawRoleLegend('#F59E0B', `Trái: ${bassNames}`);
+    drawRoleLegend('#0EA5E9', `Phải: ${rhNames}`);
+    drawRoleLegend('#10B981', `Giai điệu: ${melNames}`);
+
+    // Piano Keys Area
+    const kbPadX = 6;
+    const kbPadY = 4;
+    const kbX = GUTTER_W + kbPadX;
+    const kbY = yPiano + statusH + kbPadY;
+    const kbW = Math.max(120, laneW - kbPadX * 2);
+    const kbH = PIANO_LANE_H - statusH - kbPadY * 2;
+    const whiteW = kbW / TOTAL_WHITE_KEYS;
+    const blackW = Math.max(5, whiteW * 0.6);
+    const blackH = kbH * 0.61;
+
+    // 7a. White keys
+    PIANO_KEY_LAYOUT.forEach((k) => {
+      if (k.isBlack) return;
+      const x = kbX + k.whiteIndex * whiteW;
+      const isBass = bassMidiSet.has(k.midi);
+      const isRh = rhMidiSet.has(k.midi);
+      const isMel = melodyMidiSet.has(k.midi);
+      const isAnyActive = isBass || isRh || isMel;
+
+      ctx.save();
+      if (isMel) {
+        ctx.fillStyle = '#10B981';
+        ctx.shadowColor = 'rgba(16, 185, 129, 0.55)';
+        ctx.shadowBlur = 8;
+      } else if (isRh) {
+        ctx.fillStyle = isDark ? '#0284C7' : '#38BDF8';
+        ctx.shadowColor = 'rgba(14, 165, 233, 0.45)';
+        ctx.shadowBlur = 6;
+      } else if (isBass) {
+        ctx.fillStyle = '#F59E0B';
+        ctx.shadowColor = 'rgba(245, 158, 11, 0.45)';
+        ctx.shadowBlur = 6;
+      } else {
+        ctx.fillStyle = isDark ? '#F1F5F9' : '#FFFFFF';
+      }
+
+      ctx.beginPath();
+      ctx.roundRect(x + 0.5, kbY, Math.max(2, whiteW - 1), kbH, [0, 0, 3, 3]);
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = isAnyActive
+        ? isMel
+          ? '#047857'
+          : isRh
+          ? '#0369A1'
+          : '#B45309'
+        : isDark
+        ? '#334155'
+        : '#CBD5E1';
+      ctx.lineWidth = isAnyActive ? 1.3 : 1;
+      ctx.stroke();
+
+      // Dual role accent bar if melody overlaps bass/right-hand chord
+      if (isMel && (isRh || isBass)) {
+        ctx.fillStyle = isRh ? '#38BDF8' : '#F59E0B';
+        ctx.fillRect(x + 1.5, kbY + 1, Math.max(1, whiteW - 3), 4);
+      }
+
+      if (isAnyActive && whiteW >= 14) {
+        ctx.fillStyle = isMel || isBass || (isRh && isDark) ? '#FFFFFF' : '#0F172A';
+        ctx.font = '700 8.5px "JetBrains Mono", monospace';
+        const tw = ctx.measureText(k.noteName).width;
+        ctx.fillText(k.noteName, x + Math.max(1, (whiteW - tw) / 2), kbY + kbH - 6);
+      } else if (!isAnyActive && k.midi % 12 === 0 && whiteW >= 14) {
+        ctx.fillStyle = '#94A3B8';
+        ctx.font = '600 8px "JetBrains Mono", monospace';
+        const tw = ctx.measureText(k.noteName).width;
+        ctx.fillText(k.noteName, x + Math.max(1, (whiteW - tw) / 2), kbY + kbH - 5);
+      }
+      ctx.restore();
+    });
+
+    // 7b. Black keys
+    PIANO_KEY_LAYOUT.forEach((k) => {
+      if (!k.isBlack) return;
+      const centerX = kbX + (k.whiteIndex + 1) * whiteW;
+      const x = centerX - blackW / 2;
+      const isBass = bassMidiSet.has(k.midi);
+      const isRh = rhMidiSet.has(k.midi);
+      const isMel = melodyMidiSet.has(k.midi);
+      const isAnyActive = isBass || isRh || isMel;
+
+      ctx.save();
+      if (isMel) {
+        ctx.fillStyle = '#10B981';
+        ctx.shadowColor = 'rgba(16, 185, 129, 0.65)';
+        ctx.shadowBlur = 8;
+      } else if (isRh) {
+        ctx.fillStyle = '#0284C7';
+        ctx.shadowColor = 'rgba(2, 132, 199, 0.55)';
+        ctx.shadowBlur = 6;
+      } else if (isBass) {
+        ctx.fillStyle = '#D97706';
+        ctx.shadowColor = 'rgba(217, 119, 6, 0.55)';
+        ctx.shadowBlur = 6;
+      } else {
+        ctx.fillStyle = isDark ? '#0F172A' : '#1E293B';
+      }
+
+      ctx.beginPath();
+      ctx.roundRect(x, kbY, blackW, blackH, [0, 0, 2.5, 2.5]);
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = isAnyActive ? '#FFFFFF' : '#020617';
+      ctx.lineWidth = isAnyActive ? 1.2 : 0.8;
+      ctx.stroke();
+
+      if (isAnyActive && blackW >= 12) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = '700 7.5px "JetBrains Mono", monospace';
+        const shortName = k.noteName.replace(/\d/, '');
+        const tw = ctx.measureText(shortName).width;
+        ctx.fillText(shortName, x + Math.max(0.5, (blackW - tw) / 2), kbY + blackH - 5);
+      }
+      ctx.restore();
+    });
+
+    ctx.restore(); // End Piano Lane clip
+
+    // 8. Left Track Header Labels Gutter
     ctx.fillStyle = isDark ? '#0B1220' : '#F1F5F9';
     ctx.fillRect(0, 0, GUTTER_W, cssHeight);
 
@@ -564,6 +792,7 @@ export function SongTimelinePlayer({
       { label: 'HỢP ÂM', sub: 'Tay trái/phải', y: yChord, h: CHORD_LANE_H },
       { label: 'GIAI ĐIỆU', sub: 'Piano Roll', y: yMelody, h: MELODY_LANE_H },
       { label: 'CA TỪ', sub: '& Sóng âm', y: yLyric, h: LYRIC_LANE_H },
+      { label: 'PIANO', sub: 'Đang đánh', y: yPiano, h: PIANO_LANE_H },
     ];
 
     tracks.forEach((tr) => {
@@ -621,9 +850,49 @@ export function SongTimelinePlayer({
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
     if (x < GUTTER_W) return;
 
     const laneW = Math.max(200, rect.width - GUTTER_W);
+
+    // Clicking inside the live Piano lane auditions the pressed piano key directly
+    if (y >= TIMELINE_SCROLL_H) {
+      const kbPadX = 6;
+      const kbPadY = 4;
+      const statusH = 24;
+      const kbX = GUTTER_W + kbPadX;
+      const kbY = TIMELINE_SCROLL_H + statusH + kbPadY;
+      const kbW = Math.max(120, laneW - kbPadX * 2);
+      const kbH = PIANO_LANE_H - statusH - kbPadY * 2;
+      if (x >= kbX && x <= kbX + kbW && y >= kbY && y <= kbY + kbH) {
+        const whiteW = kbW / TOTAL_WHITE_KEYS;
+        const blackW = Math.max(5, whiteW * 0.6);
+        const blackH = kbH * 0.61;
+        if (y <= kbY + blackH) {
+          const hitBlack = PIANO_KEY_LAYOUT.find((k) => {
+            if (!k.isBlack) return false;
+            const centerX = kbX + (k.whiteIndex + 1) * whiteW;
+            return x >= centerX - blackW / 2 && x <= centerX + blackW / 2;
+          });
+          if (hitBlack) {
+            onPreviewMidi?.(hitBlack.midi);
+            return;
+          }
+        }
+        const whiteIdx = Math.max(
+          0,
+          Math.min(TOTAL_WHITE_KEYS - 1, Math.floor((x - kbX) / whiteW))
+        );
+        const hitWhite = PIANO_KEY_LAYOUT.find(
+          (k) => !k.isBlack && k.whiteIndex === whiteIdx
+        );
+        if (hitWhite) {
+          onPreviewMidi?.(hitWhite.midi);
+        }
+      }
+      return;
+    }
+
     const windowBeats = Math.min(VISIBLE_BEATS, Math.max(8, timelineData.totalBeats));
     const beatW = laneW / windowBeats;
     const clickedBeat = Math.max(
@@ -651,16 +920,16 @@ export function SongTimelinePlayer({
           ref={canvasRef}
           data-testid="song-timeline-canvas"
           onPointerDown={handleCanvasPointerDown}
-          className="w-full h-[244px] block cursor-pointer touch-none select-none"
-          aria-label="Khung timeline đa track hiển thị ô nhịp, hợp âm, nốt giai điệu và lời bài hát đang chạy"
+          className="w-full h-[336px] block cursor-pointer touch-none select-none"
+          aria-label="Khung timeline đa track hiển thị ô nhịp, hợp âm, nốt giai điệu, lời bài hát và phím piano đang đánh"
         />
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#475569] dark:text-[#94A3B8]">
         <span>
-          Bấm vào bất kỳ vị trí nào trên khung timeline để nhảy kim phát tới đúng phách đó
+          Bấm lên timeline để nhảy tới đúng phách · Bấm phím Piano bên dưới để nghe thử nốt
         </span>
         <span className="font-mono">
-          {timelineData.noteItems.length} nốt giai điệu · {timelineData.chordEvents.length} hợp âm · {timelineData.totalBeats / 4} ô nhịp
+          {timelineData.noteItems.length} nốt giai điệu · {timelineData.chordEvents.length} hợp âm · {Math.round(timelineData.totalBeats / beatsPerBar)} ô nhịp
         </span>
       </div>
     </div>

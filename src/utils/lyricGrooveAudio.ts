@@ -9,6 +9,15 @@ import {
   preloadPianoSampleBytes,
 } from './grandPianoEngine.ts';
 import {
+  AcousticGuitarEngine,
+  buildGuitarChordVoicing,
+  ensureGuitarSamplesDecoded,
+  getDecodedGuitarSampleCount,
+  getDecodedGuitarSampleSnapshot,
+  GUITAR_SAMPLE_MANIFEST,
+  preloadGuitarSampleBytes,
+} from './acousticGuitarEngine.ts';
+import {
   type BackingInstrumentId,
   type BackingPatternId,
   buildChordTimeline,
@@ -23,25 +32,28 @@ import {
   type MoodStyleId,
   type PianistVoicing,
   type PitchFrame,
+  resolveBeatsPerBar,
   resolveConcreteArpPattern,
   resolveMelodyPlaybackMode,
   resolvePianistVoicing,
+  type RhythmStyle20Id,
   type SketchpadDraft,
   type SongSection,
+  type TimeSignatureId,
 } from './lyricGrooveEngine.ts';
 
 interface SynthRig {
   grandPiano: GrandPianoEngine;
+  acousticGuitar: AcousticGuitarEngine;
   rhodes: Tone.PolySynth;
-  guitar: Tone.PolySynth;
   bass: Tone.MonoSynth;
   kick: Tone.MembraneSynth;
   snare: Tone.NoiseSynth;
   hat: Tone.NoiseSynth;
+  slap: Tone.NoiseSynth;
   metronome: Tone.MembraneSynth;
   stringsPad: Tone.PolySynth;
   melodySynth: Tone.PolySynth;
-  melodyGuitar: Tone.PolySynth;
   masterGain: Tone.Gain;
   fftAnalyser: Tone.Analyser | null;
   waveAnalyser: Tone.Analyser | null;
@@ -51,7 +63,8 @@ interface SynthRig {
 function createSynthRig(
   destination: Tone.InputNode,
   enableAnalyser = false,
-  predecodedPianoBuffers?: Map<string, AudioBuffer>
+  predecodedPianoBuffers?: Map<string, AudioBuffer>,
+  predecodedGuitarBuffers?: Map<string, AudioBuffer>
 ): SynthRig {
   const masterGain = new Tone.Gain(0.88);
   masterGain.connect(destination);
@@ -89,12 +102,12 @@ function createSynthRig(
     volume: -7,
   }).connect(rhodesFilter);
 
-  const guitarFilter = new Tone.Filter(2600, 'lowpass').connect(reverb);
-  const guitar = new Tone.PolySynth(Tone.Synth, {
-    oscillator: { type: 'triangle4' },
-    envelope: { attack: 0.005, decay: 0.52, sustain: 0.14, release: 0.72 },
-    volume: -6,
-  }).connect(guitarFilter);
+  // Studio-sampled Acoustic Guitar routed directly through its own calibrated studio room bus
+  const acousticGuitar = new AcousticGuitarEngine(
+    masterGain.context,
+    masterGain.input,
+    predecodedGuitarBuffers
+  );
 
   const bass = new Tone.MonoSynth({
     oscillator: { type: 'triangle' },
@@ -133,6 +146,14 @@ function createSynthRig(
     volume: -20,
   }).connect(hatFilter);
 
+  const slapFilter = new Tone.Filter(980, 'bandpass').connect(masterGain);
+  slapFilter.Q.value = 1.6;
+  const slap = new Tone.NoiseSynth({
+    noise: { type: 'brown' },
+    envelope: { attack: 0.001, decay: 0.055, sustain: 0 },
+    volume: -10,
+  }).connect(slapFilter);
+
   const metronome = new Tone.MembraneSynth({
     pitchDecay: 0.012,
     octaves: 2.0,
@@ -155,45 +176,39 @@ function createSynthRig(
     volume: -8,
   }).connect(synthFilter);
 
-  const melodyGuitar = new Tone.PolySynth(Tone.Synth, {
-    oscillator: { type: 'triangle4' },
-    envelope: { attack: 0.004, decay: 0.46, sustain: 0.18, release: 0.48 },
-    volume: -5,
-  }).connect(guitarFilter);
-
   return {
     grandPiano,
+    acousticGuitar,
     rhodes,
-    guitar,
     bass,
     kick,
     snare,
     hat,
+    slap,
     metronome,
     stringsPad,
     melodySynth,
-    melodyGuitar,
     masterGain,
     fftAnalyser,
     waveAnalyser,
     dispose: () => {
       grandPiano.dispose();
+      acousticGuitar.dispose();
       rhodes.dispose();
       rhodesFilter.dispose();
-      guitar.dispose();
-      guitarFilter.dispose();
       bass.dispose();
       kick.dispose();
       snare.dispose();
       snareFilter.dispose();
       hat.dispose();
       hatFilter.dispose();
+      slap.dispose();
+      slapFilter.dispose();
       metronome.dispose();
       stringsPad.dispose();
       stringsFilter.dispose();
       melodySynth.dispose();
       synthFilter.dispose();
-      melodyGuitar.dispose();
       reverb.dispose();
       fftAnalyser?.dispose();
       waveAnalyser?.dispose();
@@ -222,6 +237,10 @@ export function warmConcertGrandSamples(): Promise<void> {
   return preloadPianoSampleBytes();
 }
 
+export function warmAcousticGuitarSamples(): Promise<void> {
+  return preloadGuitarSampleBytes();
+}
+
 export function getLoadedPianoSampleCount(): number {
   return getDecodedPianoSampleCount();
 }
@@ -232,6 +251,19 @@ async function ensureLivePianoSamplesReady(rig: SynthRig, maxWaitMs = 2500): Pro
   }
   await Promise.race([
     rig.grandPiano.ensureLoaded().then(() => undefined),
+    new Promise<void>((resolve) => window.setTimeout(resolve, maxWaitMs)),
+  ]);
+}
+
+async function ensureLiveGuitarSamplesReady(rig: SynthRig, maxWaitMs = 3000): Promise<void> {
+  if (
+    rig.acousticGuitar.hasDecodedSamples() &&
+    getDecodedGuitarSampleCount() >= GUITAR_SAMPLE_MANIFEST.length
+  ) {
+    return;
+  }
+  await Promise.race([
+    rig.acousticGuitar.ensureLoaded().then(() => undefined),
     new Promise<void>((resolve) => window.setTimeout(resolve, maxWaitMs)),
   ]);
 }
@@ -296,6 +328,224 @@ function resolveMidisFromNoteNames(notes: string[]): number[] {
     .filter((m): m is number => typeof m === 'number');
 }
 
+type CoreVoiceToken = 'B1' | 'B2' | '3' | '2' | '1' | 'SLAP';
+
+interface CoreArpStep {
+  beat: number;
+  voices: CoreVoiceToken[];
+  vel: number;
+  durBeats?: number;
+  staccato?: boolean;
+}
+
+function isCoreArpPattern(
+  pattern: ConcreteArpeggioPatternId
+): pattern is Exclude<ConcreteArpeggioPatternId, 'ballad-wave' | 'lofi-broken' | 'rising-arp' | 'falling-arp' | 'pinch-plucked' | 'rich-block' | 'pop-comp'> {
+  return pattern.startsWith('arp-');
+}
+
+function buildCoreArpSteps(
+  pattern: ConcreteArpeggioPatternId,
+  durationBeats: number
+): CoreArpStep[] {
+  const steps: CoreArpStep[] = [];
+  switch (pattern) {
+    case 'arp-ballad-1': {
+      // B - 3 - 2 - 1
+      if (durationBeats <= 2.2) {
+        steps.push(
+          { beat: 0, voices: ['B1'], vel: 0.48, durBeats: 1.45 },
+          { beat: 0.5, voices: ['3'], vel: 0.31, durBeats: 0.9 },
+          { beat: 1.0, voices: ['2'], vel: 0.34, durBeats: 0.85 },
+          { beat: 1.5, voices: ['1'], vel: 0.38, durBeats: 0.75 }
+        );
+      } else {
+        steps.push(
+          { beat: 0, voices: ['B1'], vel: 0.48, durBeats: 1.8 },
+          { beat: 1, voices: ['3'], vel: 0.34, durBeats: 1.4 },
+          { beat: 2, voices: ['2'], vel: 0.32, durBeats: 1.2 },
+          { beat: 3, voices: ['1'], vel: 0.38, durBeats: 1.1 }
+        );
+      }
+      break;
+    }
+    case 'arp-ballad-2': {
+      // B - 3 - 2 - 3 - 1 - 3 - 2 - 3 (nhịp 2/4 nén gọn đủ B - 3 - 2 - 1)
+      if (durationBeats <= 2.2) {
+        steps.push(
+          { beat: 0, voices: ['B1'], vel: 0.48, durBeats: 1.55 },
+          { beat: 0.5, voices: ['3'], vel: 0.29, durBeats: 0.8 },
+          { beat: 1.0, voices: ['2'], vel: 0.34, durBeats: 0.85 },
+          { beat: 1.5, voices: ['1'], vel: 0.39, durBeats: 0.85 }
+        );
+      } else {
+        steps.push(
+          { beat: 0, voices: ['B1'], vel: 0.48, durBeats: 1.85 },
+          { beat: 0.5, voices: ['3'], vel: 0.28, durBeats: 0.9 },
+          { beat: 1.0, voices: ['2'], vel: 0.33, durBeats: 0.95 },
+          { beat: 1.5, voices: ['3'], vel: 0.25, durBeats: 0.75 },
+          { beat: 2.0, voices: ['1'], vel: 0.40, durBeats: 1.15 },
+          { beat: 2.5, voices: ['3'], vel: 0.25, durBeats: 0.75 },
+          { beat: 3.0, voices: ['2'], vel: 0.32, durBeats: 0.85 },
+          { beat: 3.5, voices: ['3'], vel: 0.24, durBeats: 0.65 }
+        );
+      }
+      break;
+    }
+    case 'arp-ballad-3': {
+      // B - 3 - (2+1) - 3 - (2+1) - 3
+      steps.push(
+        { beat: 0, voices: ['B1'], vel: 0.48, durBeats: 1.8 },
+        { beat: 0.5, voices: ['3'], vel: 0.29, durBeats: 0.7 },
+        { beat: 1.0, voices: ['2', '1'], vel: 0.39, durBeats: 0.9 },
+        { beat: 1.5, voices: ['3'], vel: 0.27, durBeats: 0.7 },
+        { beat: 2.0, voices: ['2', '1'], vel: 0.38, durBeats: 0.9 },
+        { beat: 2.5, voices: ['3'], vel: 0.27, durBeats: 0.7 },
+        { beat: 3.0, voices: ['2', '1'], vel: 0.36, durBeats: 0.85 },
+        { beat: 3.5, voices: ['3'], vel: 0.25, durBeats: 0.65 }
+      );
+      break;
+    }
+    case 'arp-country-folk': {
+      // B1 - (3+2+1) - B2 - (3+2+1)
+      if (durationBeats <= 2.2) {
+        steps.push(
+          { beat: 0, voices: ['B1'], vel: 0.49, durBeats: 0.7 },
+          { beat: 0.5, voices: ['3', '2', '1'], vel: 0.40, durBeats: 0.48 },
+          { beat: 1.0, voices: ['B2'], vel: 0.44, durBeats: 0.7 },
+          { beat: 1.5, voices: ['3', '2', '1'], vel: 0.40, durBeats: 0.48 }
+        );
+      } else {
+        steps.push(
+          { beat: 0, voices: ['B1'], vel: 0.50, durBeats: 0.95 },
+          { beat: 1.0, voices: ['3', '2', '1'], vel: 0.41, durBeats: 0.65 },
+          { beat: 2.0, voices: ['B2'], vel: 0.45, durBeats: 0.95 },
+          { beat: 3.0, voices: ['3', '2', '1'], vel: 0.41, durBeats: 0.65 }
+        );
+      }
+      break;
+    }
+    case 'arp-ballad-drive': {
+      // B - 3 - 2 - 1 - 2 - 3 - 2 - 1 (cao trào dồn)
+      steps.push(
+        { beat: 0, voices: ['B1'], vel: 0.50, durBeats: 1.75 },
+        { beat: 0.5, voices: ['3'], vel: 0.33, durBeats: 0.7 },
+        { beat: 1.0, voices: ['2'], vel: 0.36, durBeats: 0.75 },
+        { beat: 1.5, voices: ['1'], vel: 0.42, durBeats: 0.8 },
+        { beat: 2.0, voices: ['2'], vel: 0.37, durBeats: 0.75 },
+        { beat: 2.5, voices: ['3'], vel: 0.34, durBeats: 0.7 },
+        { beat: 3.0, voices: ['2'], vel: 0.38, durBeats: 0.7 },
+        { beat: 3.5, voices: ['1'], vel: 0.44, durBeats: 0.75 }
+      );
+      break;
+    }
+    case 'arp-percussive-slap': {
+      // B - 3 - 2 - [Đập] - 3 - 2 - 1 - [Đập]
+      steps.push(
+        { beat: 0, voices: ['B1'], vel: 0.50, durBeats: 1.4 },
+        { beat: 0.5, voices: ['3'], vel: 0.33, durBeats: 0.6 },
+        { beat: 0.75, voices: ['2'], vel: 0.32, durBeats: 0.5 },
+        { beat: 1.0, voices: ['SLAP'], vel: 0.68, durBeats: 0.25 },
+        { beat: 1.5, voices: ['3'], vel: 0.32, durBeats: 0.6 },
+        { beat: 2.0, voices: ['2'], vel: 0.36, durBeats: 0.7 },
+        { beat: 2.5, voices: ['1'], vel: 0.41, durBeats: 0.7 },
+        { beat: 3.0, voices: ['SLAP'], vel: 0.72, durBeats: 0.25 },
+        { beat: 3.5, voices: ['3', '2'], vel: 0.28, durBeats: 0.45 }
+      );
+      break;
+    }
+    case 'arp-valse-even': {
+      // B - 3 - 2 - 1 - 2 - 3 (6 nốt móc đơn đều cho nhịp 3/4)
+      steps.push(
+        { beat: 0, voices: ['B1'], vel: 0.48, durBeats: 1.6 },
+        { beat: 0.5, voices: ['3'], vel: 0.30, durBeats: 0.85 },
+        { beat: 1.0, voices: ['2'], vel: 0.34, durBeats: 0.85 },
+        { beat: 1.5, voices: ['1'], vel: 0.39, durBeats: 0.9 },
+        { beat: 2.0, voices: ['2'], vel: 0.32, durBeats: 0.8 },
+        { beat: 2.5, voices: ['3'], vel: 0.29, durBeats: 0.7 },
+        { beat: 3.0, voices: ['2'], vel: 0.31, durBeats: 0.7 },
+        { beat: 3.5, voices: ['3'], vel: 0.27, durBeats: 0.6 }
+      );
+      break;
+    }
+    case 'arp-valse-boom-chat': {
+      // B - (3+2+1) - (3+2+1) (Bùm - Chát - Chát)
+      steps.push(
+        { beat: 0, voices: ['B1'], vel: 0.52, durBeats: 0.95 },
+        { beat: 1.0, voices: ['3', '2', '1'], vel: 0.37, durBeats: 0.48 },
+        { beat: 2.0, voices: ['3', '2', '1'], vel: 0.33, durBeats: 0.48 },
+        { beat: 3.0, voices: ['3', '2', '1'], vel: 0.32, durBeats: 0.48 }
+      );
+      break;
+    }
+    case 'arp-slow-rock-68': {
+      // B - 3 - 2 - 1 - 2 - 3 (6/8 nhấn mạnh phách 1 & phách 4)
+      const scale = durationBeats >= 3.6 && durationBeats <= 4.3 ? 4 / 3 : 1;
+      steps.push(
+        { beat: 0 * scale, voices: ['B1'], vel: 0.50, durBeats: 1.7 },
+        { beat: 0.5 * scale, voices: ['3'], vel: 0.29, durBeats: 0.75 },
+        { beat: 1.0 * scale, voices: ['2'], vel: 0.31, durBeats: 0.75 },
+        { beat: 1.5 * scale, voices: ['1'], vel: 0.44, durBeats: 1.15 },
+        { beat: 2.0 * scale, voices: ['2'], vel: 0.30, durBeats: 0.75 },
+        { beat: 2.5 * scale, voices: ['3'], vel: 0.28, durBeats: 0.7 }
+      );
+      break;
+    }
+    case 'arp-bossa-funky': {
+      // Đảo phách / ngắt tiếng (staccato / mute)
+      steps.push(
+        { beat: 0, voices: ['B1'], vel: 0.49, durBeats: 0.58, staccato: true },
+        { beat: 0.75, voices: ['3', '2'], vel: 0.38, durBeats: 0.28, staccato: true },
+        { beat: 1.5, voices: ['B2'], vel: 0.41, durBeats: 0.36, staccato: true },
+        { beat: 1.75, voices: ['2', '1'], vel: 0.43, durBeats: 0.24, staccato: true },
+        { beat: 2.5, voices: ['3', '2', '1'], vel: 0.37, durBeats: 0.26, staccato: true },
+        { beat: 3.25, voices: ['2', '1'], vel: 0.35, durBeats: 0.24, staccato: true }
+      );
+      break;
+    }
+    default:
+      break;
+  }
+
+  return steps.filter((s) => s.beat < Math.max(0.5, durationBeats - 0.08));
+}
+
+function resolveVoiceMidisForStep(
+  tokens: CoreVoiceToken[],
+  rootMidi: number,
+  fifthMidi: number,
+  rightHandMidis: number[]
+): { midis: number[]; hasSlap: boolean } {
+  const s3 = rightHandMidis[0] ?? rootMidi + 12;
+  const s2 =
+    rightHandMidis.length >= 3
+      ? rightHandMidis[1]
+      : rightHandMidis[Math.min(1, rightHandMidis.length - 1)] ?? rootMidi + 16;
+  const s1 = rightHandMidis[rightHandMidis.length - 1] ?? rootMidi + 19;
+
+  const midis: number[] = [];
+  let hasSlap = false;
+  tokens.forEach((tok) => {
+    if (tok === 'SLAP') {
+      hasSlap = true;
+    } else if (tok === 'B1') {
+      midis.push(rootMidi);
+    } else if (tok === 'B2') {
+      midis.push(fifthMidi);
+    } else if (tok === '3') {
+      midis.push(s3);
+    } else if (tok === '2') {
+      midis.push(s2);
+    } else if (tok === '1') {
+      midis.push(s1);
+    }
+  });
+  return {
+    midis: Array.from(new Set(midis)),
+    hasSlap,
+  };
+}
+
 function triggerGrandPianoBacking(
   rig: SynthRig,
   bassMidis: number[],
@@ -313,6 +563,37 @@ function triggerGrandPianoBacking(
   const lastRhIdx = Math.max(0, rightHandMidis.length - 1);
   const rootMidi = bassMidis[0] ?? (rightHandMidis[0] ? rightHandMidis[0] - 12 : 48);
   const fifthMidi = bassMidis[1] ?? rootMidi + 7;
+
+  if (isCoreArpPattern(concretePattern)) {
+    const steps = buildCoreArpSteps(concretePattern, durationBeats);
+    steps.forEach((step) => {
+      const when = time + step.beat * secPerBeat;
+      const { midis, hasSlap } = resolveVoiceMidisForStep(
+        step.voices,
+        rootMidi,
+        fifthMidi,
+        rightHandMidis
+      );
+      if (hasSlap) {
+        rig.slap.triggerAttackRelease('32n', when, step.vel);
+        rig.kick.triggerAttackRelease('G1', '32n', when, step.vel * 0.26);
+      }
+      const noteDurSec = Math.max(
+        0.16,
+        Math.min(totalDurSec, (step.durBeats ?? 0.85) * secPerBeat)
+      );
+      midis.forEach((midi, idx) => {
+        rig.grandPiano.triggerNote(
+          midi,
+          noteDurSec,
+          when + idx * 0.01,
+          step.vel,
+          step.staccato ? false : sustainPedal
+        );
+      });
+    });
+    return;
+  }
 
   if (concretePattern === 'ballad-wave') {
     // Bass root beat 0, gentle fifth at 0.5 beat, warm octave color at 1.0 beat
@@ -633,17 +914,17 @@ function triggerChordWithStyle(
     resolveConcreteArpPattern(pattern) ?? 'ballad-wave';
   const sustainPedal = options?.sustainPedal ?? true;
 
-  if (instrument === 'piano-ballad') {
-    const rightMidis =
-      options?.rightHandMidis && options.rightHandMidis.length > 0
-        ? options.rightHandMidis
-        : resolveMidisFromNoteNames(notes);
-    const bassRootFallback = Note.midi(bassNote) ?? 48;
-    const bassMidis =
-      options?.bassMidis && options.bassMidis.length > 0
-        ? options.bassMidis
-        : [bassRootFallback];
+  const rightMidis =
+    options?.rightHandMidis && options.rightHandMidis.length > 0
+      ? options.rightHandMidis
+      : resolveMidisFromNoteNames(notes);
+  const bassRootFallback = Note.midi(bassNote) ?? 48;
+  const bassMidis =
+    options?.bassMidis && options.bassMidis.length > 0
+      ? options.bassMidis
+      : [bassRootFallback];
 
+  if (instrument === 'piano-ballad') {
     triggerGrandPianoBacking(
       rig,
       bassMidis,
@@ -673,39 +954,130 @@ function triggerChordWithStyle(
     return;
   }
 
+  // All 10 core arpeggio patterns rendered authentically on Guitar Acoustic & Rhodes EP
+  const guitarChordMidis =
+    instrument === 'guitar-strum'
+      ? buildGuitarChordVoicing(bassMidis, rightMidis, bassRootFallback)
+      : [];
+  const guitarBassMidi = guitarChordMidis[0] ?? bassMidis[0] ?? bassRootFallback;
+  const guitarTrebleMidis =
+    guitarChordMidis.length > 1 ? guitarChordMidis.slice(1) : rightMidis;
+
+  if (isCoreArpPattern(concretePattern)) {
+    const activeBassRoot = instrument === 'guitar-strum' ? guitarBassMidi : (bassMidis[0] ?? bassRootFallback);
+    const activeFifthMidi =
+      instrument === 'guitar-strum'
+        ? (guitarTrebleMidis[0] ?? activeBassRoot + 7)
+        : (bassMidis[1] ?? activeBassRoot + 7);
+    const activeTreble = instrument === 'guitar-strum' ? guitarTrebleMidis : rightMidis;
+    const steps = buildCoreArpSteps(concretePattern, durationBeats);
+
+    steps.forEach((step) => {
+      const when = time + step.beat * secPerBeat;
+      const { midis, hasSlap } = resolveVoiceMidisForStep(
+        step.voices,
+        activeBassRoot,
+        activeFifthMidi,
+        activeTreble
+      );
+      if (hasSlap) {
+        rig.slap.triggerAttackRelease('32n', when, step.vel);
+        rig.kick.triggerAttackRelease('G1', '32n', when, step.vel * 0.3);
+      }
+      const noteDurSec = Math.max(
+        0.14,
+        Math.min(durationSec, (step.durBeats ?? 0.85) * secPerBeat)
+      );
+      const isBassOnly = step.voices.every((v) => v === 'B1' || v === 'B2');
+      const noteNames = midis.map((m) => midiToNoteName(m));
+      if (noteNames.length === 0) return;
+
+      if (instrument === 'guitar-strum') {
+        midis.forEach((m, idx) => {
+          rig.acousticGuitar.triggerNote(
+            m,
+            step.staccato ? Math.min(0.24, noteDurSec) : noteDurSec,
+            when + idx * 0.016,
+            isBassOnly ? Math.min(0.92, step.vel * 1.1) : Math.max(0.32, step.vel * (0.94 - idx * 0.04)),
+            !step.staccato && sustainPedal,
+            'backing'
+          );
+        });
+      } else {
+        if (isBassOnly) {
+          rig.bass.triggerAttackRelease(
+            noteNames[0],
+            step.staccato ? Math.min(0.28, noteDurSec) : Math.min(noteDurSec, 1.4),
+            when,
+            step.vel * 1.05
+          );
+        } else {
+          rig.rhodes.triggerAttackRelease(
+            noteNames,
+            step.staccato ? Math.min(0.25, noteDurSec) : noteDurSec,
+            when,
+            step.vel * 0.96
+          );
+        }
+      }
+    });
+    return;
+  }
+
   if (instrument === 'guitar-strum') {
+    const allGuitarMidis =
+      guitarChordMidis.length > 0 ? guitarChordMidis : [guitarBassMidi, ...guitarTrebleMidis];
     if (concretePattern === 'rising-arp' || concretePattern === 'pinch-plucked') {
-      const order = concretePattern === 'rising-arp' ? notes : [...notes.slice(1), notes[0]];
-      order.forEach((n, idx) => {
+      const order =
+        concretePattern === 'rising-arp'
+          ? allGuitarMidis
+          : [guitarBassMidi, ...guitarTrebleMidis.slice(1), guitarTrebleMidis[0]].filter(
+              (m): m is number => typeof m === 'number'
+            );
+      order.forEach((m, idx) => {
         const beatOff = idx * Math.min(0.45, (durationBeats * 0.65) / Math.max(2, order.length));
-        rig.guitar.triggerAttackRelease(
-          n,
-          Math.min(durationSec * 0.85, 1.35),
+        rig.acousticGuitar.triggerNote(
+          m,
+          Math.min(durationSec * 0.96, 1.95),
           time + beatOff * secPerBeat,
-          idx === order.length - 1 ? 0.5 : 0.42
+          idx === 0 ? 0.64 : idx === order.length - 1 ? 0.56 : 0.46,
+          sustainPedal,
+          'backing'
         );
       });
     } else if (concretePattern === 'falling-arp') {
-      const desc = [...notes].reverse();
-      desc.forEach((n, idx) => {
+      rig.acousticGuitar.triggerNote(
+        guitarBassMidi,
+        Math.min(durationSec * 0.98, 2.1),
+        time,
+        0.62,
+        sustainPedal,
+        'backing'
+      );
+      const desc = [...guitarTrebleMidis].reverse();
+      desc.forEach((m, idx) => {
         const beatOff = idx * Math.min(0.42, (durationBeats * 0.65) / Math.max(2, desc.length));
-        rig.guitar.triggerAttackRelease(
-          n,
-          Math.min(durationSec * 0.8, 1.3),
+        rig.acousticGuitar.triggerNote(
+          m,
+          Math.min(durationSec * 0.9, 1.65),
           time + beatOff * secPerBeat,
-          idx === 0 ? 0.5 : 0.38
+          idx === 0 ? 0.54 : 0.42,
+          sustainPedal,
+          'backing'
         );
       });
     } else if (concretePattern === 'pop-comp' && durationBeats >= 2) {
       [0, 1.5, 3]
         .filter((b) => b < durationBeats - 0.2)
         .forEach((beatOff, hIdx) => {
-          notes.forEach((n, idx) => {
-            rig.guitar.triggerAttackRelease(
-              n,
-              hIdx === 0 ? Math.min(durationSec * 0.6, 0.9) : 0.36,
+          allGuitarMidis.forEach((m, idx) => {
+            rig.acousticGuitar.triggerNote(
+              m,
+              hIdx === 0 ? Math.min(durationSec * 0.72, 1.25) : 0.48,
               time + beatOff * secPerBeat + idx * 0.018,
-              hIdx === 0 ? 0.52 : 0.38
+              hIdx === 0 ? Math.max(0.4, 0.62 - idx * 0.03) : Math.max(0.32, 0.45 - idx * 0.025),
+              sustainPedal,
+              'backing'
             );
           });
         });
@@ -714,33 +1086,40 @@ function triggerChordWithStyle(
         concretePattern === 'lofi-broken'
           ? 0.068
           : concretePattern === 'ballad-wave'
-          ? 0.052
-          : 0.026;
-      notes.forEach((n, idx) => {
-        rig.guitar.triggerAttackRelease(
-          n,
-          Math.min(durationSec, 1.5),
+          ? 0.048
+          : 0.022;
+      allGuitarMidis.forEach((m, idx) => {
+        rig.acousticGuitar.triggerNote(
+          m,
+          Math.min(durationSec * 0.98, 1.95),
           time + idx * strumSpacing,
-          0.52
+          idx === 0 ? 0.64 : Math.max(0.42, 0.54 - idx * 0.02),
+          sustainPedal,
+          'backing'
         );
       });
-      if (durationSec > 0.85 && notes.length >= 3) {
-        rig.guitar.triggerAttackRelease(
-          notes[notes.length - 1],
-          0.45,
+      if (durationSec > 0.85 && guitarTrebleMidis.length >= 2) {
+        rig.acousticGuitar.triggerNote(
+          guitarTrebleMidis[guitarTrebleMidis.length - 1],
+          0.62,
           time + durationSec * 0.48,
-          0.38
+          0.42,
+          sustainPedal,
+          'backing'
         );
-        rig.guitar.triggerAttackRelease(
-          notes[1],
-          0.4,
+        rig.acousticGuitar.triggerNote(
+          guitarTrebleMidis[0],
+          0.52,
           time + durationSec * 0.74,
-          0.34
+          0.38,
+          sustainPedal,
+          'backing'
         );
       }
     }
+    return;
   } else {
-    // Rhodes EP warm backing across all 7 styles
+    // Rhodes EP warm backing across studio styles
     if (concretePattern === 'pop-comp' && durationBeats >= 2.2) {
       rig.rhodes.triggerAttackRelease(
         notes,
@@ -819,9 +1198,19 @@ function triggerMelodyNote(
     );
     return;
   }
+  if (instrument === 'guitar') {
+    rig.acousticGuitar.triggerNote(
+      midi,
+      Math.max(0.16, durationSec),
+      time,
+      Math.min(0.98, velocity * 1.02),
+      sustainPedal,
+      'melody'
+    );
+    return;
+  }
   const noteName = midiToNoteName(midi);
-  const synth = instrument === 'synth' ? rig.melodySynth : rig.melodyGuitar;
-  synth.triggerAttackRelease(noteName, Math.max(0.12, durationSec), time, Math.min(1, velocity * 1.08));
+  rig.melodySynth.triggerAttackRelease(noteName, Math.max(0.12, durationSec), time, Math.min(1, velocity * 1.08));
 }
 
 export async function auditionChord(
@@ -837,6 +1226,8 @@ export async function auditionChord(
   const rig = ensureLiveRig();
   if (instrument === 'piano-ballad') {
     await ensureLivePianoSamplesReady(rig);
+  } else if (instrument === 'guitar-strum') {
+    await ensureLiveGuitarSamplesReady(rig);
   }
   triggerChordWithStyle(
     rig,
@@ -876,6 +1267,8 @@ export async function auditionProgression(
   const rig = ensureLiveRig();
   if (instrument === 'piano-ballad') {
     await ensureLivePianoSamplesReady(rig);
+  } else if (instrument === 'guitar-strum') {
+    await ensureLiveGuitarSamplesReady(rig);
   }
   const secPerBeat = 60 / Math.max(55, Math.min(165, bpm));
   const chordBeats = 2;
@@ -939,6 +1332,8 @@ export async function auditionMidiNote(
   const rig = ensureLiveRig();
   if (instrument === 'piano') {
     await ensureLivePianoSamplesReady(rig);
+  } else if (instrument === 'guitar') {
+    await ensureLiveGuitarSamplesReady(rig);
   }
   triggerMelodyNote(
     rig,
@@ -982,6 +1377,8 @@ export interface LoopPlaybackOptions {
   sections: SongSection[];
   melodyNotes: MelodyNote[];
   bpm: number;
+  timeSignature?: TimeSignatureId;
+  beatsPerBar?: number;
   backingInstrument: BackingInstrumentId;
   backingPattern?: BackingPatternId;
   chordArpStyles?: Record<string, ConcreteArpeggioPatternId>;
@@ -1055,6 +1452,253 @@ export function seekGroovePlayback(beat: number, bpm: number): void {
   }
 }
 
+function buildRhythmStepHit(
+  style: RhythmStyle20Id,
+  stepInBar: number,
+  stepsPerBar: number,
+  stepSec: number
+): {
+  kick?: boolean;
+  snare?: boolean;
+  hat?: boolean;
+  slap?: boolean;
+  kickVel: number;
+  snareVel: number;
+  hatVel: number;
+  slapVel: number;
+  offsetSec: number;
+} | null {
+  // Normalize 16-step pattern mapping when user plays a 4/4 rhythm in 3/4 or 2/4, and vice versa
+  const s16 = stepsPerBar === 16 ? stepInBar : Math.round((stepInBar / Math.max(1, stepsPerBar)) * 16) % 16;
+
+  switch (style) {
+    case 'pop-ballad-44': {
+      const kick = s16 === 0 || s16 === 6 || s16 === 10;
+      const snare = s16 === 4 || s16 === 12;
+      const hat = stepInBar % 2 === 0;
+      return kick || snare || hat
+        ? { kick, snare, hat, kickVel: 0.46, snareVel: 0.34, hatVel: stepInBar % 4 === 0 ? 0.24 : 0.15, slapVel: 0, offsetSec: 0 }
+        : null;
+    }
+    case 'ballad-24': {
+      // Ballad 2/4 êm ái: Bùm ở phách 1, rải hi-hat móc đơn, Chát nhẹ ở phách 2, lơi ghost-kick ở 2&
+      const s8 = stepsPerBar === 8 ? stepInBar : stepInBar % 8;
+      const kick = s8 === 0 || s8 === 6;
+      const snare = s8 === 4;
+      const hat = s8 % 2 === 0;
+      return kick || snare || hat
+        ? {
+            kick,
+            snare,
+            hat,
+            kickVel: s8 === 0 ? 0.46 : 0.26,
+            snareVel: 0.28,
+            hatVel: s8 === 0 || s8 === 4 ? 0.22 : 0.14,
+            slapVel: 0,
+            offsetSec: 0,
+          }
+        : null;
+    }
+    case 'slow-ballad-44': {
+      const kick = s16 === 0 || s16 === 10;
+      const snare = s16 === 4 || s16 === 12;
+      const hat = s16 === 0 || s16 === 4 || s16 === 8 || s16 === 12 || s16 === 14;
+      return kick || snare || hat
+        ? { kick, snare, hat, kickVel: 0.38, snareVel: 0.26, hatVel: s16 === 14 ? 0.12 : 0.18, slapVel: 0, offsetSec: 0 }
+        : null;
+    }
+    case 'slow-surf-44': {
+      const kick = s16 === 0 || s16 === 8;
+      const snare = s16 === 4 || s16 === 12;
+      const hat = stepInBar % 2 === 0;
+      return kick || snare || hat
+        ? { kick, snare, hat, kickVel: 0.42, snareVel: 0.28, hatVel: stepInBar % 4 === 0 ? 0.26 : 0.2, slapVel: 0, offsetSec: 0 }
+        : null;
+    }
+    case 'blue-44': {
+      const swingOffset = stepInBar % 2 === 1 ? stepSec * 0.24 : 0;
+      const kick = s16 === 0 || s16 === 6 || s16 === 8 || s16 === 14;
+      const snare = s16 === 4 || s16 === 12;
+      const hat = stepInBar % 2 === 0 || s16 === 7 || s16 === 15;
+      return kick || snare || hat
+        ? { kick, snare, hat, kickVel: 0.48, snareVel: 0.42, hatVel: 0.22, slapVel: 0, offsetSec: swingOffset }
+        : null;
+    }
+    case 'fox-24': {
+      // 2/4: Bùm - Chát
+      const s8 = stepsPerBar === 8 ? stepInBar : stepInBar % 8;
+      const kick = s8 === 0;
+      const snare = s8 === 4;
+      const hat = s8 % 2 === 0;
+      return kick || snare || hat
+        ? { kick, snare, hat, kickVel: 0.56, snareVel: 0.46, hatVel: s8 % 4 === 0 ? 0.28 : 0.16, slapVel: 0, offsetSec: 0 }
+        : null;
+    }
+    case 'march-24': {
+      const s8 = stepsPerBar === 8 ? stepInBar : stepInBar % 8;
+      const kick = s8 === 0 || s8 === 4;
+      const snare = s8 === 2 || s8 === 4 || s8 === 6 || s8 === 7;
+      const hat = s8 % 2 === 0;
+      return kick || snare || hat
+        ? { kick, snare, hat, kickVel: 0.64, snareVel: s8 === 7 ? 0.36 : 0.52, hatVel: 0.24, slapVel: 0, offsetSec: 0 }
+        : null;
+    }
+    case 'bolero-44': {
+      // "Bùm - chát - bùm - bùm - chát" (kick 0, 6, 8; rim/slap 2, 4, 10, 12, 14)
+      const kick = s16 === 0 || s16 === 6 || s16 === 8;
+      const snare = s16 === 4 || s16 === 12;
+      const slap = s16 === 2 || s16 === 10 || s16 === 14;
+      const hat = stepInBar % 2 === 0;
+      return kick || snare || slap || hat
+        ? { kick, snare, hat, slap, kickVel: 0.54, snareVel: 0.34, hatVel: 0.2, slapVel: 0.46, offsetSec: 0 }
+        : null;
+    }
+    case 'rumba-44': {
+      const swingOffset = stepInBar % 2 === 1 ? stepSec * 0.1 : 0;
+      const kick = s16 === 0 || s16 === 6 || s16 === 10;
+      const snare = s16 === 4 || s16 === 12;
+      const slap = s16 === 3 || s16 === 14;
+      const hat = stepInBar % 2 === 0;
+      return kick || snare || slap || hat
+        ? { kick, snare, hat, slap, kickVel: 0.48, snareVel: 0.3, hatVel: 0.21, slapVel: 0.4, offsetSec: swingOffset }
+        : null;
+    }
+    case 'habenera-44': {
+      // Dotted 3+3+2 feel
+      const kick = s16 === 0 || s16 === 6 || s16 === 8 || s16 === 14;
+      const slap = s16 === 6 || s16 === 12;
+      const hat = s16 === 0 || s16 === 3 || s16 === 6 || s16 === 8 || s16 === 12;
+      return kick || slap || hat
+        ? { kick, hat, slap, kickVel: 0.56, snareVel: 0, hatVel: 0.24, slapVel: 0.48, offsetSec: 0 }
+        : null;
+    }
+    case 'tango-44': {
+      const kick = s16 === 0 || s16 === 4 || s16 === 8 || s16 === 12;
+      const snare = s16 === 4 || s16 === 12 || s16 === 14;
+      const slap = s16 === 6 || s16 === 15;
+      const hat = s16 % 4 === 0;
+      return kick || snare || slap || hat
+        ? { kick, snare, hat, slap, kickVel: 0.62, snareVel: 0.5, hatVel: 0.24, slapVel: 0.55, offsetSec: 0 }
+        : null;
+    }
+    case 'bossa-nova-44': {
+      // 3-2 Bossa clave + surdo pattern
+      const kick = s16 === 0 || s16 === 3 || s16 === 4 || s16 === 7 || s16 === 8 || s16 === 11 || s16 === 12;
+      const slap = s16 === 0 || s16 === 3 || s16 === 6 || s16 === 10 || s16 === 12;
+      const hat = stepInBar % 2 === 0;
+      return kick || slap || hat
+        ? { kick, hat, slap, kickVel: 0.44, snareVel: 0, hatVel: 0.18, slapVel: 0.48, offsetSec: 0 }
+        : null;
+    }
+    case 'disco-44': {
+      const kick = s16 === 0 || s16 === 4 || s16 === 8 || s16 === 12;
+      const snare = s16 === 4 || s16 === 12;
+      const hat = stepInBar % 2 === 0;
+      const isOffbeat = s16 === 2 || s16 === 6 || s16 === 10 || s16 === 14;
+      return kick || snare || hat
+        ? { kick, snare, hat, kickVel: 0.64, snareVel: 0.5, hatVel: isOffbeat ? 0.42 : 0.18, slapVel: 0, offsetSec: 0 }
+        : null;
+    }
+    case 'pop-rock-44': {
+      const kick = s16 === 0 || s16 === 3 || s16 === 6 || s16 === 8 || s16 === 10;
+      const snare = s16 === 4 || s16 === 12;
+      const hat = stepInBar % 2 === 0;
+      return kick || snare || hat
+        ? { kick, snare, hat, kickVel: 0.65, snareVel: 0.58, hatVel: stepInBar % 4 === 0 ? 0.34 : 0.24, slapVel: 0, offsetSec: 0 }
+        : null;
+    }
+    case 'funk-44': {
+      const kick = s16 === 0 || s16 === 2 || s16 === 7 || s16 === 10;
+      const snare = s16 === 4 || s16 === 9 || s16 === 12 || s16 === 15;
+      const hat = true;
+      const isGhost = s16 === 9 || s16 === 15;
+      return {
+        kick,
+        snare,
+        hat,
+        kickVel: 0.62,
+        snareVel: isGhost ? 0.24 : 0.54,
+        hatVel: stepInBar % 2 === 0 ? 0.3 : 0.14,
+        slapVel: 0,
+        offsetSec: 0,
+      };
+    }
+    case 'reggae-44': {
+      // One-drop on beat 3 (s16 === 8), skank offbeat slap/hat
+      const kick = s16 === 8;
+      const snare = s16 === 8;
+      const slap = s16 === 2 || s16 === 6 || s16 === 10 || s16 === 14;
+      const hat = stepInBar % 2 === 0;
+      return kick || snare || slap || hat
+        ? { kick, snare, hat, slap, kickVel: 0.62, snareVel: 0.48, hatVel: 0.2, slapVel: 0.42, offsetSec: 0 }
+        : null;
+    }
+    case 'chachacha-44': {
+      // 1 - 2 - 3 - cha-cha-1
+      const kick = s16 === 0 || s16 === 8 || s16 === 12;
+      const snare = s16 === 4 || s16 === 12 || s16 === 14;
+      const slap = s16 === 0 || s16 === 4 || s16 === 8 || s16 === 12 || s16 === 14;
+      const hat = stepInBar % 2 === 0;
+      return kick || snare || slap || hat
+        ? { kick, snare, hat, slap, kickVel: 0.56, snareVel: 0.42, hatVel: 0.24, slapVel: 0.5, offsetSec: 0 }
+        : null;
+    }
+    case 'twist-44': {
+      const kick = s16 === 0 || s16 === 6 || s16 === 8 || s16 === 14;
+      const snare = s16 === 4 || s16 === 12;
+      const hat = stepInBar % 2 === 0;
+      return kick || snare || hat
+        ? { kick, snare, hat, kickVel: 0.62, snareVel: 0.56, hatVel: 0.3, slapVel: 0, offsetSec: 0 }
+        : null;
+    }
+    case 'valse-34': {
+      // Bùm - Chát - Chát (stepsPerBar = 12 in 3/4, or adapted on 4/4)
+      const b1 = 0;
+      const b2 = Math.round(stepsPerBar / 3);
+      const b3 = Math.round((stepsPerBar * 2) / 3);
+      const kick = stepInBar === b1;
+      const snare = stepInBar === b2 || stepInBar === b3;
+      const hat = stepInBar === b1 || stepInBar === b2 || stepInBar === b3;
+      return kick || snare || hat
+        ? { kick, snare, hat, kickVel: 0.54, snareVel: 0.34, hatVel: 0.22, slapVel: 0, offsetSec: 0 }
+        : null;
+    }
+    case 'boston-34': {
+      const b1 = 0;
+      const b2 = Math.round(stepsPerBar / 3);
+      const b3 = Math.round((stepsPerBar * 2) / 3);
+      const kick = stepInBar === b1;
+      const slap = stepInBar === b2 || stepInBar === b3;
+      const hat = stepInBar % 2 === 0;
+      return kick || slap || hat
+        ? { kick, hat, slap, kickVel: 0.46, snareVel: 0, hatVel: 0.16, slapVel: 0.34, offsetSec: 0 }
+        : null;
+    }
+    case 'slow-rock-68': {
+      // 6/8 feel: strong accent at beat 1 (step 0) and beat 4 (midpoint of bar)
+      const mid = Math.round(stepsPerBar / 2);
+      const kick = stepInBar === 0;
+      const snare = stepInBar === mid;
+      const eighthInterval = Math.max(1, Math.round(stepsPerBar / 6));
+      const hat = stepInBar % eighthInterval === 0;
+      return kick || snare || hat
+        ? {
+            kick,
+            snare,
+            hat,
+            kickVel: 0.54,
+            snareVel: 0.42,
+            hatVel: stepInBar === 0 || stepInBar === mid ? 0.32 : 0.19,
+            slapVel: 0,
+            offsetSec: 0,
+          }
+        : null;
+    }
+    default:
+      return null;
+  }
+}
+
 function schedulePatternToTransport(
   rig: SynthRig,
   options: LoopPlaybackOptions,
@@ -1066,11 +1710,14 @@ function schedulePatternToTransport(
   sectionBeatSpans: Array<{ id: string; start: number; end: number }>;
   chordEvents: ReturnType<typeof buildChordTimeline>['events'];
 } {
+  const beatsPerBar =
+    options.beatsPerBar ?? resolveBeatsPerBar(options.timeSignature);
   const { events, totalBeats } = buildChordTimeline(options.sections, {
     backingPattern: options.backingPattern,
     chordArpStyles: options.chordArpStyles,
     songMood: options.songMood,
     melodyNotes: options.melodyNotes,
+    beatsPerBar,
   });
   const secPerBeat = 60 / Math.max(45, Math.min(180, options.bpm));
   const sustainPedal = options.sustainPedal ?? true;
@@ -1083,7 +1730,7 @@ function schedulePatternToTransport(
   }> = [];
   let beatCursor = 0;
   options.sections.forEach((sec) => {
-    const dur = sec.bars * 4;
+    const dur = sec.bars * beatsPerBar;
     sectionBeatSpans.push({
       id: sec.id,
       kind: sec.kind,
@@ -1279,11 +1926,11 @@ function schedulePatternToTransport(
     activeLoopParts.push(melodyPart);
   }
 
-  // Schedule Optional Metronome Quarter-Note Clicks
+  // Schedule Optional Metronome Clicks
   if (options.metronomeEnabled) {
     const metroEvents: Array<[number, { isBarAccent: boolean }]> = [];
     for (let beat = 0; beat < totalBeats; beat++) {
-      metroEvents.push([beat * secPerBeat, { isBarAccent: beat % 4 === 0 }]);
+      metroEvents.push([beat * secPerBeat, { isBarAccent: beat % beatsPerBar === 0 }]);
     }
     const metroPart = new Tone.Part((time, ev) => {
       rig.metronome.triggerAttackRelease(
@@ -1299,21 +1946,31 @@ function schedulePatternToTransport(
     activeLoopParts.push(metroPart);
   }
 
-  // Schedule Drums across 16th steps (4 steps per beat)
+  // Schedule Drums across 16th steps (4 steps per beat) — supports Legacy Kits + 20 Accompaniment Styles
   if (options.drumPattern !== 'none') {
     const totalSteps = Math.round(totalBeats * 4);
+    const stepsPerBar = beatsPerBar * 4;
     const stepSec = secPerBeat / 4;
     const drumEvents: Array<
       [
         number,
-        { kick?: boolean; snare?: boolean; hat?: boolean; kickVel: number; snareVel: number; hatVel: number },
+        {
+          kick?: boolean;
+          snare?: boolean;
+          hat?: boolean;
+          slap?: boolean;
+          kickVel: number;
+          snareVel: number;
+          hatVel: number;
+          slapVel: number;
+        },
       ]
     > = [];
     const firstVerseId = sectionBeatSpans.find((s) => s.kind === 'Verse')?.id;
 
     for (let step = 0; step < totalSteps; step++) {
       const stepBeat = step / 4;
-      const stepInBar = step % 16;
+      const stepInBar = step % stepsPerBar;
       const span =
         sectionBeatSpans.find((s) => stepBeat >= s.start && stepBeat < s.end) ??
         sectionBeatSpans[0];
@@ -1348,31 +2005,58 @@ function schedulePatternToTransport(
               kickVel: isChorusIntensity ? 0.56 : isSoftEntry ? 0.36 : 0.44,
               snareVel: isChorusIntensity ? 0.44 : isSoftEntry ? 0.22 : 0.3,
               hatVel: baseHatVel * (isChorusIntensity ? 0.34 : isSoftEntry ? 0.17 : 0.23),
+              slapVel: 0,
             },
           ]);
         }
         continue;
       }
 
-      const isLofiKit = options.drumPattern === 'lofi';
-      const swingOffset = isLofiKit && step % 2 === 1 ? stepSec * 0.14 : 0;
-      const isKick = isLofiKit
-        ? stepInBar === 0 || stepInBar === 7 || stepInBar === 10
-        : stepInBar === 0 || stepInBar === 3 || stepInBar === 10 || stepInBar === 11;
-      const isSnare = stepInBar === 4 || stepInBar === 12;
-      const isHat = step % 2 === 0;
+      if (options.drumPattern === 'lofi' || options.drumPattern === 'boombap') {
+        const isLofiKit = options.drumPattern === 'lofi';
+        const swingOffset = isLofiKit && step % 2 === 1 ? stepSec * 0.14 : 0;
+        const isKick = isLofiKit
+          ? stepInBar === 0 || stepInBar === 7 || stepInBar === 10
+          : stepInBar === 0 || stepInBar === 3 || stepInBar === 10 || stepInBar === 11;
+        const isSnare = stepInBar === 4 || stepInBar === 12;
+        const isHat = step % 2 === 0;
 
-      if (isKick || isSnare || isHat) {
-        const hatBase = step % 4 === 0 ? 0.78 : 0.48;
+        if (isKick || isSnare || isHat) {
+          const hatBase = step % 4 === 0 ? 0.78 : 0.48;
+          drumEvents.push([
+            step * stepSec + swingOffset,
+            {
+              kick: isKick,
+              snare: isSnare,
+              hat: isHat,
+              kickVel: isLofiKit ? 0.48 : 0.62,
+              snareVel: isLofiKit ? 0.42 : 0.56,
+              hatVel: hatBase * (isLofiKit ? 0.32 : 0.42),
+              slapVel: 0,
+            },
+          ]);
+        }
+        continue;
+      }
+
+      const hit = buildRhythmStepHit(
+        options.drumPattern,
+        stepInBar,
+        stepsPerBar,
+        stepSec
+      );
+      if (hit) {
         drumEvents.push([
-          step * stepSec + swingOffset,
+          step * stepSec + hit.offsetSec,
           {
-            kick: isKick,
-            snare: isSnare,
-            hat: isHat,
-            kickVel: isLofiKit ? 0.48 : 0.62,
-            snareVel: isLofiKit ? 0.42 : 0.56,
-            hatVel: hatBase * (isLofiKit ? 0.32 : 0.42),
+            kick: hit.kick,
+            snare: hit.snare,
+            hat: hit.hat,
+            slap: hit.slap,
+            kickVel: hit.kickVel,
+            snareVel: hit.snareVel,
+            hatVel: hit.hatVel,
+            slapVel: hit.slapVel,
           },
         ]);
       }
@@ -1383,6 +2067,7 @@ function schedulePatternToTransport(
         if (ev.kick) rig.kick.triggerAttackRelease('C1', '8n', time, ev.kickVel);
         if (ev.snare) rig.snare.triggerAttackRelease('16n', time, ev.snareVel);
         if (ev.hat) rig.hat.triggerAttackRelease('32n', time, ev.hatVel);
+        if (ev.slap) rig.slap.triggerAttackRelease('32n', time, ev.slapVel);
       }, drumEvents);
       drumPart.loop = isLoop;
       drumPart.loopEnd = totalBeats * secPerBeat;
@@ -1405,6 +2090,13 @@ export async function startGrooveLoop(options: LoopPlaybackOptions): Promise<voi
     options.melodyInstrument === 'piano'
   ) {
     await ensureLivePianoSamplesReady(rig);
+    if (sessionId !== activePlaybackSessionId) return;
+  }
+  if (
+    options.backingInstrument === 'guitar-strum' ||
+    options.melodyInstrument === 'guitar'
+  ) {
+    await ensureLiveGuitarSamplesReady(rig);
     if (sessionId !== activePlaybackSessionId) return;
   }
   if (typeof options.volumeGain === 'number') {
@@ -1498,24 +2190,31 @@ export async function startGrooveLoop(options: LoopPlaybackOptions): Promise<voi
 export async function renderDraftToWavBytes(
   draft: SketchpadDraft
 ): Promise<Uint8Array> {
+  const beatsPerBar = resolveBeatsPerBar(draft.timeSignature);
   const { totalBeats } = buildChordTimeline(draft.sections, {
     backingPattern: draft.backingPattern,
     chordArpStyles: draft.chordArpStyles,
     songMood: draft.mood,
     melodyNotes: draft.melodyNotes,
+    beatsPerBar,
   });
   const secPerBeat = 60 / Math.max(45, Math.min(180, draft.bpm));
   const durationSec = Math.min(240, Math.max(2, totalBeats * secPerBeat + 2.0));
 
-  // Ensure real Yamaha C5 samples are decoded prior to OfflineAudioContext rendering
-  await ensurePianoSamplesDecoded(Tone.getContext()).catch(() => 0);
+  // Ensure real Yamaha C5 & Acoustic Guitar samples are decoded prior to OfflineAudioContext rendering
+  await Promise.all([
+    ensurePianoSamplesDecoded(Tone.getContext()).catch(() => 0),
+    ensureGuitarSamplesDecoded(Tone.getContext()).catch(() => 0),
+  ]);
   const predecodedPianoBuffers = getDecodedPianoSampleSnapshot();
+  const predecodedGuitarBuffers = getDecodedGuitarSampleSnapshot();
 
   const buffer = await Tone.Offline(({ transport }) => {
     const rig = createSynthRig(
       Tone.getDestination(),
       false,
-      predecodedPianoBuffers
+      predecodedPianoBuffers,
+      predecodedGuitarBuffers
     );
     const savedParts = activeLoopParts;
     activeLoopParts = [];
@@ -1525,6 +2224,8 @@ export async function renderDraftToWavBytes(
         sections: draft.sections,
         melodyNotes: draft.melodyNotes,
         bpm: draft.bpm,
+        timeSignature: draft.timeSignature,
+        beatsPerBar,
         backingInstrument: draft.backingInstrument,
         backingPattern: draft.backingPattern ?? 'auto-song',
         chordArpStyles: draft.chordArpStyles,

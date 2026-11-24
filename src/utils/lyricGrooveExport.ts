@@ -3,6 +3,7 @@ import {
   analyzeSectionLyrics,
   buildMidiFileBytes,
   MOOD_STYLE_OPTIONS,
+  resolveBeatsPerBar,
   type SketchpadDraft,
 } from './lyricGrooveEngine.ts';
 import { renderDraftToWavBytes } from './lyricGrooveAudio.ts';
@@ -39,11 +40,12 @@ export function renderLeadSheetCanvas(draft: SketchpadDraft): HTMLCanvasElement 
   const paddingX = 76;
   const lineHeight = 58;
 
+  const beatsPerBar = resolveBeatsPerBar(draft.timeSignature);
   // First pass: calculate total height accurately
   let estimatedHeight = 230;
   const analyzedSections = draft.sections.map((section) => ({
     section,
-    analysis: analyzeSectionLyrics(section),
+    analysis: analyzeSectionLyrics(section, beatsPerBar),
   }));
   analyzedSections.forEach(({ analysis }) => {
     estimatedHeight += 76 + Math.max(1, analysis.lines.length) * lineHeight + 28;
@@ -73,7 +75,7 @@ export function renderLeadSheetCanvas(draft: SketchpadDraft): HTMLCanvasElement 
     MOOD_STYLE_OPTIONS.find((m) => m.id === draft.mood)?.label ?? draft.mood;
   const metaLine = `Tông ${draft.keyRoot} ${
     draft.scaleMode === 'major' ? 'Trưởng' : 'Thứ'
-  }  ·  ${draft.bpm} BPM  ·  Phong cách: ${moodLabel}  ·  ${
+  }  ·  Nhịp ${draft.timeSignature ?? '4/4'}  ·  ${draft.bpm} BPM  ·  Phong cách: ${moodLabel}  ·  ${
     draft.sections.length
   } đoạn nhạc`;
 

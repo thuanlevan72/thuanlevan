@@ -8,7 +8,22 @@ export type MoodStyleId =
   | 'acoustic';
 
 export type BackingInstrumentId = 'rhodes' | 'guitar-strum' | 'piano-ballad';
+export type TimeSignatureId = '4/4' | '2/4' | '3/4' | '6/8';
+
+export type CoreArpeggioPatternId =
+  | 'arp-ballad-1'
+  | 'arp-ballad-2'
+  | 'arp-ballad-3'
+  | 'arp-country-folk'
+  | 'arp-ballad-drive'
+  | 'arp-percussive-slap'
+  | 'arp-valse-even'
+  | 'arp-valse-boom-chat'
+  | 'arp-slow-rock-68'
+  | 'arp-bossa-funky';
+
 export type ConcreteArpeggioPatternId =
+  | CoreArpeggioPatternId
   | 'ballad-wave'
   | 'lofi-broken'
   | 'rising-arp'
@@ -18,7 +33,31 @@ export type ConcreteArpeggioPatternId =
   | 'pop-comp';
 export type ArpeggioPatternId = 'auto-song' | ConcreteArpeggioPatternId;
 export type BackingPatternId = 'ballad-arpeggio' | ArpeggioPatternId;
-export type DrumPatternId = 'none' | 'lofi' | 'boombap' | 'ballad';
+
+export type RhythmStyle20Id =
+  | 'pop-ballad-44'
+  | 'ballad-24'
+  | 'slow-ballad-44'
+  | 'slow-surf-44'
+  | 'blue-44'
+  | 'fox-24'
+  | 'march-24'
+  | 'bolero-44'
+  | 'rumba-44'
+  | 'habenera-44'
+  | 'tango-44'
+  | 'bossa-nova-44'
+  | 'disco-44'
+  | 'pop-rock-44'
+  | 'funk-44'
+  | 'reggae-44'
+  | 'chachacha-44'
+  | 'twist-44'
+  | 'valse-34'
+  | 'boston-34'
+  | 'slow-rock-68';
+
+export type DrumPatternId = 'none' | 'lofi' | 'boombap' | 'ballad' | RhythmStyle20Id;
 export type MelodyInstrumentId = 'piano' | 'synth' | 'guitar';
 export type SectionKind =
   | 'Intro'
@@ -61,6 +100,7 @@ export interface SketchpadDraft {
   title: string;
   keyRoot: string;
   scaleMode: 'major' | 'minor';
+  timeSignature?: TimeSignatureId;
   mood: MoodStyleId;
   bpm: number;
   backingInstrument: BackingInstrumentId;
@@ -77,6 +117,19 @@ export interface SketchpadDraft {
   sections: SongSection[];
   melodyNotes: MelodyNote[];
   updatedAt: number;
+}
+
+export function resolveBeatsPerBar(timeSignature?: TimeSignatureId | null): number {
+  switch (timeSignature) {
+    case '2/4':
+      return 2;
+    case '3/4':
+    case '6/8':
+      return 3;
+    case '4/4':
+    default:
+      return 4;
+  }
 }
 
 export function resolveMelodyPlaybackMode(
@@ -166,53 +219,448 @@ export interface ScheduledChordEvent {
   bassMidis?: number[];
 }
 
-export const ARPEGGIO_PATTERN_META: Array<{
+export interface ArpeggioPatternMetaItem {
   id: ConcreteArpeggioPatternId;
+  order?: number;
+  group: 'Nhóm 4/4' | 'Nhóm 3/4 & 6/8' | 'Studio mở rộng';
+  recommendedMeter?: TimeSignatureId;
+  formula: string;
   shortLabel: string;
   label: string;
   desc: string;
-}> = [
+  isCore: boolean;
+}
+
+export const ARPEGGIO_PATTERN_META: ArpeggioPatternMetaItem[] = [
+  // 10 kiểu rải hợp âm cốt lõi — Nhóm 4/4 (6 kiểu)
+  {
+    id: 'arp-ballad-1',
+    order: 1,
+    group: 'Nhóm 4/4',
+    recommendedMeter: '4/4',
+    formula: 'B - 3 - 2 - 1',
+    shortLabel: 'Ballad 1',
+    label: '1. Rải xuôi cơ bản (Ballad 1)',
+    desc: 'B - 3 - 2 - 1 · 4 nốt đen chậm rãi, dùng cho đoạn mở đầu sâu lắng',
+    isCore: true,
+  },
+  {
+    id: 'arp-ballad-2',
+    order: 2,
+    group: 'Nhóm 4/4',
+    recommendedMeter: '4/4',
+    formula: 'B - 3 - 2 - 3 - 1 - 3 - 2 - 3',
+    shortLabel: 'Ballad 2',
+    label: '2. Rải tiến – lùi (Ballad 2 / V-Pop)',
+    desc: 'B - 3 - 2 - 3 - 1 - 3 - 2 - 3 · 8 nốt móc đơn quốc dân cho hầu hết nhạc trẻ ballad',
+    isCore: true,
+  },
+  {
+    id: 'arp-ballad-3',
+    order: 3,
+    group: 'Nhóm 4/4',
+    recommendedMeter: '4/4',
+    formula: 'B - 3 - (2+1) - 3 - (2+1) - 3',
+    shortLabel: 'Ballad 3',
+    label: '3. Rải chập dây (Ballad 3)',
+    desc: 'B - 3 - (2+1) - 3 - (2+1) - 3 · Móc cùng lúc dây 1 & 2 tạo độ dày ấm',
+    isCore: true,
+  },
+  {
+    id: 'arp-country-folk',
+    order: 4,
+    group: 'Nhóm 4/4',
+    recommendedMeter: '4/4',
+    formula: 'B1 - (3+2+1) - B2 - (3+2+1)',
+    shortLabel: 'Country/Folk',
+    label: '4. Rải tách bass – chập nhịp (Country / Folk)',
+    desc: 'B1 - (3+2+1) - B2 - (3+2+1) · Đánh luân phiên 2 nốt bass xen kẽ chập hợp âm',
+    isCore: true,
+  },
+  {
+    id: 'arp-ballad-drive',
+    order: 5,
+    group: 'Nhóm 4/4',
+    recommendedMeter: '4/4',
+    formula: 'B - 3 - 2 - 1 - 2 - 3 - 2 - 1',
+    shortLabel: 'Móc kép dồn',
+    label: '5. Rải móc kép dồn (Ballad cao trào)',
+    desc: 'B - 3 - 2 - 1 - 2 - 3 - 2 - 1 · Tiết tấu nhanh, dày tiếng trước khi vào điệp khúc',
+    isCore: true,
+  },
+  {
+    id: 'arp-percussive-slap',
+    order: 6,
+    group: 'Nhóm 4/4',
+    recommendedMeter: '4/4',
+    formula: 'B - 3 - 2 - [Đập] - 3 - 2 - 1 - [Đập]',
+    shortLabel: 'Đập thùng',
+    label: '6. Rải kết hợp đập thùng (Percussive / Slap)',
+    desc: 'B - 3 - 2 - [Đập] - 3 - 2 - 1 - [Đập] · Tạo tiếng trống giả nhịp 2 & 4 ngay trên đàn',
+    isCore: true,
+  },
+  // 10 kiểu rải hợp âm cốt lõi — Nhóm 3/4 & 6/8 (4 kiểu)
+  {
+    id: 'arp-valse-even',
+    order: 7,
+    group: 'Nhóm 3/4 & 6/8',
+    recommendedMeter: '3/4',
+    formula: 'B - 3 - 2 - 1 - 2 - 3',
+    shortLabel: 'Valse 3 đều',
+    label: '7. Rải 3 phách đều (Valse / Boston chậm)',
+    desc: 'B - 3 - 2 - 1 - 2 - 3 · 6 nốt móc đơn đều nhau cho nhịp 3/4 trữ tình',
+    isCore: true,
+  },
+  {
+    id: 'arp-valse-boom-chat',
+    order: 8,
+    group: 'Nhóm 3/4 & 6/8',
+    recommendedMeter: '3/4',
+    formula: 'B - (3+2+1) - (3+2+1)',
+    shortLabel: 'Bùm-Chát-Chát',
+    label: '8. Rải Valse truyền thống (Bùm - Chát - Chát)',
+    desc: 'B - (3+2+1) - (3+2+1) · 1 phách trầm ấm, 2 phách cao nhẹ bay bổng',
+    isCore: true,
+  },
+  {
+    id: 'arp-slow-rock-68',
+    order: 9,
+    group: 'Nhóm 3/4 & 6/8',
+    recommendedMeter: '6/8',
+    formula: 'B - 3 - 2 - 1 - 2 - 3 (6/8)',
+    shortLabel: 'Slow Rock 6/8',
+    label: '9. Rải Slow Rock chuẩn (nhịp 6/8)',
+    desc: 'B - 3 - 2 - 1 - 2 - 3 · Nhấn mạnh vào phách 1 và phách 4 dập dìu',
+    isCore: true,
+  },
+  {
+    id: 'arp-bossa-funky',
+    order: 10,
+    group: 'Nhóm 3/4 & 6/8',
+    recommendedMeter: '4/4',
+    formula: 'Đảo phách · Ngắt tiếng (Mute)',
+    shortLabel: 'Đảo phách',
+    label: '10. Rải đảo phách / ngắt tiếng (Bossa / Funky)',
+    desc: 'Rải nốt xen kẽ ngắt tiếng (staccato/mute), tạo độ nảy và groove phóng khoáng',
+    isCore: true,
+  },
+  // Kiểu rải Piano / Studio mở rộng (tương thích ngược)
   {
     id: 'ballad-wave',
+    group: 'Studio mở rộng',
+    formula: '1 - 5 - 8 - 10',
     shortLabel: 'Sóng 1-5-8',
     label: 'Rải Sóng Ballad (1-5-8-10)',
     desc: 'Tay trái rải Bass–5–8, tay phải buông giai điệu đệm mượt',
+    isCore: false,
   },
   {
     id: 'lofi-broken',
+    group: 'Studio mở rộng',
+    formula: 'Bass · Trì hoãn',
     shortLabel: 'Rải Lofi',
     label: 'Rải Lofi Trì Hoãn (Đan xen)',
     desc: 'Bass trầm ấm kết hợp nốt đệm rải nhẹ có khoảng nghỉ lofi',
+    isCore: false,
   },
   {
     id: 'rising-arp',
+    group: 'Studio mở rộng',
+    formula: 'Bass → Ngọn',
     shortLabel: 'Móc lên',
     label: 'Rải Móc Lên (Bass → Ngọn)',
     desc: 'Đánh nối tiếp từng nốt từ trầm lên cao kiểu đàn dây / piano mở đầu',
+    isCore: false,
   },
   {
     id: 'falling-arp',
+    group: 'Studio mở rộng',
+    formula: 'Cao → Trầm',
     shortLabel: 'Buông xuống',
     label: 'Rải Buông Xuống (Cao → Trầm)',
     desc: 'Ngân nốt cao sáng rồi rải rơi dần xuống giữ độ sâu lắng',
+    isCore: false,
   },
   {
     id: 'pinch-plucked',
+    group: 'Studio mở rộng',
+    formula: 'Bass + Đôi',
     shortLabel: 'Móc đôi',
     label: 'Móc Đôi Acoustic (Bass + Đôi)',
     desc: 'Móc đồng thời bass + nốt cao ở phách mạnh, xen kẽ nốt giữa nhịp',
+    isCore: false,
   },
   {
     id: 'rich-block',
+    group: 'Studio mở rộng',
+    formula: 'Chặn 2 tay',
     shortLabel: 'Dày 2 tay',
     label: 'Chặn Hợp Âm Dày (2 Tay)',
     desc: 'Bấm trọn khối hợp âm mở rộng, giàu lực cho điệp khúc cao trào',
+    isCore: false,
   },
   {
     id: 'pop-comp',
+    group: 'Studio mở rộng',
+    formula: 'Chập Pop/R&B',
     shortLabel: 'Pop/R&B',
     label: 'Nhấn Nhịp Pop/R&B',
     desc: 'Đệm chập nhịp hiện đại, giữ groove chắc và có độ nảy',
+    isCore: false,
+  },
+];
+
+export interface RhythmStyleMetaItem {
+  id: RhythmStyle20Id;
+  order: number;
+  group:
+    | 'Nhóm 1 · Nhạc nhẹ, Trữ tình & Nhạc trẻ'
+    | 'Nhóm 2 · Nhạc Bolero & Nhạc xưa'
+    | 'Nhóm 3 · Nhạc sôi động, Tiết tấu nhanh'
+    | 'Nhóm 4 · Nhạc 3 phách & 6 phách';
+  label: string;
+  meter: TimeSignatureId;
+  characteristic: string;
+  genres: string;
+  recommendedBpm: number;
+  recommendedArp: ConcreteArpeggioPatternId;
+}
+
+export const RHYTHM_STYLE_META: RhythmStyleMetaItem[] = [
+  // Nhóm 1: Nhạc nhẹ, Trữ tình & Nhạc trẻ
+  {
+    id: 'pop-ballad-44',
+    order: 1,
+    group: 'Nhóm 1 · Nhạc nhẹ, Trữ tình & Nhạc trẻ',
+    label: '1. Ballad (Pop Ballad)',
+    meter: '4/4',
+    characteristic: 'Êm ái, tự sự, dễ biến tấu rải hoặc quạt',
+    genres: 'Nhạc trẻ V-Pop, US-UK trữ tình',
+    recommendedBpm: 74,
+    recommendedArp: 'arp-ballad-2',
+  },
+  {
+    id: 'ballad-24',
+    order: 2,
+    group: 'Nhóm 1 · Nhạc nhẹ, Trữ tình & Nhạc trẻ',
+    label: '1B. Ballad 2/4',
+    meter: '2/4',
+    characteristic: 'Ballad nhịp 2/4 êm ái, dìu dặt (Bùm - Chát - lơi nhẹ)',
+    genres: 'Ballad V-Pop 2/4, Tháng Tư Là Lời Nói Dối Của Em',
+    recommendedBpm: 72,
+    recommendedArp: 'arp-ballad-2',
+  },
+  {
+    id: 'slow-ballad-44',
+    order: 2,
+    group: 'Nhóm 1 · Nhạc nhẹ, Trữ tình & Nhạc trẻ',
+    label: '2. Slow (Slow Ballad)',
+    meter: '4/4',
+    characteristic: 'Rất chậm, thưa nốt, dàn trải sâu lắng',
+    genres: 'Nhạc tình ca buồn, tiền chiến chậm',
+    recommendedBpm: 62,
+    recommendedArp: 'arp-ballad-1',
+  },
+  {
+    id: 'slow-surf-44',
+    order: 3,
+    group: 'Nhóm 1 · Nhạc nhẹ, Trữ tình & Nhạc trẻ',
+    label: '3. Surf (Slow Surf)',
+    meter: '4/4',
+    characteristic: 'Đánh móc đơn đều (8 phách nhỏ), nhẹ nhàng',
+    genres: 'Nhạc Trịnh, nhạc xưa êm dịu',
+    recommendedBpm: 78,
+    recommendedArp: 'arp-ballad-2',
+  },
+  {
+    id: 'blue-44',
+    order: 4,
+    group: 'Nhóm 1 · Nhạc nhẹ, Trữ tình & Nhạc trẻ',
+    label: '4. Blue',
+    meter: '4/4',
+    characteristic: 'Có độ luyến láy swing, nhấn vào phách 2 và 4',
+    genres: 'Nhạc trữ tình sâu lắng, Jazz nhẹ',
+    recommendedBpm: 76,
+    recommendedArp: 'arp-ballad-3',
+  },
+  {
+    id: 'fox-24',
+    order: 5,
+    group: 'Nhóm 1 · Nhạc nhẹ, Trữ tình & Nhạc trẻ',
+    label: '5. Fox',
+    meter: '2/4',
+    characteristic: 'Nhịp đi đều 2 phách (Bùm - Chát)',
+    genres: 'Nhạc thiếu nhi, nhạc vui tươi đơn giản',
+    recommendedBpm: 108,
+    recommendedArp: 'arp-country-folk',
+  },
+  {
+    id: 'march-24',
+    order: 6,
+    group: 'Nhóm 1 · Nhạc nhẹ, Trữ tình & Nhạc trẻ',
+    label: '6. March (Hành khúc)',
+    meter: '2/4',
+    characteristic: 'Mạnh mẽ, dứt khoát, rộn ràng',
+    genres: 'Nhạc cách mạng, cổ động',
+    recommendedBpm: 116,
+    recommendedArp: 'arp-country-folk',
+  },
+  // Nhóm 2: Nhạc Bolero & Nhạc xưa
+  {
+    id: 'bolero-44',
+    order: 7,
+    group: 'Nhóm 2 · Nhạc Bolero & Nhạc xưa',
+    label: '7. Bolero',
+    meter: '4/4',
+    characteristic: 'Tiết tấu đặc trưng "Bùm - chát - bùm - bùm - chát"',
+    genres: 'Nhạc vàng, Bolero trữ tình',
+    recommendedBpm: 74,
+    recommendedArp: 'arp-ballad-3',
+  },
+  {
+    id: 'rumba-44',
+    order: 8,
+    group: 'Nhóm 2 · Nhạc Bolero & Nhạc xưa',
+    label: '8. Rumba',
+    meter: '4/4',
+    characteristic: 'Tương tự Bolero nhưng nhấn phách mềm và lơi hơn',
+    genres: 'Nhạc trữ tình, nhạc Pháp lời Việt',
+    recommendedBpm: 82,
+    recommendedArp: 'arp-ballad-3',
+  },
+  {
+    id: 'habenera-44',
+    order: 9,
+    group: 'Nhóm 2 · Nhạc Bolero & Nhạc xưa',
+    label: '9. Habenera',
+    meter: '4/4',
+    characteristic: 'Nốt bass chấm dôi tạo cảm giác lả lướt (3+3+2)',
+    genres: 'Nhạc cổ điển, trữ tình sang trọng',
+    recommendedBpm: 84,
+    recommendedArp: 'arp-bossa-funky',
+  },
+  {
+    id: 'tango-44',
+    order: 10,
+    group: 'Nhóm 2 · Nhạc Bolero & Nhạc xưa',
+    label: '10. Tango',
+    meter: '4/4',
+    characteristic: 'Dứt khoát, ngắt tiếng đột ngột, kịch tính',
+    genres: 'Nhạc xưa, nhạc khiêu vũ cổ điển',
+    recommendedBpm: 112,
+    recommendedArp: 'arp-bossa-funky',
+  },
+  {
+    id: 'bossa-nova-44',
+    order: 11,
+    group: 'Nhóm 2 · Nhạc Bolero & Nhạc xưa',
+    label: '11. Bossa Nova',
+    meter: '4/4',
+    characteristic: 'Đảo phách tinh tế, thư giãn, phóng khoáng',
+    genres: 'Nhạc chill, Acoustic quán cà phê',
+    recommendedBpm: 94,
+    recommendedArp: 'arp-bossa-funky',
+  },
+  // Nhóm 3: Nhạc sôi động, Tiết tấu nhanh
+  {
+    id: 'disco-44',
+    order: 12,
+    group: 'Nhóm 3 · Nhạc sôi động, Tiết tấu nhanh',
+    label: '12. Disco',
+    meter: '4/4',
+    characteristic: 'Sôi động, kick 4/4 đều tay, mở hi-hat phách và',
+    genres: 'Nhạc dance, pop sôi động, remix',
+    recommendedBpm: 120,
+    recommendedArp: 'pop-comp',
+  },
+  {
+    id: 'pop-rock-44',
+    order: 13,
+    group: 'Nhóm 3 · Nhạc sôi động, Tiết tấu nhanh',
+    label: '13. Pop Rock',
+    meter: '4/4',
+    characteristic: 'Trống chắc khỏe, snare dồn phách 2 & 4, quạt dày',
+    genres: 'Pop Rock, Rock Ballad sôi nổi',
+    recommendedBpm: 114,
+    recommendedArp: 'arp-ballad-drive',
+  },
+  {
+    id: 'funk-44',
+    order: 14,
+    group: 'Nhóm 3 · Nhạc sôi động, Tiết tấu nhanh',
+    label: '14. Funk / Funky',
+    meter: '4/4',
+    characteristic: 'Nhấn móc kép đảo phách, ngắt tiếng nảy giàu năng lượng',
+    genres: 'Funk Pop, Nu-Disco, R&B Groove',
+    recommendedBpm: 106,
+    recommendedArp: 'arp-bossa-funky',
+  },
+  {
+    id: 'reggae-44',
+    order: 15,
+    group: 'Nhóm 3 · Nhạc sôi động, Tiết tấu nhanh',
+    label: '15. Reggae',
+    meter: '4/4',
+    characteristic: 'Đánh nghịch phách (phách và), trống one-drop phách 3',
+    genres: 'Reggae chill, Acoustic biển đảo',
+    recommendedBpm: 88,
+    recommendedArp: 'arp-bossa-funky',
+  },
+  {
+    id: 'chachacha-44',
+    order: 16,
+    group: 'Nhóm 3 · Nhạc sôi động, Tiết tấu nhanh',
+    label: '16. Cha-cha-cha',
+    meter: '4/4',
+    characteristic: 'Nhịp Latin 1 - 2 - 3 - cha-cha-1 rộn rã',
+    genres: 'Nhạc khiêu vũ Latin, nhạc xuân sôi nổi',
+    recommendedBpm: 116,
+    recommendedArp: 'arp-percussive-slap',
+  },
+  {
+    id: 'twist-44',
+    order: 17,
+    group: 'Nhóm 3 · Nhạc sôi động, Tiết tấu nhanh',
+    label: '17. Twist / Rock & Roll',
+    meter: '4/4',
+    characteristic: 'Sôi động cổ điển, nhấn snare 2 & 4 + 8th cuốn hút',
+    genres: 'Rock & Roll, nhạc retro thập niên 60-70',
+    recommendedBpm: 132,
+    recommendedArp: 'arp-country-folk',
+  },
+  // Nhóm 4: Nhạc 3 phách & 6 phách
+  {
+    id: 'valse-34',
+    order: 18,
+    group: 'Nhóm 4 · Nhạc 3 phách & 6 phách',
+    label: '18. Valse (Waltz)',
+    meter: '3/4',
+    characteristic: 'Nhịp 3/4 "Bùm - Chát - Chát" nhẹ nhàng bay bổng',
+    genres: 'Nhạc trữ tình 3/4, khiêu vũ cổ điển',
+    recommendedBpm: 92,
+    recommendedArp: 'arp-valse-boom-chat',
+  },
+  {
+    id: 'boston-34',
+    order: 19,
+    group: 'Nhóm 4 · Nhạc 3 phách & 6 phách',
+    label: '19. Boston',
+    meter: '3/4',
+    characteristic: 'Valse chậm trữ tình, thưa và sâu lắng',
+    genres: 'Tình ca 3/4 chậm, nhạc tiền chiến',
+    recommendedBpm: 72,
+    recommendedArp: 'arp-valse-even',
+  },
+  {
+    id: 'slow-rock-68',
+    order: 20,
+    group: 'Nhóm 4 · Nhạc 3 phách & 6 phách',
+    label: '20. Slow Rock',
+    meter: '6/8',
+    characteristic: 'Nhịp 6/8 dập dìu 6 phách, nhấn phách 1 và phách 4',
+    genres: 'Slow Rock Việt, Ballad 6/8 cổ điển',
+    recommendedBpm: 68,
+    recommendedArp: 'arp-slow-rock-68',
   },
 ];
 
@@ -404,12 +852,24 @@ export const KEY_ROOT_OPTIONS = [
   'Eb',
   'E',
   'F',
+  'F#',
   'G',
   'Ab',
   'A',
   'Bb',
   'B',
 ] as const;
+
+export function normalizeKeyRoot(rawKey: string): string {
+  const trimmed = rawKey.trim();
+  const direct = KEY_ROOT_OPTIONS.find((k) => k === trimmed);
+  if (direct) return direct;
+  const chroma = Note.chroma(trimmed);
+  if (typeof chroma === 'number') {
+    return KEY_ROOT_OPTIONS[chroma] ?? 'C';
+  }
+  return 'C';
+}
 
 export const SECTION_KIND_OPTIONS: SectionKind[] = [
   'Intro',
@@ -586,14 +1046,21 @@ export function parseChordsFromLine(rawLine: string, lineBeats = 4): {
   };
 }
 
-export function analyzeSectionLyrics(section: SongSection): {
+export function analyzeSectionLyrics(
+  section: SongSection,
+  beatsPerBar = 4
+): {
   lines: AnalyzedLyricLine[];
   rhymeFamilies: RhymeFamilySummary[];
   totalChords: number;
   totalSyllables: number;
 } {
   const rawLines = section.text.split(/\r?\n/);
-  const beatsPerLine = Math.max(2, (section.bars * 4) / Math.max(1, rawLines.filter((l) => l.trim().length > 0).length));
+  const beatsPerLine = Math.max(
+    2,
+    (section.bars * beatsPerBar) /
+      Math.max(1, rawLines.filter((l) => l.trim().length > 0).length)
+  );
 
   const parsedLines = rawLines.map((rawLine, lineIndex) => {
     const { lyricOnlyLine, chords } = parseChordsFromLine(rawLine, beatsPerLine);
@@ -722,10 +1189,13 @@ export interface KaraokeLine {
  * Splits a section's chord-annotated lyrics into beat-accurate karaoke segments
  * aligned identically with buildChordTimeline() so UI can light up every [Chord] + lyric slice live.
  */
-export function parseSectionKaraokeLines(section: SongSection): KaraokeLine[] {
+export function parseSectionKaraokeLines(
+  section: SongSection,
+  beatsPerBar = 4
+): KaraokeLine[] {
   const rawLines = section.text.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (rawLines.length === 0) return [];
-  const sectionBeats = section.bars * 4;
+  const sectionBeats = section.bars * beatsPerBar;
   const beatsPerLine = sectionBeats / rawLines.length;
   const schedule = section.chordSchedule;
   let globalChordIdx = 0;
@@ -899,16 +1369,17 @@ export interface SynchronizedLyricWord {
 export function alignSectionLyricsToMelody(
   section: SongSection,
   sectionMelodyNotes: MelodyNote[],
-  sectionAbsStartBeat = 0
+  sectionAbsStartBeat = 0,
+  beatsPerBar = 4
 ): SynchronizedLyricWord[] {
-  const karaokeLines = parseSectionKaraokeLines(section);
+  const karaokeLines = parseSectionKaraokeLines(section, beatsPerBar);
   if (karaokeLines.length === 0) return [];
 
   const sortedNotes = [...sectionMelodyNotes]
     .filter((n) => n.sectionId === section.id)
     .sort((a, b) => a.startBeat - b.startBeat);
 
-  const sectionLimit = section.bars * 4;
+  const sectionLimit = section.bars * beatsPerBar;
   const wordsOut: SynchronizedLyricWord[] = [];
 
   karaokeLines.forEach((line) => {
@@ -1034,13 +1505,14 @@ export function alignSectionLyricsToMelody(
  */
 export function buildSynchronizedLyricEvents(
   sections: SongSection[],
-  melodyNotes: MelodyNote[]
+  melodyNotes: MelodyNote[],
+  beatsPerBar = 4
 ): SynchronizedLyricWord[] {
   const allWords: SynchronizedLyricWord[] = [];
   let cursor = 0;
   sections.forEach((sec) => {
-    allWords.push(...alignSectionLyricsToMelody(sec, melodyNotes, cursor));
-    cursor += sec.bars * 4;
+    allWords.push(...alignSectionLyricsToMelody(sec, melodyNotes, cursor, beatsPerBar));
+    cursor += sec.bars * beatsPerBar;
   });
   return allWords;
 }
@@ -1066,7 +1538,8 @@ export function resolvePianistVoicing(
     };
   }
 
-  const [mainPart, slashBass] = clean.split('/');
+  const [rawMainPart, slashBass] = clean.split('/');
+  const mainPart = rawMainPart.replace(/°/g, 'dim');
   const parsed = Chord.get(mainPart);
   if (!parsed || parsed.empty || parsed.notes.length === 0) {
     return {
@@ -1450,6 +1923,7 @@ export function buildChordTimeline(
     chordArpStyles?: Record<string, ConcreteArpeggioPatternId>;
     songMood?: MoodStyleId;
     melodyNotes?: MelodyNote[];
+    beatsPerBar?: number;
   }
 ): {
   events: ScheduledChordEvent[];
@@ -1459,9 +1933,10 @@ export function buildChordTimeline(
   let cursorBeat = 0;
   let prevRightHandMidis: number[] | undefined;
   const forcedPattern = resolveConcreteArpPattern(options?.backingPattern);
+  const beatsPerBar = options?.beatsPerBar ?? 4;
 
   sections.forEach((section) => {
-    const sectionBeats = section.bars * 4;
+    const sectionBeats = section.bars * beatsPerBar;
     const sectionChords: Array<{
       symbol: string;
       rawBeat: number;
@@ -1766,12 +2241,14 @@ export function buildMidiFileBytes(draft: SketchpadDraft): Uint8Array {
     },
   ];
 
+  const beatsPerBar = resolveBeatsPerBar(draft.timeSignature);
   // Channel 0: Backing Chords (strictly below melody register)
   const { events: chordEvents } = buildChordTimeline(draft.sections, {
     backingPattern: draft.backingPattern,
     chordArpStyles: draft.chordArpStyles,
     songMood: draft.mood,
     melodyNotes: draft.melodyNotes,
+    beatsPerBar,
   });
   chordEvents.forEach((ch) => {
     const startTick = Math.round(ch.startBeat * ticksPerBeat);
@@ -1800,7 +2277,7 @@ export function buildMidiFileBytes(draft: SketchpadDraft): Uint8Array {
       });
       events.push({ tick: endTick, data: [0x81, note.midi & 0x7f, 0] });
     });
-    sectionBeatOffset += sec.bars * 4;
+    sectionBeatOffset += sec.bars * beatsPerBar;
   });
 
   events.sort((a, b) => a.tick - b.tick);
@@ -1953,6 +2430,50 @@ export function transposeDraftAll(
       ...n,
       midi: Math.max(PIANO_MIN_MIDI, Math.min(PIANO_MAX_MIDI, n.midi + semitones)),
     })),
+  };
+}
+
+/**
+ * Transposes the entire song draft (keyRoot, inline [Chord] tags, chordSchedule, and melodyNotes)
+ * to a target key root using the shortest musical semitone distance in [-6, +6].
+ */
+export function transposeDraftToKey(
+  draft: SketchpadDraft,
+  targetKeyRoot: string
+): { draft: SketchpadDraft; semitones: number } {
+  const canonicalTarget = normalizeKeyRoot(targetKeyRoot);
+  const fromChroma = Note.chroma(draft.keyRoot);
+  const toChroma = Note.chroma(canonicalTarget);
+
+  if (typeof fromChroma !== 'number' || typeof toChroma !== 'number') {
+    return {
+      draft: { ...draft, keyRoot: canonicalTarget },
+      semitones: 0,
+    };
+  }
+
+  const rawDiff = (((toChroma - fromChroma) % 12) + 12) % 12;
+  if (rawDiff === 0) {
+    return {
+      draft: { ...draft, keyRoot: canonicalTarget },
+      semitones: 0,
+    };
+  }
+
+  let semitones = rawDiff > 6 ? rawDiff - 12 : rawDiff;
+  if (rawDiff === 6 && draft.melodyNotes.length > 0) {
+    const avgMidi =
+      draft.melodyNotes.reduce((sum, n) => sum + n.midi, 0) / draft.melodyNotes.length;
+    semitones = avgMidi > 71 ? -6 : 6;
+  }
+
+  const transposed = transposeDraftAll(draft, semitones);
+  return {
+    draft: {
+      ...transposed,
+      keyRoot: canonicalTarget,
+    },
+    semitones,
   };
 }
 
@@ -2132,8 +2653,10 @@ export function extractSectionBarSlots(
     backingPattern?: BackingPatternId;
     chordArpStyles?: Record<string, ConcreteArpeggioPatternId>;
     songMood?: MoodStyleId;
+    beatsPerBar?: number;
   }
 ): SectionBarSlot[] {
+  const beatsPerBar = options?.beatsPerBar ?? 4;
   const { events } = buildChordTimeline([section], options);
   const slots: SectionBarSlot[] = [];
   let runningChord = events[0]?.symbol ?? fallbackChord;
@@ -2141,8 +2664,8 @@ export function extractSectionBarSlots(
     events[0]?.arpPattern ?? resolveConcreteArpPattern(options?.backingPattern) ?? 'ballad-wave';
 
   for (let b = 0; b < section.bars; b++) {
-    const barStart = b * 4;
-    const barEnd = (b + 1) * 4;
+    const barStart = b * beatsPerBar;
+    const barEnd = (b + 1) * beatsPerBar;
     const inBar = events.filter(
       (ev) => ev.startBeat >= barStart - 0.01 && ev.startBeat < barEnd - 0.01
     );
@@ -2178,7 +2701,8 @@ export function extractSectionBarSlots(
 export function updateBarChordInSectionText(
   section: SongSection,
   barIndex: number,
-  newChord: string
+  newChord: string,
+  beatsPerBar = 4
 ): string {
   const cleanChord = normalizeChordInput(newChord);
   if (!cleanChord) return section.text;
@@ -2196,9 +2720,9 @@ export function updateBarChordInSectionText(
     return built.join('\n');
   }
 
-  const beatsPerLine = (section.bars * 4) / nonEmptyIndices.length;
-  const barStartBeat = barIndex * 4;
-  const barEndBeat = barStartBeat + 4;
+  const beatsPerLine = (section.bars * beatsPerBar) / nonEmptyIndices.length;
+  const barStartBeat = barIndex * beatsPerBar;
+  const barEndBeat = barStartBeat + beatsPerBar;
 
   // Locate first chord tag whose timeline beat falls in [barStartBeat, barEndBeat)
   let targetLineIdx = -1;
@@ -2316,10 +2840,11 @@ export function generateHarmonicMelodyForSection(
   section: SongSection,
   keyRoot: string,
   scaleMode: 'major' | 'minor',
-  variationSeed = 0
+  variationSeed = 0,
+  beatsPerBar = 4
 ): MelodyNote[] {
-  const { events } = buildChordTimeline([section]);
-  const totalBeats = section.bars * 4;
+  const { events } = buildChordTimeline([section], { beatsPerBar });
+  const totalBeats = section.bars * beatsPerBar;
   const fallbackVoicing = resolvePianistVoicing(
     scaleMode === 'minor' ? `${keyRoot}m7` : `${keyRoot}maj7`,
     0
@@ -2329,16 +2854,17 @@ export function generateHarmonicMelodyForSection(
   let prevMidi = 69;
 
   for (let b = 0; b < section.bars; b++) {
-    const barStart = b * 4;
+    const barStart = b * beatsPerBar;
     const isLastBar = b === section.bars - 1;
     const pattern =
       MELODY_RHYTHM_PATTERNS[(b + Math.abs(variationSeed)) % MELODY_RHYTHM_PATTERNS.length];
 
     pattern.forEach((step, sIdx) => {
+      if (step.offset >= beatsPerBar) return;
       const beat = barStart + step.offset;
       if (beat >= totalBeats) return;
       // Leave graceful vocal breath at end of final bar
-      if (isLastBar && sIdx === pattern.length - 1 && step.offset >= 2.5) {
+      if (isLastBar && sIdx === pattern.length - 1 && step.offset >= beatsPerBar - 1.5) {
         return;
       }
 
@@ -3325,6 +3851,7 @@ export function createStarterDrafts(): SketchpadDraft[] {
       title: 'Tháng Tư Là Lời Nói Dối Của Em (Tone C)',
       keyRoot: 'C',
       scaleMode: 'major',
+      timeSignature: '2/4',
       mood: 'pop-ballad',
       bpm: 72,
       backingInstrument: 'piano-ballad',
@@ -3337,466 +3864,490 @@ export function createStarterDrafts(): SketchpadDraft[] {
       updatedAt: now + 20_000,
       sections: [
         {
-          id: 'sec-tt-intro',
-          kind: 'Intro',
-          label: 'Intro — Piano Tháng Tư',
-          bars: 4,
-          text:
-            '[Fmaj7] [Fm] [C/E] [F#dim]\n' +
-            '[Dm7] [C/E] [Fmaj7] [G7]',
-          chordSchedule: [
-            { symbol: 'Fmaj7', startBeat: 0, durationBeats: 2, arpPattern: 'rising-arp' },
-            { symbol: 'Fm', startBeat: 2, durationBeats: 2, arpPattern: 'falling-arp' },
-            { symbol: 'C/E', startBeat: 4, durationBeats: 2, arpPattern: 'ballad-wave' },
-            { symbol: 'F#dim', startBeat: 6, durationBeats: 2, arpPattern: 'pinch-plucked' },
-            { symbol: 'Dm7', startBeat: 8, durationBeats: 2, arpPattern: 'rising-arp' },
-            { symbol: 'C/E', startBeat: 10, durationBeats: 2, arpPattern: 'ballad-wave' },
-            { symbol: 'Fmaj7', startBeat: 12, durationBeats: 2, arpPattern: 'falling-arp' },
-            { symbol: 'G7', startBeat: 14, durationBeats: 2, arpPattern: 'rich-block' },
-          ],
-        },
-        {
-          id: 'sec-tt-verse-1',
+          id: 'sec-tt-verse-1a',
           kind: 'Verse',
-          label: '1. Mùa Xuân Có Em',
+          label: '1A. Mùa Xuân Có Em (Ô 1–8)',
           bars: 8,
           text:
-            '[F]Mùa xuân có [G]em như chưa bắt [Em7]đầu [Am7]\n' +
-            '[Dm7]Và cơn gió [G]như khẽ mơn man [Am7]lay từng nhành hoa rơi\n' +
-            '[Fmaj7]Em đã bước [G]tới như em đã [Em7]từng [Am7]\n' +
-            '[Dm7]Chạy trốn với [Em7]anh đến cánh đồng [Asus4]xanh [A]',
+            '[F] Mùa xuân có [G7/F]em như chưa [Em]bắt [Am]đầu\n' +
+            '[Dm7] Và cơn [G]gió đang khẽ mơn man lay từng nhành [Am]hoa rơi',
           chordSchedule: [
-            { symbol: 'F', startBeat: 0.0, durationBeats: 2.0, arpPattern: 'ballad-wave' },
-            { symbol: 'G', startBeat: 2.0, durationBeats: 2.55, arpPattern: 'rising-arp' },
-            { symbol: 'Em7', startBeat: 4.55, durationBeats: 1.45, arpPattern: 'falling-arp' },
-            { symbol: 'Am7', startBeat: 6.0, durationBeats: 2.0, arpPattern: 'pinch-plucked' },
-            { symbol: 'Dm7', startBeat: 8.0, durationBeats: 1.8, arpPattern: 'ballad-wave' },
-            { symbol: 'G', startBeat: 9.8, durationBeats: 2.2, arpPattern: 'falling-arp' },
-            { symbol: 'Am7', startBeat: 12.0, durationBeats: 4.0, arpPattern: 'rising-arp' },
-            { symbol: 'Fmaj7', startBeat: 16.0, durationBeats: 2.0, arpPattern: 'ballad-wave' },
-            { symbol: 'G', startBeat: 18.0, durationBeats: 2.6, arpPattern: 'pinch-plucked' },
-            { symbol: 'Em7', startBeat: 20.6, durationBeats: 1.4, arpPattern: 'falling-arp' },
-            { symbol: 'Am7', startBeat: 22.0, durationBeats: 2.0, arpPattern: 'ballad-wave' },
-            { symbol: 'Dm7', startBeat: 24.0, durationBeats: 2.0, arpPattern: 'rising-arp' },
-            { symbol: 'Em7', startBeat: 26.0, durationBeats: 2.65, arpPattern: 'pinch-plucked' },
-            { symbol: 'Asus4', startBeat: 28.65, durationBeats: 1.35, arpPattern: 'falling-arp' },
-            { symbol: 'A', startBeat: 30.0, durationBeats: 2.0, arpPattern: 'rich-block' },
+            { symbol: 'F', startBeat: 0.0, durationBeats: 2.0, arpPattern: 'arp-ballad-1' },
+            { symbol: 'G7/F', startBeat: 2.0, durationBeats: 2.0, arpPattern: 'arp-ballad-2' },
+            { symbol: 'Em', startBeat: 4.0, durationBeats: 2.0, arpPattern: 'pinch-plucked' },
+            { symbol: 'Am', startBeat: 6.0, durationBeats: 2.0, arpPattern: 'falling-arp' },
+            { symbol: 'Dm7', startBeat: 8.0, durationBeats: 2.0, arpPattern: 'arp-ballad-1' },
+            { symbol: 'G', startBeat: 10.0, durationBeats: 2.0, arpPattern: 'arp-ballad-2' },
+            { symbol: 'Am', startBeat: 12.0, durationBeats: 4.0, arpPattern: 'rising-arp' },
           ],
         },
         {
-          id: 'sec-tt-verse-2',
+          id: 'sec-tt-verse-1b',
           kind: 'Verse',
-          label: '2. Khúc Nhạc Nắng Chiều',
+          label: '1B. Em Đã Bước Tới (Ô 9–16)',
           bars: 8,
           text:
-            'Khúc [Fmaj7]nhạc hoà cùng nắng [G]chiều dịu dàng để [Em7]mình gần lại [Am7]mãi\n' +
-            'Nói [Dm7]lời thì thầm những [G]điều thật thà đã [Cmaj7]giữ trong tim mình [C7]\n' +
-            'Những [Fmaj7]chặng đường dài ngỡ [G]mình mệt nhoài đã [Em7]một lần gục [Am]ngã\n' +
-            'Tháng [Dm7]tư có em ở [Em7]đây nhìn tôi mỉm [Asus4]cười [A]',
+            '[F] Em đã bước [G7/F]tới như em [Em]đã [Am]từng\n' +
+            '[Dm7]Chạy trốn với anh trên [Em]cánh đồng [Asus4]xanh [A]',
           chordSchedule: [
-            { symbol: 'Fmaj7', startBeat: 0.45, durationBeats: 1.95, arpPattern: 'ballad-wave' },
-            { symbol: 'G', startBeat: 2.4, durationBeats: 2.0, arpPattern: 'rising-arp' },
-            { symbol: 'Em7', startBeat: 4.4, durationBeats: 1.6, arpPattern: 'pinch-plucked' },
-            { symbol: 'Am7', startBeat: 6.0, durationBeats: 2.0, arpPattern: 'falling-arp' },
-            { symbol: 'Dm7', startBeat: 8.45, durationBeats: 1.95, arpPattern: 'lofi-broken' },
-            { symbol: 'G', startBeat: 10.4, durationBeats: 2.0, arpPattern: 'rising-arp' },
-            { symbol: 'Cmaj7', startBeat: 12.4, durationBeats: 2.3, arpPattern: 'ballad-wave' },
-            { symbol: 'C7', startBeat: 14.7, durationBeats: 1.3, arpPattern: 'pinch-plucked' },
-            { symbol: 'Fmaj7', startBeat: 16.45, durationBeats: 1.95, arpPattern: 'rising-arp' },
-            { symbol: 'G', startBeat: 18.4, durationBeats: 2.0, arpPattern: 'falling-arp' },
-            { symbol: 'Em7', startBeat: 20.4, durationBeats: 1.6, arpPattern: 'ballad-wave' },
-            { symbol: 'Am', startBeat: 22.0, durationBeats: 2.0, arpPattern: 'pinch-plucked' },
-            { symbol: 'Dm7', startBeat: 24.55, durationBeats: 2.25, arpPattern: 'ballad-wave' },
-            { symbol: 'Em7', startBeat: 26.8, durationBeats: 2.35, arpPattern: 'rising-arp' },
-            { symbol: 'Asus4', startBeat: 29.15, durationBeats: 1.1, arpPattern: 'falling-arp' },
-            { symbol: 'A', startBeat: 30.25, durationBeats: 1.75, arpPattern: 'rich-block' },
-          ],
-        },
-        {
-          id: 'sec-tt-chorus-1',
-          kind: 'Chorus',
-          label: 'ĐK 1 — Những Cánh Hoa',
-          bars: 8,
-          text:
-            'Những cánh hoa phai [F]tàn thật [F6]nhanh, em có bay [Em7]xa, em có đi [Am7]xa mãi\n' +
-            'Tháng tư đôi khi [Dm7]thật mong [G7]manh để mình nói [C]ra những câu chân thật [C7]\n' +
-            'Giá như tôi một [Fmaj7]lần tin [Fm6]em, cô gái tôi [Em7]thương, này hoá theo [Ebdim]mây gió\n' +
-            'Để [Dm7]lại tháng [Em7]tư ở [Asus4]đó [A]',
-          chordSchedule: [
-            { symbol: 'F', startBeat: 1.6, durationBeats: 1.0, arpPattern: 'rich-block' },
-            { symbol: 'F6', startBeat: 2.6, durationBeats: 2.15, arpPattern: 'ballad-wave' },
-            { symbol: 'Em7', startBeat: 4.75, durationBeats: 2.1, arpPattern: 'falling-arp' },
-            { symbol: 'Am7', startBeat: 6.85, durationBeats: 1.15, arpPattern: 'rising-arp' },
-            { symbol: 'Dm7', startBeat: 9.7, durationBeats: 1.0, arpPattern: 'ballad-wave' },
-            { symbol: 'G7', startBeat: 10.7, durationBeats: 2.0, arpPattern: 'rising-arp' },
-            { symbol: 'C', startBeat: 12.7, durationBeats: 2.45, arpPattern: 'rich-block' },
-            { symbol: 'C7', startBeat: 15.15, durationBeats: 0.85, arpPattern: 'pinch-plucked' },
-            { symbol: 'Fmaj7', startBeat: 17.6, durationBeats: 1.0, arpPattern: 'rich-block' },
-            { symbol: 'Fm6', startBeat: 18.6, durationBeats: 2.15, arpPattern: 'falling-arp' },
-            { symbol: 'Em7', startBeat: 20.75, durationBeats: 2.1, arpPattern: 'ballad-wave' },
-            { symbol: 'Ebdim', startBeat: 22.85, durationBeats: 1.15, arpPattern: 'pinch-plucked' },
-            { symbol: 'Dm7', startBeat: 24.65, durationBeats: 1.45, arpPattern: 'ballad-wave' },
-            { symbol: 'Em7', startBeat: 26.1, durationBeats: 1.5, arpPattern: 'rising-arp' },
-            { symbol: 'Asus4', startBeat: 27.6, durationBeats: 2.6, arpPattern: 'falling-arp' },
-            { symbol: 'A', startBeat: 30.2, durationBeats: 1.8, arpPattern: 'rich-block' },
-          ],
-        },
-        {
-          id: 'sec-tt-bridge',
-          kind: 'Bridge',
-          label: 'Bridge — Và Tôi Sẽ Sống',
-          bars: 8,
-          text:
-            '[F]Và tôi sẽ [G]sống như những [Em]gì em từng [Am]mơ\n' +
-            '[F]Và tôi sẽ [G]bước tiếp trên con [Em]mình đã chọn [Am]\n' +
-            '[F]Và khi tôi [G]chết sẽ mỉm [Em]cười khi gặp [Am]em\n' +
-            'Khẽ [F]chào cô gái tháng [G]tư của [Asus4]tôi [A]',
-          chordSchedule: [
-            { symbol: 'F', startBeat: 0.0, durationBeats: 1.7, arpPattern: 'pinch-plucked' },
-            { symbol: 'G', startBeat: 1.7, durationBeats: 1.75, arpPattern: 'rising-arp' },
-            { symbol: 'Em', startBeat: 3.45, durationBeats: 1.85, arpPattern: 'ballad-wave' },
-            { symbol: 'Am', startBeat: 5.3, durationBeats: 2.7, arpPattern: 'falling-arp' },
-            { symbol: 'F', startBeat: 8.0, durationBeats: 1.7, arpPattern: 'ballad-wave' },
-            { symbol: 'G', startBeat: 9.7, durationBeats: 2.3, arpPattern: 'rising-arp' },
+            { symbol: 'F', startBeat: 0.0, durationBeats: 2.0, arpPattern: 'arp-ballad-1' },
+            { symbol: 'G7/F', startBeat: 2.0, durationBeats: 2.0, arpPattern: 'arp-ballad-2' },
+            { symbol: 'Em', startBeat: 4.0, durationBeats: 2.0, arpPattern: 'pinch-plucked' },
+            { symbol: 'Am', startBeat: 6.0, durationBeats: 2.0, arpPattern: 'falling-arp' },
+            { symbol: 'Dm7', startBeat: 8.0, durationBeats: 4.0, arpPattern: 'arp-ballad-2' },
             { symbol: 'Em', startBeat: 12.0, durationBeats: 2.0, arpPattern: 'pinch-plucked' },
-            { symbol: 'Am', startBeat: 14.0, durationBeats: 2.0, arpPattern: 'falling-arp' },
-            { symbol: 'F', startBeat: 16.0, durationBeats: 1.7, arpPattern: 'rich-block' },
-            { symbol: 'G', startBeat: 17.7, durationBeats: 1.8, arpPattern: 'rising-arp' },
-            { symbol: 'Em', startBeat: 19.5, durationBeats: 1.8, arpPattern: 'ballad-wave' },
-            { symbol: 'Am', startBeat: 21.3, durationBeats: 2.7, arpPattern: 'falling-arp' },
-            { symbol: 'F', startBeat: 24.55, durationBeats: 2.5, arpPattern: 'rising-arp' },
-            { symbol: 'G', startBeat: 27.05, durationBeats: 1.3, arpPattern: 'ballad-wave' },
-            { symbol: 'Asus4', startBeat: 28.35, durationBeats: 1.65, arpPattern: 'falling-arp' },
-            { symbol: 'A', startBeat: 30.0, durationBeats: 2.0, arpPattern: 'rich-block' },
+            { symbol: 'Asus4', startBeat: 14.0, durationBeats: 1.0, arpPattern: 'falling-arp' },
+            { symbol: 'A', startBeat: 15.0, durationBeats: 1.0, arpPattern: 'rich-block' },
           ],
         },
         {
-          id: 'sec-tt-chorus-2',
-          kind: 'Chorus',
-          label: 'ĐK 2 — Những Kỷ Niệm',
+          id: 'sec-tt-verse-2a',
+          kind: 'Verse',
+          label: '2A. Khúc Nhạc Nắng Chiều (Ô 17–24)',
           bars: 8,
           text:
-            'Những kỷ niệm phai [F]tàn thật [F6]nhanh, em đã bay [Em7]xa, em đã đi [Am7]xa mãi\n' +
-            'Tháng tư đôi khi [Dm]thật mong [G]manh để mình nói [C]ra những câu chân thật [C7]\n' +
-            'Giá như tôi một [F]lần tin [Fm]em, cô gái tôi [Em7]thương, nay hoá theo [Ebdim]mây gió\n' +
-            'Để [Dm]lại tháng [Em7]tư xa [Asus4]mãi [A]',
+            '[Fmaj7]Khúc nhạc hòa cùng nắng chiều dịu dàng [Em]để mình gần lại [Am]mãi\n' +
+            'Nói lời [Dm7]thì thầm những điều [G]thật thà đã [Cmaj7]giữ trong tim mình [C7/G] Những',
           chordSchedule: [
-            { symbol: 'F', startBeat: 1.6, durationBeats: 1.0, arpPattern: 'rich-block' },
-            { symbol: 'F6', startBeat: 2.6, durationBeats: 2.15, arpPattern: 'ballad-wave' },
-            { symbol: 'Em7', startBeat: 4.75, durationBeats: 2.1, arpPattern: 'falling-arp' },
-            { symbol: 'Am7', startBeat: 6.85, durationBeats: 1.15, arpPattern: 'rising-arp' },
-            { symbol: 'Dm', startBeat: 9.7, durationBeats: 1.0, arpPattern: 'ballad-wave' },
-            { symbol: 'G', startBeat: 10.7, durationBeats: 2.0, arpPattern: 'rising-arp' },
-            { symbol: 'C', startBeat: 12.7, durationBeats: 2.45, arpPattern: 'rich-block' },
-            { symbol: 'C7', startBeat: 15.15, durationBeats: 0.85, arpPattern: 'pinch-plucked' },
-            { symbol: 'F', startBeat: 17.6, durationBeats: 1.0, arpPattern: 'rich-block' },
-            { symbol: 'Fm', startBeat: 18.6, durationBeats: 2.15, arpPattern: 'falling-arp' },
-            { symbol: 'Em7', startBeat: 20.75, durationBeats: 2.1, arpPattern: 'ballad-wave' },
-            { symbol: 'Ebdim', startBeat: 22.85, durationBeats: 1.15, arpPattern: 'pinch-plucked' },
-            { symbol: 'Dm', startBeat: 24.65, durationBeats: 1.45, arpPattern: 'ballad-wave' },
-            { symbol: 'Em7', startBeat: 26.1, durationBeats: 1.65, arpPattern: 'rising-arp' },
-            { symbol: 'Asus4', startBeat: 27.75, durationBeats: 2.25, arpPattern: 'falling-arp' },
-            { symbol: 'A', startBeat: 30.0, durationBeats: 2.0, arpPattern: 'rich-block' },
+            { symbol: 'Fmaj7', startBeat: 0.0, durationBeats: 4.0, arpPattern: 'arp-ballad-2' },
+            { symbol: 'Em', startBeat: 4.0, durationBeats: 2.0, arpPattern: 'pinch-plucked' },
+            { symbol: 'Am', startBeat: 6.0, durationBeats: 2.0, arpPattern: 'falling-arp' },
+            { symbol: 'Dm7', startBeat: 8.0, durationBeats: 2.0, arpPattern: 'lofi-broken' },
+            { symbol: 'G', startBeat: 10.0, durationBeats: 2.0, arpPattern: 'rising-arp' },
+            { symbol: 'Cmaj7', startBeat: 12.0, durationBeats: 2.0, arpPattern: 'arp-ballad-2' },
+            { symbol: 'C7/G', startBeat: 14.0, durationBeats: 2.0, arpPattern: 'pinch-plucked' },
           ],
         },
         {
-          id: 'sec-tt-outro',
-          kind: 'Outro',
-          label: 'Outro — Tháng Tư Mình Anh',
-          bars: 4,
-          text: 'Để [Fmaj7]lại tháng [Em7]tư mình [Am]anh [Fmaj7] [G] [Am]',
+          id: 'sec-tt-verse-2b',
+          kind: 'Verse',
+          label: '2B. Tháng Tư Mỉm Cười (Ô 25–32)',
+          bars: 8,
+          text:
+            '[Fmaj7]chặng đường dài ngỡ mình mệt nhoài [Em]đã một lần gục [Am]ngã\n' +
+            'Tháng [Dm7]tư có em [Em]ở đây nhìn tôi [Asus4]mỉm [A]cười',
           chordSchedule: [
-            { symbol: 'Fmaj7', startBeat: 0.65, durationBeats: 1.5, arpPattern: 'falling-arp' },
-            { symbol: 'Em7', startBeat: 2.15, durationBeats: 1.6, arpPattern: 'pinch-plucked' },
-            { symbol: 'Am', startBeat: 3.75, durationBeats: 4.25, arpPattern: 'ballad-wave' },
-            { symbol: 'Fmaj7', startBeat: 8.0, durationBeats: 2.0, arpPattern: 'rising-arp' },
-            { symbol: 'G', startBeat: 10.0, durationBeats: 2.0, arpPattern: 'falling-arp' },
+            { symbol: 'Fmaj7', startBeat: 0.0, durationBeats: 4.0, arpPattern: 'arp-ballad-2' },
+            { symbol: 'Em', startBeat: 4.0, durationBeats: 2.0, arpPattern: 'ballad-wave' },
+            { symbol: 'Am', startBeat: 6.0, durationBeats: 2.0, arpPattern: 'pinch-plucked' },
+            { symbol: 'Dm7', startBeat: 8.0, durationBeats: 2.0, arpPattern: 'rising-arp' },
+            { symbol: 'Em', startBeat: 10.0, durationBeats: 2.0, arpPattern: 'ballad-wave' },
+            { symbol: 'Asus4', startBeat: 12.0, durationBeats: 2.0, arpPattern: 'falling-arp' },
+            { symbol: 'A', startBeat: 14.0, durationBeats: 2.0, arpPattern: 'rich-block' },
+          ],
+        },
+        {
+          id: 'sec-tt-chorus-1a',
+          kind: 'Chorus',
+          label: 'ĐK 1A — Những Cánh Hoa (𝄋 Ô 33–40)',
+          bars: 8,
+          text:
+            'Những cánh hoa [F]phai tàn thật [G7/F]nhanh, em có [Em7]bay xa, em có [Am]đi xa mãi\n' +
+            'Tháng tư đôi khi [Dm7]thật mong [G]manh để mình nói [C]ra những câu chân thật',
+          chordSchedule: [
+            { symbol: 'F', startBeat: 0.6, durationBeats: 1.4, arpPattern: 'rich-block' },
+            { symbol: 'G7/F', startBeat: 2.0, durationBeats: 2.0, arpPattern: 'arp-ballad-3' },
+            { symbol: 'Em7', startBeat: 4.0, durationBeats: 2.0, arpPattern: 'falling-arp' },
+            { symbol: 'Am', startBeat: 6.0, durationBeats: 2.0, arpPattern: 'rising-arp' },
+            { symbol: 'Dm7', startBeat: 9.0, durationBeats: 1.0, arpPattern: 'ballad-wave' },
+            { symbol: 'G', startBeat: 10.0, durationBeats: 2.0, arpPattern: 'arp-ballad-drive' },
+            { symbol: 'C', startBeat: 12.0, durationBeats: 4.0, arpPattern: 'rich-block' },
+          ],
+        },
+        {
+          id: 'sec-tt-chorus-1b',
+          kind: 'Chorus',
+          label: 'ĐK 1B — Mây Gió Tháng Tư (Fine Ô 41–48)',
+          bars: 8,
+          text:
+            'Giá như tôi một [F]lần tin [Fm]em, cô gái [Em]tôi thương, nay hóa theo [D#dim7]mây gió\n' +
+            'Để [Dm7]lại tháng [Em]tư ở [A]đó',
+          chordSchedule: [
+            { symbol: 'F', startBeat: 0.9, durationBeats: 1.3, arpPattern: 'rich-block' },
+            { symbol: 'Fm', startBeat: 2.2, durationBeats: 1.8, arpPattern: 'falling-arp' },
+            { symbol: 'Em', startBeat: 4.0, durationBeats: 2.0, arpPattern: 'arp-ballad-3' },
+            { symbol: 'D#dim7', startBeat: 6.0, durationBeats: 2.0, arpPattern: 'pinch-plucked' },
+            { symbol: 'Dm7', startBeat: 8.0, durationBeats: 2.0, arpPattern: 'ballad-wave' },
+            { symbol: 'Em', startBeat: 10.0, durationBeats: 2.0, arpPattern: 'rising-arp' },
+            { symbol: 'A', startBeat: 12.0, durationBeats: 4.0, arpPattern: 'rich-block' },
+          ],
+        },
+        {
+          id: 'sec-tt-interlude',
+          kind: 'Interlude',
+          label: 'Gian Tấu — Piano Solo (Ô 49–57)',
+          bars: 8,
+          text:
+            '[F](Piano solo chủ đề) [Fm](Chuyển thứ sâu lắng) [C/E](Đỉnh cao giai điệu) [Ddim7](Đi lên) [Dm7](Chạy ngón) [G](Dẫn cầu nối)',
+          chordSchedule: [
+            { symbol: 'F', startBeat: 0.0, durationBeats: 3.0, arpPattern: 'rising-arp' },
+            { symbol: 'Fm', startBeat: 3.0, durationBeats: 3.0, arpPattern: 'falling-arp' },
+            { symbol: 'C/E', startBeat: 6.0, durationBeats: 4.0, arpPattern: 'arp-ballad-2' },
+            { symbol: 'Ddim7', startBeat: 10.0, durationBeats: 2.0, arpPattern: 'pinch-plucked' },
+            { symbol: 'Dm7', startBeat: 12.0, durationBeats: 2.0, arpPattern: 'arp-ballad-drive' },
+            { symbol: 'G', startBeat: 14.0, durationBeats: 2.0, arpPattern: 'rich-block' },
+          ],
+        },
+        {
+          id: 'sec-tt-bridge-a',
+          kind: 'Bridge',
+          label: 'Bridge 1 — Và Tôi Sẽ Sống (Ô 58–64)',
+          bars: 8,
+          text:
+            '[F] Và tôi sẽ [G7/F]sống như những [Em]gì em từng [Am]mơ\n' +
+            '[Dm7] Và tôi sẽ [G]bước tiếp trên con đường mình [Am]đã chọn',
+          chordSchedule: [
+            { symbol: 'F', startBeat: 0.0, durationBeats: 2.0, arpPattern: 'pinch-plucked' },
+            { symbol: 'G7/F', startBeat: 2.0, durationBeats: 2.0, arpPattern: 'rising-arp' },
+            { symbol: 'Em', startBeat: 4.0, durationBeats: 2.0, arpPattern: 'ballad-wave' },
+            { symbol: 'Am', startBeat: 6.0, durationBeats: 2.0, arpPattern: 'falling-arp' },
+            { symbol: 'Dm7', startBeat: 8.0, durationBeats: 2.0, arpPattern: 'arp-ballad-2' },
+            { symbol: 'G', startBeat: 10.0, durationBeats: 2.0, arpPattern: 'arp-ballad-drive' },
             { symbol: 'Am', startBeat: 12.0, durationBeats: 4.0, arpPattern: 'falling-arp' },
+          ],
+        },
+        {
+          id: 'sec-tt-bridge-b',
+          kind: 'Bridge',
+          label: 'Bridge 2 — Cô Gái Tháng Tư (D.S. Ô 65–72)',
+          bars: 8,
+          text:
+            '[F] Và khi tôi [G7/F]chết sẽ mỉm [Em]cười khi gặp [Am]em\n' +
+            '[Dm7] Khẽ chào cô gái [Em]tháng tư của [Asus4]tôi [A] (Những kỷ niệm)',
+          chordSchedule: [
+            { symbol: 'F', startBeat: 0.0, durationBeats: 2.0, arpPattern: 'rich-block' },
+            { symbol: 'G7/F', startBeat: 2.0, durationBeats: 2.0, arpPattern: 'rising-arp' },
+            { symbol: 'Em', startBeat: 4.0, durationBeats: 2.0, arpPattern: 'ballad-wave' },
+            { symbol: 'Am', startBeat: 6.0, durationBeats: 2.0, arpPattern: 'falling-arp' },
+            { symbol: 'Dm7', startBeat: 8.0, durationBeats: 2.0, arpPattern: 'rising-arp' },
+            { symbol: 'Em', startBeat: 10.0, durationBeats: 2.0, arpPattern: 'ballad-wave' },
+            { symbol: 'Asus4', startBeat: 12.0, durationBeats: 2.0, arpPattern: 'falling-arp' },
+            { symbol: 'A', startBeat: 14.0, durationBeats: 2.0, arpPattern: 'rich-block' },
+          ],
+        },
+        {
+          id: 'sec-tt-chorus-2a',
+          kind: 'Chorus',
+          label: 'ĐK 2A — Những Kỷ Niệm Phai (D.S. al Fine)',
+          bars: 8,
+          text:
+            'Những kỷ niệm [F]phai tàn thật [G7/F]nhanh, em đã [Em7]bay xa, em đã [Am]đi xa mãi\n' +
+            'Tháng tư đôi khi [Dm7]thật mong [G]manh để mình nói [C]ra những câu chân thật',
+          chordSchedule: [
+            { symbol: 'F', startBeat: 0.6, durationBeats: 1.4, arpPattern: 'rich-block' },
+            { symbol: 'G7/F', startBeat: 2.0, durationBeats: 2.0, arpPattern: 'arp-ballad-3' },
+            { symbol: 'Em7', startBeat: 4.0, durationBeats: 2.0, arpPattern: 'falling-arp' },
+            { symbol: 'Am', startBeat: 6.0, durationBeats: 2.0, arpPattern: 'rising-arp' },
+            { symbol: 'Dm7', startBeat: 9.0, durationBeats: 1.0, arpPattern: 'ballad-wave' },
+            { symbol: 'G', startBeat: 10.0, durationBeats: 2.0, arpPattern: 'arp-ballad-drive' },
+            { symbol: 'C', startBeat: 12.0, durationBeats: 4.0, arpPattern: 'rich-block' },
+          ],
+        },
+        {
+          id: 'sec-tt-chorus-2b',
+          kind: 'Chorus',
+          label: 'ĐK 2B — Tháng Tư Mình Anh (Fine)',
+          bars: 8,
+          text:
+            'Giá như tôi một [F]lần tin [Fm]em, cô gái [Em]tôi thương, nay hóa theo [D#dim7]mây gió\n' +
+            'Để [Dm7]lại tháng [Em]tư mình [A]anh',
+          chordSchedule: [
+            { symbol: 'F', startBeat: 0.9, durationBeats: 1.3, arpPattern: 'rich-block' },
+            { symbol: 'Fm', startBeat: 2.2, durationBeats: 1.8, arpPattern: 'falling-arp' },
+            { symbol: 'Em', startBeat: 4.0, durationBeats: 2.0, arpPattern: 'arp-ballad-3' },
+            { symbol: 'D#dim7', startBeat: 6.0, durationBeats: 2.0, arpPattern: 'pinch-plucked' },
+            { symbol: 'Dm7', startBeat: 8.0, durationBeats: 2.0, arpPattern: 'ballad-wave' },
+            { symbol: 'Em', startBeat: 10.0, durationBeats: 2.0, arpPattern: 'rising-arp' },
+            { symbol: 'A', startBeat: 12.0, durationBeats: 4.0, arpPattern: 'falling-arp' },
           ],
         },
       ],
       melodyNotes: [
-        // 1. Intro (4 bars = 16 beats, 29 singing piano notes)
-        { id: 'tti-1', sectionId: 'sec-tt-intro', midi: 76, startBeat: 0, durationBeats: 0.5, velocity: 0.78 },
-        { id: 'tti-2', sectionId: 'sec-tt-intro', midi: 74, startBeat: 0.5, durationBeats: 0.5, velocity: 0.76 },
-        { id: 'tti-3', sectionId: 'sec-tt-intro', midi: 72, startBeat: 1.0, durationBeats: 0.5, velocity: 0.78 },
-        { id: 'tti-4', sectionId: 'sec-tt-intro', midi: 69, startBeat: 1.5, durationBeats: 0.5, velocity: 0.74 },
-        { id: 'tti-5', sectionId: 'sec-tt-intro', midi: 68, startBeat: 2.0, durationBeats: 0.5, velocity: 0.78 },
-        { id: 'tti-6', sectionId: 'sec-tt-intro', midi: 72, startBeat: 2.5, durationBeats: 0.5, velocity: 0.76 },
-        { id: 'tti-7', sectionId: 'sec-tt-intro', midi: 74, startBeat: 3.0, durationBeats: 0.5, velocity: 0.78 },
-        { id: 'tti-8', sectionId: 'sec-tt-intro', midi: 72, startBeat: 3.5, durationBeats: 0.5, velocity: 0.74 },
-        { id: 'tti-9', sectionId: 'sec-tt-intro', midi: 67, startBeat: 4.0, durationBeats: 0.5, velocity: 0.76 },
-        { id: 'tti-10', sectionId: 'sec-tt-intro', midi: 72, startBeat: 4.5, durationBeats: 0.5, velocity: 0.78 },
-        { id: 'tti-11', sectionId: 'sec-tt-intro', midi: 76, startBeat: 5.0, durationBeats: 0.5, velocity: 0.8 },
-        { id: 'tti-12', sectionId: 'sec-tt-intro', midi: 79, startBeat: 5.5, durationBeats: 0.5, velocity: 0.82 },
-        { id: 'tti-13', sectionId: 'sec-tt-intro', midi: 75, startBeat: 6.0, durationBeats: 0.75, velocity: 0.78 },
-        { id: 'tti-14', sectionId: 'sec-tt-intro', midi: 72, startBeat: 6.75, durationBeats: 0.5, velocity: 0.76 },
-        { id: 'tti-15', sectionId: 'sec-tt-intro', midi: 69, startBeat: 7.25, durationBeats: 0.75, velocity: 0.74 },
-        { id: 'tti-16', sectionId: 'sec-tt-intro', midi: 65, startBeat: 8.0, durationBeats: 0.5, velocity: 0.74 },
-        { id: 'tti-17', sectionId: 'sec-tt-intro', midi: 69, startBeat: 8.5, durationBeats: 0.5, velocity: 0.76 },
-        { id: 'tti-18', sectionId: 'sec-tt-intro', midi: 72, startBeat: 9.0, durationBeats: 0.5, velocity: 0.78 },
-        { id: 'tti-19', sectionId: 'sec-tt-intro', midi: 76, startBeat: 9.5, durationBeats: 0.5, velocity: 0.8 },
-        { id: 'tti-20', sectionId: 'sec-tt-intro', midi: 76, startBeat: 10.0, durationBeats: 0.5, velocity: 0.78 },
-        { id: 'tti-21', sectionId: 'sec-tt-intro', midi: 74, startBeat: 10.5, durationBeats: 0.5, velocity: 0.76 },
-        { id: 'tti-22', sectionId: 'sec-tt-intro', midi: 72, startBeat: 11.0, durationBeats: 0.5, velocity: 0.76 },
-        { id: 'tti-23', sectionId: 'sec-tt-intro', midi: 67, startBeat: 11.5, durationBeats: 0.5, velocity: 0.72 },
-        { id: 'tti-24', sectionId: 'sec-tt-intro', midi: 69, startBeat: 12.0, durationBeats: 0.5, velocity: 0.76 },
-        { id: 'tti-25', sectionId: 'sec-tt-intro', midi: 72, startBeat: 12.5, durationBeats: 0.75, velocity: 0.78 },
-        { id: 'tti-26', sectionId: 'sec-tt-intro', midi: 76, startBeat: 13.25, durationBeats: 0.75, velocity: 0.8 },
-        { id: 'tti-27', sectionId: 'sec-tt-intro', midi: 74, startBeat: 14.0, durationBeats: 0.65, velocity: 0.78 },
-        { id: 'tti-28', sectionId: 'sec-tt-intro', midi: 72, startBeat: 14.65, durationBeats: 0.65, velocity: 0.76 },
-        { id: 'tti-29', sectionId: 'sec-tt-intro', midi: 71, startBeat: 15.3, durationBeats: 0.7, velocity: 0.74 },
+        // 1A. Verse 1A (2/4, 8 bars = 16 beats: Ô 1–8)
+        { id: 'ttv1a-1', sectionId: 'sec-tt-verse-1a', midi: 65, startBeat: 1.0, durationBeats: 0.33, velocity: 0.78 },
+        { id: 'ttv1a-2', sectionId: 'sec-tt-verse-1a', midi: 67, startBeat: 1.33, durationBeats: 0.33, velocity: 0.8 },
+        { id: 'ttv1a-3', sectionId: 'sec-tt-verse-1a', midi: 69, startBeat: 1.66, durationBeats: 0.34, velocity: 0.84 },
+        { id: 'ttv1a-4', sectionId: 'sec-tt-verse-1a', midi: 67, startBeat: 2.0, durationBeats: 0.75, velocity: 0.82 },
+        { id: 'ttv1a-5', sectionId: 'sec-tt-verse-1a', midi: 65, startBeat: 2.75, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'ttv1a-6', sectionId: 'sec-tt-verse-1a', midi: 64, startBeat: 3.25, durationBeats: 0.75, velocity: 0.76 },
+        { id: 'ttv1a-7', sectionId: 'sec-tt-verse-1a', midi: 64, startBeat: 4.0, durationBeats: 0.75, velocity: 0.8 },
+        { id: 'ttv1a-8', sectionId: 'sec-tt-verse-1a', midi: 62, startBeat: 4.75, durationBeats: 1.25, velocity: 0.76 },
+        { id: 'ttv1a-9', sectionId: 'sec-tt-verse-1a', midi: 64, startBeat: 6.0, durationBeats: 2.0, velocity: 0.8 },
+        { id: 'ttv1a-10', sectionId: 'sec-tt-verse-1a', midi: 62, startBeat: 9.0, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'ttv1a-11', sectionId: 'sec-tt-verse-1a', midi: 64, startBeat: 9.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'ttv1a-12', sectionId: 'sec-tt-verse-1a', midi: 65, startBeat: 10.0, durationBeats: 0.75, velocity: 0.82 },
+        { id: 'ttv1a-13', sectionId: 'sec-tt-verse-1a', midi: 65, startBeat: 10.75, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'ttv1a-14', sectionId: 'sec-tt-verse-1a', midi: 64, startBeat: 11.25, durationBeats: 0.4, velocity: 0.78 },
+        { id: 'ttv1a-15', sectionId: 'sec-tt-verse-1a', midi: 62, startBeat: 11.65, durationBeats: 0.35, velocity: 0.76 },
+        { id: 'ttv1a-16', sectionId: 'sec-tt-verse-1a', midi: 64, startBeat: 12.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'ttv1a-17', sectionId: 'sec-tt-verse-1a', midi: 64, startBeat: 12.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'ttv1a-18', sectionId: 'sec-tt-verse-1a', midi: 62, startBeat: 13.0, durationBeats: 0.5, velocity: 0.76 },
+        { id: 'ttv1a-19', sectionId: 'sec-tt-verse-1a', midi: 60, startBeat: 13.5, durationBeats: 0.5, velocity: 0.74 },
+        { id: 'ttv1a-20', sectionId: 'sec-tt-verse-1a', midi: 62, startBeat: 14.0, durationBeats: 0.5, velocity: 0.76 },
+        { id: 'ttv1a-21', sectionId: 'sec-tt-verse-1a', midi: 64, startBeat: 14.5, durationBeats: 1.5, velocity: 0.8 },
 
-        // 2. Verse 1 (8 bars = 32 beats, locked 1:1 with chordSchedule)
-        { id: 'ttv1-1', sectionId: 'sec-tt-verse-1', midi: 69, startBeat: 0.0, durationBeats: 0.65, velocity: 0.8 },
-        { id: 'ttv1-2', sectionId: 'sec-tt-verse-1', midi: 71, startBeat: 0.65, durationBeats: 0.65, velocity: 0.82 },
-        { id: 'ttv1-3', sectionId: 'sec-tt-verse-1', midi: 72, startBeat: 1.3, durationBeats: 0.7, velocity: 0.85 },
-        { id: 'ttv1-4', sectionId: 'sec-tt-verse-1', midi: 71, startBeat: 2.0, durationBeats: 0.85, velocity: 0.84 },
-        { id: 'ttv1-5', sectionId: 'sec-tt-verse-1', midi: 69, startBeat: 2.85, durationBeats: 0.6, velocity: 0.8 },
-        { id: 'ttv1-6', sectionId: 'sec-tt-verse-1', midi: 67, startBeat: 3.45, durationBeats: 0.55, velocity: 0.78 },
-        { id: 'ttv1-7', sectionId: 'sec-tt-verse-1', midi: 69, startBeat: 4.0, durationBeats: 0.55, velocity: 0.82 },
-        { id: 'ttv1-8', sectionId: 'sec-tt-verse-1', midi: 64, startBeat: 4.55, durationBeats: 2.0, velocity: 0.78 },
-        { id: 'ttv1-9', sectionId: 'sec-tt-verse-1', midi: 69, startBeat: 8.0, durationBeats: 0.5, velocity: 0.8 },
-        { id: 'ttv1-10', sectionId: 'sec-tt-verse-1', midi: 71, startBeat: 8.5, durationBeats: 0.5, velocity: 0.82 },
-        { id: 'ttv1-11', sectionId: 'sec-tt-verse-1', midi: 72, startBeat: 9.0, durationBeats: 0.8, velocity: 0.85 },
-        { id: 'ttv1-12', sectionId: 'sec-tt-verse-1', midi: 71, startBeat: 9.8, durationBeats: 0.55, velocity: 0.82 },
-        { id: 'ttv1-13', sectionId: 'sec-tt-verse-1', midi: 69, startBeat: 10.35, durationBeats: 0.5, velocity: 0.8 },
-        { id: 'ttv1-14', sectionId: 'sec-tt-verse-1', midi: 69, startBeat: 10.85, durationBeats: 0.5, velocity: 0.8 },
-        { id: 'ttv1-15', sectionId: 'sec-tt-verse-1', midi: 67, startBeat: 11.35, durationBeats: 0.65, velocity: 0.78 },
-        { id: 'ttv1-16', sectionId: 'sec-tt-verse-1', midi: 67, startBeat: 12.0, durationBeats: 0.6, velocity: 0.8 },
-        { id: 'ttv1-17', sectionId: 'sec-tt-verse-1', midi: 62, startBeat: 12.6, durationBeats: 0.5, velocity: 0.76 },
-        { id: 'ttv1-18', sectionId: 'sec-tt-verse-1', midi: 64, startBeat: 13.1, durationBeats: 0.5, velocity: 0.78 },
-        { id: 'ttv1-19', sectionId: 'sec-tt-verse-1', midi: 67, startBeat: 13.6, durationBeats: 0.55, velocity: 0.8 },
-        { id: 'ttv1-20', sectionId: 'sec-tt-verse-1', midi: 69, startBeat: 14.15, durationBeats: 1.5, velocity: 0.82 },
-        { id: 'ttv1-21', sectionId: 'sec-tt-verse-1', midi: 69, startBeat: 16.0, durationBeats: 0.65, velocity: 0.82 },
-        { id: 'ttv1-22', sectionId: 'sec-tt-verse-1', midi: 71, startBeat: 16.65, durationBeats: 0.65, velocity: 0.84 },
-        { id: 'ttv1-23', sectionId: 'sec-tt-verse-1', midi: 72, startBeat: 17.3, durationBeats: 0.7, velocity: 0.86 },
-        { id: 'ttv1-24', sectionId: 'sec-tt-verse-1', midi: 74, startBeat: 18.0, durationBeats: 0.9, velocity: 0.88 },
-        { id: 'ttv1-25', sectionId: 'sec-tt-verse-1', midi: 72, startBeat: 18.9, durationBeats: 0.6, velocity: 0.84 },
-        { id: 'ttv1-26', sectionId: 'sec-tt-verse-1', midi: 71, startBeat: 19.5, durationBeats: 0.55, velocity: 0.82 },
-        { id: 'ttv1-27', sectionId: 'sec-tt-verse-1', midi: 69, startBeat: 20.05, durationBeats: 0.55, velocity: 0.8 },
-        { id: 'ttv1-28', sectionId: 'sec-tt-verse-1', midi: 67, startBeat: 20.6, durationBeats: 2.0, velocity: 0.78 },
-        { id: 'ttv1-29', sectionId: 'sec-tt-verse-1', midi: 69, startBeat: 24.0, durationBeats: 0.65, velocity: 0.8 },
-        { id: 'ttv1-30', sectionId: 'sec-tt-verse-1', midi: 71, startBeat: 24.65, durationBeats: 0.65, velocity: 0.82 },
-        { id: 'ttv1-31', sectionId: 'sec-tt-verse-1', midi: 72, startBeat: 25.3, durationBeats: 0.7, velocity: 0.86 },
-        { id: 'ttv1-32', sectionId: 'sec-tt-verse-1', midi: 71, startBeat: 26.0, durationBeats: 0.9, velocity: 0.84 },
-        { id: 'ttv1-33', sectionId: 'sec-tt-verse-1', midi: 69, startBeat: 26.9, durationBeats: 0.6, velocity: 0.82 },
-        { id: 'ttv1-34', sectionId: 'sec-tt-verse-1', midi: 69, startBeat: 27.5, durationBeats: 0.55, velocity: 0.82 },
-        { id: 'ttv1-35', sectionId: 'sec-tt-verse-1', midi: 67, startBeat: 28.05, durationBeats: 0.6, velocity: 0.8 },
-        { id: 'ttv1-36', sectionId: 'sec-tt-verse-1', midi: 69, startBeat: 28.65, durationBeats: 2.5, velocity: 0.84 },
+        // 1B. Verse 1B (2/4, 8 bars = 16 beats: Ô 9–16)
+        { id: 'ttv1b-1', sectionId: 'sec-tt-verse-1b', midi: 65, startBeat: 1.0, durationBeats: 0.33, velocity: 0.8 },
+        { id: 'ttv1b-2', sectionId: 'sec-tt-verse-1b', midi: 67, startBeat: 1.33, durationBeats: 0.33, velocity: 0.82 },
+        { id: 'ttv1b-3', sectionId: 'sec-tt-verse-1b', midi: 69, startBeat: 1.66, durationBeats: 0.34, velocity: 0.84 },
+        { id: 'ttv1b-4', sectionId: 'sec-tt-verse-1b', midi: 67, startBeat: 2.0, durationBeats: 0.75, velocity: 0.84 },
+        { id: 'ttv1b-5', sectionId: 'sec-tt-verse-1b', midi: 65, startBeat: 2.75, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'ttv1b-6', sectionId: 'sec-tt-verse-1b', midi: 64, startBeat: 3.25, durationBeats: 0.75, velocity: 0.78 },
+        { id: 'ttv1b-7', sectionId: 'sec-tt-verse-1b', midi: 67, startBeat: 4.0, durationBeats: 1.0, velocity: 0.82 },
+        { id: 'ttv1b-8', sectionId: 'sec-tt-verse-1b', midi: 64, startBeat: 5.0, durationBeats: 1.0, velocity: 0.78 },
+        { id: 'ttv1b-9', sectionId: 'sec-tt-verse-1b', midi: 64, startBeat: 6.0, durationBeats: 1.5, velocity: 0.8 },
+        { id: 'ttv1b-10', sectionId: 'sec-tt-verse-1b', midi: 62, startBeat: 8.0, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'ttv1b-11', sectionId: 'sec-tt-verse-1b', midi: 64, startBeat: 8.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'ttv1b-12', sectionId: 'sec-tt-verse-1b', midi: 65, startBeat: 9.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'ttv1b-13', sectionId: 'sec-tt-verse-1b', midi: 62, startBeat: 9.5, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'ttv1b-14', sectionId: 'sec-tt-verse-1b', midi: 65, startBeat: 10.0, durationBeats: 1.5, velocity: 0.82 },
+        { id: 'ttv1b-15', sectionId: 'sec-tt-verse-1b', midi: 67, startBeat: 12.0, durationBeats: 1.0, velocity: 0.84 },
+        { id: 'ttv1b-16', sectionId: 'sec-tt-verse-1b', midi: 67, startBeat: 13.0, durationBeats: 1.0, velocity: 0.84 },
+        { id: 'ttv1b-17', sectionId: 'sec-tt-verse-1b', midi: 69, startBeat: 14.0, durationBeats: 1.0, velocity: 0.86 },
+        { id: 'ttv1b-18', sectionId: 'sec-tt-verse-1b', midi: 69, startBeat: 15.0, durationBeats: 1.0, velocity: 0.84 },
 
-        // 3. Verse 2 (8 bars = 32 beats — warm chest register <= 76(E5), locked to chordSchedule)
-        { id: 'ttv2-1', sectionId: 'sec-tt-verse-2', midi: 64, startBeat: 0.0, durationBeats: 0.45, velocity: 0.8 },
-        { id: 'ttv2-2', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 0.45, durationBeats: 0.55, velocity: 0.84 },
-        { id: 'ttv2-3', sectionId: 'sec-tt-verse-2', midi: 67, startBeat: 1.0, durationBeats: 0.45, velocity: 0.8 },
-        { id: 'ttv2-4', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 1.45, durationBeats: 0.45, velocity: 0.82 },
-        { id: 'ttv2-5', sectionId: 'sec-tt-verse-2', midi: 64, startBeat: 1.9, durationBeats: 0.5, velocity: 0.8 },
-        { id: 'ttv2-6', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 2.4, durationBeats: 0.6, velocity: 0.84 },
-        { id: 'ttv2-7', sectionId: 'sec-tt-verse-2', midi: 67, startBeat: 3.0, durationBeats: 0.45, velocity: 0.8 },
-        { id: 'ttv2-8', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 3.45, durationBeats: 0.5, velocity: 0.82 },
-        { id: 'ttv2-9', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 3.95, durationBeats: 0.45, velocity: 0.82 },
-        { id: 'ttv2-10', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 4.4, durationBeats: 0.6, velocity: 0.84 },
-        { id: 'ttv2-11', sectionId: 'sec-tt-verse-2', midi: 67, startBeat: 5.0, durationBeats: 0.5, velocity: 0.8 },
-        { id: 'ttv2-12', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 5.5, durationBeats: 0.5, velocity: 0.84 },
-        { id: 'ttv2-13', sectionId: 'sec-tt-verse-2', midi: 76, startBeat: 6.0, durationBeats: 1.75, velocity: 0.88 },
-        { id: 'ttv2-14', sectionId: 'sec-tt-verse-2', midi: 64, startBeat: 8.0, durationBeats: 0.45, velocity: 0.8 },
-        { id: 'ttv2-15', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 8.45, durationBeats: 0.55, velocity: 0.84 },
-        { id: 'ttv2-16', sectionId: 'sec-tt-verse-2', midi: 67, startBeat: 9.0, durationBeats: 0.45, velocity: 0.8 },
-        { id: 'ttv2-17', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 9.45, durationBeats: 0.45, velocity: 0.82 },
-        { id: 'ttv2-18', sectionId: 'sec-tt-verse-2', midi: 64, startBeat: 9.9, durationBeats: 0.5, velocity: 0.8 },
-        { id: 'ttv2-19', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 10.4, durationBeats: 0.6, velocity: 0.84 },
-        { id: 'ttv2-20', sectionId: 'sec-tt-verse-2', midi: 67, startBeat: 11.0, durationBeats: 0.45, velocity: 0.8 },
-        { id: 'ttv2-21', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 11.45, durationBeats: 0.5, velocity: 0.82 },
-        { id: 'ttv2-22', sectionId: 'sec-tt-verse-2', midi: 67, startBeat: 11.95, durationBeats: 0.45, velocity: 0.8 },
-        { id: 'ttv2-23', sectionId: 'sec-tt-verse-2', midi: 67, startBeat: 12.4, durationBeats: 0.55, velocity: 0.82 },
-        { id: 'ttv2-24', sectionId: 'sec-tt-verse-2', midi: 64, startBeat: 12.95, durationBeats: 0.45, velocity: 0.78 },
-        { id: 'ttv2-25', sectionId: 'sec-tt-verse-2', midi: 62, startBeat: 13.4, durationBeats: 0.45, velocity: 0.76 },
-        { id: 'ttv2-26', sectionId: 'sec-tt-verse-2', midi: 64, startBeat: 13.85, durationBeats: 1.75, velocity: 0.82 },
-        { id: 'ttv2-27', sectionId: 'sec-tt-verse-2', midi: 64, startBeat: 16.0, durationBeats: 0.45, velocity: 0.8 },
-        { id: 'ttv2-28', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 16.45, durationBeats: 0.55, velocity: 0.84 },
-        { id: 'ttv2-29', sectionId: 'sec-tt-verse-2', midi: 67, startBeat: 17.0, durationBeats: 0.45, velocity: 0.8 },
-        { id: 'ttv2-30', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 17.45, durationBeats: 0.45, velocity: 0.82 },
-        { id: 'ttv2-31', sectionId: 'sec-tt-verse-2', midi: 64, startBeat: 17.9, durationBeats: 0.5, velocity: 0.8 },
-        { id: 'ttv2-32', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 18.4, durationBeats: 0.6, velocity: 0.84 },
-        { id: 'ttv2-33', sectionId: 'sec-tt-verse-2', midi: 67, startBeat: 19.0, durationBeats: 0.45, velocity: 0.8 },
-        { id: 'ttv2-34', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 19.45, durationBeats: 0.5, velocity: 0.82 },
-        { id: 'ttv2-35', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 19.95, durationBeats: 0.45, velocity: 0.84 },
-        { id: 'ttv2-36', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 20.4, durationBeats: 0.6, velocity: 0.86 },
-        { id: 'ttv2-37', sectionId: 'sec-tt-verse-2', midi: 67, startBeat: 21.0, durationBeats: 0.5, velocity: 0.8 },
-        { id: 'ttv2-38', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 21.5, durationBeats: 0.5, velocity: 0.84 },
-        { id: 'ttv2-39', sectionId: 'sec-tt-verse-2', midi: 76, startBeat: 22.0, durationBeats: 1.75, velocity: 0.88 },
-        { id: 'ttv2-40', sectionId: 'sec-tt-verse-2', midi: 72, startBeat: 24.0, durationBeats: 0.55, velocity: 0.86 },
-        { id: 'ttv2-41', sectionId: 'sec-tt-verse-2', midi: 71, startBeat: 24.55, durationBeats: 0.6, velocity: 0.86 },
-        { id: 'ttv2-42', sectionId: 'sec-tt-verse-2', midi: 72, startBeat: 25.15, durationBeats: 0.55, velocity: 0.86 },
-        { id: 'ttv2-43', sectionId: 'sec-tt-verse-2', midi: 71, startBeat: 25.7, durationBeats: 0.55, velocity: 0.84 },
-        { id: 'ttv2-44', sectionId: 'sec-tt-verse-2', midi: 72, startBeat: 26.25, durationBeats: 0.55, velocity: 0.86 },
-        { id: 'ttv2-45', sectionId: 'sec-tt-verse-2', midi: 71, startBeat: 26.8, durationBeats: 0.7, velocity: 0.86 },
-        { id: 'ttv2-46', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 27.5, durationBeats: 0.55, velocity: 0.84 },
-        { id: 'ttv2-47', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 28.05, durationBeats: 0.55, velocity: 0.84 },
-        { id: 'ttv2-48', sectionId: 'sec-tt-verse-2', midi: 67, startBeat: 28.6, durationBeats: 0.55, velocity: 0.82 },
-        { id: 'ttv2-49', sectionId: 'sec-tt-verse-2', midi: 69, startBeat: 29.15, durationBeats: 2.35, velocity: 0.86 },
+        // 2A. Verse 2A (2/4, 8 bars = 16 beats: Ô 17–24)
+        { id: 'ttv2a-1', sectionId: 'sec-tt-verse-2a', midi: 64, startBeat: 0.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'ttv2a-2', sectionId: 'sec-tt-verse-2a', midi: 69, startBeat: 0.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2a-3', sectionId: 'sec-tt-verse-2a', midi: 67, startBeat: 1.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'ttv2a-4', sectionId: 'sec-tt-verse-2a', midi: 69, startBeat: 1.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2a-5', sectionId: 'sec-tt-verse-2a', midi: 64, startBeat: 2.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'ttv2a-6', sectionId: 'sec-tt-verse-2a', midi: 69, startBeat: 2.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2a-7', sectionId: 'sec-tt-verse-2a', midi: 67, startBeat: 3.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'ttv2a-8', sectionId: 'sec-tt-verse-2a', midi: 69, startBeat: 3.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2a-9', sectionId: 'sec-tt-verse-2a', midi: 69, startBeat: 4.0, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2a-10', sectionId: 'sec-tt-verse-2a', midi: 69, startBeat: 4.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2a-11', sectionId: 'sec-tt-verse-2a', midi: 67, startBeat: 5.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'ttv2a-12', sectionId: 'sec-tt-verse-2a', midi: 69, startBeat: 5.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2a-13', sectionId: 'sec-tt-verse-2a', midi: 76, startBeat: 6.0, durationBeats: 1.0, velocity: 0.88 },
+        { id: 'ttv2a-14', sectionId: 'sec-tt-verse-2a', midi: 64, startBeat: 7.4, durationBeats: 0.3, velocity: 0.78 },
+        { id: 'ttv2a-15', sectionId: 'sec-tt-verse-2a', midi: 69, startBeat: 7.7, durationBeats: 0.3, velocity: 0.82 },
+        { id: 'ttv2a-16', sectionId: 'sec-tt-verse-2a', midi: 64, startBeat: 8.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'ttv2a-17', sectionId: 'sec-tt-verse-2a', midi: 69, startBeat: 8.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2a-18', sectionId: 'sec-tt-verse-2a', midi: 67, startBeat: 9.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'ttv2a-19', sectionId: 'sec-tt-verse-2a', midi: 69, startBeat: 9.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2a-20', sectionId: 'sec-tt-verse-2a', midi: 67, startBeat: 10.0, durationBeats: 0.65, velocity: 0.82 },
+        { id: 'ttv2a-21', sectionId: 'sec-tt-verse-2a', midi: 69, startBeat: 10.65, durationBeats: 0.6, velocity: 0.84 },
+        { id: 'ttv2a-22', sectionId: 'sec-tt-verse-2a', midi: 67, startBeat: 11.25, durationBeats: 0.75, velocity: 0.82 },
+        { id: 'ttv2a-23', sectionId: 'sec-tt-verse-2a', midi: 67, startBeat: 12.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'ttv2a-24', sectionId: 'sec-tt-verse-2a', midi: 67, startBeat: 12.5, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'ttv2a-25', sectionId: 'sec-tt-verse-2a', midi: 64, startBeat: 13.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'ttv2a-26', sectionId: 'sec-tt-verse-2a', midi: 62, startBeat: 13.5, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'ttv2a-27', sectionId: 'sec-tt-verse-2a', midi: 64, startBeat: 14.0, durationBeats: 1.25, velocity: 0.82 },
+        { id: 'ttv2a-28', sectionId: 'sec-tt-verse-2a', midi: 64, startBeat: 15.5, durationBeats: 0.5, velocity: 0.8 },
 
-        // 4. ĐK 1 (8 bars = 32 beats — comma breath pauses & sustained A5(81) on "đó")
-        { id: 'ttc1-1', sectionId: 'sec-tt-chorus-1', midi: 76, startBeat: 0.0, durationBeats: 0.4, velocity: 0.88 },
-        { id: 'ttc1-2', sectionId: 'sec-tt-chorus-1', midi: 74, startBeat: 0.4, durationBeats: 0.4, velocity: 0.86 },
-        { id: 'ttc1-3', sectionId: 'sec-tt-chorus-1', midi: 72, startBeat: 0.8, durationBeats: 0.4, velocity: 0.86 },
-        { id: 'ttc1-4', sectionId: 'sec-tt-chorus-1', midi: 71, startBeat: 1.2, durationBeats: 0.4, velocity: 0.84 },
-        { id: 'ttc1-5', sectionId: 'sec-tt-chorus-1', midi: 69, startBeat: 1.6, durationBeats: 0.55, velocity: 0.88 },
-        { id: 'ttc1-6', sectionId: 'sec-tt-chorus-1', midi: 72, startBeat: 2.15, durationBeats: 0.45, velocity: 0.88 },
-        { id: 'ttc1-7', sectionId: 'sec-tt-chorus-1', midi: 74, startBeat: 2.6, durationBeats: 0.75, velocity: 0.9 },
-        { id: 'ttc1-8', sectionId: 'sec-tt-chorus-1', midi: 76, startBeat: 3.55, durationBeats: 0.4, velocity: 0.9 },
-        { id: 'ttc1-9', sectionId: 'sec-tt-chorus-1', midi: 79, startBeat: 3.95, durationBeats: 0.4, velocity: 0.92 },
-        { id: 'ttc1-10', sectionId: 'sec-tt-chorus-1', midi: 74, startBeat: 4.35, durationBeats: 0.4, velocity: 0.88 },
-        { id: 'ttc1-11', sectionId: 'sec-tt-chorus-1', midi: 74, startBeat: 4.75, durationBeats: 0.7, velocity: 0.9 },
-        { id: 'ttc1-12', sectionId: 'sec-tt-chorus-1', midi: 76, startBeat: 5.65, durationBeats: 0.4, velocity: 0.9 },
-        { id: 'ttc1-13', sectionId: 'sec-tt-chorus-1', midi: 79, startBeat: 6.05, durationBeats: 0.4, velocity: 0.92 },
-        { id: 'ttc1-14', sectionId: 'sec-tt-chorus-1', midi: 76, startBeat: 6.45, durationBeats: 0.4, velocity: 0.88 },
-        { id: 'ttc1-15', sectionId: 'sec-tt-chorus-1', midi: 74, startBeat: 6.85, durationBeats: 0.45, velocity: 0.9 },
-        { id: 'ttc1-16', sectionId: 'sec-tt-chorus-1', midi: 76, startBeat: 7.3, durationBeats: 0.55, velocity: 0.9 },
-        { id: 'ttc1-17', sectionId: 'sec-tt-chorus-1', midi: 76, startBeat: 8.0, durationBeats: 0.42, velocity: 0.88 },
-        { id: 'ttc1-18', sectionId: 'sec-tt-chorus-1', midi: 74, startBeat: 8.42, durationBeats: 0.42, velocity: 0.86 },
-        { id: 'ttc1-19', sectionId: 'sec-tt-chorus-1', midi: 72, startBeat: 8.84, durationBeats: 0.42, velocity: 0.86 },
-        { id: 'ttc1-20', sectionId: 'sec-tt-chorus-1', midi: 71, startBeat: 9.26, durationBeats: 0.44, velocity: 0.84 },
-        { id: 'ttc1-21', sectionId: 'sec-tt-chorus-1', midi: 69, startBeat: 9.7, durationBeats: 0.55, velocity: 0.88 },
-        { id: 'ttc1-22', sectionId: 'sec-tt-chorus-1', midi: 72, startBeat: 10.25, durationBeats: 0.45, velocity: 0.88 },
-        { id: 'ttc1-23', sectionId: 'sec-tt-chorus-1', midi: 74, startBeat: 10.7, durationBeats: 0.7, velocity: 0.9 },
-        { id: 'ttc1-24', sectionId: 'sec-tt-chorus-1', midi: 76, startBeat: 11.4, durationBeats: 0.42, velocity: 0.9 },
-        { id: 'ttc1-25', sectionId: 'sec-tt-chorus-1', midi: 76, startBeat: 11.82, durationBeats: 0.42, velocity: 0.9 },
-        { id: 'ttc1-26', sectionId: 'sec-tt-chorus-1', midi: 84, startBeat: 12.24, durationBeats: 0.46, velocity: 0.94 },
-        { id: 'ttc1-27', sectionId: 'sec-tt-chorus-1', midi: 83, startBeat: 12.7, durationBeats: 0.55, velocity: 0.92 },
-        { id: 'ttc1-28', sectionId: 'sec-tt-chorus-1', midi: 84, startBeat: 13.25, durationBeats: 0.42, velocity: 0.94 },
-        { id: 'ttc1-29', sectionId: 'sec-tt-chorus-1', midi: 83, startBeat: 13.67, durationBeats: 0.42, velocity: 0.9 },
-        { id: 'ttc1-30', sectionId: 'sec-tt-chorus-1', midi: 79, startBeat: 14.09, durationBeats: 0.41, velocity: 0.88 },
-        { id: 'ttc1-31', sectionId: 'sec-tt-chorus-1', midi: 76, startBeat: 14.5, durationBeats: 0.95, velocity: 0.86 },
-        { id: 'ttc1-32', sectionId: 'sec-tt-chorus-1', midi: 76, startBeat: 16.0, durationBeats: 0.4, velocity: 0.88 },
-        { id: 'ttc1-33', sectionId: 'sec-tt-chorus-1', midi: 74, startBeat: 16.4, durationBeats: 0.4, velocity: 0.86 },
-        { id: 'ttc1-34', sectionId: 'sec-tt-chorus-1', midi: 72, startBeat: 16.8, durationBeats: 0.4, velocity: 0.86 },
-        { id: 'ttc1-35', sectionId: 'sec-tt-chorus-1', midi: 71, startBeat: 17.2, durationBeats: 0.4, velocity: 0.84 },
-        { id: 'ttc1-36', sectionId: 'sec-tt-chorus-1', midi: 69, startBeat: 17.6, durationBeats: 0.55, velocity: 0.88 },
-        { id: 'ttc1-37', sectionId: 'sec-tt-chorus-1', midi: 72, startBeat: 18.15, durationBeats: 0.45, velocity: 0.88 },
-        { id: 'ttc1-38', sectionId: 'sec-tt-chorus-1', midi: 74, startBeat: 18.6, durationBeats: 0.75, velocity: 0.9 },
-        { id: 'ttc1-39', sectionId: 'sec-tt-chorus-1', midi: 76, startBeat: 19.55, durationBeats: 0.4, velocity: 0.9 },
-        { id: 'ttc1-40', sectionId: 'sec-tt-chorus-1', midi: 79, startBeat: 19.95, durationBeats: 0.4, velocity: 0.92 },
-        { id: 'ttc1-41', sectionId: 'sec-tt-chorus-1', midi: 74, startBeat: 20.35, durationBeats: 0.4, velocity: 0.88 },
-        { id: 'ttc1-42', sectionId: 'sec-tt-chorus-1', midi: 74, startBeat: 20.75, durationBeats: 0.7, velocity: 0.9 },
-        { id: 'ttc1-43', sectionId: 'sec-tt-chorus-1', midi: 76, startBeat: 21.65, durationBeats: 0.4, velocity: 0.9 },
-        { id: 'ttc1-44', sectionId: 'sec-tt-chorus-1', midi: 79, startBeat: 22.05, durationBeats: 0.4, velocity: 0.92 },
-        { id: 'ttc1-45', sectionId: 'sec-tt-chorus-1', midi: 76, startBeat: 22.45, durationBeats: 0.4, velocity: 0.88 },
-        { id: 'ttc1-46', sectionId: 'sec-tt-chorus-1', midi: 74, startBeat: 22.85, durationBeats: 0.45, velocity: 0.9 },
-        { id: 'ttc1-47', sectionId: 'sec-tt-chorus-1', midi: 76, startBeat: 23.3, durationBeats: 0.55, velocity: 0.9 },
-        { id: 'ttc1-48', sectionId: 'sec-tt-chorus-1', midi: 67, startBeat: 24.0, durationBeats: 0.65, velocity: 0.84 },
-        { id: 'ttc1-49', sectionId: 'sec-tt-chorus-1', midi: 69, startBeat: 24.65, durationBeats: 0.75, velocity: 0.86 },
-        { id: 'ttc1-50', sectionId: 'sec-tt-chorus-1', midi: 76, startBeat: 25.4, durationBeats: 0.7, velocity: 0.9 },
-        { id: 'ttc1-51', sectionId: 'sec-tt-chorus-1', midi: 74, startBeat: 26.1, durationBeats: 0.75, velocity: 0.88 },
-        { id: 'ttc1-52', sectionId: 'sec-tt-chorus-1', midi: 79, startBeat: 26.85, durationBeats: 0.75, velocity: 0.92 },
-        { id: 'ttc1-53', sectionId: 'sec-tt-chorus-1', midi: 81, startBeat: 27.6, durationBeats: 3.4, velocity: 0.94 },
+        // 2B. Verse 2B (2/4, 8 bars = 16 beats: Ô 25–32)
+        { id: 'ttv2b-1', sectionId: 'sec-tt-verse-2b', midi: 64, startBeat: 0.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'ttv2b-2', sectionId: 'sec-tt-verse-2b', midi: 69, startBeat: 0.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2b-3', sectionId: 'sec-tt-verse-2b', midi: 67, startBeat: 1.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'ttv2b-4', sectionId: 'sec-tt-verse-2b', midi: 69, startBeat: 1.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2b-5', sectionId: 'sec-tt-verse-2b', midi: 64, startBeat: 2.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'ttv2b-6', sectionId: 'sec-tt-verse-2b', midi: 69, startBeat: 2.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2b-7', sectionId: 'sec-tt-verse-2b', midi: 69, startBeat: 3.0, durationBeats: 1.0, velocity: 0.84 },
+        { id: 'ttv2b-8', sectionId: 'sec-tt-verse-2b', midi: 69, startBeat: 4.0, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2b-9', sectionId: 'sec-tt-verse-2b', midi: 69, startBeat: 4.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2b-10', sectionId: 'sec-tt-verse-2b', midi: 67, startBeat: 5.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'ttv2b-11', sectionId: 'sec-tt-verse-2b', midi: 69, startBeat: 5.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2b-12', sectionId: 'sec-tt-verse-2b', midi: 76, startBeat: 6.0, durationBeats: 1.35, velocity: 0.88 },
+        { id: 'ttv2b-13', sectionId: 'sec-tt-verse-2b', midi: 72, startBeat: 7.45, durationBeats: 0.55, velocity: 0.84 },
+        { id: 'ttv2b-14', sectionId: 'sec-tt-verse-2b', midi: 72, startBeat: 8.0, durationBeats: 0.65, velocity: 0.86 },
+        { id: 'ttv2b-15', sectionId: 'sec-tt-verse-2b', midi: 71, startBeat: 8.65, durationBeats: 0.6, velocity: 0.84 },
+        { id: 'ttv2b-16', sectionId: 'sec-tt-verse-2b', midi: 72, startBeat: 9.25, durationBeats: 0.75, velocity: 0.86 },
+        { id: 'ttv2b-17', sectionId: 'sec-tt-verse-2b', midi: 71, startBeat: 10.0, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2b-18', sectionId: 'sec-tt-verse-2b', midi: 72, startBeat: 10.5, durationBeats: 0.5, velocity: 0.86 },
+        { id: 'ttv2b-19', sectionId: 'sec-tt-verse-2b', midi: 71, startBeat: 11.0, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttv2b-20', sectionId: 'sec-tt-verse-2b', midi: 69, startBeat: 11.5, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'ttv2b-21', sectionId: 'sec-tt-verse-2b', midi: 67, startBeat: 12.0, durationBeats: 2.0, velocity: 0.84 },
+        { id: 'ttv2b-22', sectionId: 'sec-tt-verse-2b', midi: 69, startBeat: 14.0, durationBeats: 1.75, velocity: 0.86 },
 
-        // 5. Bridge (8 bars = 32 beats, locked 1:1 with chordSchedule)
-        { id: 'ttb-1', sectionId: 'sec-tt-bridge', midi: 69, startBeat: 0.0, durationBeats: 0.55, velocity: 0.84 },
-        { id: 'ttb-2', sectionId: 'sec-tt-bridge', midi: 71, startBeat: 0.55, durationBeats: 0.55, velocity: 0.86 },
-        { id: 'ttb-3', sectionId: 'sec-tt-bridge', midi: 72, startBeat: 1.1, durationBeats: 0.6, velocity: 0.88 },
-        { id: 'ttb-4', sectionId: 'sec-tt-bridge', midi: 74, startBeat: 1.7, durationBeats: 0.7, velocity: 0.9 },
-        { id: 'ttb-5', sectionId: 'sec-tt-bridge', midi: 72, startBeat: 2.4, durationBeats: 0.5, velocity: 0.86 },
-        { id: 'ttb-6', sectionId: 'sec-tt-bridge', midi: 71, startBeat: 2.9, durationBeats: 0.55, velocity: 0.84 },
-        { id: 'ttb-7', sectionId: 'sec-tt-bridge', midi: 67, startBeat: 3.45, durationBeats: 0.65, velocity: 0.84 },
-        { id: 'ttb-8', sectionId: 'sec-tt-bridge', midi: 69, startBeat: 4.1, durationBeats: 0.55, velocity: 0.84 },
-        { id: 'ttb-9', sectionId: 'sec-tt-bridge', midi: 67, startBeat: 4.65, durationBeats: 0.65, velocity: 0.82 },
-        { id: 'ttb-10', sectionId: 'sec-tt-bridge', midi: 69, startBeat: 5.3, durationBeats: 2.35, velocity: 0.88 },
-        { id: 'ttb-11', sectionId: 'sec-tt-bridge', midi: 69, startBeat: 8.0, durationBeats: 0.55, velocity: 0.84 },
-        { id: 'ttb-12', sectionId: 'sec-tt-bridge', midi: 71, startBeat: 8.55, durationBeats: 0.55, velocity: 0.86 },
-        { id: 'ttb-13', sectionId: 'sec-tt-bridge', midi: 72, startBeat: 9.1, durationBeats: 0.6, velocity: 0.88 },
-        { id: 'ttb-14', sectionId: 'sec-tt-bridge', midi: 74, startBeat: 9.7, durationBeats: 0.65, velocity: 0.9 },
-        { id: 'ttb-15', sectionId: 'sec-tt-bridge', midi: 74, startBeat: 10.35, durationBeats: 0.55, velocity: 0.9 },
-        { id: 'ttb-16', sectionId: 'sec-tt-bridge', midi: 72, startBeat: 10.9, durationBeats: 0.55, velocity: 0.86 },
-        { id: 'ttb-17', sectionId: 'sec-tt-bridge', midi: 71, startBeat: 11.45, durationBeats: 0.55, velocity: 0.84 },
-        { id: 'ttb-18', sectionId: 'sec-tt-bridge', midi: 67, startBeat: 12.0, durationBeats: 0.6, velocity: 0.84 },
-        { id: 'ttb-19', sectionId: 'sec-tt-bridge', midi: 69, startBeat: 12.6, durationBeats: 0.6, velocity: 0.84 },
-        { id: 'ttb-20', sectionId: 'sec-tt-bridge', midi: 69, startBeat: 13.2, durationBeats: 2.4, velocity: 0.88 },
-        { id: 'ttb-21', sectionId: 'sec-tt-bridge', midi: 69, startBeat: 16.0, durationBeats: 0.55, velocity: 0.86 },
-        { id: 'ttb-22', sectionId: 'sec-tt-bridge', midi: 71, startBeat: 16.55, durationBeats: 0.55, velocity: 0.88 },
-        { id: 'ttb-23', sectionId: 'sec-tt-bridge', midi: 72, startBeat: 17.1, durationBeats: 0.6, velocity: 0.9 },
-        { id: 'ttb-24', sectionId: 'sec-tt-bridge', midi: 74, startBeat: 17.7, durationBeats: 0.7, velocity: 0.92 },
-        { id: 'ttb-25', sectionId: 'sec-tt-bridge', midi: 76, startBeat: 18.4, durationBeats: 0.55, velocity: 0.94 },
-        { id: 'ttb-26', sectionId: 'sec-tt-bridge', midi: 76, startBeat: 18.95, durationBeats: 0.55, velocity: 0.94 },
-        { id: 'ttb-27', sectionId: 'sec-tt-bridge', midi: 74, startBeat: 19.5, durationBeats: 0.65, velocity: 0.9 },
-        { id: 'ttb-28', sectionId: 'sec-tt-bridge', midi: 72, startBeat: 20.15, durationBeats: 0.55, velocity: 0.88 },
-        { id: 'ttb-29', sectionId: 'sec-tt-bridge', midi: 71, startBeat: 20.7, durationBeats: 0.6, velocity: 0.86 },
-        { id: 'ttb-30', sectionId: 'sec-tt-bridge', midi: 69, startBeat: 21.3, durationBeats: 2.4, velocity: 0.88 },
-        { id: 'ttb-31', sectionId: 'sec-tt-bridge', midi: 72, startBeat: 24.0, durationBeats: 0.55, velocity: 0.88 },
-        { id: 'ttb-32', sectionId: 'sec-tt-bridge', midi: 74, startBeat: 24.55, durationBeats: 0.65, velocity: 0.9 },
-        { id: 'ttb-33', sectionId: 'sec-tt-bridge', midi: 76, startBeat: 25.2, durationBeats: 0.6, velocity: 0.92 },
-        { id: 'ttb-34', sectionId: 'sec-tt-bridge', midi: 76, startBeat: 25.8, durationBeats: 0.6, velocity: 0.92 },
-        { id: 'ttb-35', sectionId: 'sec-tt-bridge', midi: 74, startBeat: 26.4, durationBeats: 0.65, velocity: 0.88 },
-        { id: 'ttb-36', sectionId: 'sec-tt-bridge', midi: 72, startBeat: 27.05, durationBeats: 0.65, velocity: 0.86 },
-        { id: 'ttb-37', sectionId: 'sec-tt-bridge', midi: 74, startBeat: 27.7, durationBeats: 0.65, velocity: 0.9 },
-        { id: 'ttb-38', sectionId: 'sec-tt-bridge', midi: 73, startBeat: 28.35, durationBeats: 2.75, velocity: 0.88 },
+        // ĐK 1A (2/4, 8 bars = 16 beats: Ô 33–40)
+        { id: 'ttc1a-1', sectionId: 'sec-tt-chorus-1a', midi: 76, startBeat: 0.0, durationBeats: 0.2, velocity: 0.86 },
+        { id: 'ttc1a-2', sectionId: 'sec-tt-chorus-1a', midi: 74, startBeat: 0.2, durationBeats: 0.2, velocity: 0.86 },
+        { id: 'ttc1a-3', sectionId: 'sec-tt-chorus-1a', midi: 72, startBeat: 0.4, durationBeats: 0.2, velocity: 0.86 },
+        { id: 'ttc1a-4', sectionId: 'sec-tt-chorus-1a', midi: 69, startBeat: 0.6, durationBeats: 0.5, velocity: 0.88 },
+        { id: 'ttc1a-5', sectionId: 'sec-tt-chorus-1a', midi: 72, startBeat: 1.1, durationBeats: 0.45, velocity: 0.88 },
+        { id: 'ttc1a-6', sectionId: 'sec-tt-chorus-1a', midi: 74, startBeat: 1.55, durationBeats: 0.45, velocity: 0.9 },
+        { id: 'ttc1a-7', sectionId: 'sec-tt-chorus-1a', midi: 74, startBeat: 2.0, durationBeats: 0.9, velocity: 0.9 },
+        { id: 'ttc1a-8', sectionId: 'sec-tt-chorus-1a', midi: 76, startBeat: 3.0, durationBeats: 0.5, velocity: 0.9 },
+        { id: 'ttc1a-9', sectionId: 'sec-tt-chorus-1a', midi: 79, startBeat: 3.5, durationBeats: 0.5, velocity: 0.92 },
+        { id: 'ttc1a-10', sectionId: 'sec-tt-chorus-1a', midi: 74, startBeat: 4.0, durationBeats: 0.45, velocity: 0.88 },
+        { id: 'ttc1a-11', sectionId: 'sec-tt-chorus-1a', midi: 74, startBeat: 4.45, durationBeats: 0.7, velocity: 0.9 },
+        { id: 'ttc1a-12', sectionId: 'sec-tt-chorus-1a', midi: 76, startBeat: 5.2, durationBeats: 0.4, velocity: 0.9 },
+        { id: 'ttc1a-13', sectionId: 'sec-tt-chorus-1a', midi: 79, startBeat: 5.6, durationBeats: 0.4, velocity: 0.92 },
+        { id: 'ttc1a-14', sectionId: 'sec-tt-chorus-1a', midi: 76, startBeat: 6.0, durationBeats: 0.4, velocity: 0.9 },
+        { id: 'ttc1a-15', sectionId: 'sec-tt-chorus-1a', midi: 74, startBeat: 6.4, durationBeats: 0.4, velocity: 0.88 },
+        { id: 'ttc1a-16', sectionId: 'sec-tt-chorus-1a', midi: 76, startBeat: 6.8, durationBeats: 1.0, velocity: 0.9 },
+        { id: 'ttc1a-17', sectionId: 'sec-tt-chorus-1a', midi: 76, startBeat: 8.0, durationBeats: 0.25, velocity: 0.88 },
+        { id: 'ttc1a-18', sectionId: 'sec-tt-chorus-1a', midi: 74, startBeat: 8.25, durationBeats: 0.25, velocity: 0.86 },
+        { id: 'ttc1a-19', sectionId: 'sec-tt-chorus-1a', midi: 72, startBeat: 8.5, durationBeats: 0.25, velocity: 0.86 },
+        { id: 'ttc1a-20', sectionId: 'sec-tt-chorus-1a', midi: 71, startBeat: 8.75, durationBeats: 0.25, velocity: 0.84 },
+        { id: 'ttc1a-21', sectionId: 'sec-tt-chorus-1a', midi: 69, startBeat: 9.0, durationBeats: 0.5, velocity: 0.88 },
+        { id: 'ttc1a-22', sectionId: 'sec-tt-chorus-1a', midi: 72, startBeat: 9.5, durationBeats: 0.5, velocity: 0.88 },
+        { id: 'ttc1a-23', sectionId: 'sec-tt-chorus-1a', midi: 74, startBeat: 10.0, durationBeats: 0.9, velocity: 0.9 },
+        { id: 'ttc1a-24', sectionId: 'sec-tt-chorus-1a', midi: 76, startBeat: 11.0, durationBeats: 0.33, velocity: 0.9 },
+        { id: 'ttc1a-25', sectionId: 'sec-tt-chorus-1a', midi: 79, startBeat: 11.33, durationBeats: 0.33, velocity: 0.92 },
+        { id: 'ttc1a-26', sectionId: 'sec-tt-chorus-1a', midi: 84, startBeat: 11.66, durationBeats: 0.34, velocity: 0.94 },
+        { id: 'ttc1a-27', sectionId: 'sec-tt-chorus-1a', midi: 83, startBeat: 12.0, durationBeats: 0.55, velocity: 0.92 },
+        { id: 'ttc1a-28', sectionId: 'sec-tt-chorus-1a', midi: 84, startBeat: 12.55, durationBeats: 0.45, velocity: 0.94 },
+        { id: 'ttc1a-29', sectionId: 'sec-tt-chorus-1a', midi: 83, startBeat: 13.0, durationBeats: 0.45, velocity: 0.92 },
+        { id: 'ttc1a-30', sectionId: 'sec-tt-chorus-1a', midi: 79, startBeat: 13.45, durationBeats: 0.55, velocity: 0.9 },
+        { id: 'ttc1a-31', sectionId: 'sec-tt-chorus-1a', midi: 76, startBeat: 14.0, durationBeats: 1.5, velocity: 0.88 },
 
-        // 6. ĐK 2 (8 bars = 32 beats — ending on warm B4(71) -> C#5(73) Picardy cadence)
-        { id: 'ttc2-1', sectionId: 'sec-tt-chorus-2', midi: 76, startBeat: 0.0, durationBeats: 0.4, velocity: 0.88 },
-        { id: 'ttc2-2', sectionId: 'sec-tt-chorus-2', midi: 74, startBeat: 0.4, durationBeats: 0.4, velocity: 0.86 },
-        { id: 'ttc2-3', sectionId: 'sec-tt-chorus-2', midi: 72, startBeat: 0.8, durationBeats: 0.4, velocity: 0.86 },
-        { id: 'ttc2-4', sectionId: 'sec-tt-chorus-2', midi: 71, startBeat: 1.2, durationBeats: 0.4, velocity: 0.84 },
-        { id: 'ttc2-5', sectionId: 'sec-tt-chorus-2', midi: 69, startBeat: 1.6, durationBeats: 0.55, velocity: 0.88 },
-        { id: 'ttc2-6', sectionId: 'sec-tt-chorus-2', midi: 72, startBeat: 2.15, durationBeats: 0.45, velocity: 0.88 },
-        { id: 'ttc2-7', sectionId: 'sec-tt-chorus-2', midi: 74, startBeat: 2.6, durationBeats: 0.75, velocity: 0.9 },
-        { id: 'ttc2-8', sectionId: 'sec-tt-chorus-2', midi: 76, startBeat: 3.55, durationBeats: 0.4, velocity: 0.9 },
-        { id: 'ttc2-9', sectionId: 'sec-tt-chorus-2', midi: 79, startBeat: 3.95, durationBeats: 0.4, velocity: 0.92 },
-        { id: 'ttc2-10', sectionId: 'sec-tt-chorus-2', midi: 74, startBeat: 4.35, durationBeats: 0.4, velocity: 0.88 },
-        { id: 'ttc2-11', sectionId: 'sec-tt-chorus-2', midi: 74, startBeat: 4.75, durationBeats: 0.7, velocity: 0.9 },
-        { id: 'ttc2-12', sectionId: 'sec-tt-chorus-2', midi: 76, startBeat: 5.65, durationBeats: 0.4, velocity: 0.9 },
-        { id: 'ttc2-13', sectionId: 'sec-tt-chorus-2', midi: 79, startBeat: 6.05, durationBeats: 0.4, velocity: 0.92 },
-        { id: 'ttc2-14', sectionId: 'sec-tt-chorus-2', midi: 76, startBeat: 6.45, durationBeats: 0.4, velocity: 0.88 },
-        { id: 'ttc2-15', sectionId: 'sec-tt-chorus-2', midi: 74, startBeat: 6.85, durationBeats: 0.45, velocity: 0.9 },
-        { id: 'ttc2-16', sectionId: 'sec-tt-chorus-2', midi: 76, startBeat: 7.3, durationBeats: 0.55, velocity: 0.9 },
-        { id: 'ttc2-17', sectionId: 'sec-tt-chorus-2', midi: 76, startBeat: 8.0, durationBeats: 0.42, velocity: 0.88 },
-        { id: 'ttc2-18', sectionId: 'sec-tt-chorus-2', midi: 74, startBeat: 8.42, durationBeats: 0.42, velocity: 0.86 },
-        { id: 'ttc2-19', sectionId: 'sec-tt-chorus-2', midi: 72, startBeat: 8.84, durationBeats: 0.42, velocity: 0.86 },
-        { id: 'ttc2-20', sectionId: 'sec-tt-chorus-2', midi: 71, startBeat: 9.26, durationBeats: 0.44, velocity: 0.84 },
-        { id: 'ttc2-21', sectionId: 'sec-tt-chorus-2', midi: 69, startBeat: 9.7, durationBeats: 0.55, velocity: 0.88 },
-        { id: 'ttc2-22', sectionId: 'sec-tt-chorus-2', midi: 72, startBeat: 10.25, durationBeats: 0.45, velocity: 0.88 },
-        { id: 'ttc2-23', sectionId: 'sec-tt-chorus-2', midi: 74, startBeat: 10.7, durationBeats: 0.7, velocity: 0.9 },
-        { id: 'ttc2-24', sectionId: 'sec-tt-chorus-2', midi: 76, startBeat: 11.4, durationBeats: 0.42, velocity: 0.9 },
-        { id: 'ttc2-25', sectionId: 'sec-tt-chorus-2', midi: 76, startBeat: 11.82, durationBeats: 0.42, velocity: 0.9 },
-        { id: 'ttc2-26', sectionId: 'sec-tt-chorus-2', midi: 84, startBeat: 12.24, durationBeats: 0.46, velocity: 0.94 },
-        { id: 'ttc2-27', sectionId: 'sec-tt-chorus-2', midi: 83, startBeat: 12.7, durationBeats: 0.55, velocity: 0.92 },
-        { id: 'ttc2-28', sectionId: 'sec-tt-chorus-2', midi: 84, startBeat: 13.25, durationBeats: 0.42, velocity: 0.94 },
-        { id: 'ttc2-29', sectionId: 'sec-tt-chorus-2', midi: 83, startBeat: 13.67, durationBeats: 0.42, velocity: 0.9 },
-        { id: 'ttc2-30', sectionId: 'sec-tt-chorus-2', midi: 79, startBeat: 14.09, durationBeats: 0.41, velocity: 0.88 },
-        { id: 'ttc2-31', sectionId: 'sec-tt-chorus-2', midi: 76, startBeat: 14.5, durationBeats: 0.95, velocity: 0.86 },
-        { id: 'ttc2-32', sectionId: 'sec-tt-chorus-2', midi: 76, startBeat: 16.0, durationBeats: 0.4, velocity: 0.88 },
-        { id: 'ttc2-33', sectionId: 'sec-tt-chorus-2', midi: 74, startBeat: 16.4, durationBeats: 0.4, velocity: 0.86 },
-        { id: 'ttc2-34', sectionId: 'sec-tt-chorus-2', midi: 72, startBeat: 16.8, durationBeats: 0.4, velocity: 0.86 },
-        { id: 'ttc2-35', sectionId: 'sec-tt-chorus-2', midi: 71, startBeat: 17.2, durationBeats: 0.4, velocity: 0.84 },
-        { id: 'ttc2-36', sectionId: 'sec-tt-chorus-2', midi: 69, startBeat: 17.6, durationBeats: 0.55, velocity: 0.88 },
-        { id: 'ttc2-37', sectionId: 'sec-tt-chorus-2', midi: 72, startBeat: 18.15, durationBeats: 0.45, velocity: 0.88 },
-        { id: 'ttc2-38', sectionId: 'sec-tt-chorus-2', midi: 74, startBeat: 18.6, durationBeats: 0.75, velocity: 0.9 },
-        { id: 'ttc2-39', sectionId: 'sec-tt-chorus-2', midi: 76, startBeat: 19.55, durationBeats: 0.4, velocity: 0.9 },
-        { id: 'ttc2-40', sectionId: 'sec-tt-chorus-2', midi: 79, startBeat: 19.95, durationBeats: 0.4, velocity: 0.92 },
-        { id: 'ttc2-41', sectionId: 'sec-tt-chorus-2', midi: 74, startBeat: 20.35, durationBeats: 0.4, velocity: 0.88 },
-        { id: 'ttc2-42', sectionId: 'sec-tt-chorus-2', midi: 74, startBeat: 20.75, durationBeats: 0.7, velocity: 0.9 },
-        { id: 'ttc2-43', sectionId: 'sec-tt-chorus-2', midi: 76, startBeat: 21.65, durationBeats: 0.4, velocity: 0.9 },
-        { id: 'ttc2-44', sectionId: 'sec-tt-chorus-2', midi: 79, startBeat: 22.05, durationBeats: 0.4, velocity: 0.92 },
-        { id: 'ttc2-45', sectionId: 'sec-tt-chorus-2', midi: 76, startBeat: 22.45, durationBeats: 0.4, velocity: 0.88 },
-        { id: 'ttc2-46', sectionId: 'sec-tt-chorus-2', midi: 74, startBeat: 22.85, durationBeats: 0.45, velocity: 0.9 },
-        { id: 'ttc2-47', sectionId: 'sec-tt-chorus-2', midi: 76, startBeat: 23.3, durationBeats: 0.55, velocity: 0.9 },
-        { id: 'ttc2-48', sectionId: 'sec-tt-chorus-2', midi: 67, startBeat: 24.0, durationBeats: 0.65, velocity: 0.84 },
-        { id: 'ttc2-49', sectionId: 'sec-tt-chorus-2', midi: 69, startBeat: 24.65, durationBeats: 0.75, velocity: 0.86 },
-        { id: 'ttc2-50', sectionId: 'sec-tt-chorus-2', midi: 76, startBeat: 25.4, durationBeats: 0.7, velocity: 0.9 },
-        { id: 'ttc2-51', sectionId: 'sec-tt-chorus-2', midi: 74, startBeat: 26.1, durationBeats: 0.75, velocity: 0.88 },
-        { id: 'ttc2-52', sectionId: 'sec-tt-chorus-2', midi: 71, startBeat: 26.85, durationBeats: 0.9, velocity: 0.88 },
-        { id: 'ttc2-53', sectionId: 'sec-tt-chorus-2', midi: 73, startBeat: 27.75, durationBeats: 3.25, velocity: 0.9 },
+        // ĐK 1B (2/4, 8 bars = 16 beats: Ô 41–48 Fine)
+        { id: 'ttc1b-1', sectionId: 'sec-tt-chorus-1b', midi: 76, startBeat: 0.0, durationBeats: 0.22, velocity: 0.88 },
+        { id: 'ttc1b-2', sectionId: 'sec-tt-chorus-1b', midi: 74, startBeat: 0.22, durationBeats: 0.22, velocity: 0.86 },
+        { id: 'ttc1b-3', sectionId: 'sec-tt-chorus-1b', midi: 72, startBeat: 0.44, durationBeats: 0.22, velocity: 0.86 },
+        { id: 'ttc1b-4', sectionId: 'sec-tt-chorus-1b', midi: 71, startBeat: 0.66, durationBeats: 0.24, velocity: 0.84 },
+        { id: 'ttc1b-5', sectionId: 'sec-tt-chorus-1b', midi: 69, startBeat: 0.9, durationBeats: 0.65, velocity: 0.88 },
+        { id: 'ttc1b-6', sectionId: 'sec-tt-chorus-1b', midi: 72, startBeat: 1.55, durationBeats: 0.65, velocity: 0.88 },
+        { id: 'ttc1b-7', sectionId: 'sec-tt-chorus-1b', midi: 74, startBeat: 2.2, durationBeats: 0.85, velocity: 0.9 },
+        { id: 'ttc1b-8', sectionId: 'sec-tt-chorus-1b', midi: 76, startBeat: 3.15, durationBeats: 0.4, velocity: 0.9 },
+        { id: 'ttc1b-9', sectionId: 'sec-tt-chorus-1b', midi: 79, startBeat: 3.55, durationBeats: 0.45, velocity: 0.92 },
+        { id: 'ttc1b-10', sectionId: 'sec-tt-chorus-1b', midi: 74, startBeat: 4.0, durationBeats: 0.45, velocity: 0.88 },
+        { id: 'ttc1b-11', sectionId: 'sec-tt-chorus-1b', midi: 74, startBeat: 4.45, durationBeats: 0.6, velocity: 0.9 },
+        { id: 'ttc1b-12', sectionId: 'sec-tt-chorus-1b', midi: 76, startBeat: 5.1, durationBeats: 0.3, velocity: 0.9 },
+        { id: 'ttc1b-13', sectionId: 'sec-tt-chorus-1b', midi: 79, startBeat: 5.4, durationBeats: 0.3, velocity: 0.92 },
+        { id: 'ttc1b-14', sectionId: 'sec-tt-chorus-1b', midi: 76, startBeat: 5.7, durationBeats: 0.3, velocity: 0.9 },
+        { id: 'ttc1b-15', sectionId: 'sec-tt-chorus-1b', midi: 72, startBeat: 6.0, durationBeats: 0.65, velocity: 0.88 },
+        { id: 'ttc1b-16', sectionId: 'sec-tt-chorus-1b', midi: 69, startBeat: 6.65, durationBeats: 0.75, velocity: 0.86 },
+        { id: 'ttc1b-17', sectionId: 'sec-tt-chorus-1b', midi: 67, startBeat: 7.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttc1b-18', sectionId: 'sec-tt-chorus-1b', midi: 69, startBeat: 8.0, durationBeats: 0.9, velocity: 0.88 },
+        { id: 'ttc1b-19', sectionId: 'sec-tt-chorus-1b', midi: 76, startBeat: 9.0, durationBeats: 1.0, velocity: 0.9 },
+        { id: 'ttc1b-20', sectionId: 'sec-tt-chorus-1b', midi: 74, startBeat: 10.0, durationBeats: 0.95, velocity: 0.9 },
+        { id: 'ttc1b-21', sectionId: 'sec-tt-chorus-1b', midi: 79, startBeat: 11.0, durationBeats: 1.0, velocity: 0.92 },
+        { id: 'ttc1b-22', sectionId: 'sec-tt-chorus-1b', midi: 81, startBeat: 12.0, durationBeats: 3.5, velocity: 0.94 },
 
-        // 7. Outro (4 bars = 16 beats — "Để lại tháng tư mình anh [Fmaj7] [G] [Am]")
-        { id: 'tto-1', sectionId: 'sec-tt-outro', midi: 67, startBeat: 0.0, durationBeats: 0.65, velocity: 0.82 },
-        { id: 'tto-2', sectionId: 'sec-tt-outro', midi: 69, startBeat: 0.65, durationBeats: 0.75, velocity: 0.84 },
-        { id: 'tto-3', sectionId: 'sec-tt-outro', midi: 76, startBeat: 1.4, durationBeats: 0.75, velocity: 0.88 },
-        { id: 'tto-4', sectionId: 'sec-tt-outro', midi: 74, startBeat: 2.15, durationBeats: 0.75, velocity: 0.86 },
-        { id: 'tto-5', sectionId: 'sec-tt-outro', midi: 71, startBeat: 2.9, durationBeats: 0.85, velocity: 0.84 },
-        { id: 'tto-6', sectionId: 'sec-tt-outro', midi: 69, startBeat: 3.75, durationBeats: 3.75, velocity: 0.86 },
-        { id: 'tto-7', sectionId: 'sec-tt-outro', midi: 76, startBeat: 8.0, durationBeats: 1.0, velocity: 0.76 },
-        { id: 'tto-8', sectionId: 'sec-tt-outro', midi: 74, startBeat: 9.0, durationBeats: 1.0, velocity: 0.74 },
-        { id: 'tto-9', sectionId: 'sec-tt-outro', midi: 72, startBeat: 10.0, durationBeats: 2.0, velocity: 0.72 },
-        { id: 'tto-10', sectionId: 'sec-tt-outro', midi: 69, startBeat: 12.0, durationBeats: 4.0, velocity: 0.76 },
+        // Gian tấu Piano Solo (2/4, 8 bars = 16 beats: Ô 49–57)
+        { id: 'tti-1', sectionId: 'sec-tt-interlude', midi: 69, startBeat: 0.5, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'tti-2', sectionId: 'sec-tt-interlude', midi: 70, startBeat: 1.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'tti-3', sectionId: 'sec-tt-interlude', midi: 71, startBeat: 1.5, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'tti-4', sectionId: 'sec-tt-interlude', midi: 76, startBeat: 2.0, durationBeats: 1.0, velocity: 0.84 },
+        { id: 'tti-5', sectionId: 'sec-tt-interlude', midi: 68, startBeat: 3.5, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'tti-6', sectionId: 'sec-tt-interlude', midi: 70, startBeat: 4.0, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'tti-7', sectionId: 'sec-tt-interlude', midi: 72, startBeat: 4.5, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'tti-8', sectionId: 'sec-tt-interlude', midi: 75, startBeat: 5.0, durationBeats: 1.0, velocity: 0.84 },
+        { id: 'tti-9', sectionId: 'sec-tt-interlude', midi: 79, startBeat: 6.0, durationBeats: 1.5, velocity: 0.88 },
+        { id: 'tti-10', sectionId: 'sec-tt-interlude', midi: 72, startBeat: 7.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'tti-11', sectionId: 'sec-tt-interlude', midi: 74, startBeat: 8.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'tti-12', sectionId: 'sec-tt-interlude', midi: 76, startBeat: 8.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'tti-13', sectionId: 'sec-tt-interlude', midi: 79, startBeat: 9.0, durationBeats: 0.5, velocity: 0.86 },
+        { id: 'tti-14', sectionId: 'sec-tt-interlude', midi: 76, startBeat: 9.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'tti-15', sectionId: 'sec-tt-interlude', midi: 81, startBeat: 10.0, durationBeats: 0.5, velocity: 0.88 },
+        { id: 'tti-16', sectionId: 'sec-tt-interlude', midi: 83, startBeat: 10.5, durationBeats: 0.5, velocity: 0.9 },
+        { id: 'tti-17', sectionId: 'sec-tt-interlude', midi: 84, startBeat: 11.0, durationBeats: 0.5, velocity: 0.92 },
+        { id: 'tti-18', sectionId: 'sec-tt-interlude', midi: 83, startBeat: 11.5, durationBeats: 0.5, velocity: 0.88 },
+        { id: 'tti-19', sectionId: 'sec-tt-interlude', midi: 84, startBeat: 12.0, durationBeats: 0.25, velocity: 0.9 },
+        { id: 'tti-20', sectionId: 'sec-tt-interlude', midi: 83, startBeat: 12.25, durationBeats: 0.25, velocity: 0.88 },
+        { id: 'tti-21', sectionId: 'sec-tt-interlude', midi: 81, startBeat: 12.5, durationBeats: 0.25, velocity: 0.86 },
+        { id: 'tti-22', sectionId: 'sec-tt-interlude', midi: 79, startBeat: 12.75, durationBeats: 0.25, velocity: 0.84 },
+        { id: 'tti-23', sectionId: 'sec-tt-interlude', midi: 77, startBeat: 13.0, durationBeats: 0.25, velocity: 0.82 },
+        { id: 'tti-24', sectionId: 'sec-tt-interlude', midi: 76, startBeat: 13.25, durationBeats: 0.25, velocity: 0.8 },
+        { id: 'tti-25', sectionId: 'sec-tt-interlude', midi: 74, startBeat: 13.5, durationBeats: 0.25, velocity: 0.78 },
+        { id: 'tti-26', sectionId: 'sec-tt-interlude', midi: 72, startBeat: 13.75, durationBeats: 0.25, velocity: 0.76 },
+        { id: 'tti-27', sectionId: 'sec-tt-interlude', midi: 79, startBeat: 14.0, durationBeats: 1.5, velocity: 0.84 },
+
+        // Bridge 1 (2/4, 8 bars = 16 beats: Ô 58–64)
+        { id: 'ttba-1', sectionId: 'sec-tt-bridge-a', midi: 65, startBeat: 0.75, durationBeats: 0.4, velocity: 0.82 },
+        { id: 'ttba-2', sectionId: 'sec-tt-bridge-a', midi: 67, startBeat: 1.15, durationBeats: 0.4, velocity: 0.84 },
+        { id: 'ttba-3', sectionId: 'sec-tt-bridge-a', midi: 69, startBeat: 1.55, durationBeats: 0.45, velocity: 0.86 },
+        { id: 'ttba-4', sectionId: 'sec-tt-bridge-a', midi: 67, startBeat: 2.0, durationBeats: 0.75, velocity: 0.84 },
+        { id: 'ttba-5', sectionId: 'sec-tt-bridge-a', midi: 65, startBeat: 2.75, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'ttba-6', sectionId: 'sec-tt-bridge-a', midi: 64, startBeat: 3.25, durationBeats: 0.75, velocity: 0.8 },
+        { id: 'ttba-7', sectionId: 'sec-tt-bridge-a', midi: 67, startBeat: 4.0, durationBeats: 0.75, velocity: 0.84 },
+        { id: 'ttba-8', sectionId: 'sec-tt-bridge-a', midi: 64, startBeat: 4.75, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'ttba-9', sectionId: 'sec-tt-bridge-a', midi: 64, startBeat: 5.25, durationBeats: 0.75, velocity: 0.8 },
+        { id: 'ttba-10', sectionId: 'sec-tt-bridge-a', midi: 64, startBeat: 6.0, durationBeats: 2.0, velocity: 0.82 },
+        { id: 'ttba-11', sectionId: 'sec-tt-bridge-a', midi: 62, startBeat: 8.75, durationBeats: 0.4, velocity: 0.78 },
+        { id: 'ttba-12', sectionId: 'sec-tt-bridge-a', midi: 64, startBeat: 9.15, durationBeats: 0.4, velocity: 0.8 },
+        { id: 'ttba-13', sectionId: 'sec-tt-bridge-a', midi: 65, startBeat: 9.55, durationBeats: 0.45, velocity: 0.82 },
+        { id: 'ttba-14', sectionId: 'sec-tt-bridge-a', midi: 65, startBeat: 10.0, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'ttba-15', sectionId: 'sec-tt-bridge-a', midi: 64, startBeat: 10.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'ttba-16', sectionId: 'sec-tt-bridge-a', midi: 62, startBeat: 11.0, durationBeats: 0.33, velocity: 0.78 },
+        { id: 'ttba-17', sectionId: 'sec-tt-bridge-a', midi: 64, startBeat: 11.33, durationBeats: 0.33, velocity: 0.8 },
+        { id: 'ttba-18', sectionId: 'sec-tt-bridge-a', midi: 62, startBeat: 11.66, durationBeats: 0.34, velocity: 0.78 },
+        { id: 'ttba-19', sectionId: 'sec-tt-bridge-a', midi: 60, startBeat: 12.0, durationBeats: 0.65, velocity: 0.76 },
+        { id: 'ttba-20', sectionId: 'sec-tt-bridge-a', midi: 62, startBeat: 12.65, durationBeats: 0.65, velocity: 0.78 },
+        { id: 'ttba-21', sectionId: 'sec-tt-bridge-a', midi: 64, startBeat: 13.3, durationBeats: 2.2, velocity: 0.82 },
+
+        // Bridge 2 (2/4, 8 bars = 16 beats: Ô 65–72 -> D.S. al Fine)
+        { id: 'ttbb-1', sectionId: 'sec-tt-bridge-b', midi: 65, startBeat: 0.75, durationBeats: 0.4, velocity: 0.82 },
+        { id: 'ttbb-2', sectionId: 'sec-tt-bridge-b', midi: 67, startBeat: 1.15, durationBeats: 0.4, velocity: 0.84 },
+        { id: 'ttbb-3', sectionId: 'sec-tt-bridge-b', midi: 69, startBeat: 1.55, durationBeats: 0.45, velocity: 0.86 },
+        { id: 'ttbb-4', sectionId: 'sec-tt-bridge-b', midi: 67, startBeat: 2.0, durationBeats: 0.75, velocity: 0.84 },
+        { id: 'ttbb-5', sectionId: 'sec-tt-bridge-b', midi: 65, startBeat: 2.75, durationBeats: 0.5, velocity: 0.82 },
+        { id: 'ttbb-6', sectionId: 'sec-tt-bridge-b', midi: 64, startBeat: 3.25, durationBeats: 0.75, velocity: 0.8 },
+        { id: 'ttbb-7', sectionId: 'sec-tt-bridge-b', midi: 67, startBeat: 4.0, durationBeats: 0.75, velocity: 0.84 },
+        { id: 'ttbb-8', sectionId: 'sec-tt-bridge-b', midi: 64, startBeat: 4.75, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'ttbb-9', sectionId: 'sec-tt-bridge-b', midi: 64, startBeat: 5.25, durationBeats: 0.75, velocity: 0.8 },
+        { id: 'ttbb-10', sectionId: 'sec-tt-bridge-b', midi: 64, startBeat: 6.0, durationBeats: 1.75, velocity: 0.82 },
+        { id: 'ttbb-11', sectionId: 'sec-tt-bridge-b', midi: 62, startBeat: 8.25, durationBeats: 0.4, velocity: 0.78 },
+        { id: 'ttbb-12', sectionId: 'sec-tt-bridge-b', midi: 64, startBeat: 8.65, durationBeats: 0.4, velocity: 0.8 },
+        { id: 'ttbb-13', sectionId: 'sec-tt-bridge-b', midi: 65, startBeat: 9.05, durationBeats: 0.45, velocity: 0.82 },
+        { id: 'ttbb-14', sectionId: 'sec-tt-bridge-b', midi: 64, startBeat: 9.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'ttbb-15', sectionId: 'sec-tt-bridge-b', midi: 62, startBeat: 10.0, durationBeats: 0.5, velocity: 0.78 },
+        { id: 'ttbb-16', sectionId: 'sec-tt-bridge-b', midi: 64, startBeat: 10.5, durationBeats: 0.5, velocity: 0.8 },
+        { id: 'ttbb-17', sectionId: 'sec-tt-bridge-b', midi: 67, startBeat: 11.0, durationBeats: 0.9, velocity: 0.84 },
+        { id: 'ttbb-18', sectionId: 'sec-tt-bridge-b', midi: 69, startBeat: 12.0, durationBeats: 1.8, velocity: 0.86 },
+        { id: 'ttbb-19', sectionId: 'sec-tt-bridge-b', midi: 69, startBeat: 14.0, durationBeats: 1.25, velocity: 0.84 },
+        { id: 'ttbb-20', sectionId: 'sec-tt-bridge-b', midi: 76, startBeat: 15.35, durationBeats: 0.3, velocity: 0.84 },
+        { id: 'ttbb-21', sectionId: 'sec-tt-bridge-b', midi: 74, startBeat: 15.65, durationBeats: 0.3, velocity: 0.82 },
+
+        // ĐK 2A (D.S. al Fine, 2/4, 8 bars = 16 beats)
+        { id: 'ttc2a-1', sectionId: 'sec-tt-chorus-2a', midi: 76, startBeat: 0.0, durationBeats: 0.2, velocity: 0.86 },
+        { id: 'ttc2a-2', sectionId: 'sec-tt-chorus-2a', midi: 74, startBeat: 0.2, durationBeats: 0.2, velocity: 0.86 },
+        { id: 'ttc2a-3', sectionId: 'sec-tt-chorus-2a', midi: 72, startBeat: 0.4, durationBeats: 0.2, velocity: 0.86 },
+        { id: 'ttc2a-4', sectionId: 'sec-tt-chorus-2a', midi: 69, startBeat: 0.6, durationBeats: 0.5, velocity: 0.88 },
+        { id: 'ttc2a-5', sectionId: 'sec-tt-chorus-2a', midi: 72, startBeat: 1.1, durationBeats: 0.45, velocity: 0.88 },
+        { id: 'ttc2a-6', sectionId: 'sec-tt-chorus-2a', midi: 74, startBeat: 1.55, durationBeats: 0.45, velocity: 0.9 },
+        { id: 'ttc2a-7', sectionId: 'sec-tt-chorus-2a', midi: 74, startBeat: 2.0, durationBeats: 0.9, velocity: 0.9 },
+        { id: 'ttc2a-8', sectionId: 'sec-tt-chorus-2a', midi: 76, startBeat: 3.0, durationBeats: 0.5, velocity: 0.9 },
+        { id: 'ttc2a-9', sectionId: 'sec-tt-chorus-2a', midi: 79, startBeat: 3.5, durationBeats: 0.5, velocity: 0.92 },
+        { id: 'ttc2a-10', sectionId: 'sec-tt-chorus-2a', midi: 74, startBeat: 4.0, durationBeats: 0.45, velocity: 0.88 },
+        { id: 'ttc2a-11', sectionId: 'sec-tt-chorus-2a', midi: 74, startBeat: 4.45, durationBeats: 0.7, velocity: 0.9 },
+        { id: 'ttc2a-12', sectionId: 'sec-tt-chorus-2a', midi: 76, startBeat: 5.2, durationBeats: 0.4, velocity: 0.9 },
+        { id: 'ttc2a-13', sectionId: 'sec-tt-chorus-2a', midi: 79, startBeat: 5.6, durationBeats: 0.4, velocity: 0.92 },
+        { id: 'ttc2a-14', sectionId: 'sec-tt-chorus-2a', midi: 76, startBeat: 6.0, durationBeats: 0.4, velocity: 0.9 },
+        { id: 'ttc2a-15', sectionId: 'sec-tt-chorus-2a', midi: 74, startBeat: 6.4, durationBeats: 0.4, velocity: 0.88 },
+        { id: 'ttc2a-16', sectionId: 'sec-tt-chorus-2a', midi: 76, startBeat: 6.8, durationBeats: 1.0, velocity: 0.9 },
+        { id: 'ttc2a-17', sectionId: 'sec-tt-chorus-2a', midi: 76, startBeat: 8.0, durationBeats: 0.25, velocity: 0.88 },
+        { id: 'ttc2a-18', sectionId: 'sec-tt-chorus-2a', midi: 74, startBeat: 8.25, durationBeats: 0.25, velocity: 0.86 },
+        { id: 'ttc2a-19', sectionId: 'sec-tt-chorus-2a', midi: 72, startBeat: 8.5, durationBeats: 0.25, velocity: 0.86 },
+        { id: 'ttc2a-20', sectionId: 'sec-tt-chorus-2a', midi: 71, startBeat: 8.75, durationBeats: 0.25, velocity: 0.84 },
+        { id: 'ttc2a-21', sectionId: 'sec-tt-chorus-2a', midi: 69, startBeat: 9.0, durationBeats: 0.5, velocity: 0.88 },
+        { id: 'ttc2a-22', sectionId: 'sec-tt-chorus-2a', midi: 72, startBeat: 9.5, durationBeats: 0.5, velocity: 0.88 },
+        { id: 'ttc2a-23', sectionId: 'sec-tt-chorus-2a', midi: 74, startBeat: 10.0, durationBeats: 0.9, velocity: 0.9 },
+        { id: 'ttc2a-24', sectionId: 'sec-tt-chorus-2a', midi: 76, startBeat: 11.0, durationBeats: 0.33, velocity: 0.9 },
+        { id: 'ttc2a-25', sectionId: 'sec-tt-chorus-2a', midi: 79, startBeat: 11.33, durationBeats: 0.33, velocity: 0.92 },
+        { id: 'ttc2a-26', sectionId: 'sec-tt-chorus-2a', midi: 84, startBeat: 11.66, durationBeats: 0.34, velocity: 0.94 },
+        { id: 'ttc2a-27', sectionId: 'sec-tt-chorus-2a', midi: 83, startBeat: 12.0, durationBeats: 0.55, velocity: 0.92 },
+        { id: 'ttc2a-28', sectionId: 'sec-tt-chorus-2a', midi: 84, startBeat: 12.55, durationBeats: 0.45, velocity: 0.94 },
+        { id: 'ttc2a-29', sectionId: 'sec-tt-chorus-2a', midi: 83, startBeat: 13.0, durationBeats: 0.45, velocity: 0.92 },
+        { id: 'ttc2a-30', sectionId: 'sec-tt-chorus-2a', midi: 79, startBeat: 13.45, durationBeats: 0.55, velocity: 0.9 },
+        { id: 'ttc2a-31', sectionId: 'sec-tt-chorus-2a', midi: 76, startBeat: 14.0, durationBeats: 1.5, velocity: 0.88 },
+
+        // ĐK 2B (Fine: Để lại tháng tư mình anh, 2/4, 8 bars = 16 beats)
+        { id: 'ttc2b-1', sectionId: 'sec-tt-chorus-2b', midi: 76, startBeat: 0.0, durationBeats: 0.22, velocity: 0.88 },
+        { id: 'ttc2b-2', sectionId: 'sec-tt-chorus-2b', midi: 74, startBeat: 0.22, durationBeats: 0.22, velocity: 0.86 },
+        { id: 'ttc2b-3', sectionId: 'sec-tt-chorus-2b', midi: 72, startBeat: 0.44, durationBeats: 0.22, velocity: 0.86 },
+        { id: 'ttc2b-4', sectionId: 'sec-tt-chorus-2b', midi: 71, startBeat: 0.66, durationBeats: 0.24, velocity: 0.84 },
+        { id: 'ttc2b-5', sectionId: 'sec-tt-chorus-2b', midi: 69, startBeat: 0.9, durationBeats: 0.65, velocity: 0.88 },
+        { id: 'ttc2b-6', sectionId: 'sec-tt-chorus-2b', midi: 72, startBeat: 1.55, durationBeats: 0.65, velocity: 0.88 },
+        { id: 'ttc2b-7', sectionId: 'sec-tt-chorus-2b', midi: 74, startBeat: 2.2, durationBeats: 0.85, velocity: 0.9 },
+        { id: 'ttc2b-8', sectionId: 'sec-tt-chorus-2b', midi: 76, startBeat: 3.15, durationBeats: 0.4, velocity: 0.9 },
+        { id: 'ttc2b-9', sectionId: 'sec-tt-chorus-2b', midi: 79, startBeat: 3.55, durationBeats: 0.45, velocity: 0.92 },
+        { id: 'ttc2b-10', sectionId: 'sec-tt-chorus-2b', midi: 74, startBeat: 4.0, durationBeats: 0.45, velocity: 0.88 },
+        { id: 'ttc2b-11', sectionId: 'sec-tt-chorus-2b', midi: 74, startBeat: 4.45, durationBeats: 0.6, velocity: 0.9 },
+        { id: 'ttc2b-12', sectionId: 'sec-tt-chorus-2b', midi: 76, startBeat: 5.1, durationBeats: 0.3, velocity: 0.9 },
+        { id: 'ttc2b-13', sectionId: 'sec-tt-chorus-2b', midi: 79, startBeat: 5.4, durationBeats: 0.3, velocity: 0.92 },
+        { id: 'ttc2b-14', sectionId: 'sec-tt-chorus-2b', midi: 76, startBeat: 5.7, durationBeats: 0.3, velocity: 0.9 },
+        { id: 'ttc2b-15', sectionId: 'sec-tt-chorus-2b', midi: 72, startBeat: 6.0, durationBeats: 0.65, velocity: 0.88 },
+        { id: 'ttc2b-16', sectionId: 'sec-tt-chorus-2b', midi: 69, startBeat: 6.65, durationBeats: 0.75, velocity: 0.86 },
+        { id: 'ttc2b-17', sectionId: 'sec-tt-chorus-2b', midi: 67, startBeat: 7.5, durationBeats: 0.5, velocity: 0.84 },
+        { id: 'ttc2b-18', sectionId: 'sec-tt-chorus-2b', midi: 69, startBeat: 8.0, durationBeats: 0.9, velocity: 0.88 },
+        { id: 'ttc2b-19', sectionId: 'sec-tt-chorus-2b', midi: 76, startBeat: 9.0, durationBeats: 1.0, velocity: 0.9 },
+        { id: 'ttc2b-20', sectionId: 'sec-tt-chorus-2b', midi: 74, startBeat: 10.0, durationBeats: 0.95, velocity: 0.9 },
+        { id: 'ttc2b-21', sectionId: 'sec-tt-chorus-2b', midi: 79, startBeat: 11.0, durationBeats: 1.0, velocity: 0.92 },
+        { id: 'ttc2b-22', sectionId: 'sec-tt-chorus-2b', midi: 81, startBeat: 12.0, durationBeats: 3.5, velocity: 0.92 },
       ],
     },
     {
@@ -4005,6 +4556,10 @@ export function createMidnightCafeLofiTrack(updatedAt = Date.now() - 90_000): Sk
 }
 
 export function getDraftStyleLabel(draft: SketchpadDraft): string {
+  const style20 = RHYTHM_STYLE_META.find((r) => r.id === draft.drumPattern);
+  if (style20) {
+    return style20.label.replace(/^\d+[A-Za-z]?\.\s*/, '');
+  }
   if (draft.backingInstrument === 'piano-ballad' && draft.drumPattern === 'ballad') {
     return 'Ballad Beat';
   }
@@ -4024,6 +4579,41 @@ export function getDraftStyleLabel(draft: SketchpadDraft): string {
     default:
       return 'Ballad';
   }
+}
+
+export function resolvePairedInstrumentsForBacking(
+  backingInstrument: BackingInstrumentId,
+  currentMelody?: MelodyInstrumentId
+): {
+  backingInstrument: BackingInstrumentId;
+  melodyInstrument: MelodyInstrumentId;
+} {
+  if (backingInstrument === 'guitar-strum') {
+    return { backingInstrument: 'guitar-strum', melodyInstrument: 'guitar' };
+  }
+  if (backingInstrument === 'piano-ballad') {
+    return { backingInstrument: 'piano-ballad', melodyInstrument: 'piano' };
+  }
+  return {
+    backingInstrument: 'rhodes',
+    melodyInstrument: currentMelody === 'synth' ? 'synth' : 'piano',
+  };
+}
+
+export function resolvePairedInstrumentsForMelody(
+  melodyInstrument: MelodyInstrumentId,
+  currentBacking: BackingInstrumentId
+): {
+  backingInstrument: BackingInstrumentId;
+  melodyInstrument: MelodyInstrumentId;
+} {
+  if (melodyInstrument === 'guitar') {
+    return { backingInstrument: 'guitar-strum', melodyInstrument: 'guitar' };
+  }
+  if (melodyInstrument === 'piano') {
+    return { backingInstrument: 'piano-ballad', melodyInstrument: 'piano' };
+  }
+  return { backingInstrument: currentBacking, melodyInstrument: 'synth' };
 }
 
 const STARTER_PLAYLIST_PRIORITY: Record<string, number> = {

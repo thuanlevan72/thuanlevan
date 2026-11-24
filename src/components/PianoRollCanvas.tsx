@@ -17,6 +17,7 @@ interface PianoRollCanvasProps {
   theme: ThemeMode;
   sectionId: string;
   bars: 2 | 4 | 8;
+  beatsPerBar?: number;
   keyRoot: string;
   scaleMode: 'major' | 'minor';
   scaleSnap: boolean;
@@ -49,6 +50,7 @@ export function PianoRollCanvas({
   theme,
   sectionId,
   bars,
+  beatsPerBar = 4,
   keyRoot,
   scaleMode,
   scaleSnap,
@@ -74,7 +76,7 @@ export function PianoRollCanvas({
   const [hoverInfo, setHoverInfo] = useState<string | null>(null);
   const dragNoteRef = useRef<{ id: string; startBeat: number } | null>(null);
 
-  const totalBeats = bars * 4;
+  const totalBeats = bars * beatsPerBar;
 
   const scaleChromas = useMemo(() => {
     const pcs = getScaleNotes(keyRoot, scaleMode);
@@ -173,9 +175,9 @@ export function PianoRollCanvas({
     ctx.font = '600 10px "JetBrains Mono", monospace';
     for (let b = 0; b < totalBeats; b++) {
       const bx = KEY_GUTTER_W + b * beatW;
-      if (b % 4 === 0) {
+      if (b % beatsPerBar === 0) {
         ctx.fillStyle = textMuted;
-        ctx.fillText(`Ô ${b / 4 + 1}`, bx + 4, HEADER_H - 6);
+        ctx.fillText(`Ô ${b / beatsPerBar + 1}`, bx + 4, HEADER_H - 6);
       }
     }
 
@@ -198,7 +200,7 @@ export function PianoRollCanvas({
         ((localBeat >= ch.beatOffset && localBeat < nextOffset) ||
           (activeChordSymbol !== null &&
             ch.symbol === activeChordSymbol &&
-            Math.abs(localBeat - ch.beatOffset) < 4));
+            Math.abs(localBeat - ch.beatOffset) < beatsPerBar));
       const cx = KEY_GUTTER_W + ch.beatOffset * beatW;
       ctx.font = '700 11px "JetBrains Mono", monospace';
       if (isActiveChord) {
@@ -269,7 +271,7 @@ export function PianoRollCanvas({
     for (let step = 0; step <= totalBeats * 2; step++) {
       const beat = step / 2;
       const x = KEY_GUTTER_W + beat * beatW;
-      const isBar = step % 8 === 0;
+      const isBar = step % (beatsPerBar * 2) === 0;
       const isBeat = step % 2 === 0;
       ctx.strokeStyle = isBar
         ? barLine
