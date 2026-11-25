@@ -207,11 +207,24 @@ export interface ThanhMinhState {
   interrogationStep: 0 | 1 | 2 | 3;
   confessionAnswers: boolean[];
 
-  // Restrained Peripheral Horror System
+  // Restrained Peripheral Horror & Psychological Dread System
   horrorPulseTimer: number;
   activePhantomX: number | null;
   activePhantomTimer: number;
   activePhantomKind: 'peeker' | 'shadow_child' | null;
+  audioVacuumTimer: number;
+  pendingDreadBeat: 'sub_bass_ambush' | 'door_slam_behind' | null;
+  panicTimer: number;
+  doorJamTimer: number;
+  lanternSputterTimer: number;
+  fakeoutKind: 'black_cat' | 'falling_book' | null;
+  fakeoutX: number | null;
+  fakeoutTimer: number;
+  postFakeoutAmbushTimer: number;
+  dreadCycleCount: number;
+  modalReadTimer: number;
+  uiIntrusionTimer: number;
+  sceneVisitCounts: Partial<Record<SceneId, number>>;
 
   // Entities & UI
   ghosts: GhostEntity[];
@@ -239,7 +252,18 @@ export interface ThanhMinhEvents {
   sanityCollapsed: boolean;
   ghostAlerted: boolean;
   killedByGhostKind: 'paper_hat' | 'tongue_warden' | null;
-  horrorEvent?: 'knock' | 'sting' | 'whisper' | null;
+  horrorEvent?:
+    | 'knock'
+    | 'sting'
+    | 'whisper'
+    | 'vacuum_start'
+    | 'sub_bass_ambush'
+    | 'fakeout_cat'
+    | 'fakeout_book'
+    | 'footstep_behind'
+    | 'ui_intrusion'
+    | null;
+  horrorPan?: number;
 }
 
 // Baseline speeds before the deliberate -35% Detention-style pacing reduction
@@ -1506,6 +1530,19 @@ export function createInitialThanhMinhState(loopCount = 1): ThanhMinhState {
     activePhantomX: null,
     activePhantomTimer: 0,
     activePhantomKind: null,
+    audioVacuumTimer: 0,
+    pendingDreadBeat: null,
+    panicTimer: 0,
+    doorJamTimer: 0,
+    lanternSputterTimer: 0,
+    fakeoutKind: null,
+    fakeoutX: null,
+    fakeoutTimer: 0,
+    postFakeoutAmbushTimer: 0,
+    dreadCycleCount: 0,
+    modalReadTimer: 0,
+    uiIntrusionTimer: 0,
+    sceneVisitCounts: { classroom_12b: 1 },
 
     ghosts: [
       {
@@ -1672,6 +1709,14 @@ export function interactWithHotspot(state: ThanhMinhState): ThanhMinhState {
   if (!hs) return state;
 
   if ((hs.kind === 'door' || hs.kind === 'illogical_door') && hs.targetScene) {
+    if ((state.doorJamTimer ?? 0) > 0) {
+      return {
+        ...state,
+        subtitleText:
+          'Tay nắm cửa bị bóp chặt từ bên kia — cơn hoảng loạn khiến cánh cửa kẹt cứng trong giây lát!',
+        subtitleTimer: 3.0,
+      };
+    }
     if (hs.requiredItem && !state.inventory.includes(hs.requiredItem)) {
       return {
         ...state,
@@ -1687,6 +1732,10 @@ export function interactWithHotspot(state: ThanhMinhState): ThanhMinhState {
       };
     }
     const targetMeta = SCENE_META[hs.targetScene];
+    const nextVisits = {
+      ...(state.sceneVisitCounts ?? {}),
+      [hs.targetScene]: ((state.sceneVisitCounts ?? {})[hs.targetScene] ?? 0) + 1,
+    };
     return {
       ...state,
       scene: hs.targetScene,
@@ -1694,6 +1743,12 @@ export function interactWithHotspot(state: ThanhMinhState): ThanhMinhState {
       playerX: hs.targetX ?? 140,
       activePhantomX: null,
       activePhantomTimer: 0,
+      audioVacuumTimer: 0,
+      pendingDreadBeat: null,
+      fakeoutKind: null,
+      fakeoutX: null,
+      fakeoutTimer: 0,
+      sceneVisitCounts: nextVisits,
       subtitleText: hs.dialogueText ?? `Bước vào ${targetMeta.title}.`,
       subtitleTimer: 3.8,
     };
@@ -2412,7 +2467,40 @@ export function tickThanhMinhSimulation(
   }
 
   if (prev.activeModal !== 'none') {
-    return { next: { ...prev, isRunning: false, isMoving: false }, events };
+    const canIntrudeModal =
+      prev.scene !== 'final_interrogation' &&
+      (prev.activeModal === 'journal' ||
+        prev.activeModal === 'memory_echo' ||
+        prev.activeModal === 'radio_tuner');
+    let modalReadTimer = canIntrudeModal ? (prev.modalReadTimer ?? 0) + dt : 0;
+    let uiIntrusionTimer = Math.max(0, (prev.uiIntrusionTimer ?? 0) - dt);
+    let modalSanity = prev.sanity;
+    let modalSputter = Math.max(0, (prev.lanternSputterTimer ?? 0) - dt);
+    let postFakeoutAmbushTimer = prev.postFakeoutAmbushTimer ?? 0;
+
+    if (canIntrudeModal && modalReadTimer >= 4.8 && uiIntrusionTimer <= 0) {
+      modalReadTimer = -7.5;
+      uiIntrusionTimer = 2.4;
+      modalSanity = Math.max(8, modalSanity - 4);
+      modalSputter = Math.max(modalSputter, 1.8);
+      postFakeoutAmbushTimer = Math.max(postFakeoutAmbushTimer, 1.5);
+      events.horrorEvent = 'ui_intrusion';
+      events.horrorPan = -prev.playerFacing * 0.85;
+    }
+
+    return {
+      next: {
+        ...prev,
+        isRunning: false,
+        isMoving: false,
+        modalReadTimer,
+        uiIntrusionTimer,
+        sanity: modalSanity,
+        lanternSputterTimer: modalSputter,
+        postFakeoutAmbushTimer,
+      },
+      events,
+    };
   }
 
   const meta = SCENE_META[prev.scene];
@@ -2437,10 +2525,73 @@ export function tickThanhMinhSimulation(
     subtitleText,
     subtitleTimer,
   } = prev;
+  let audioVacuumTimer = prev.audioVacuumTimer ?? 0;
+  let pendingDreadBeat = prev.pendingDreadBeat ?? null;
+  let panicTimer = Math.max(0, (prev.panicTimer ?? 0) - dt);
+  let doorJamTimer = Math.max(0, (prev.doorJamTimer ?? 0) - dt);
+  let lanternSputterTimer = Math.max(0, (prev.lanternSputterTimer ?? 0) - dt);
+  let fakeoutKind = prev.fakeoutKind ?? null;
+  let fakeoutX = prev.fakeoutX ?? null;
+  let fakeoutTimer = prev.fakeoutTimer ?? 0;
+  let postFakeoutAmbushTimer = prev.postFakeoutAmbushTimer ?? 0;
+  let dreadCycleCount = prev.dreadCycleCount ?? 0;
+  const uiIntrusionTimer = Math.max(0, (prev.uiIntrusionTimer ?? 0) - dt);
 
   subtitleTimer = Math.max(0, subtitleTimer - dt);
   if (subtitleTimer <= 0) subtitleText = '';
   gaspPenaltyTimer = Math.max(0, gaspPenaltyTimer - dt);
+
+  // Pillar 1 & 4: Audio Vacuum countdown -> Sub-Bass Dread Ambush with real gameplay stakes
+  let ambushAlertTrigger = false;
+  if (audioVacuumTimer > 0) {
+    audioVacuumTimer = Math.max(0, audioVacuumTimer - dt);
+    if (audioVacuumTimer <= 0 && pendingDreadBeat) {
+      const behindSign: 1 | -1 = playerFacing === 1 ? -1 : 1;
+      const pan = behindSign * 0.88;
+      if (activePhantomX === null) {
+        const spawnX = Math.max(meta.minX + 32, Math.min(meta.maxX - 32, playerX + behindSign * 148));
+        if (Math.abs(spawnX - playerX) > 90) {
+          activePhantomX = spawnX;
+          activePhantomTimer = 3.0;
+          activePhantomKind = 'shadow_child';
+        }
+      }
+      events.horrorEvent = pendingDreadBeat === 'door_slam_behind' ? 'footstep_behind' : 'sub_bass_ambush';
+      events.horrorPan = pan;
+      sanity = Math.max(6, sanity - 11);
+      panicTimer = 3.8;
+      lanternSputterTimer = 1.9;
+      doorJamTimer = 2.8;
+      ambushAlertTrigger = true;
+      pendingDreadBeat = null;
+      if (!subtitleText) {
+        subtitleText =
+          'Khoảng lặng chết chóc vỡ tan — tiếng bước chân nặng trịch sát sau gáy khiến ngọn đèn dầu chập chờn!';
+        subtitleTimer = 3.4;
+      }
+    }
+  }
+
+  // Pillar 3: Mundane fake-out visual runner + post-relaxation ambush trigger
+  if (fakeoutTimer > 0) {
+    fakeoutTimer = Math.max(0, fakeoutTimer - dt);
+    if (fakeoutX !== null && fakeoutKind === 'black_cat') {
+      fakeoutX += playerFacing * 190 * dt;
+    }
+    if (fakeoutTimer <= 0) {
+      fakeoutKind = null;
+      fakeoutX = null;
+    }
+  }
+
+  if (postFakeoutAmbushTimer > 0) {
+    postFakeoutAmbushTimer = Math.max(0, postFakeoutAmbushTimer - dt);
+    if (postFakeoutAmbushTimer <= 0 && audioVacuumTimer <= 0 && prev.scene !== 'final_interrogation') {
+      audioVacuumTimer = 1.35;
+      pendingDreadBeat = 'sub_bass_ambush';
+      events.horrorEvent = 'vacuum_start';
+    }
+  }
 
   if (activePhantomTimer > 0 && activePhantomX !== null) {
     activePhantomTimer = Math.max(0, activePhantomTimer - dt);
@@ -2453,6 +2604,13 @@ export function tickThanhMinhSimulation(
     if ((lookingAtPhantom && distPhantom < 230) || distPhantom < 85 || activePhantomTimer <= 0) {
       if (lookingAtPhantom && distPhantom < 230 && activePhantomTimer > 0.2) {
         events.horrorEvent = 'sting';
+        events.horrorPan = activePhantomX > playerX ? 0.72 : -0.72;
+        sanity = Math.max(5, sanity - 7);
+        panicTimer = Math.max(panicTimer, 2.8);
+        lanternSputterTimer = Math.max(lanternSputterTimer, 1.35);
+        if (activePhantomKind === 'shadow_child') {
+          doorJamTimer = Math.max(doorJamTimer, 2.2);
+        }
       }
       activePhantomX = null;
       activePhantomTimer = 0;
@@ -2463,24 +2621,51 @@ export function tickThanhMinhSimulation(
   horrorPulseTimer -= dt;
   if (horrorPulseTimer <= 0 && prev.scene !== 'final_interrogation') {
     const isUnsafeScene = prev.scene !== 'classroom_12b' || subtitleTimer <= 0;
+    dreadCycleCount += 1;
+    const cyclePhase = dreadCycleCount % 3;
+
     if (isUnsafeScene && activePhantomX === null) {
-      const behindOffset = -playerFacing * (195 + ((Math.round(prev.walkPhase * 17) % 5) * 14));
-      const candidateX = Math.max(meta.minX + 30, Math.min(meta.maxX - 30, playerX + behindOffset));
-      if (Math.abs(candidateX - playerX) > 130) {
-        activePhantomX = candidateX;
-        activePhantomTimer = 3.2;
-        activePhantomKind = prev.act >= 2 ? 'shadow_child' : 'peeker';
-        events.horrorEvent = prev.realm === 'yin' ? 'whisper' : 'knock';
-        if (!subtitleText) {
-          subtitleText =
-            prev.realm === 'yin'
-              ? 'Có tiếng thì thầm lạnh buốt ngay phía sau ánh đèn dầu...'
-              : 'Cộc... cộc... Tiếng gõ khe khẽ vang lên từ góc tối phía sau.';
-          subtitleTimer = 3.0;
+      if (cyclePhase === 1) {
+        const behindOffset = -playerFacing * (195 + ((Math.round(prev.walkPhase * 17) % 5) * 14));
+        const candidateX = Math.max(meta.minX + 30, Math.min(meta.maxX - 30, playerX + behindOffset));
+        if (Math.abs(candidateX - playerX) > 130) {
+          activePhantomX = candidateX;
+          activePhantomTimer = 3.2;
+          activePhantomKind = prev.act >= 2 ? 'shadow_child' : 'peeker';
+          events.horrorEvent = prev.realm === 'yin' ? 'whisper' : 'knock';
+          events.horrorPan = -playerFacing * 0.88;
+          if (!subtitleText) {
+            subtitleText =
+              prev.realm === 'yin'
+                ? 'Có tiếng thì thầm lạnh buốt ngay phía sau ánh đèn dầu...'
+                : 'Cộc... cộc... Tiếng gõ khe khẽ vang lên từ góc tối phía sau.';
+            subtitleTimer = 3.0;
+          }
         }
+      } else if (cyclePhase === 2) {
+        const isCat = dreadCycleCount % 2 === 0;
+        fakeoutKind = isCat ? 'black_cat' : 'falling_book';
+        fakeoutX = Math.max(
+          meta.minX + 40,
+          Math.min(meta.maxX - 40, playerX + playerFacing * (isCat ? 115 : 145))
+        );
+        fakeoutTimer = 1.9;
+        postFakeoutAmbushTimer = 3.2;
+        events.horrorEvent = isCat ? 'fakeout_cat' : 'fakeout_book';
+        events.horrorPan = playerFacing * 0.65;
+        if (!subtitleText) {
+          subtitleText = isCat
+            ? 'Một con mèo đen vụt qua chân tường... Chỉ là tiếng động thường thôi sao?'
+            : 'Bịch! Cuốn sổ cũ rơi xuống sàn phía trước — chỉ là gió lùa thôi sao?';
+          subtitleTimer = 2.6;
+        }
+      } else if (audioVacuumTimer <= 0) {
+        audioVacuumTimer = 1.45;
+        pendingDreadBeat = 'sub_bass_ambush';
+        events.horrorEvent = 'vacuum_start';
       }
     }
-    horrorPulseTimer = prev.realm === 'yin' || sanity < 65 ? 9.5 : 14.5;
+    horrorPulseTimer = prev.realm === 'yin' || sanity < 65 ? 9.5 : 13.5;
   }
 
   if (input.holdingBreath && gaspPenaltyTimer <= 0) {
@@ -2524,17 +2709,21 @@ export function tickThanhMinhSimulation(
 
   if (isMoving) {
     playerFacing = input.moveDir > 0 ? 1 : -1;
-    const speed = holdingBreath
-      ? MOVEMENT_SPEEDS.holdBreath
-      : exhausted
-        ? MOVEMENT_SPEEDS.exhausted
-        : isRunning
-          ? MOVEMENT_SPEEDS.run
-          : MOVEMENT_SPEEDS.walk;
+    const panicControlPenalty = panicTimer > 0 ? 0.85 : sanity < 38 ? 0.9 : 1;
+    const speed =
+      (holdingBreath
+        ? MOVEMENT_SPEEDS.holdBreath
+        : exhausted
+          ? MOVEMENT_SPEEDS.exhausted
+          : isRunning
+            ? MOVEMENT_SPEEDS.run
+            : MOVEMENT_SPEEDS.walk) * panicControlPenalty;
     playerX = Math.max(meta.minX, Math.min(meta.maxX, playerX + input.moveDir * speed * dt));
     const prevCycle = Math.floor(walkPhase);
     const phaseRate =
-      (holdingBreath ? 2.5 : exhausted ? 2.2 : isRunning ? 6.6 : 4.0) * SPEED_SCALE_FACTOR;
+      (holdingBreath ? 2.5 : exhausted ? 2.2 : isRunning ? 6.6 : 4.0) *
+      SPEED_SCALE_FACTOR *
+      panicControlPenalty;
     walkPhase += phaseRate * dt;
     if (Math.floor(walkPhase) > prevCycle) events.footstep = true;
   }
@@ -2555,7 +2744,9 @@ export function tickThanhMinhSimulation(
     const distBefore = Math.abs(g.x - playerX);
     const playerAudible = !holdingBreath || gaspPenaltyTimer > 0;
     const alertRadius = isRunning ? 175 : 130;
-    const isAlerted = playerAudible && distBefore < alertRadius;
+    const isAlerted =
+      (playerAudible && distBefore < alertRadius) ||
+      (ambushAlertTrigger && distBefore < 340);
 
     let nx = g.x;
     let nvx = g.vx;
@@ -2685,6 +2876,18 @@ export function tickThanhMinhSimulation(
       activePhantomX,
       activePhantomTimer,
       activePhantomKind,
+      audioVacuumTimer,
+      pendingDreadBeat,
+      panicTimer,
+      doorJamTimer,
+      lanternSputterTimer,
+      fakeoutKind,
+      fakeoutX,
+      fakeoutTimer,
+      postFakeoutAmbushTimer,
+      dreadCycleCount,
+      modalReadTimer: 0,
+      uiIntrusionTimer,
       ghosts,
       deathCutscene,
       subtitleText,

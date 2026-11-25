@@ -163,6 +163,18 @@ export class ThanhMinhAudioEngine {
     this.droneGain = dGain;
   }
 
+  private routeWithPan(node: AudioNode, pan: number, dest: AudioNode): void {
+    if (!this.ctx) return;
+    if (typeof this.ctx.createStereoPanner === 'function' && Math.abs(pan) > 0.02) {
+      const panner = this.ctx.createStereoPanner();
+      panner.pan.setValueAtTime(Math.max(-1, Math.min(1, pan)), this.ctx.currentTime);
+      node.connect(panner);
+      panner.connect(dest);
+    } else {
+      node.connect(dest);
+    }
+  }
+
   public update(
     active: boolean,
     realm: RealmMode,
@@ -171,7 +183,8 @@ export class ThanhMinhAudioEngine {
     radioTuned: boolean,
     dt: number,
     isOutdoor = false,
-    exhausted = false
+    exhausted = false,
+    inAudioVacuum = false
   ): void {
     if (
       !this.ctx ||
@@ -188,11 +201,12 @@ export class ThanhMinhAudioEngine {
 
     const now = this.ctx.currentTime;
 
-    if (!active) {
-      this.rainHighGain.gain.setTargetAtTime(0, now, 0.15);
-      this.rainLowGain.gain.setTargetAtTime(0, now, 0.15);
-      this.windGain.gain.setTargetAtTime(0, now, 0.15);
-      this.droneGain.gain.setTargetAtTime(0, now, 0.15);
+    if (!active || inAudioVacuum) {
+      const cutTau = inAudioVacuum ? 0.035 : 0.15;
+      this.rainHighGain.gain.setTargetAtTime(0, now, cutTau);
+      this.rainLowGain.gain.setTargetAtTime(0, now, cutTau);
+      this.windGain.gain.setTargetAtTime(0, now, cutTau);
+      this.droneGain.gain.setTargetAtTime(0, now, cutTau);
       return;
     }
 
@@ -808,7 +822,7 @@ export class ThanhMinhAudioEngine {
     }
   }
 
-  public playGhostWhisper(): void {
+  public playGhostWhisper(pan = 0): void {
     if (this.muted || !this.ctx || !this.masterGain || !this.noiseBuffer) return;
     const now = this.ctx.currentTime;
     const src = this.ctx.createBufferSource();
@@ -816,23 +830,23 @@ export class ThanhMinhAudioEngine {
 
     const bp = this.ctx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.setValueAtTime(2100, now);
-    bp.frequency.exponentialRampToValueAtTime(750, now + 0.55);
-    bp.Q.setValueAtTime(4.2, now);
+    bp.frequency.setValueAtTime(1650, now);
+    bp.frequency.exponentialRampToValueAtTime(520, now + 0.72);
+    bp.Q.setValueAtTime(4.8, now);
 
     const g = this.ctx.createGain();
     g.gain.setValueAtTime(0.005, now);
-    g.gain.linearRampToValueAtTime(0.13, now + 0.14);
-    g.gain.exponentialRampToValueAtTime(0.001, now + 0.62);
+    g.gain.linearRampToValueAtTime(0.14, now + 0.18);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.78);
 
     src.connect(bp);
     bp.connect(g);
-    g.connect(this.masterGain);
+    this.routeWithPan(g, pan, this.masterGain);
     src.start(now);
-    src.stop(now + 0.65);
+    src.stop(now + 0.82);
   }
 
-  public playDistantKnock(): void {
+  public playDistantKnock(pan = 0): void {
     if (this.muted || !this.ctx || !this.masterGain || !this.noiseBuffer) return;
     const now = this.ctx.currentTime;
     for (let i = 0; i < 3; i += 1) {
@@ -840,44 +854,195 @@ export class ThanhMinhAudioEngine {
       const osc = this.ctx.createOscillator();
       const g = this.ctx.createGain();
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(145 - i * 8, t);
-      osc.frequency.exponentialRampToValueAtTime(62, t + 0.08);
+      osc.frequency.setValueAtTime(132 - i * 8, t);
+      osc.frequency.exponentialRampToValueAtTime(52, t + 0.09);
       g.gain.setValueAtTime(0.001, t);
-      g.gain.linearRampToValueAtTime(0.16, t + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0008, t + 0.11);
+      g.gain.linearRampToValueAtTime(0.18, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0008, t + 0.13);
       osc.connect(g);
-      g.connect(this.masterGain);
+      this.routeWithPan(g, pan, this.masterGain);
       osc.start(t);
-      osc.stop(t + 0.12);
+      osc.stop(t + 0.15);
     }
   }
 
-  public playSubtleTensionSting(): void {
+  public playSubtleTensionSting(pan = 0): void {
     if (this.muted || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
     for (const [freq, detune] of [
-      [311.13, 0],
-      [329.63, 7],
+      [116.54, 0],
+      [123.47, 6],
     ] as const) {
       const osc = this.ctx.createOscillator();
+      const lp = this.ctx.createBiquadFilter();
       const g = this.ctx.createGain();
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(freq, now);
       osc.detune.setValueAtTime(detune, now);
-      const bp = this.ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.setValueAtTime(840, now);
-      bp.Q.setValueAtTime(3.2, now);
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(390, now);
+      lp.frequency.exponentialRampToValueAtTime(160, now + 1.4);
 
       g.gain.setValueAtTime(0.001, now);
-      g.gain.linearRampToValueAtTime(0.055, now + 0.18);
-      g.gain.exponentialRampToValueAtTime(0.0008, now + 1.35);
-      osc.connect(bp);
-      bp.connect(g);
-      g.connect(this.masterGain);
+      g.gain.linearRampToValueAtTime(0.085, now + 0.22);
+      g.gain.exponentialRampToValueAtTime(0.0008, now + 1.55);
+      osc.connect(lp);
+      lp.connect(g);
+      this.routeWithPan(g, pan, this.masterGain);
       osc.start(now);
-      osc.stop(now + 1.4);
+      osc.stop(now + 1.6);
     }
+
+    const sub = this.ctx.createOscillator();
+    const sg = this.ctx.createGain();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(42, now);
+    sub.frequency.exponentialRampToValueAtTime(26, now + 1.25);
+    sg.gain.setValueAtTime(0.001, now);
+    sg.gain.linearRampToValueAtTime(0.24, now + 0.08);
+    sg.gain.exponentialRampToValueAtTime(0.001, now + 1.35);
+    sub.connect(sg);
+    this.routeWithPan(sg, pan * 0.4, this.masterGain);
+    sub.start(now);
+    sub.stop(now + 1.4);
+  }
+
+  public playSubBassDread(pan = 0): void {
+    if (this.muted || !this.ctx || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+    for (const [fStart, fEnd, amp] of [
+      [52, 24, 0.34],
+      [38, 22, 0.28],
+    ] as const) {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(fStart, now);
+      osc.frequency.exponentialRampToValueAtTime(fEnd, now + 1.65);
+      g.gain.setValueAtTime(0.001, now);
+      g.gain.linearRampToValueAtTime(amp, now + 0.11);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 1.75);
+      osc.connect(g);
+      this.routeWithPan(g, pan * 0.35, this.masterGain);
+      osc.start(now);
+      osc.stop(now + 1.8);
+    }
+    this.playFootstepBehind(pan);
+  }
+
+  public playFootstepBehind(pan = 0): void {
+    if (this.muted || !this.ctx || !this.masterGain || !this.noiseBuffer) return;
+    const now = this.ctx.currentTime;
+    for (let i = 0; i < 2; i += 1) {
+      const t = now + i * 0.36;
+      const thud = this.ctx.createOscillator();
+      const tg = this.ctx.createGain();
+      thud.type = 'sine';
+      thud.frequency.setValueAtTime(64 - i * 6, t);
+      thud.frequency.exponentialRampToValueAtTime(28, t + 0.14);
+      tg.gain.setValueAtTime(0.001, t);
+      tg.gain.linearRampToValueAtTime(0.22, t + 0.015);
+      tg.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+      thud.connect(tg);
+      this.routeWithPan(tg, pan, this.masterGain);
+      thud.start(t);
+      thud.stop(t + 0.2);
+
+      const scrape = this.ctx.createBufferSource();
+      scrape.buffer = this.noiseBuffer;
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(340, t);
+      const sg = this.ctx.createGain();
+      sg.gain.setValueAtTime(0.08, t);
+      sg.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+      scrape.connect(lp);
+      lp.connect(sg);
+      this.routeWithPan(sg, pan, this.masterGain);
+      scrape.start(t);
+      scrape.stop(t + 0.18);
+    }
+  }
+
+  public playFakeoutCat(pan = 0): void {
+    if (this.muted || !this.ctx || !this.masterGain || !this.noiseBuffer) return;
+    const now = this.ctx.currentTime;
+    const scurry = this.ctx.createBufferSource();
+    scurry.buffer = this.noiseBuffer;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(980, now);
+    bp.Q.setValueAtTime(1.8, now);
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0.001, now);
+    g.gain.linearRampToValueAtTime(0.11, now + 0.04);
+    g.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
+    scurry.connect(bp);
+    bp.connect(g);
+    this.routeWithPan(g, pan, this.masterGain);
+    scurry.start(now);
+    scurry.stop(now + 0.36);
+
+    const meow = this.ctx.createOscillator();
+    const mg = this.ctx.createGain();
+    meow.type = 'triangle';
+    meow.frequency.setValueAtTime(620, now + 0.08);
+    meow.frequency.linearRampToValueAtTime(490, now + 0.28);
+    mg.gain.setValueAtTime(0.001, now + 0.08);
+    mg.gain.linearRampToValueAtTime(0.045, now + 0.14);
+    mg.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+    meow.connect(mg);
+    this.routeWithPan(mg, pan, this.masterGain);
+    meow.start(now + 0.08);
+    meow.stop(now + 0.34);
+  }
+
+  public playFakeoutBook(pan = 0): void {
+    if (this.muted || !this.ctx || !this.masterGain || !this.noiseBuffer) return;
+    const now = this.ctx.currentTime;
+    const slap = this.ctx.createOscillator();
+    const sg = this.ctx.createGain();
+    slap.type = 'triangle';
+    slap.frequency.setValueAtTime(112, now);
+    slap.frequency.exponentialRampToValueAtTime(42, now + 0.12);
+    sg.gain.setValueAtTime(0.2, now);
+    sg.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+    slap.connect(sg);
+    this.routeWithPan(sg, pan, this.masterGain);
+    slap.start(now);
+    slap.stop(now + 0.17);
+
+    const flutter = this.ctx.createBufferSource();
+    flutter.buffer = this.noiseBuffer;
+    const bp = this.ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(1250, now + 0.06);
+    const fg = this.ctx.createGain();
+    fg.gain.setValueAtTime(0.06, now + 0.06);
+    fg.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    flutter.connect(bp);
+    bp.connect(fg);
+    this.routeWithPan(fg, pan, this.masterGain);
+    flutter.start(now + 0.06);
+    flutter.stop(now + 0.3);
+  }
+
+  public playUiIntrusion(pan = -0.8): void {
+    if (this.muted || !this.ctx || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+    const sub = this.ctx.createOscillator();
+    const sg = this.ctx.createGain();
+    sub.type = 'sine';
+    sub.frequency.setValueAtTime(34, now);
+    sub.frequency.exponentialRampToValueAtTime(24, now + 0.9);
+    sg.gain.setValueAtTime(0.001, now);
+    sg.gain.linearRampToValueAtTime(0.18, now + 0.12);
+    sg.gain.exponentialRampToValueAtTime(0.001, now + 0.95);
+    sub.connect(sg);
+    this.routeWithPan(sg, pan * 0.4, this.masterGain);
+    sub.start(now);
+    sub.stop(now + 1.0);
+    this.playGhostWhisper(pan);
   }
 
   public playBellToll(ringCount = 1): void {

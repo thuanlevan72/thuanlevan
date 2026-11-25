@@ -466,4 +466,116 @@ test('thanhMinh: Music classroom piano puzzle solves on Do -> Mi -> Sol -> Re an
   assert.ok(done.next.collectedLoreIds.includes('lore-18-piano-duet'));
 });
 
+test('thanhMinh: audio vacuum -> sub-bass ambush drains sanity, jams exit doors, and degrades panic control', () => {
+  let s: ThanhMinhState = {
+    ...createInitialThanhMinhState(),
+    scene: 'corridor_act1',
+    playerX: 140,
+    playerFacing: 1,
+    dreadCycleCount: 2,
+    horrorPulseTimer: 0.02,
+    sanity: 90,
+  };
+
+  let vacuumStarted = false;
+  let ambushTriggered = false;
+  let ambushPan = 0;
+  let preAmbushSanity = s.sanity;
+
+  for (let i = 0; i < 45; i += 1) {
+    const prevSan = s.sanity;
+    const res = tickThanhMinhSimulation(s, { dt: 0.05, moveDir: 0, holdingBreath: false });
+    s = res.next;
+    if (res.events.horrorEvent === 'vacuum_start') vacuumStarted = true;
+    if (res.events.horrorEvent === 'sub_bass_ambush') {
+      ambushTriggered = true;
+      ambushPan = res.events.horrorPan ?? 0;
+      preAmbushSanity = prevSan;
+      break;
+    }
+  }
+
+  assert.equal(vacuumStarted, true);
+  assert.equal(ambushTriggered, true);
+  assert.ok(ambushPan < -0.5, `Expected stereo pan behind right-facing player, got ${ambushPan}`);
+  assert.ok(preAmbushSanity - s.sanity >= 10.5, `Expected ~11 sanity loss on ambush, got ${preAmbushSanity - s.sanity}`);
+  assert.ok(s.panicTimer > 0);
+  assert.ok(s.lanternSputterTimer > 0);
+  assert.ok(s.doorJamTimer > 0);
+
+  const jammedAttempt = interactWithHotspot(s);
+  assert.equal(jammedAttempt.scene, 'corridor_act1');
+
+  const calmMove = tickThanhMinhSimulation(
+    { ...createInitialThanhMinhState(), scene: 'corridor_act1', playerX: 500, sanity: 100, panicTimer: 0 },
+    { dt: 0.05, moveDir: 1, holdingBreath: false }
+  );
+  const panicMove = tickThanhMinhSimulation(
+    { ...createInitialThanhMinhState(), scene: 'corridor_act1', playerX: 500, sanity: 79, panicTimer: 3.0 },
+    { dt: 0.05, moveDir: 1, holdingBreath: false }
+  );
+  const calmDelta = calmMove.next.playerX - 500;
+  const panicDelta = panicMove.next.playerX - 500;
+  assert.ok(Math.abs(panicDelta - calmDelta * 0.85) < 1e-5);
+
+  const cleared = interactWithHotspot({ ...s, doorJamTimer: 0 });
+  assert.equal(cleared.scene, 'classroom_12b');
+  assert.equal(cleared.sceneVisitCounts.classroom_12b, 2);
+});
+
+test('thanhMinh: fake-out distraction arms delayed ambush & reading journal triggers safe-zone UI intrusion', () => {
+  let s: ThanhMinhState = {
+    ...createInitialThanhMinhState(),
+    scene: 'corridor_act1',
+    playerX: 480,
+    playerFacing: 1,
+    dreadCycleCount: 1,
+    horrorPulseTimer: 0.02,
+  };
+
+  let fakeoutEvent: string | null = null;
+  for (let i = 0; i < 5; i += 1) {
+    const res = tickThanhMinhSimulation(s, { dt: 0.05, moveDir: 0, holdingBreath: false });
+    s = res.next;
+    if (res.events.horrorEvent === 'fakeout_cat' || res.events.horrorEvent === 'fakeout_book') {
+      fakeoutEvent = res.events.horrorEvent;
+      break;
+    }
+  }
+  assert.ok(fakeoutEvent === 'fakeout_cat' || fakeoutEvent === 'fakeout_book');
+  assert.ok(s.fakeoutKind === 'black_cat' || s.fakeoutKind === 'falling_book');
+  assert.ok(s.postFakeoutAmbushTimer > 2.5);
+
+  let sawPostFakeoutVacuum = false;
+  for (let i = 0; i < 80; i += 1) {
+    const res = tickThanhMinhSimulation(s, { dt: 0.05, moveDir: 0, holdingBreath: false });
+    s = res.next;
+    if (res.events.horrorEvent === 'vacuum_start') {
+      sawPostFakeoutVacuum = true;
+      break;
+    }
+  }
+  assert.equal(sawPostFakeoutVacuum, true);
+
+  let modalState: ThanhMinhState = {
+    ...createInitialThanhMinhState(),
+    scene: 'corridor_act1',
+    activeModal: 'journal',
+    sanity: 80,
+    modalReadTimer: 4.75,
+  };
+  let uiIntruded = false;
+  for (let i = 0; i < 5; i += 1) {
+    const res = tickThanhMinhSimulation(modalState, { dt: 0.05, moveDir: 0, holdingBreath: false });
+    modalState = res.next;
+    if (res.events.horrorEvent === 'ui_intrusion') {
+      uiIntruded = true;
+      break;
+    }
+  }
+  assert.equal(uiIntruded, true);
+  assert.equal(modalState.sanity, 76);
+  assert.ok(modalState.uiIntrusionTimer > 0);
+  assert.ok(modalState.postFakeoutAmbushTimer > 0);
+});
 

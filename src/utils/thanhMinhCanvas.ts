@@ -235,7 +235,9 @@ export class ThanhMinhCanvasRenderer {
       this.camX = targetCamX;
       this.lastScene = state.scene;
     } else {
-      this.camX += (targetCamX - this.camX) * (1 - Math.exp(-8.5 * dt));
+      const isPanicking = (state.panicTimer ?? 0) > 0 || state.sanity < 42;
+      const camLagRate = isPanicking ? 3.2 : 8.5;
+      this.camX += (targetCamX - this.camX) * (1 - Math.exp(-camLagRate * dt));
     }
 
     if (!isYin && !isDawn && !isAshes && !isDarkroom) {
@@ -328,7 +330,9 @@ export class ThanhMinhCanvasRenderer {
       ctx.translate(-this.camX, 0);
 
       this.drawRoomArchitecture(ctx, height, floorY, state, timeSec, dt);
+      this.drawSilentRoomAnomalies(ctx, floorY, state, timeSec);
       this.drawScenePropsAndHotspots(ctx, floorY, state, timeSec, dt);
+      this.drawFakeoutProp(ctx, floorY, state, timeSec);
 
       if (state.scene === 'flooded_courtyard') {
         this.drawCourtyardWaterReflections(ctx, floorY, state, timeSec);
@@ -386,12 +390,17 @@ export class ThanhMinhCanvasRenderer {
       const dreadTighten =
         nearestGhostDist < 230 ? 1 - ((230 - nearestGhostDist) / 230) * 0.18 : 1;
       const fatigueDim = state.exhausted ? 0.8 + Math.sin(timeSec * 9) * 0.05 : 1;
+      const sputterActive = (state.lanternSputterTimer ?? 0) > 0;
+      const sputterDim = sputterActive ? 0.62 + Math.sin(timeSec * 41) * 0.14 : 1;
+      const vacuumDim = (state.audioVacuumTimer ?? 0) > 0 ? 0.84 : 1;
       const dreadFlicker =
         nearestGhostDist < 170 ? Math.sin(timeSec * 29) * 0.035 : 0;
       const flicker = lanternDead
         ? 0.3
         : (1 + Math.sin(timeSec * 14.3) * 0.03 + Math.cos(timeSec * 23.1) * 0.02 + dreadFlicker) *
           fatigueDim *
+          sputterDim *
+          vacuumDim *
           dreadTighten;
       const lanternX = playerScreenX + state.playerFacing * 28;
       const lanternY = floorY - (state.exhausted ? 66 : 84);
@@ -446,6 +455,10 @@ export class ThanhMinhCanvasRenderer {
       }
       ctx.fillStyle = lanternGrad;
       ctx.fillRect(0, 0, width, height);
+
+      if (state.activePhantomX !== null && state.activePhantomTimer > 0) {
+        this.drawPeripheralWatcherGloomGlint(ctx, floorY, state, timeSec);
+      }
     }
 
     // 6. Monster Kill Cutscene Animation Overlay (when caught / sanity breaks)
@@ -453,27 +466,57 @@ export class ThanhMinhCanvasRenderer {
       this.drawKillAnimationCutscene(ctx, width, height, state, timeSec);
     }
 
-    // 7. Gaze Terror Veins & Panic Vignette
-    if (!state.deathCutscene?.active && (state.gazeExposure > 15 || state.sanity < 45)) {
+    // 7. Gaze Terror Veins, Heavy 4-Corner Panic Vignette & Chromatic Aberration Fringes
+    const panicRatio =
+      (state.panicTimer ?? 0) > 0 ? Math.min(1, (state.panicTimer ?? 0) / 2.2) : 0;
+    if (
+      !state.deathCutscene?.active &&
+      (state.gazeExposure > 15 || state.sanity < 52 || panicRatio > 0)
+    ) {
       const bleedAlpha = Math.min(
-        0.78,
-        (state.gazeExposure / 100) * 0.62 + Math.max(0, (45 - state.sanity) / 45) * 0.36
+        0.84,
+        (state.gazeExposure / 100) * 0.62 +
+          Math.max(0, (52 - state.sanity) / 52) * 0.38 +
+          panicRatio * 0.42
       );
       const bleedGrad = ctx.createRadialGradient(
         width * 0.5,
         height * 0.5,
-        width * 0.18,
+        width * (0.22 - panicRatio * 0.07),
         width * 0.5,
         height * 0.5,
-        width * 0.72
+        width * 0.7
       );
-      bleedGrad.addColorStop(0, 'rgba(110, 0, 0, 0)');
-      bleedGrad.addColorStop(1, `rgba(135, 8, 12, ${bleedAlpha})`);
+      bleedGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      bleedGrad.addColorStop(0.55, `rgba(14, 3, 5, ${bleedAlpha * 0.52})`);
+      bleedGrad.addColorStop(1, `rgba(88, 6, 10, ${bleedAlpha})`);
       ctx.fillStyle = bleedGrad;
       ctx.fillRect(0, 0, width, height);
 
-      if (state.gazeExposure > 40) {
-        ctx.fillStyle = `rgba(220, 38, 38, ${(state.gazeExposure - 40) * 0.003})`;
+      // Subtle feathered optical RGB chromatic aberration fringes along screen edges during panic / low sanity
+      const chromaStrength = Math.min(
+        0.26,
+        panicRatio * 0.19 + Math.max(0, (48 - state.sanity) / 48) * 0.12
+      );
+      if (chromaStrength > 0.02) {
+        const fringeW = Math.round(28 + chromaStrength * 52);
+        const leftFringe = ctx.createLinearGradient(0, 0, fringeW, 0);
+        leftFringe.addColorStop(0, `rgba(220, 38, 38, ${chromaStrength * 0.72})`);
+        leftFringe.addColorStop(0.55, `rgba(185, 28, 28, ${chromaStrength * 0.22})`);
+        leftFringe.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = leftFringe;
+        ctx.fillRect(0, 0, fringeW, height);
+
+        const rightFringe = ctx.createLinearGradient(width, 0, width - fringeW, 0);
+        rightFringe.addColorStop(0, `rgba(56, 189, 248, ${chromaStrength * 0.56})`);
+        rightFringe.addColorStop(0.55, `rgba(14, 116, 144, ${chromaStrength * 0.18})`);
+        rightFringe.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = rightFringe;
+        ctx.fillRect(width - fringeW, 0, fringeW, height);
+      }
+
+      if (state.gazeExposure > 40 || panicRatio > 0.4) {
+        ctx.fillStyle = `rgba(220, 38, 38, ${Math.max(0.06, (state.gazeExposure - 40) * 0.003 + panicRatio * 0.08)})`;
         const tearY = (timeSec * 310) % height;
         ctx.fillRect(0, tearY, width, 2);
       }
@@ -3060,7 +3103,7 @@ export class ThanhMinhCanvasRenderer {
     ctx.restore();
   }
 
-  // Restrained peripheral apparition standing silently just outside direct oil-lantern gaze
+  // Pillar 2: Ambiguous partial shadow silhouette barely visible outside lantern core (no sticker oval faces)
   private drawPeripheralWatcher(
     ctx: CanvasRenderingContext2D,
     floorY: number,
@@ -3069,39 +3112,225 @@ export class ThanhMinhCanvasRenderer {
   ): void {
     if (state.activePhantomX === null) return;
     const isChild = state.activePhantomKind === 'shadow_child';
-    const fade = Math.min(1, state.activePhantomTimer / 0.8);
+    const fade = Math.min(1, state.activePhantomTimer / 0.9);
     const facingPlayer: 1 | -1 = state.playerX >= state.activePhantomX ? 1 : -1;
-    const twitch = Math.sin(timeSec * 37) > 0.94 ? 1.8 : 0;
+    const twitch = Math.sin(timeSec * 34) > 0.92 ? 2.2 : 0;
 
     ctx.save();
     ctx.translate(state.activePhantomX + twitch, floorY);
-    ctx.scale(facingPlayer * (isChild ? 0.82 : 1.08), isChild ? 0.82 : 1.08);
-    ctx.globalAlpha = 0.72 * fade;
+    ctx.scale(facingPlayer * (isChild ? 0.84 : 1.06), isChild ? 0.84 : 1.06);
+    ctx.globalAlpha = 0.66 * fade;
 
-    // Gaunt silent silhouette in the gloom
-    ctx.fillStyle = '#07060a';
+    // Soft mist shroud around lower legs so entity seems half-dissolved in darkness
+    const shroudGrad = ctx.createLinearGradient(0, -185, 0, 0);
+    shroudGrad.addColorStop(0, 'rgba(4, 4, 7, 0.92)');
+    shroudGrad.addColorStop(0.62, 'rgba(6, 6, 10, 0.68)');
+    shroudGrad.addColorStop(1, 'rgba(6, 6, 10, 0)');
+    ctx.fillStyle = shroudGrad;
     ctx.beginPath();
-    ctx.moveTo(-16, 0);
-    ctx.lineTo(-14, -158);
-    ctx.quadraticCurveTo(0, -172, 14, -158);
-    ctx.lineTo(18, 0);
+    ctx.moveTo(-20, 0);
+    ctx.quadraticCurveTo(-17, -96, -12, -148);
+    ctx.quadraticCurveTo(-3, -155, 11, -146);
+    ctx.quadraticCurveTo(17, -92, 22, 0);
     ctx.closePath();
     ctx.fill();
 
-    // Faint pale oval face & tiny unblinking eyes staring from darkness
-    ctx.fillStyle = 'rgba(203, 213, 225, 0.45)';
+    // Unnaturally tilted human-like head shadow with barely visible pale rim & distant dim eye glint
+    ctx.save();
+    ctx.translate(2, -152);
+    ctx.rotate(-0.24 + Math.sin(timeSec * 2.7) * 0.04);
+    ctx.fillStyle = '#050508';
     ctx.beginPath();
-    ctx.ellipse(2, -168, 9.5, 13, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, -12, 8.5, 11.5, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = 'rgba(203, 213, 225, 0.14)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0, -12, 9, -0.7, 0.85);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(226, 232, 240, 0.45)';
+    ctx.beginPath();
+    ctx.arc(4.2, -13, 0.9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    ctx.restore();
+  }
 
-    ctx.fillStyle = '#030305';
+  private drawPeripheralWatcherGloomGlint(
+    ctx: CanvasRenderingContext2D,
+    floorY: number,
+    state: ThanhMinhState,
+    timeSec: number
+  ): void {
+    if (state.activePhantomX === null) return;
+    const screenX = state.activePhantomX - this.camX;
+    if (screenX < -20 || screenX > this.viewWidth + 20) return;
+    const isChild = state.activePhantomKind === 'shadow_child';
+    const scale = isChild ? 0.84 : 1.06;
+    const facingPlayer: 1 | -1 = state.playerX >= state.activePhantomX ? 1 : -1;
+    const fade = Math.min(1, state.activePhantomTimer / 0.9);
+    const twitch = Math.sin(timeSec * 34) > 0.92 ? 2.2 : 0;
+
+    ctx.save();
+    ctx.translate(screenX + twitch, floorY);
+    ctx.scale(facingPlayer * scale, scale);
+    ctx.globalAlpha = 0.42 * fade;
+
+    // Barely perceptible rim & single pale pinpoint eye in the dark beyond lantern range
+    ctx.translate(2, -152);
+    ctx.rotate(-0.24 + Math.sin(timeSec * 2.7) * 0.04);
+    ctx.strokeStyle = 'rgba(203, 213, 225, 0.22)';
+    ctx.lineWidth = 1.1;
     ctx.beginPath();
-    ctx.ellipse(4.5, -170, 2.2, 1.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(248, 250, 252, 0.75)';
+    ctx.arc(0, -12, 9.2, -0.75, 0.85);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(226, 232, 240, 0.72)';
     ctx.beginPath();
-    ctx.arc(4.8, -170, 0.7, 0, Math.PI * 2);
+    ctx.arc(4.2, -13, 1.15, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
+  }
+
+  // Pillar 2: Silent environmental anomalies on room revisit or dropping sanity (zero audio/UI warning)
+  private drawSilentRoomAnomalies(
+    ctx: CanvasRenderingContext2D,
+    floorY: number,
+    state: ThanhMinhState,
+    timeSec: number
+  ): void {
+    const visits = (state.sceneVisitCounts ?? {})[state.scene] ?? 1;
+    const activeAnomaly = visits >= 2 || state.sanity < 74 || state.act >= 2;
+    if (!activeAnomaly) return;
+    if (
+      state.scene === 'flooded_courtyard' ||
+      state.scene === 'roof_belltower' ||
+      state.scene === 'final_interrogation'
+    ) {
+      return;
+    }
+
+    const meta = SCENE_META[state.scene];
+    const span = meta.maxX - meta.minX;
+    const portraitX = meta.minX + span * 0.36;
+    const closetX = meta.minX + span * 0.62;
+    const shoesX = meta.minX + span * 0.78;
+
+    // 1. Portrait / class frame silently turned face-to-wall
+    if (portraitX + 90 >= this.camX && portraitX - 90 <= this.camX + this.viewWidth) {
+      ctx.save();
+      ctx.translate(portraitX, floorY - 196);
+      ctx.rotate(0.06);
+      ctx.fillStyle = '#1b1410';
+      ctx.fillRect(-26, -34, 52, 68);
+      ctx.strokeStyle = '#3f2e21';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-26, -34, 52, 68);
+      ctx.strokeStyle = 'rgba(168, 162, 158, 0.18)';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(-20, -28);
+      ctx.lineTo(0, -39);
+      ctx.lineTo(20, -28);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 2. Previously shut closet/storage door now silently ajar with darkness crack & faint fingers
+    if (closetX + 90 >= this.camX && closetX - 90 <= this.camX + this.viewWidth) {
+      ctx.save();
+      ctx.translate(closetX, floorY);
+      ctx.fillStyle = '#1e1611';
+      ctx.fillRect(-34, -184, 68, 184);
+      ctx.fillStyle = '#030305';
+      ctx.fillRect(10, -180, 18, 180);
+      ctx.fillStyle = '#2d2118';
+      ctx.fillRect(-32, -180, 42, 180);
+      ctx.fillStyle = 'rgba(180, 170, 158, 0.36)';
+      for (let f = 0; f < 3; f += 1) {
+        ctx.fillRect(8, -112 + f * 4.5, 4.5, 2.2);
+      }
+      if (Math.sin(timeSec * 1.4) > -0.3) {
+        ctx.fillStyle = 'rgba(226, 232, 240, 0.45)';
+        ctx.beginPath();
+        ctx.arc(17, -142, 1.1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // 3. Empty pair of schoolgirl leather shoes neatly placed in corner facing the wall
+    if (shoesX + 70 >= this.camX && shoesX - 70 <= this.camX + this.viewWidth) {
+      ctx.save();
+      ctx.translate(shoesX, floorY + 2);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.42)';
+      ctx.beginPath();
+      ctx.ellipse(0, 2, 18, 4, 0, 0, Math.PI * 2);
+      ctx.fill();
+      for (const sx of [-7, 5]) {
+        ctx.fillStyle = '#141114';
+        ctx.beginPath();
+        ctx.ellipse(sx, -2, 5.5, 2.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#b4afa4';
+        ctx.fillRect(sx - 2, -6, 3.8, 4);
+      }
+      ctx.restore();
+    }
+  }
+
+  // Pillar 3: Mundane fake-out props (stray black cat darting past / dropped old ledger)
+  private drawFakeoutProp(
+    ctx: CanvasRenderingContext2D,
+    floorY: number,
+    state: ThanhMinhState,
+    timeSec: number
+  ): void {
+    if (!state.fakeoutKind || state.fakeoutX === null || (state.fakeoutTimer ?? 0) <= 0) return;
+    if (state.fakeoutX + 90 < this.camX || state.fakeoutX - 90 > this.camX + this.viewWidth) return;
+
+    ctx.save();
+    ctx.translate(state.fakeoutX, floorY);
+    if (state.fakeoutKind === 'black_cat') {
+      ctx.scale(state.playerFacing, 1);
+      const stride = Math.sin(timeSec * 28) * 5;
+      ctx.fillStyle = '#09090b';
+      ctx.beginPath();
+      ctx.ellipse(0, -14, 15, 7, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(14, -19, 6.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(11, -24);
+      ctx.lineTo(13, -31);
+      ctx.lineTo(16, -24);
+      ctx.moveTo(15, -24);
+      ctx.lineTo(18, -31);
+      ctx.lineTo(20, -22);
+      ctx.fill();
+      ctx.strokeStyle = '#09090b';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-13, -15);
+      ctx.quadraticCurveTo(-24, -28 + stride * 0.4, -27, -20);
+      ctx.moveTo(8, -10);
+      ctx.lineTo(10 + stride, 0);
+      ctx.moveTo(-8, -10);
+      ctx.lineTo(-10 - stride, 0);
+      ctx.stroke();
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.arc(16.5, -19.5, 1.3, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.rotate(-0.18);
+      ctx.fillStyle = '#7f1d1d';
+      ctx.fillRect(-14, -7, 28, 8);
+      ctx.fillStyle = '#e7dec8';
+      ctx.fillRect(-11, -5, 22, 4);
+    }
     ctx.restore();
   }
 

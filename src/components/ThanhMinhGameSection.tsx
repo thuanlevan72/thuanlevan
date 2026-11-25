@@ -455,14 +455,28 @@ export function ThanhMinhGameSection({
           rendererRef.current?.triggerShake(5);
           ghostWhisperCooldown = 1.6;
         }
+        const horrorPan = events.horrorPan ?? 0;
         if (events.horrorEvent === 'knock') {
-          audioRef.current?.playDistantKnock();
+          audioRef.current?.playDistantKnock(horrorPan);
         } else if (events.horrorEvent === 'sting') {
-          audioRef.current?.playSubtleTensionSting();
-          rendererRef.current?.triggerShake(3.2);
+          audioRef.current?.playSubtleTensionSting(horrorPan);
+          rendererRef.current?.triggerShake(4.2);
         } else if (events.horrorEvent === 'whisper' && ghostWhisperCooldown <= 0) {
-          audioRef.current?.playGhostWhisper();
+          audioRef.current?.playGhostWhisper(horrorPan);
           ghostWhisperCooldown = 1.6;
+        } else if (events.horrorEvent === 'sub_bass_ambush') {
+          audioRef.current?.playSubBassDread(horrorPan);
+          rendererRef.current?.triggerShake(7.5);
+        } else if (events.horrorEvent === 'fakeout_cat') {
+          audioRef.current?.playFakeoutCat(horrorPan);
+        } else if (events.horrorEvent === 'fakeout_book') {
+          audioRef.current?.playFakeoutBook(horrorPan);
+          rendererRef.current?.triggerShake(2.2);
+        } else if (events.horrorEvent === 'footstep_behind') {
+          audioRef.current?.playFootstepBehind(horrorPan);
+        } else if (events.horrorEvent === 'ui_intrusion') {
+          audioRef.current?.playUiIntrusion(horrorPan);
+          rendererRef.current?.triggerShake(2.5);
         }
         if (events.killedByGhostKind) {
           audioRef.current?.playKillAnimationAudio(events.killedByGhostKind);
@@ -504,6 +518,11 @@ export function ThanhMinhGameSection({
           Math.round(next.runStamina) !== Math.round(cur.runStamina) ||
           Math.round(next.breathStamina) !== Math.round(cur.breathStamina) ||
           (next.gaspPenaltyTimer > 0) !== (cur.gaspPenaltyTimer > 0) ||
+          (next.audioVacuumTimer > 0) !== (cur.audioVacuumTimer > 0) ||
+          (next.panicTimer > 0) !== (cur.panicTimer > 0) ||
+          (next.doorJamTimer > 0) !== (cur.doorJamTimer > 0) ||
+          (next.uiIntrusionTimer > 0) !== (cur.uiIntrusionTimer > 0) ||
+          next.fakeoutKind !== cur.fakeoutKind ||
           next.collectedKeepsakeIds.length !== cur.collectedKeepsakeIds.length ||
           next.collectedLoreIds.length !== cur.collectedLoreIds.length;
 
@@ -520,7 +539,8 @@ export function ThanhMinhGameSection({
           next.radioTunedAct2,
           dt,
           next.scene === 'flooded_courtyard',
-          next.exhausted
+          next.exhausted,
+          next.audioVacuumTimer > 0
         );
 
         const canvas = canvasRef.current;
@@ -695,6 +715,10 @@ export function ThanhMinhGameSection({
       data-exhausted={String(hudState.exhausted)}
       data-running={String(hudState.isRunning)}
       data-sanity={Math.round(hudState.sanity)}
+      data-panic={String(hudState.panicTimer > 0)}
+      data-vacuum={String(hudState.audioVacuumTimer > 0)}
+      data-door-jam={String(hudState.doorJamTimer > 0)}
+      data-ui-intrusion={String(hudState.uiIntrusionTimer > 0)}
       data-death-cutscene={String(Boolean(hudState.deathCutscene?.active))}
       className={`rounded-2xl border border-[#3a2c22] bg-[#0a0908] text-stone-100 shadow-2xl overflow-hidden flex flex-col ${
         isFullscreen ? 'flex-1 min-h-0 h-full' : ''
@@ -1063,10 +1087,26 @@ export function ThanhMinhGameSection({
           </div>
         )}
 
-        {/* PAUSE OVERLAY */}
+        {/* PAUSE OVERLAY — Subtle Safe-Zone Intrusion at low sanity or panic */}
         {screenMode === 'paused' && (
-          <div className="absolute inset-0 bg-[#080605]/88 flex items-center justify-center p-4">
-            <div className="max-w-sm w-full rounded-lg border border-[#5c4632] bg-[#14100d] p-6 space-y-4 text-center shadow-2xl">
+          <div className="absolute inset-0 bg-[#080605]/88 flex items-center justify-center p-4 overflow-hidden">
+            {(hudState.sanity < 78 || hudState.panicTimer > 0) && (
+              <div
+                aria-hidden="true"
+                data-testid="thanh-minh-pause-intrusion"
+                className="pointer-events-none absolute inset-0 flex items-end justify-end pr-[9%] opacity-40"
+              >
+                <svg viewBox="0 0 120 260" className="h-[78%] w-auto text-black drop-shadow-[0_0_24px_rgba(127,29,29,0.28)]">
+                  <path
+                    d="M58 18 C46 18 39 30 41 44 C42 54 47 61 44 68 L28 118 L24 252 L84 252 L79 116 L69 68 C67 60 72 52 72 42 C72 28 66 18 58 18 Z"
+                    fill="#040303"
+                  />
+                  <circle cx="51" cy="39" r="1.6" fill="#cbd5e1" fillOpacity="0.65" />
+                  <circle cx="62" cy="40" r="1.4" fill="#cbd5e1" fillOpacity="0.55" />
+                </svg>
+              </div>
+            )}
+            <div className="relative z-10 max-w-sm w-full rounded-lg border border-[#5c4632] bg-[#14100d] p-6 space-y-4 text-center shadow-2xl">
               <h3 className="text-xl font-editorial font-bold text-amber-200">Tạm Dừng</h3>
               <p className="text-xs text-stone-400">
                 {sceneMeta.subtitle} · Kỷ vật {hudState.collectedKeepsakeIds.length}/{TRUTH_KEEPSAKES.length}
@@ -1094,6 +1134,27 @@ export function ThanhMinhGameSection({
         {/* INTERACTIVE STORY & PUZZLE MODALS */}
         {screenMode === 'playing' && hudState.activeModal !== 'none' && (
           <div className="absolute inset-0 bg-[#070505]/90 flex p-2.5 sm:p-4 z-20 overflow-y-auto">
+            {hudState.uiIntrusionTimer > 0 && (
+              <div
+                aria-hidden="true"
+                data-testid="thanh-minh-ui-intrusion"
+                className="pointer-events-none fixed sm:absolute inset-0 z-30 overflow-hidden"
+                style={{
+                  boxShadow:
+                    'inset 0 0 90px rgba(127,29,29,0.45), inset 3px 0 18px rgba(185,28,28,0.22), inset -3px 0 18px rgba(56,189,248,0.16)',
+                }}
+              >
+                <div className="absolute inset-x-0 top-[28%] h-1 bg-rose-200/10" />
+                <div className="absolute inset-y-0 right-4 flex items-end opacity-35">
+                  <svg viewBox="0 0 120 260" className="h-[74%] w-auto">
+                    <path
+                      d="M64 20 C51 20 44 33 46 47 C47 56 50 63 45 71 L29 124 L26 254 L88 254 L82 119 L72 70 C70 62 76 53 76 42 C76 28 71 20 64 20 Z"
+                      fill="#030202"
+                    />
+                  </svg>
+                </div>
+              </div>
+            )}
             {/* 1. JOURNAL & TRUTH KEEPSAKES + LORE CODEX */}
             {hudState.activeModal === 'journal' && (
               <div className="max-w-2xl w-full m-auto max-h-full flex flex-col rounded-lg border border-[#6a523b] bg-[#15110d] p-3.5 sm:p-5 gap-3 shadow-2xl">
