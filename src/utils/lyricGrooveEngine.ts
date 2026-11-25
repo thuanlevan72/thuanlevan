@@ -4718,4 +4718,154 @@ export function sanitizePartSchedule<T>(
     .sort((a, b) => a[0] - b[0]);
 }
 
+function stableRecordString(record?: Record<string, string>): string {
+  if (!record) return '{}';
+  const keys = Object.keys(record).sort();
+  return JSON.stringify(keys.map((k) => [k, record[k]]));
+}
+
+export function cloneSketchpadDraft(draft: SketchpadDraft): SketchpadDraft {
+  return {
+    ...draft,
+    chordArpStyles: draft.chordArpStyles ? { ...draft.chordArpStyles } : undefined,
+    mutedMelodySectionIds: draft.mutedMelodySectionIds
+      ? [...draft.mutedMelodySectionIds]
+      : undefined,
+    sections: draft.sections.map((sec) => ({
+      ...sec,
+      chordSchedule: sec.chordSchedule
+        ? sec.chordSchedule.map((item) => ({ ...item }))
+        : undefined,
+    })),
+    melodyNotes: draft.melodyNotes.map((n) => ({ ...n })),
+  };
+}
+
+export function summarizeDraftChanges(
+  current: SketchpadDraft,
+  saved: SketchpadDraft | undefined
+): string[] {
+  if (!saved || current.id !== saved.id) {
+    return ['Bản nháp mới'];
+  }
+  const changes: string[] = [];
+
+  if (current.title !== saved.title) {
+    changes.push('Tên bài hát');
+  }
+
+  if (
+    current.keyRoot !== saved.keyRoot ||
+    current.scaleMode !== saved.scaleMode ||
+    (current.timeSignature ?? '4/4') !== (saved.timeSignature ?? '4/4') ||
+    current.scaleSnap !== saved.scaleSnap
+  ) {
+    changes.push('Tông & nhịp');
+  }
+
+  const curMutedIds = [...(current.mutedMelodySectionIds ?? [])].sort();
+  const savedMutedIds = [...(saved.mutedMelodySectionIds ?? [])].sort();
+  if (
+    current.bpm !== saved.bpm ||
+    current.mood !== saved.mood ||
+    current.backingInstrument !== saved.backingInstrument ||
+    (current.backingPattern ?? 'auto-song') !== (saved.backingPattern ?? 'auto-song') ||
+    current.drumPattern !== saved.drumPattern ||
+    current.melodyInstrument !== saved.melodyInstrument ||
+    (current.sustainPedal ?? true) !== (saved.sustainPedal ?? true) ||
+    (current.metronomeEnabled ?? false) !== (saved.metronomeEnabled ?? false) ||
+    resolveMelodyPlaybackMode(current) !== resolveMelodyPlaybackMode(saved) ||
+    JSON.stringify(curMutedIds) !== JSON.stringify(savedMutedIds) ||
+    stableRecordString(current.chordArpStyles) !== stableRecordString(saved.chordArpStyles)
+  ) {
+    changes.push('Nhạc cụ, điệu & BPM');
+  }
+
+  const structureChanged =
+    current.sections.length !== saved.sections.length ||
+    current.sections.some(
+      (sec, idx) =>
+        sec.id !== saved.sections[idx]?.id ||
+        sec.kind !== saved.sections[idx]?.kind ||
+        sec.bars !== saved.sections[idx]?.bars
+    );
+  if (structureChanged) {
+    changes.push('Cấu trúc đoạn nhạc');
+  }
+
+  const lyricsOrChordsChanged = current.sections.some((sec, idx) => {
+    const base = saved.sections[idx];
+    if (!base) return true;
+    return (
+      sec.label !== base.label ||
+      sec.text !== base.text ||
+      JSON.stringify(sec.chordSchedule ?? null) !== JSON.stringify(base.chordSchedule ?? null)
+    );
+  });
+  if (lyricsOrChordsChanged) {
+    changes.push('Lời & hợp âm');
+  }
+
+  if (JSON.stringify(current.melodyNotes) !== JSON.stringify(saved.melodyNotes)) {
+    changes.push('Nốt giai điệu');
+  }
+
+  return changes;
+}
+
+export function hasDraftUnsavedChanges(
+  current: SketchpadDraft,
+  saved: SketchpadDraft | undefined
+): boolean {
+  return summarizeDraftChanges(current, saved).length > 0;
+}
+
+export interface SketchpadDraftVersion {
+  id: string;
+  draftId: string;
+  versionNumber: number;
+  savedAt: number;
+  note: string;
+  changeTags: string[];
+  snapshot: SketchpadDraft;
+}
+
+export function buildDraftVersionEntry(
+  draft: SketchpadDraft,
+  existingVersions: SketchpadDraftVersion[],
+  changeTags: string[] = [],
+  customNote?: string
+): SketchpadDraftVersion {
+  const maxVersion = existingVersions.reduce(
+    (max, item) => (item.versionNumber > max ? item.versionNumber : max),
+    0
+  );
+  const versionNumber = maxVersion + 1;
+  const savedAt = Date.now();
+  const trimmedNote = customNote?.trim();
+  const defaultNote =
+    changeTags.length > 0
+      ? `Sửa: ${changeTags.join(' · ')}`
+      : versionNumber === 1
+      ? 'Bản lưu gốc'
+      : `Phiên bản lưu v${versionNumber}`;
+
+  return {
+    id: `${draft.id}::v${versionNumber}-${savedAt}-${Math.random().toString(36).slice(2, 6)}`,
+    draftId: draft.id,
+    versionNumber,
+    savedAt,
+    note: trimmedNote || defaultNote,
+    changeTags: [...changeTags],
+    snapshot: cloneSketchpadDraft({ ...draft, updatedAt: savedAt }),
+  };
+}
+
+export function restoreDraftFromVersion(
+  version: SketchpadDraftVersion
+): SketchpadDraft {
+  return cloneSketchpadDraft(version.snapshot);
+}
+
+
 

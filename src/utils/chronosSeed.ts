@@ -125,6 +125,83 @@ export function createInitialChronosDatabase(options?: SeedUserOptions): Chronos
   const todayISO = getTodayISO();
   const nowISO = new Date().toISOString();
   const resolvedUserId = options?.userId?.trim() || 'guest-default';
+  const finalUserName = options?.userName?.trim() || 'Người dùng mới';
+  const finalUserRole = options?.userRole?.trim() || 'Cá nhân';
+  const finalWorkspace =
+    options?.workspaceName?.trim() ||
+    (options?.userName?.trim()
+      ? `ChronosFlow · Không gian của ${options.userName.trim()}`
+      : 'ChronosFlow · Không gian làm việc');
+
+  return {
+    version: 1,
+    userId: resolvedUserId,
+    workspaceName: finalWorkspace,
+    userName: finalUserName,
+    userRole: finalUserRole,
+    baseDateISO: todayISO,
+    lastSavedAt: nowISO,
+    okrs: [],
+    projects: [],
+    tasks: [],
+    blocks: [],
+    calendarAccounts: [],
+    energyProfile: {
+      chronotype: 'balanced',
+      peakStartMin: 8 * 60 + 30,
+      peakEndMin: 11 * 60 + 30,
+      troughStartMin: 13 * 60 + 30,
+      troughEndMin: 15 * 60 + 30,
+      workdayStartMin: 8 * 60,
+      workdayEndMin: 18 * 60,
+      shutdownMin: 18 * 60,
+    },
+    teamMembers: [],
+    focusShield: {
+      enabled: false,
+      blockedSites: [],
+      autoDndApps: {
+        slack: false,
+        teams: false,
+        zalo: false,
+      },
+      activeDndMessage: 'Đang tập trung sâu — Không làm phiền',
+    },
+    focusLogs: [],
+    rpg: {
+      level: 1,
+      xp: 0,
+      crystals: 0,
+      totalDeepMinutes: 0,
+      streakDays: 0,
+      streakFreezeTokens: 0,
+      streakFreezeActiveToday: false,
+      upgrades: {
+        desk: 1,
+        lamp: 1,
+        bookshelf: 1,
+        windowView: 1,
+        bonsai: 1,
+      },
+    },
+    rituals: {
+      morningBriefingCompletedDate: null,
+      shutdownCompletedDate: null,
+      isShutdownLocked: false,
+      todayReflection: '',
+      mitTaskIds: [],
+    },
+  };
+}
+
+/**
+ * Fixture exclusively for unit-testing chronosEngine scheduling & analytics algorithms.
+ * Never used to seed production workspaces.
+ */
+export function createChronosTestFixture(options?: SeedUserOptions): ChronosDatabase {
+  const todayISO = getTodayISO();
+  const nowISO = new Date().toISOString();
+  const resolvedUserId = options?.userId?.trim() || 'guest-default';
   const personaIdx =
     resolvedUserId === 'guest-default' ? 0 : hashUserIdToIndex(resolvedUserId);
   const tpl = USER_PERSONA_TEMPLATES[personaIdx];

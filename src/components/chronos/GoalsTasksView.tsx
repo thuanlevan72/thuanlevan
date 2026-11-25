@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   CheckSquare,
   ChevronDown,
@@ -43,7 +43,7 @@ export const GoalsTasksView: React.FC<GoalsTasksViewProps> = ({
     Object.fromEntries(db.projects.map((p) => [p.id, true]))
   );
   const [newSubtaskByTask, setNewSubtaskByTask] = useState<Record<string, string>>({});
-  const [newTaskProject, setNewTaskProject] = useState<string>(db.projects[0]?.id ?? 'prj-core');
+  const [newTaskProject, setNewTaskProject] = useState<string>(db.projects[0]?.id ?? '');
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskLoad, setNewTaskLoad] = useState<CognitiveLoad>('high');
   const [newTaskMin, setNewTaskMin] = useState(60);
@@ -52,6 +52,14 @@ export const GoalsTasksView: React.FC<GoalsTasksViewProps> = ({
 
   const [newOkrTitle, setNewOkrTitle] = useState('');
   const [addingOkr, setAddingOkr] = useState(false);
+
+  useEffect(() => {
+    if (newTaskProject && !db.projects.some((p) => p.id === newTaskProject)) {
+      setNewTaskProject(db.projects[0]?.id ?? '');
+    } else if (!newTaskProject && db.projects[0]) {
+      setNewTaskProject(db.projects[0].id);
+    }
+  }, [db.projects, newTaskProject]);
 
   const toggleSubtask = (taskId: string, subId: string) => {
     onUpdateDb((prev) => ({
@@ -111,9 +119,12 @@ export const GoalsTasksView: React.FC<GoalsTasksViewProps> = ({
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTaskTitle.trim()) return;
+    const resolvedProjectId = db.projects.some((p) => p.id === newTaskProject)
+      ? newTaskProject
+      : (db.projects[0]?.id ?? '');
     const created: ChronosTask = {
       id: `tsk-${Date.now()}`,
-      projectId: newTaskProject || db.projects[0]?.id || 'prj-core',
+      projectId: resolvedProjectId,
       title: newTaskTitle.trim(),
       urgent: newTaskUrgent,
       important: newTaskImportant,
@@ -121,7 +132,7 @@ export const GoalsTasksView: React.FC<GoalsTasksViewProps> = ({
       estimatedMinutes: newTaskMin,
       actualMinutes: 0,
       status: 'inbox',
-      assigneeId: db.teamMembers[0]?.id ?? 'mem-1',
+      assigneeId: db.teamMembers[0]?.id ?? '',
       subtasks: [],
       createdAt: new Date().toISOString(),
     };
@@ -235,6 +246,7 @@ export const GoalsTasksView: React.FC<GoalsTasksViewProps> = ({
             onChange={(e) => setNewTaskProject(e.target.value)}
             className="md:col-span-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs"
           >
+            <option value="">— Đầu việc độc lập (Hộp thư đến) —</option>
             {db.projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -293,6 +305,31 @@ export const GoalsTasksView: React.FC<GoalsTasksViewProps> = ({
       {/* Mode 1: 4-Tier Hierarchy */}
       {mode === 'hierarchy' ? (
         <div className="space-y-3">
+          {db.okrs.length === 0 && db.tasks.length === 0 && (
+            <div
+              data-testid="goals-empty-state"
+              className="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-[#111827] p-8 text-center space-y-3"
+            >
+              <Target className="h-8 w-8 text-blue-600 dark:text-blue-400 mx-auto" />
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Chưa có Mục tiêu OKR hoặc Đầu việc nào
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                  Bạn có thể bắt đầu bằng cách tạo OKR Quý đầu tiên (tự động kèm Dự án triển khai) hoặc thêm ngay đầu việc độc lập ở khung phía trên.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAddingOkr(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-medium text-white hover:bg-blue-700 cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Tạo OKR &amp; Dự án đầu tiên</span>
+              </button>
+            </div>
+          )}
+
           {db.okrs.map((okr) => {
             const okrExpanded = expandedOkrs[okr.id] ?? true;
             const okrProjects = db.projects.filter((p) => p.okrId === okr.id);
@@ -487,6 +524,94 @@ export const GoalsTasksView: React.FC<GoalsTasksViewProps> = ({
               </div>
             );
           })}
+
+          {/* Unassigned / Standalone Inbox Tasks */}
+          {(() => {
+            const projectIds = new Set(db.projects.map((p) => p.id));
+            const orphanTasks = db.tasks
+              .filter((t) => !t.projectId || !projectIds.has(t.projectId))
+              .sort((a, b) => computeTaskPriorityScore(b) - computeTaskPriorityScore(a));
+            if (orphanTasks.length === 0) return null;
+            return (
+              <div
+                data-testid="goals-inbox-tasks"
+                className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 space-y-2.5"
+              >
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                  <div className="flex items-center gap-2">
+                    <FolderKanban className="h-4 w-4 text-slate-500" />
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                      Đầu việc độc lập / Hộp thư đến (Chưa gắn dự án)
+                    </span>
+                  </div>
+                  <span className="font-mono text-[11px] tabular-nums text-slate-500">
+                    {orphanTasks.filter((t) => t.status === 'done').length}/{orphanTasks.length} hoàn thành
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  {orphanTasks.map((task) => {
+                    const score = computeTaskPriorityScore(task);
+                    const isDone = task.status === 'done';
+                    const qMeta = getQuadrantMeta(getEisenhowerQuadrant(task));
+                    return (
+                      <div
+                        key={task.id}
+                        className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 p-2.5 space-y-2"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <button
+                              type="button"
+                              onClick={() => toggleTaskDone(task.id)}
+                              className="text-slate-500 hover:text-emerald-600"
+                            >
+                              {isDone ? (
+                                <CheckSquare className="h-4 w-4 text-emerald-600" />
+                              ) : (
+                                <Square className="h-4 w-4" />
+                              )}
+                            </button>
+                            <span
+                              className={`text-xs font-medium ${
+                                isDone ? 'line-through text-slate-400' : 'text-slate-900 dark:text-slate-100'
+                              }`}
+                            >
+                              {task.title}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                            <span className="font-mono tabular-nums text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-500/15 px-1.5 py-0.5 rounded">
+                              {score}đ
+                            </span>
+                            <span className="text-slate-500">{qMeta.short}</span>
+                            <span className="font-mono tabular-nums text-slate-600 dark:text-slate-300">
+                              DK {formatDurationVi(task.estimatedMinutes)} / TT {formatDurationVi(task.actualMinutes)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => onStartFocusTask(task.id, task.title, task.estimatedMinutes)}
+                              className="inline-flex items-center gap-1 rounded border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                            >
+                              <Play className="h-3 w-3" />
+                              <span>Focus</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteTask(task.id)}
+                              className="text-slate-400 hover:text-red-500"
+                              title="Xóa đầu việc"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       ) : (
         /* Mode 2: Eisenhower 4 Quadrants */

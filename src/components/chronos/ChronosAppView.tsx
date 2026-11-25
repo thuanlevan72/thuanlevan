@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Lock, Plus, Sparkles, Unlock, Wand2 } from 'lucide-react';
+import { BookOpen, Lock, Plus, Sparkles, Unlock, Wand2 } from 'lucide-react';
 import type {
   ChronosDatabase,
   ChronosTask,
@@ -16,6 +16,7 @@ import { createInitialChronosDatabase } from '../../utils/chronosSeed.ts';
 import { chronosAudio } from '../../utils/chronosAudio.ts';
 import { ChronosSidebar } from './ChronosSidebar.tsx';
 import { QuickCapturePalette } from './QuickCapturePalette.tsx';
+import { ChronosGuideModal } from './ChronosGuideModal.tsx';
 import { PlannerTimelineView } from './PlannerTimelineView.tsx';
 import { GoalsTasksView } from './GoalsTasksView.tsx';
 import { DeepWorkStudioView } from './DeepWorkStudioView.tsx';
@@ -85,6 +86,7 @@ export const ChronosAppView: React.FC<ChronosAppViewProps> = ({ theme, onToggleT
   const [activeSection, setActiveSection] = useState<NavSection>('planner');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [quickCaptureOpen, setQuickCaptureOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   // Focus Timer shared state across views
   const [activePreset, setActivePreset] = useState<FocusPresetId>('deep50');
@@ -166,7 +168,7 @@ export const ChronosAppView: React.FC<ChronosAppViewProps> = ({ theme, onToggleT
         await refreshUsersList();
       } catch {
         setLoadError(
-          'Không kết nối được máy chủ JSON cục bộ (/api/db). Đang hiển thị bản khởi tạo riêng tạm thời.'
+          'Không kết nối được máy chủ JSON cục bộ (/api/db). Đang hiển thị không gian làm việc trắng cục bộ tạm thời.'
         );
         const fallback = createInitialChronosDatabase({
           userId: targetUserId,
@@ -445,11 +447,21 @@ export const ChronosAppView: React.FC<ChronosAppViewProps> = ({ theme, onToggleT
             <p className="text-xs text-slate-500 dark:text-slate-400">{headerMeta.subtitle}</p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
+              data-testid="chronos-guide-btn"
+              onClick={() => setGuideOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/40 px-3 py-1.5 text-xs font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-100/80 dark:hover:bg-blue-950/70 cursor-pointer"
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              <span>Sách hướng dẫn</span>
+            </button>
+            <button
+              type="button"
+              data-testid="chronos-quick-capture-btn"
               onClick={() => setQuickCaptureOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5" />
               <span>Nhập nhanh</span>
@@ -466,7 +478,7 @@ export const ChronosAppView: React.FC<ChronosAppViewProps> = ({ theme, onToggleT
                 }));
                 setActiveSection('planner');
               }}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 cursor-pointer"
             >
               <Wand2 className="h-3.5 w-3.5" />
               <span>Cân bằng lịch ngay</span>
@@ -543,6 +555,7 @@ export const ChronosAppView: React.FC<ChronosAppViewProps> = ({ theme, onToggleT
               onUpdateDb={updateDb}
               onStartFocusTask={handleStartFocusTask}
               onOpenQuickCapture={() => setQuickCaptureOpen(true)}
+              onOpenGuide={() => setGuideOpen(true)}
             />
           )}
 
@@ -597,8 +610,15 @@ export const ChronosAppView: React.FC<ChronosAppViewProps> = ({ theme, onToggleT
         open={quickCaptureOpen}
         onClose={() => setQuickCaptureOpen(false)}
         projects={db.projects}
-        defaultAssigneeId={db.teamMembers[0]?.id ?? 'mem-1'}
+        defaultAssigneeId={db.teamMembers[0]?.id ?? ''}
         onCreateTask={handleCreateTask}
+      />
+
+      <ChronosGuideModal
+        isOpen={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        onNavigateSection={setActiveSection}
+        onOpenQuickCapture={() => setQuickCaptureOpen(true)}
       />
     </div>
   );

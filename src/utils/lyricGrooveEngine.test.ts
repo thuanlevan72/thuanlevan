@@ -5,10 +5,12 @@ import {
   analyzeSectionLyrics,
   ARPEGGIO_PATTERN_META,
   buildChordTimeline,
+  buildDraftVersionEntry,
   buildMidiFileBytes,
   buildProfilePlaylist,
   buildSynchronizedLyricEvents,
   classifyVietnameseTone,
+  cloneSketchpadDraft,
   COMPUTER_KEY_TO_MIDI,
   countVietnameseSyllables,
   createBlankDraft,
@@ -21,6 +23,7 @@ import {
   getDraftStyleLabel,
   getScaleNotes,
   getShortcutLabelsForOctave,
+  hasDraftUnsavedChanges,
   isSectionMelodyMuted,
   midiToNoteName,
   normalizeKeyRoot,
@@ -39,12 +42,14 @@ import {
   resolvePairedInstrumentsForBacking,
   resolvePairedInstrumentsForMelody,
   resolvePianistVoicing,
+  restoreDraftFromVersion,
   RHYTHM_STYLE_META,
   sanitizePartSchedule,
   snapFrequencyToScaleMidi,
   snapMidiToScale,
   SONG_IDEA_TEMPLATES,
   suggestNextChords,
+  summarizeDraftChanges,
   transposeChordSymbol,
   transposeDraftAll,
   transposeDraftToKey,
@@ -850,5 +855,81 @@ test('sanitizePartSchedule sorts events chronologically and clamps swing offsets
   const nonLoopCleaned = sanitizePartSchedule(dirty, 4.0, false);
   assert.equal(nonLoopCleaned[3][0], 3.9999);
 });
+
+test('cloneSketchpadDraft, summarizeDraftChanges, and hasDraftUnsavedChanges track edits accurately and support revert', () => {
+  const [starter] = createStarterDrafts();
+  const baseline = cloneSketchpadDraft(starter);
+  const working = cloneSketchpadDraft(starter);
+
+  // Changing updatedAt alone or mutating working copy later must not leak into baseline
+  working.updatedAt = baseline.updatedAt + 9999;
+  assert.equal(hasDraftUnsavedChanges(working, baseline), false);
+  assert.deepEqual(summarizeDraftChanges(working, baseline), []);
+
+  // Mutate title, BPM, and lyric text -> must detect all categories without touching baseline
+  working.title = 'Tiêu Đề Đã Sửa';
+  working.bpm = baseline.bpm + 10;
+  working.sections[0].text = '[Am]Một câu hát mới';
+  working.melodyNotes.push({
+    id: 'extra-note',
+    sectionId: working.sections[0].id,
+    midi: 64,
+    startBeat: 0,
+    durationBeats: 1,
+    velocity: 0.85,
+  });
+
+  assert.equal(baseline.title, starter.title);
+  assert.equal(baseline.bpm, starter.bpm);
+  assert.equal(baseline.sections[0].text, starter.sections[0].text);
+  assert.equal(baseline.melodyNotes.length, starter.melodyNotes.length);
+
+  assert.equal(hasDraftUnsavedChanges(working, baseline), true);
+  assert.deepEqual(summarizeDraftChanges(working, baseline), [
+    'Tên bài hát',
+    'Nhạc cụ, điệu & BPM',
+    'Lời & hợp âm',
+    'Nốt giai điệu',
+  ]);
+
+  // Reverting back to cloned baseline clears unsaved changes cleanly
+  const reverted = cloneSketchpadDraft(baseline);
+  assert.equal(hasDraftUnsavedChanges(reverted, baseline), false);
+});
+
+test('buildDraftVersionEntry and restoreDraftFromVersion archive immutable versions and support rollback', () => {
+  const [starter] = createStarterDrafts();
+  const v1 = buildDraftVersionEntry(starter, [], [], 'Bản lưu gốc');
+  assert.equal(v1.versionNumber, 1);
+  assert.equal(v1.note, 'Bản lưu gốc');
+  assert.equal(v1.snapshot.title, starter.title);
+
+  // Edit v2
+  const editedV2 = cloneSketchpadDraft(starter);
+  editedV2.title = `${starter.title} · Bản phối 2`;
+  editedV2.bpm = starter.bpm + 12;
+  const v2Changes = summarizeDraftChanges(editedV2, v1.snapshot);
+  const v2 = buildDraftVersionEntry(editedV2, [v1], v2Changes);
+  assert.equal(v2.versionNumber, 2);
+  assert.equal(v2.note, 'Sửa: Tên bài hát · Nhạc cụ, điệu & BPM');
+  assert.deepEqual(v2.changeTags, ['Tên bài hát', 'Nhạc cụ, điệu & BPM']);
+
+  // Edit v3 with custom note
+  const editedV3 = cloneSketchpadDraft(editedV2);
+  editedV3.sections[0].text = '[Am]Lời mới hoàn toàn';
+  const v3 = buildDraftVersionEntry(editedV3, [v2, v1], ['Lời & hợp âm'], 'Viết lại Verse 1');
+  assert.equal(v3.versionNumber, 3);
+  assert.equal(v3.note, 'Viết lại Verse 1');
+
+  // Roll back to v1 and mutate restored copy — v1 snapshot must stay intact
+  const rolledBack = restoreDraftFromVersion(v1);
+  assert.equal(rolledBack.title, starter.title);
+  assert.equal(rolledBack.bpm, starter.bpm);
+  assert.equal(hasDraftUnsavedChanges(rolledBack, v3.snapshot), true);
+
+  rolledBack.title = 'Thay đổi sau khi rollback';
+  assert.equal(v1.snapshot.title, starter.title);
+});
+
 
 

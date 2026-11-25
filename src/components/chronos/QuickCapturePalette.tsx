@@ -103,7 +103,7 @@ export const QuickCapturePalette: React.FC<QuickCapturePaletteProps> = ({
 
     const finalTask: ChronosTask = {
       id: `tsk-${Date.now()}`,
-      projectId: projectId || projects[0]?.id || 'prj-core',
+      projectId: projectId || projects[0]?.id || '',
       title: parsed.title,
       urgent: hasInlineOverride ? parsed.urgent || urgent : urgent,
       important: hasInlineOverride ? parsed.important && important : important,
@@ -197,6 +197,7 @@ export const QuickCapturePalette: React.FC<QuickCapturePaletteProps> = ({
                 onChange={(e) => setProjectId(e.target.value)}
                 className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200"
               >
+                <option value="">— Đầu việc độc lập (Hộp thư đến) —</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}

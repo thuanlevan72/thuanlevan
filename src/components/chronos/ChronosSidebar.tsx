@@ -71,7 +71,7 @@ export const ChronosSidebar: React.FC<ChronosSidebarProps> = ({
 }) => {
   const [showNewUserForm, setShowNewUserForm] = useState(false);
   const [newUserName, setNewUserName] = useState('');
-  const [newUserRole, setNewUserRole] = useState('Product Builder');
+  const [newUserRole, setNewUserRole] = useState('');
 
   const inboxCount = db.tasks.filter((t) => t.status === 'inbox').length;
   const savedTimeStr = db.lastSavedAt

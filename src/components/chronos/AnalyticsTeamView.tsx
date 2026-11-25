@@ -5,6 +5,7 @@ import {
   BarChart3,
   CalendarCheck2,
   Download,
+  Plus,
   Sparkles,
   Users,
 } from 'lucide-react';
@@ -38,8 +39,10 @@ export const AnalyticsTeamView: React.FC<AnalyticsTeamViewProps> = ({
   );
   const [meetingDay, setMeetingDay] = useState(0);
   const [meetingDuration, setMeetingDuration] = useState(45);
-  const [meetingTitle, setMeetingTitle] = useState('Họp rà soát Sprint & Kiến trúc');
+  const [meetingTitle, setMeetingTitle] = useState('');
   const [bookedNotice, setBookedNotice] = useState<string | null>(null);
+  const [newMemberName, setNewMemberName] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState('');
 
   const accuracyStats = computeEstimationAccuracy(db.tasks, db.projects);
   const ratioStats = computeDeepVsShallowStats(db.blocks);
@@ -89,15 +92,49 @@ export const AnalyticsTeamView: React.FC<AnalyticsTeamViewProps> = ({
     }));
   };
 
+  const handleAddTeamMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newMemberName.trim();
+    if (!name) return;
+    const newId = `mem-${Date.now()}`;
+    onUpdateDb((prev) => ({
+      ...prev,
+      teamMembers: [
+        ...prev.teamMembers,
+        {
+          id: newId,
+          name,
+          role: newMemberRole.trim() || 'Thành viên',
+          avatarInitials: name
+            .split(/\s+/)
+            .slice(-2)
+            .map((w) => w[0]?.toUpperCase() ?? '')
+            .join('')
+            .slice(0, 2) || 'TV',
+          dailyCapacityMin: 480,
+          peakStartMin: 9 * 60 + 30,
+          peakEndMin: 12 * 60,
+          troughStartMin: 14 * 60,
+          troughEndMin: 16 * 60,
+          busySlots: [],
+        },
+      ],
+    }));
+    setSelectedAttendees((prev) => [...prev, newId]);
+    setNewMemberName('');
+    setNewMemberRole('');
+  };
+
   const handleBookSmartMeeting = (dayOffset: number, startMin: number, durationMin: number) => {
     const newBlockId = `blk-meet-${Date.now()}`;
+    const resolvedTitle = meetingTitle.trim() || 'Cuộc họp đội nhóm';
     onUpdateDb((prev) => ({
       ...prev,
       blocks: [
         ...prev.blocks,
         {
           id: newBlockId,
-          title: meetingTitle.trim() || 'Cuộc họp đội nhóm',
+          title: resolvedTitle,
           dayOffset,
           startMin,
           durationMin,
@@ -112,14 +149,14 @@ export const AnalyticsTeamView: React.FC<AnalyticsTeamViewProps> = ({
               ...m,
               busySlots: [
                 ...m.busySlots,
-                { dayOffset, startMin, durationMin, title: meetingTitle.trim() || 'Họp nhóm' },
+                { dayOffset, startMin, durationMin, title: resolvedTitle },
               ],
             }
           : m
       ),
     }));
     setBookedNotice(
-      `Đã đặt lịch "${meetingTitle}" lúc ${formatMinToHHMM(startMin)}–${formatMinToHHMM(
+      `Đã đặt lịch "${resolvedTitle}" lúc ${formatMinToHHMM(startMin)}–${formatMinToHHMM(
         startMin + durationMin
       )} vào lịch đội nhóm.`
     );
@@ -194,41 +231,47 @@ export const AnalyticsTeamView: React.FC<AnalyticsTeamViewProps> = ({
           </div>
 
           <div className="space-y-3.5">
-            {accuracyStats.map((stat) => {
-              const estPct = Math.round((stat.estimatedMinutes / maxMin) * 100);
-              const actPct = Math.round((stat.actualMinutes / maxMin) * 100);
-              const over = stat.variancePct > 15;
-              return (
-                <div key={stat.projectId} className="space-y-1.5">
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                    <div>
-                      <span className="font-semibold text-slate-900 dark:text-slate-100">
-                        {stat.projectName}
-                      </span>{' '}
-                      <span className="text-slate-500">· {stat.category}</span>
+            {accuracyStats.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-slate-200 dark:border-slate-700 p-4 text-center text-xs text-slate-500">
+                Chưa có dự án hoặc đầu việc nào để thống kê độ chính xác ước lượng.
+              </p>
+            ) : (
+              accuracyStats.map((stat) => {
+                const estPct = Math.round((stat.estimatedMinutes / maxMin) * 100);
+                const actPct = Math.round((stat.actualMinutes / maxMin) * 100);
+                const over = stat.variancePct > 15;
+                return (
+                  <div key={stat.projectId} className="space-y-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div>
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">
+                          {stat.projectName}
+                        </span>{' '}
+                        <span className="text-slate-500">· {stat.category}</span>
+                      </div>
+                      <div className="font-mono tabular-nums text-xs">
+                        <span className="text-slate-500">DK {formatDurationVi(stat.estimatedMinutes)}</span>
+                        <span className="mx-1.5 text-slate-300">/</span>
+                        <span className={over ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-emerald-600 dark:text-emerald-400 font-semibold'}>
+                          TT {formatDurationVi(stat.actualMinutes)} ({stat.variancePct >= 0 ? `+${stat.variancePct}%` : `${stat.variancePct}%`})
+                        </span>
+                      </div>
                     </div>
-                    <div className="font-mono tabular-nums text-xs">
-                      <span className="text-slate-500">DK {formatDurationVi(stat.estimatedMinutes)}</span>
-                      <span className="mx-1.5 text-slate-300">/</span>
-                      <span className={over ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-emerald-600 dark:text-emerald-400 font-semibold'}>
-                        TT {formatDurationVi(stat.actualMinutes)} ({stat.variancePct >= 0 ? `+${stat.variancePct}%` : `${stat.variancePct}%`})
-                      </span>
+                    <div className="space-y-1">
+                      <div className="h-2 w-full rounded bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div className="h-full bg-slate-400 dark:bg-slate-500" style={{ width: `${estPct}%` }} />
+                      </div>
+                      <div className="h-2 w-full rounded bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div
+                          className={`h-full ${over ? 'bg-red-500' : 'bg-blue-600'}`}
+                          style={{ width: `${actPct}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <div className="h-2 w-full rounded bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                      <div className="h-full bg-slate-400 dark:bg-slate-500" style={{ width: `${estPct}%` }} />
-                    </div>
-                    <div className="h-2 w-full rounded bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                      <div
-                        className={`h-full ${over ? 'bg-red-500' : 'bg-blue-600'}`}
-                        style={{ width: `${actPct}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
 
@@ -237,30 +280,36 @@ export const AnalyticsTeamView: React.FC<AnalyticsTeamViewProps> = ({
           <h3 className="font-sans text-sm font-semibold text-slate-900 dark:text-slate-100">
             Lịch sử Phiên Deep Work Gần Đây
           </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500">
-                  <th className="py-2 pr-3 font-medium">Đầu việc</th>
-                  <th className="py-2 pr-3 font-medium">Chu kỳ</th>
-                  <th className="py-2 pr-3 font-medium text-right">Thực tế</th>
-                  <th className="py-2 pr-3 font-medium text-right">Trừ Idle</th>
-                  <th className="py-2 font-medium text-right">Tinh thể</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
-                {db.focusLogs.slice(0, 8).map((log) => (
-                  <tr key={log.id}>
-                    <td className="py-2 pr-3 font-medium text-slate-800 dark:text-slate-200">{log.taskTitle}</td>
-                    <td className="py-2 pr-3 font-mono text-slate-500">{log.preset}</td>
-                    <td className="py-2 pr-3 text-right font-mono tabular-nums">{log.actualMinutes}p</td>
-                    <td className="py-2 pr-3 text-right font-mono tabular-nums text-amber-600">{log.idleSubtractedMinutes}p</td>
-                    <td className="py-2 text-right font-mono tabular-nums text-emerald-600">+{log.crystalsEarned}</td>
+          {db.focusLogs.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-slate-200 dark:border-slate-700 p-4 text-center text-xs text-slate-500">
+              Chưa có phiên Deep Work nào được ghi nhận. Hãy bắt đầu một phiên tại Deep Work Studio.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500">
+                    <th className="py-2 pr-3 font-medium">Đầu việc</th>
+                    <th className="py-2 pr-3 font-medium">Chu kỳ</th>
+                    <th className="py-2 pr-3 font-medium text-right">Thực tế</th>
+                    <th className="py-2 pr-3 font-medium text-right">Trừ Idle</th>
+                    <th className="py-2 font-medium text-right">Tinh thể</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/70">
+                  {db.focusLogs.slice(0, 8).map((log) => (
+                    <tr key={log.id}>
+                      <td className="py-2 pr-3 font-medium text-slate-800 dark:text-slate-200">{log.taskTitle}</td>
+                      <td className="py-2 pr-3 font-mono text-slate-500">{log.preset}</td>
+                      <td className="py-2 pr-3 text-right font-mono tabular-nums">{log.actualMinutes}p</td>
+                      <td className="py-2 pr-3 text-right font-mono tabular-nums text-amber-600">{log.idleSubtractedMinutes}p</td>
+                      <td className="py-2 text-right font-mono tabular-nums text-emerald-600">+{log.crystalsEarned}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -293,7 +342,7 @@ export const AnalyticsTeamView: React.FC<AnalyticsTeamViewProps> = ({
 
       {/* Team Workload Heatmap */}
       <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-sans text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
               <Users className="h-4 w-4 text-blue-600" />
@@ -301,58 +350,88 @@ export const AnalyticsTeamView: React.FC<AnalyticsTeamViewProps> = ({
             </h2>
             <p className="text-xs text-slate-500">Hiển thị % thời gian đã bị chiếm dụng của từng thành viên để cân bằng tải kịp thời</p>
           </div>
+
+          <form onSubmit={handleAddTeamMember} className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={newMemberName}
+              onChange={(e) => setNewMemberName(e.target.value)}
+              placeholder="Tên thành viên..."
+              className="rounded-md border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-1 text-xs"
+            />
+            <input
+              type="text"
+              value={newMemberRole}
+              onChange={(e) => setNewMemberRole(e.target.value)}
+              placeholder="Vai trò..."
+              className="rounded-md border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2.5 py-1 text-xs"
+            />
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700 cursor-pointer"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Thêm thành viên</span>
+            </button>
+          </form>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500">
-                <th className="py-2 pr-3 text-left font-medium">Thành viên</th>
-                {[0, 1, 2, 3, 4].map((d) => {
-                  const info = formatDayHeader(db.baseDateISO, d);
+        {db.teamMembers.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-700 p-4 text-center text-xs text-slate-500">
+            Chưa có thành viên nào trong đội nhóm. Hãy thêm thành viên thực tế của bạn ở khung phía trên để theo dõi tải công việc.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500">
+                  <th className="py-2 pr-3 text-left font-medium">Thành viên</th>
+                  {[0, 1, 2, 3, 4].map((d) => {
+                    const info = formatDayHeader(db.baseDateISO, d);
+                    return (
+                      <th key={d} className="py-2 px-2 text-center font-medium">
+                        {info.weekday} <span className="font-mono text-[10px]">{info.dateStr}</span>
+                      </th>
+                    );
+                  })}
+                  <th className="py-2 pl-2 text-right font-medium">TB Tuần</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {db.teamMembers.map((member) => {
+                  const weeklyPct = computeMemberWeeklyLoadPct(member);
                   return (
-                    <th key={d} className="py-2 px-2 text-center font-medium">
-                      {info.weekday} <span className="font-mono text-[10px]">{info.dateStr}</span>
-                    </th>
+                    <tr key={member.id}>
+                      <td className="py-2.5 pr-3">
+                        <div className="font-semibold text-slate-900 dark:text-slate-100">{member.name}</div>
+                        <div className="text-[11px] text-slate-500">{member.role}</div>
+                      </td>
+                      {[0, 1, 2, 3, 4].map((d) => {
+                        const pct = computeMemberLoadPct(member, d);
+                        const cellTone =
+                          pct >= 85
+                            ? 'bg-red-500/20 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800'
+                            : pct >= 60
+                            ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                            : 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
+                        return (
+                          <td key={d} className="py-2 px-1.5 text-center">
+                            <div className={`rounded border py-1.5 font-mono text-xs tabular-nums font-medium ${cellTone}`}>
+                              {pct}%
+                            </div>
+                          </td>
+                        );
+                      })}
+                      <td className="py-2 pl-2 text-right font-mono tabular-nums font-semibold">
+                        {weeklyPct}%
+                      </td>
+                    </tr>
                   );
                 })}
-                <th className="py-2 pl-2 text-right font-medium">TB Tuần</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {db.teamMembers.map((member) => {
-                const weeklyPct = computeMemberWeeklyLoadPct(member);
-                return (
-                  <tr key={member.id}>
-                    <td className="py-2.5 pr-3">
-                      <div className="font-semibold text-slate-900 dark:text-slate-100">{member.name}</div>
-                      <div className="text-[11px] text-slate-500">{member.role}</div>
-                    </td>
-                    {[0, 1, 2, 3, 4].map((d) => {
-                      const pct = computeMemberLoadPct(member, d);
-                      const cellTone =
-                        pct >= 85
-                          ? 'bg-red-500/20 text-red-700 dark:text-red-300 border-red-300 dark:border-red-800'
-                          : pct >= 60
-                          ? 'bg-amber-500/15 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800'
-                          : 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
-                      return (
-                        <td key={d} className="py-2 px-1.5 text-center">
-                          <div className={`rounded border py-1.5 font-mono text-xs tabular-nums font-medium ${cellTone}`}>
-                            {pct}%
-                          </div>
-                        </td>
-                      );
-                    })}
-                    <td className="py-2 pl-2 text-right font-mono tabular-nums font-semibold">
-                      {weeklyPct}%
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Smart Meeting Finder */}
@@ -374,6 +453,7 @@ export const AnalyticsTeamView: React.FC<AnalyticsTeamViewProps> = ({
               type="text"
               value={meetingTitle}
               onChange={(e) => setMeetingTitle(e.target.value)}
+              placeholder="Nhập chủ đề cuộc họp (VD: Họp kế hoạch tuần)..."
               className="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-1.5 text-xs"
             />
           </div>
@@ -443,7 +523,11 @@ export const AnalyticsTeamView: React.FC<AnalyticsTeamViewProps> = ({
         )}
 
         <div className="space-y-2">
-          {suggestions.length === 0 ? (
+          {db.teamMembers.length === 0 ? (
+            <p className="text-xs text-slate-500">
+              Hãy thêm ít nhất một thành viên đội nhóm ở bảng trên để tìm khung giờ họp trống chung.
+            </p>
+          ) : suggestions.length === 0 ? (
             <p className="text-xs text-slate-500">Không tìm thấy khung giờ trống chung trong ngày này. Thử ngày khác hoặc giảm thời lượng.</p>
           ) : (
             suggestions.map((slot, idx) => (

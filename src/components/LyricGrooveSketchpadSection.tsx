@@ -3,10 +3,12 @@ import {
   ArrowRight,
   BookOpen,
   ChevronDown,
+  Clock,
   Copy,
   Download,
   FileAudio,
   FileText,
+  History,
   Image as ImageIcon,
   Layers,
   Mic,
@@ -15,11 +17,14 @@ import {
   Play,
   Plus,
   Repeat,
+  RotateCcw,
+  Save,
   Sparkles,
   Square,
   Trash2,
   Volume2,
   Wand2,
+  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -36,8 +41,11 @@ import {
   warmConcertGrandSamples,
 } from '../utils/lyricGrooveAudio.ts';
 import {
+  appendDraftVersion,
+  deleteDraftVersionById,
   deleteSketchpadDraft,
   loadAllSketchpadDrafts,
+  loadDraftVersions,
   saveSketchpadDraft,
 } from '../utils/lyricGrooveDb.ts';
 import {
@@ -47,6 +55,8 @@ import {
   type BackingInstrumentId,
   type BackingPatternId,
   buildChordTimeline,
+  buildDraftVersionEntry,
+  cloneSketchpadDraft,
   type ConcreteArpeggioPatternId,
   createBlankDraft,
   createStarterDrafts,
@@ -73,15 +83,18 @@ import {
   resolveMelodyPlaybackMode,
   resolvePairedInstrumentsForBacking,
   resolvePairedInstrumentsForMelody,
+  restoreDraftFromVersion,
   RHYTHM_STYLE_META,
   SECTION_KIND_OPTIONS,
   type SectionKind,
   type SketchpadDraft,
+  type SketchpadDraftVersion,
   snapFrequencyToScaleMidi,
   SONG_IDEA_TEMPLATES,
   type SongIdeaTemplate,
   type SongSection,
   suggestNextChords,
+  summarizeDraftChanges,
   type TimeSignatureId,
   transposeChordSymbol,
   transposeDraftAll,
@@ -147,7 +160,12 @@ export function LyricGrooveSketchpadSection({
   theme,
   onToggleTheme,
 }: LyricGrooveSketchpadSectionProps) {
-  const [drafts, setDrafts] = useState<SketchpadDraft[]>(() => createStarterDrafts());
+  const [savedDrafts, setSavedDrafts] = useState<SketchpadDraft[]>(() =>
+    createStarterDrafts().map(cloneSketchpadDraft)
+  );
+  const [drafts, setDrafts] = useState<SketchpadDraft[]>(() =>
+    createStarterDrafts().map(cloneSketchpadDraft)
+  );
   const [activeDraftId, setActiveDraftId] = useState<string>(
     () => createStarterDrafts()[0].id
   );
@@ -199,7 +217,18 @@ export function LyricGrooveSketchpadSection({
   const [livePitchLabel, setLivePitchLabel] = useState<string>('Sẵn sàng thu giọng');
   const [liveRmsPercent, setLiveRmsPercent] = useState<number>(0);
 
-  const [saveNotice, setSaveNotice] = useState<string>('Tự động lưu');
+  const [saveNotice, setSaveNotice] = useState<string>('Đã lưu · IndexedDB');
+  const [draftVersions, setDraftVersions] = useState<SketchpadDraftVersion[]>([]);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [versionNoteInput, setVersionNoteInput] = useState('');
+  const [restoredFromVersionNum, setRestoredFromVersionNum] = useState<number | null>(null);
+  const [confirmModal, setConfirmModal] = useState<
+    | null
+    | { kind: 'save-changes' }
+    | { kind: 'switch-draft'; nextDraftId: string }
+    | { kind: 'create-draft' }
+    | { kind: 'delete-draft' }
+  >(null);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [isExportingWav, setIsExportingWav] = useState(false);
 
@@ -210,7 +239,7 @@ export function LyricGrooveSketchpadSection({
   const liveWaveformRef = useRef<Float32Array | null>(null);
   const liveDetectedMidiRef = useRef<number | null>(null);
   const micSessionRef = useRef<MicPitchSession | null>(null);
-  const saveTimerRef = useRef<number | null>(null);
+  const hasUnsavedChangesRef = useRef<boolean>(false);
   const headerMenusRef = useRef<HTMLDivElement | null>(null);
   const spectrumCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const chordClearTimerRef = useRef<number | null>(null);
@@ -252,7 +281,8 @@ export function LyricGrooveSketchpadSection({
     let mounted = true;
     loadAllSketchpadDrafts().then((loaded) => {
       if (!mounted || loaded.length === 0) return;
-      setDrafts(loaded);
+      setSavedDrafts(loaded.map(cloneSketchpadDraft));
+      setDrafts(loaded.map(cloneSketchpadDraft));
       const first = loaded[0];
       setActiveDraftId(first.id);
       const defaultSec = first.sections[0];
@@ -317,26 +347,194 @@ export function LyricGrooveSketchpadSection({
     activeDraft.mutedMelodySectionIds
   );
 
+  const savedActiveDraft = useMemo(
+    () => savedDrafts.find((d) => d.id === activeDraft.id),
+    [savedDrafts, activeDraft.id]
+  );
+
+  const draftChanges = useMemo(
+    () => summarizeDraftChanges(activeDraft, savedActiveDraft),
+    [activeDraft, savedActiveDraft]
+  );
+
+  const hasUnsavedChanges = draftChanges.length > 0;
+
+  useEffect(() => {
+    hasUnsavedChangesRef.current = hasUnsavedChanges;
+  }, [hasUnsavedChanges]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!hasUnsavedChangesRef.current) return;
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  useEffect(() => {
+    if (!confirmModal) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setConfirmModal(null);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [confirmModal]);
+
+  useEffect(() => {
+    if (!showHistoryModal) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowHistoryModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [showHistoryModal]);
+
+  useEffect(() => {
+    let active = true;
+    loadDraftVersions(activeDraft.id).then(async (versions) => {
+      if (!active) return;
+      if (versions.length === 0 && savedActiveDraft) {
+        const initialVersion = buildDraftVersionEntry(
+          savedActiveDraft,
+          [],
+          [],
+          'Bản lưu gốc'
+        );
+        const seeded = await appendDraftVersion(initialVersion);
+        if (active) {
+          setDraftVersions(seeded);
+        }
+        return;
+      }
+      setDraftVersions(versions);
+    });
+    return () => {
+      active = false;
+    };
+  }, [activeDraft.id, savedActiveDraft]);
+
   const updateActiveDraft = useCallback(
     (updater: (prev: SketchpadDraft) => SketchpadDraft) => {
       setDrafts((prevList) =>
-        prevList.map((d) => {
-          if (d.id !== activeDraft.id) return d;
-          const updated = { ...updater(d), updatedAt: Date.now() };
-          setSaveNotice('Đang lưu...');
-          if (saveTimerRef.current) {
-            window.clearTimeout(saveTimerRef.current);
-          }
-          saveTimerRef.current = window.setTimeout(() => {
-            void saveSketchpadDraft(updated).then(() => {
-              setSaveNotice('Đã lưu · IndexedDB');
-            });
-          }, 260);
-          return updated;
-        })
+        prevList.map((d) => (d.id !== activeDraft.id ? d : updater(d)))
       );
     },
     [activeDraft.id]
+  );
+
+  const applyConfirmedSave = useCallback(
+    async (targetDraft: SketchpadDraft, customNote?: string) => {
+      const stamped = cloneSketchpadDraft({ ...targetDraft, updatedAt: Date.now() });
+      const baseline = savedDrafts.find((d) => d.id === stamped.id);
+      const changes = summarizeDraftChanges(stamped, baseline);
+      setSaveNotice('Đang lưu...');
+      await saveSketchpadDraft(stamped);
+
+      let currentVersions = await loadDraftVersions(stamped.id);
+      if (currentVersions.length === 0 && baseline && changes.length > 0) {
+        const baseEntry = buildDraftVersionEntry(baseline, [], [], 'Bản lưu gốc');
+        currentVersions = await appendDraftVersion(baseEntry);
+      }
+
+      const fallbackRestoreNote =
+        restoredFromVersionNum !== null
+          ? `Khôi phục về phiên bản v${restoredFromVersionNum}`
+          : undefined;
+      const nextVersion = buildDraftVersionEntry(
+        stamped,
+        currentVersions,
+        changes,
+        customNote?.trim() || fallbackRestoreNote
+      );
+      const updatedVersions = await appendDraftVersion(nextVersion);
+      setDraftVersions(updatedVersions);
+      setVersionNoteInput('');
+      setRestoredFromVersionNum(null);
+
+      setSavedDrafts((prev) => {
+        const idx = prev.findIndex((d) => d.id === stamped.id);
+        if (idx < 0) return [cloneSketchpadDraft(stamped), ...prev];
+        return prev.map((d) => (d.id === stamped.id ? cloneSketchpadDraft(stamped) : d));
+      });
+      setDrafts((prev) =>
+        prev.map((d) => (d.id === stamped.id ? cloneSketchpadDraft(stamped) : d))
+      );
+      setSaveNotice(`Đã lưu v${nextVersion.versionNumber} · IndexedDB`);
+    },
+    [savedDrafts, restoredFromVersionNum]
+  );
+
+  const discardActiveChanges = useCallback(() => {
+    const baseline = savedDrafts.find((d) => d.id === activeDraft.id);
+    if (!baseline) return;
+    const restored = cloneSketchpadDraft(baseline);
+    setDrafts((prev) => prev.map((d) => (d.id === restored.id ? restored : d)));
+    if (!restored.sections.some((s) => s.id === activeSectionId) && restored.sections[0]) {
+      setActiveSectionId(restored.sections[0].id);
+    }
+    setRestoredFromVersionNum(null);
+    setVersionNoteInput('');
+    setSaveNotice('Đã giữ nguyên bản cũ');
+  }, [savedDrafts, activeDraft.id, activeSectionId]);
+
+  const clearLivePlayState = useCallback(() => {
+    if (chordClearTimerRef.current) {
+      window.clearTimeout(chordClearTimerRef.current);
+      chordClearTimerRef.current = null;
+    }
+    if (melodyClearTimerRef.current) {
+      window.clearTimeout(melodyClearTimerRef.current);
+      melodyClearTimerRef.current = null;
+    }
+    setLiveChordInfo(null);
+    setLiveMelodyInfo(null);
+    setSectionBeatLocal(0);
+    setSongBeatPos(0);
+    setPlayingSectionId(null);
+    playheadBeatRef.current = 0;
+    setLiveBeatIndicator('Ô 1 · 1');
+  }, []);
+
+  const handleRestoreVersion = useCallback(
+    (version: SketchpadDraftVersion) => {
+      stopGrooveLoop();
+      setIsPlaying(false);
+      clearLivePlayState();
+      const restored = restoreDraftFromVersion(version);
+      setDrafts((prev) => prev.map((d) => (d.id === restored.id ? restored : d)));
+      if (!restored.sections.some((s) => s.id === activeSectionId) && restored.sections[0]) {
+        setActiveSectionId(restored.sections[0].id);
+      }
+      setShowHistoryModal(false);
+
+      const baseline = savedDrafts.find((d) => d.id === restored.id);
+      const diffs = summarizeDraftChanges(restored, baseline);
+      if (diffs.length === 0) {
+        setRestoredFromVersionNum(null);
+        setSaveNotice(`Đang ở đúng Phiên bản v${version.versionNumber}`);
+      } else {
+        setRestoredFromVersionNum(version.versionNumber);
+        setSaveNotice(
+          `Đã nạp Phiên bản v${version.versionNumber} — Bấm Lưu để xác nhận quay về bản này`
+        );
+      }
+    },
+    [activeSectionId, clearLivePlayState, savedDrafts]
+  );
+
+  const handleDeleteVersion = useCallback(
+    async (versionId: string) => {
+      if (draftVersions.length <= 1) return;
+      const updated = await deleteDraftVersionById(versionId, activeDraft.id);
+      setDraftVersions(updated);
+    },
+    [activeDraft.id, draftVersions.length]
   );
 
   const sectionAnalysis = useMemo(
@@ -461,24 +659,6 @@ export function LyricGrooveSketchpadSection({
     () => alignSectionLyricsToMelody(activeSection, sectionMelodyNotes, 0, beatsPerBar),
     [activeSection, sectionMelodyNotes, beatsPerBar]
   );
-
-  const clearLivePlayState = useCallback(() => {
-    if (chordClearTimerRef.current) {
-      window.clearTimeout(chordClearTimerRef.current);
-      chordClearTimerRef.current = null;
-    }
-    if (melodyClearTimerRef.current) {
-      window.clearTimeout(melodyClearTimerRef.current);
-      melodyClearTimerRef.current = null;
-    }
-    setLiveChordInfo(null);
-    setLiveMelodyInfo(null);
-    setSectionBeatLocal(0);
-    setSongBeatPos(0);
-    setPlayingSectionId(null);
-    playheadBeatRef.current = 0;
-    setLiveBeatIndicator('Ô 1 · 1');
-  }, []);
 
   const launchLoopPlayback = useCallback(
     async (targetScope: 'section' | 'song', startBeat = 0) => {
@@ -1205,26 +1385,83 @@ export function LyricGrooveSketchpadSection({
     );
   };
 
-  // Draft Switching / Creating / Deleting
-  const handleCreateNewDraft = () => {
+  // Draft Switching / Creating / Deleting with Unsaved Edit Guard
+  const performDraftSwitch = useCallback(
+    (nextId: string) => {
+      stopGrooveLoop();
+      setIsPlaying(false);
+      clearLivePlayState();
+      setActiveDraftId(nextId);
+      const nextDraft = drafts.find((d) => d.id === nextId);
+      if (nextDraft?.sections[0]) {
+        setActiveSectionId(nextDraft.sections[0].id);
+        const firstChord = extractSectionBarSlots(
+          nextDraft.sections[0],
+          `${nextDraft.keyRoot}maj7`,
+          { beatsPerBar: resolveBeatsPerBar(nextDraft.timeSignature) }
+        )[0]?.primaryChord;
+        if (firstChord) {
+          setSelectedAnchorChord(firstChord);
+          setLiveHighlightChord({ symbol: firstChord, shift: 0 });
+        }
+      }
+    },
+    [clearLivePlayState, drafts]
+  );
+
+  const createNewDraftNow = useCallback(() => {
     stopGrooveLoop();
     setIsPlaying(false);
+    clearLivePlayState();
     const fresh = createBlankDraft(drafts.length + 1);
-    setDrafts((prev) => [fresh, ...prev]);
+    setSavedDrafts((prev) => [cloneSketchpadDraft(fresh), ...prev]);
+    setDrafts((prev) => [cloneSketchpadDraft(fresh), ...prev]);
     setActiveDraftId(fresh.id);
     setActiveSectionId(fresh.sections[0].id);
-    void saveSketchpadDraft(fresh);
+    setRestoredFromVersionNum(null);
+    setVersionNoteInput('');
+    void saveSketchpadDraft(fresh).then(async () => {
+      const initVersion = buildDraftVersionEntry(fresh, [], [], 'Bản nháp khởi tạo');
+      const versions = await appendDraftVersion(initVersion);
+      setDraftVersions(versions);
+    });
+    setSaveNotice('Đã tạo bản nháp mới');
+  }, [clearLivePlayState, drafts.length]);
+
+  const deleteCurrentDraftNow = useCallback(() => {
+    if (drafts.length <= 1) return;
+    stopGrooveLoop();
+    setIsPlaying(false);
+    clearLivePlayState();
+    const remaining = drafts.filter((d) => d.id !== activeDraft.id);
+    void deleteSketchpadDraft(activeDraft.id);
+    setSavedDrafts((prev) => prev.filter((d) => d.id !== activeDraft.id));
+    setDrafts(remaining);
+    setActiveDraftId(remaining[0].id);
+    setActiveSectionId(remaining[0].sections[0].id);
+    setSaveNotice('Đã xóa bản nhạc');
+  }, [activeDraft.id, clearLivePlayState, drafts]);
+
+  const handleRequestSelectDraft = (nextId: string) => {
+    if (nextId === activeDraft.id) return;
+    if (hasUnsavedChanges) {
+      setConfirmModal({ kind: 'switch-draft', nextDraftId: nextId });
+      return;
+    }
+    performDraftSwitch(nextId);
+  };
+
+  const handleCreateNewDraft = () => {
+    if (hasUnsavedChanges) {
+      setConfirmModal({ kind: 'create-draft' });
+      return;
+    }
+    createNewDraftNow();
   };
 
   const handleDeleteCurrentDraft = () => {
     if (drafts.length <= 1) return;
-    stopGrooveLoop();
-    setIsPlaying(false);
-    const remaining = drafts.filter((d) => d.id !== activeDraft.id);
-    void deleteSketchpadDraft(activeDraft.id);
-    setDrafts(remaining);
-    setActiveDraftId(remaining[0].id);
-    setActiveSectionId(remaining[0].sections[0].id);
+    setConfirmModal({ kind: 'delete-draft' });
   };
 
   const handleExportWav = async () => {
@@ -1356,15 +1593,43 @@ export function LyricGrooveSketchpadSection({
               Phòng Sáng Tác Acoustic Studio
             </span>
             <span aria-hidden="true">·</span>
-            <span data-testid="autosave-status">{saveNotice}</span>
+            <span
+              data-testid="autosave-status"
+              className={
+                hasUnsavedChanges
+                  ? 'font-semibold text-amber-600 dark:text-amber-400'
+                  : ''
+              }
+            >
+              {hasUnsavedChanges ? 'Có chỉnh sửa chưa lưu' : saveNotice}
+            </span>
           </div>
           <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-[#070B14] dark:text-[#F1F5F9]">
             Lyric &amp; Groove Sketchpad
           </h1>
         </div>
 
-        {/* Clean Primary Header Actions: Handbook + 1-Click Song Idea + Export Dropdown + Theme */}
+        {/* Clean Primary Header Actions: Save Confirmation + Handbook + 1-Click Song Idea + Export Dropdown + Theme */}
         <div ref={headerMenusRef} className="flex flex-wrap items-center gap-2 shrink-0">
+          <button
+            type="button"
+            data-testid="studio-save-confirm-btn"
+            disabled={!hasUnsavedChanges}
+            onClick={() => {
+              setShowIdeaMenu(false);
+              setShowExportMenu(false);
+              setConfirmModal({ kind: 'save-changes' });
+            }}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+              hasUnsavedChanges
+                ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-sm cursor-pointer'
+                : 'border border-[#DCE6F2] dark:border-[#1E314E] bg-[#F8FAFC] dark:bg-[#0B1220] text-[#94A3B8] cursor-default'
+            }`}
+          >
+            <Save className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>{hasUnsavedChanges ? 'Lưu chỉnh sửa' : 'Đã lưu'}</span>
+          </button>
+
           <button
             type="button"
             data-testid="open-guide-modal-btn"
@@ -1514,6 +1779,47 @@ export function LyricGrooveSketchpadSection({
         </div>
       )}
 
+      {hasUnsavedChanges && (
+        <div
+          role="region"
+          aria-label="Xác nhận lưu chỉnh sửa"
+          data-testid="unsaved-changes-bar"
+          className="rounded-xl border border-amber-400/70 dark:border-amber-600/60 bg-amber-50/90 dark:bg-amber-950/40 px-4 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-sm"
+        >
+          <div className="text-xs text-amber-950 dark:text-amber-100 leading-relaxed">
+            <span className="font-semibold">Đang có chỉnh sửa chưa lưu</span>{' '}
+            <span className="text-amber-800 dark:text-amber-300">
+              ({draftChanges.join(' · ')})
+            </span>
+            <span className="hidden md:inline text-amber-900/90 dark:text-amber-200/90">
+              {' '}— Bấm Lưu để xác nhận sửa, hoặc Giữ nguyên cũ để hủy thay đổi.
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              data-testid="studio-discard-changes-btn"
+              onClick={discardActiveChanges}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-amber-700/35 dark:border-amber-500/40 bg-white/85 dark:bg-[#0B1220] text-amber-950 dark:text-amber-200 hover:border-rose-500 hover:text-rose-700 dark:hover:text-rose-300 transition-colors whitespace-nowrap cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Không sửa · Giữ nguyên cũ</span>
+            </button>
+
+            <button
+              type="button"
+              data-testid="banner-save-confirm-btn"
+              onClick={() => setConfirmModal({ kind: 'save-changes' })}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors whitespace-nowrap cursor-pointer shadow-xs"
+            >
+              <Save className="w-3.5 h-3.5" aria-hidden="true" />
+              <span>Lưu &amp; Xác nhận sửa</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Unified DAW Transport & Sound Bar */}
       <div className="rounded-xl border border-[#DCE6F2] dark:border-[#182740] bg-white/95 dark:bg-[#0B1220]/95 p-3.5 space-y-2.5">
         {/* Row 1: Song + Primary Transport Playhead */}
@@ -1525,26 +1831,7 @@ export function LyricGrooveSketchpadSection({
             <select
               id="draft-selector"
               value={activeDraft.id}
-              onChange={(e) => {
-                const nextId = e.target.value;
-                stopGrooveLoop();
-                setIsPlaying(false);
-                clearLivePlayState();
-                setActiveDraftId(nextId);
-                const nextDraft = drafts.find((d) => d.id === nextId);
-                if (nextDraft?.sections[0]) {
-                  setActiveSectionId(nextDraft.sections[0].id);
-                  const firstChord = extractSectionBarSlots(
-                    nextDraft.sections[0],
-                    `${nextDraft.keyRoot}maj7`,
-                    { beatsPerBar: resolveBeatsPerBar(nextDraft.timeSignature) }
-                  )[0]?.primaryChord;
-                  if (firstChord) {
-                    setSelectedAnchorChord(firstChord);
-                    setLiveHighlightChord({ symbol: firstChord, shift: 0 });
-                  }
-                }
-              }}
+              onChange={(e) => handleRequestSelectDraft(e.target.value)}
               className="max-w-[215px] truncate rounded-lg border border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] px-2.5 py-1.5 text-xs font-medium text-[#0F172A] dark:text-[#E2E8F0]"
             >
               {drafts.map((d) => (
@@ -1567,6 +1854,17 @@ export function LyricGrooveSketchpadSection({
               placeholder="Tên bài hát..."
               className="flex-1 min-w-[180px] rounded-lg border border-[#CBD8E6] dark:border-[#1F3557] bg-white dark:bg-[#08101E] px-3 py-1.5 text-xs sm:text-sm font-semibold text-[#070B14] dark:text-[#F1F5F9]"
             />
+
+            <button
+              type="button"
+              data-testid="studio-history-btn"
+              onClick={() => setShowHistoryModal(true)}
+              title="Xem lịch sử các phiên bản đã lưu & quay về phiên bản cũ"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] text-[#0F172A] dark:text-[#E2E8F0] hover:border-[#0284C7] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <History className="w-3.5 h-3.5 text-[#0284C7] dark:text-[#38BDF8]" aria-hidden="true" />
+              <span>Lịch sử ({draftVersions.length})</span>
+            </button>
 
             <button
               type="button"
@@ -3296,6 +3594,311 @@ export function LyricGrooveSketchpadSection({
         onClose={() => setShowGuideModal(false)}
         currentInstrument={activeDraft.backingInstrument}
       />
+
+      {confirmModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="studio-confirm-modal-title"
+          data-testid="save-confirm-dialog"
+          className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div className="max-w-md w-full rounded-xl border border-[#CBD8E6] dark:border-[#1E314E] bg-white dark:bg-[#0B1220] p-5 space-y-4 shadow-2xl">
+            {confirmModal.kind === 'delete-draft' ? (
+              <>
+                <div className="space-y-1.5">
+                  <h2
+                    id="studio-confirm-modal-title"
+                    className="font-display text-lg font-semibold text-[#070B14] dark:text-[#F1F5F9]"
+                  >
+                    Xác nhận xóa bản nhạc?
+                  </h2>
+                  <p className="text-xs sm:text-sm text-[#475569] dark:text-[#94A3B8] leading-relaxed">
+                    Bạn có chắc muốn xóa bản nhạc{' '}
+                    <strong className="text-[#070B14] dark:text-white">
+                      “{activeDraft.title}”
+                    </strong>{' '}
+                    không? Nếu không xác nhận, bản nhạc sẽ được giữ nguyên như cũ.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    data-testid="confirm-save-cancel-btn"
+                    onClick={() => setConfirmModal(null)}
+                    className="px-3.5 py-2 rounded-lg text-xs font-semibold border border-[#CBD8E6] dark:border-[#1F3557] text-[#0F172A] dark:text-[#E2E8F0] hover:border-[#0284C7] cursor-pointer"
+                  >
+                    Không, giữ nguyên
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="confirm-delete-btn"
+                    onClick={() => {
+                      deleteCurrentDraftNow();
+                      setConfirmModal(null);
+                    }}
+                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white cursor-pointer"
+                  >
+                    Xác nhận xóa
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <h2
+                    id="studio-confirm-modal-title"
+                    className="font-display text-lg font-semibold text-[#070B14] dark:text-[#F1F5F9]"
+                  >
+                    {confirmModal.kind === 'save-changes'
+                      ? 'Xác nhận lưu chỉnh sửa?'
+                      : 'Lưu chỉnh sửa trước khi chuyển bài?'}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-[#475569] dark:text-[#94A3B8] leading-relaxed">
+                    Bản nhạc{' '}
+                    <strong className="text-[#070B14] dark:text-white">
+                      “{activeDraft.title}”
+                    </strong>{' '}
+                    đang có các chỉnh sửa:
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {draftChanges.map((item) => (
+                      <span
+                        key={item}
+                        className="px-2 py-0.5 rounded-md border border-amber-400/50 bg-amber-50 dark:bg-amber-950/45 text-[11px] font-medium text-amber-900 dark:text-amber-200"
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-xs text-[#475569] dark:text-[#94A3B8] leading-relaxed">
+                    Xác nhận để lưu thành{' '}
+                    <strong className="text-[#0F172A] dark:text-[#E2E8F0]">
+                      Phiên bản v{(draftVersions[0]?.versionNumber ?? 0) + (draftVersions.length === 0 ? 2 : 1)}
+                    </strong>
+                    , hoặc chọn{' '}
+                    <strong className="text-[#0F172A] dark:text-[#E2E8F0]">
+                      Không sửa · Giữ nguyên cũ
+                    </strong>{' '}
+                    để khôi phục nguyên trạng ban đầu.
+                  </p>
+                  <div>
+                    <label
+                      htmlFor="save-version-note-input"
+                      className="block text-[11px] font-medium text-[#475569] dark:text-[#94A3B8] mb-1"
+                    >
+                      Ghi chú phiên bản (tùy chọn)
+                    </label>
+                    <input
+                      id="save-version-note-input"
+                      data-testid="save-version-note-input"
+                      type="text"
+                      value={versionNoteInput}
+                      onChange={(e) => setVersionNoteInput(e.target.value)}
+                      placeholder={
+                        restoredFromVersionNum !== null
+                          ? `Khôi phục về phiên bản v${restoredFromVersionNum}`
+                          : 'VD: Đổi hợp âm điệp khúc, nâng BPM...'
+                      }
+                      className="w-full rounded-lg border border-[#CBD8E6] dark:border-[#1F3557] bg-[#F8FAFC] dark:bg-[#08101E] px-3 py-1.5 text-xs text-[#070B14] dark:text-[#F1F5F9]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 pt-1">
+                  <button
+                    type="button"
+                    data-testid="confirm-save-apply-btn"
+                    onClick={async () => {
+                      const modalState = confirmModal;
+                      await applyConfirmedSave(activeDraft, versionNoteInput);
+                      setConfirmModal(null);
+                      if (modalState.kind === 'switch-draft') {
+                        performDraftSwitch(modalState.nextDraftId);
+                      } else if (modalState.kind === 'create-draft') {
+                        createNewDraftNow();
+                      }
+                    }}
+                    className="w-full py-2.5 px-4 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition-colors"
+                  >
+                    {confirmModal.kind === 'save-changes'
+                      ? 'Có, xác nhận sửa & Lưu phiên bản mới'
+                      : 'Có, lưu phiên bản mới rồi chuyển'}
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="confirm-save-revert-btn"
+                    onClick={() => {
+                      const modalState = confirmModal;
+                      discardActiveChanges();
+                      setConfirmModal(null);
+                      if (modalState.kind === 'switch-draft') {
+                        performDraftSwitch(modalState.nextDraftId);
+                      } else if (modalState.kind === 'create-draft') {
+                        createNewDraftNow();
+                      }
+                    }}
+                    className="w-full py-2 px-4 rounded-lg text-xs font-semibold border border-rose-300 dark:border-rose-800/70 bg-rose-50/70 dark:bg-rose-950/35 text-rose-700 dark:text-rose-200 hover:bg-rose-100 dark:hover:bg-rose-950/60 cursor-pointer transition-colors"
+                  >
+                    {confirmModal.kind === 'save-changes'
+                      ? 'Không sửa · Giữ nguyên như cũ'
+                      : 'Không sửa (Giữ nguyên cũ) & Chuyển'}
+                  </button>
+
+                  <button
+                    type="button"
+                    data-testid="confirm-save-cancel-btn"
+                    onClick={() => setConfirmModal(null)}
+                    className="w-full py-2 px-4 rounded-lg text-xs font-medium border border-[#CBD8E6] dark:border-[#1F3557] text-[#475569] dark:text-[#94A3B8] hover:text-[#070B14] dark:hover:text-white cursor-pointer transition-colors"
+                  >
+                    Quay lại tiếp tục chỉnh sửa
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showHistoryModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="studio-history-modal-title"
+          data-testid="version-history-modal"
+          className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowHistoryModal(false);
+            }
+          }}
+        >
+          <div className="max-w-2xl w-full max-h-[85vh] flex flex-col rounded-xl border border-[#CBD8E6] dark:border-[#1E314E] bg-white dark:bg-[#0B1220] shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-[#E2ECF5] dark:border-[#182740]">
+              <div className="min-w-0">
+                <h2
+                  id="studio-history-modal-title"
+                  className="font-display text-base sm:text-lg font-semibold text-[#070B14] dark:text-[#F1F5F9] truncate"
+                >
+                  Lịch sử phiên bản lưu — {activeDraft.title}
+                </h2>
+                <p className="text-xs text-[#475569] dark:text-[#94A3B8]">
+                  Mỗi lần xác nhận sửa đều lưu thành một phiên bản riêng để bạn quay lại bất cứ lúc nào.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Đóng lịch sử phiên bản"
+                data-testid="close-history-modal-btn"
+                onClick={() => setShowHistoryModal(false)}
+                className="p-1.5 rounded-lg border border-[#DCE6F2] dark:border-[#1E314E] text-[#475569] dark:text-[#94A3B8] hover:text-[#070B14] dark:hover:text-white cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-2.5">
+              {draftVersions.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-[#CBD8E6] dark:border-[#1E314E] p-6 text-center text-xs text-[#475569] dark:text-[#94A3B8]">
+                  Chưa có phiên bản lưu nào. Hãy bấm Lưu chỉnh sửa để ghi nhận phiên bản đầu tiên.
+                </div>
+              ) : (
+                draftVersions.map((ver, idx) => {
+                  const formattedTime = new Date(ver.savedAt).toLocaleString('vi-VN', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                  });
+                  const matchesSaved =
+                    savedActiveDraft &&
+                    summarizeDraftChanges(ver.snapshot, savedActiveDraft).length === 0;
+
+                  return (
+                    <div
+                      key={ver.id}
+                      data-testid={`version-item-v${ver.versionNumber}`}
+                      className={`rounded-lg border p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                        matchesSaved
+                          ? 'border-sky-400/60 dark:border-sky-700/70 bg-sky-50/45 dark:bg-sky-950/20'
+                          : 'border-[#DCE6F2] dark:border-[#182740] bg-[#F8FAFC]/65 dark:bg-[#08101E]/70'
+                      }`}
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="font-mono font-bold text-[#0369A1] dark:text-[#38BDF8] tabular-nums">
+                            v{ver.versionNumber}
+                          </span>
+                          <span aria-hidden="true" className="text-[#94A3B8]">·</span>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-mono tabular-nums text-[#475569] dark:text-[#94A3B8]">
+                            <Clock className="w-3 h-3" aria-hidden="true" />
+                            {formattedTime}
+                          </span>
+                          {idx === 0 && (
+                            <>
+                              <span aria-hidden="true" className="text-[#94A3B8]">·</span>
+                              <span className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                                Mới nhất
+                              </span>
+                            </>
+                          )}
+                          {matchesSaved && (
+                            <>
+                              <span aria-hidden="true" className="text-[#94A3B8]">·</span>
+                              <span className="text-[11px] font-semibold text-[#0284C7] dark:text-[#38BDF8]">
+                                Đang lưu hiện tại
+                              </span>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="text-xs font-semibold text-[#070B14] dark:text-[#F1F5F9]">
+                          {ver.note}
+                        </div>
+
+                        <div className="text-[11px] text-[#475569] dark:text-[#94A3B8] truncate">
+                          {ver.snapshot.title} · {ver.snapshot.keyRoot} {ver.snapshot.scaleMode === 'minor' ? 'Thứ' : 'Trưởng'} ·{' '}
+                          <span className="font-mono tabular-nums">{ver.snapshot.bpm} BPM</span> ·{' '}
+                          <span className="font-mono tabular-nums">{ver.snapshot.sections.length} đoạn</span> ·{' '}
+                          <span className="font-mono tabular-nums">{ver.snapshot.melodyNotes.length} nốt</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          data-testid={`restore-version-btn-v${ver.versionNumber}`}
+                          onClick={() => handleRestoreVersion(ver)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#0284C7] hover:bg-[#0369A1] text-white transition-colors whitespace-nowrap cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>Quay về bản này</span>
+                        </button>
+
+                        {draftVersions.length > 1 && (
+                          <button
+                            type="button"
+                            data-testid={`delete-version-btn-v${ver.versionNumber}`}
+                            aria-label={`Xóa phiên bản v${ver.versionNumber}`}
+                            onClick={() => void handleDeleteVersion(ver.id)}
+                            className="p-1.5 rounded-lg border border-[#DCE6F2] dark:border-[#1E314E] text-[#64748B] hover:text-rose-600 hover:border-rose-400 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -3,17 +3,24 @@ import {
   createStarterDrafts,
   resolveMelodyPlaybackMode,
   type SketchpadDraft,
+  type SketchpadDraftVersion,
 } from './lyricGrooveEngine.ts';
 
 const FALLBACK_STORAGE_KEY = 'lyric-groove-sketchpad-drafts-v1';
+const FALLBACK_VERSIONS_KEY = 'lyric-groove-sketchpad-versions-v1';
 
 class LyricGrooveDatabase extends Dexie {
   drafts!: EntityTable<SketchpadDraft, 'id'>;
+  versions!: EntityTable<SketchpadDraftVersion, 'id'>;
 
   constructor() {
     super('LyricGrooveSketchpadDB');
     this.version(1).stores({
       drafts: 'id, updatedAt, title',
+    });
+    this.version(2).stores({
+      drafts: 'id, updatedAt, title',
+      versions: 'id, draftId, savedAt, versionNumber',
     });
   }
 }
@@ -241,6 +248,7 @@ export async function deleteSketchpadDraft(id: string): Promise<void> {
   if (db) {
     try {
       await db.drafts.delete(id);
+      await db.versions.where('draftId').equals(id).delete();
     } catch {
       // Fallback continues below
     }
@@ -249,4 +257,99 @@ export async function deleteSketchpadDraft(id: string): Promise<void> {
   if (current) {
     writeFallbackDrafts(current.filter((d) => d.id !== id));
   }
+  const allVersions = readFallbackVersions();
+  writeFallbackVersions(allVersions.filter((v) => v.draftId !== id));
 }
+
+function readFallbackVersions(): SketchpadDraftVersion[] {
+  try {
+    const raw = localStorage.getItem(FALLBACK_VERSIONS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeFallbackVersions(versions: SketchpadDraftVersion[]): void {
+  try {
+    localStorage.setItem(FALLBACK_VERSIONS_KEY, JSON.stringify(versions));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+function sortVersionsDesc(list: SketchpadDraftVersion[]): SketchpadDraftVersion[] {
+  return [...list].sort(
+    (a, b) => b.versionNumber - a.versionNumber || b.savedAt - a.savedAt
+  );
+}
+
+export async function loadDraftVersions(
+  draftId: string
+): Promise<SketchpadDraftVersion[]> {
+  const db = getDb();
+  if (db) {
+    try {
+      const rows = await db.versions.where('draftId').equals(draftId).toArray();
+      if (rows.length > 0) {
+        return sortVersionsDesc(rows);
+      }
+    } catch {
+      // Fallback below
+    }
+  }
+  return sortVersionsDesc(
+    readFallbackVersions().filter((v) => v.draftId === draftId)
+  );
+}
+
+export async function appendDraftVersion(
+  version: SketchpadDraftVersion,
+  maxPerDraft = 30
+): Promise<SketchpadDraftVersion[]> {
+  const db = getDb();
+  if (db) {
+    try {
+      await db.versions.put(version);
+      const allForDraft = sortVersionsDesc(
+        await db.versions.where('draftId').equals(version.draftId).toArray()
+      );
+      if (allForDraft.length > maxPerDraft) {
+        const toDelete = allForDraft.slice(maxPerDraft).map((v) => v.id);
+        await db.versions.bulkDelete(toDelete);
+      }
+    } catch {
+      // Fallback continues below
+    }
+  }
+
+  const allCached = readFallbackVersions().filter((v) => v.id !== version.id);
+  const forDraft = sortVersionsDesc([
+    version,
+    ...allCached.filter((v) => v.draftId === version.draftId),
+  ]).slice(0, maxPerDraft);
+  const others = allCached.filter((v) => v.draftId !== version.draftId);
+  writeFallbackVersions([...forDraft, ...others]);
+
+  return loadDraftVersions(version.draftId);
+}
+
+export async function deleteDraftVersionById(
+  versionId: string,
+  draftId: string
+): Promise<SketchpadDraftVersion[]> {
+  const db = getDb();
+  if (db) {
+    try {
+      await db.versions.delete(versionId);
+    } catch {
+      // Fallback continues below
+    }
+  }
+  const allCached = readFallbackVersions();
+  writeFallbackVersions(allCached.filter((v) => v.id !== versionId));
+  return loadDraftVersions(draftId);
+}
+

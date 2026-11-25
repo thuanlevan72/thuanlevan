@@ -34,6 +34,7 @@ export const RitualsRoadmapView: React.FC<RitualsRoadmapViewProps> = ({
 }) => {
   const [reflection, setReflection] = useState(db.rituals.todayReflection || '');
   const [dbFeedback, setDbFeedback] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
   const jsonInputRef = useRef<HTMLInputElement | null>(null);
 
   const openTasks = db.tasks.filter((t) => t.status !== 'done');
@@ -228,27 +229,33 @@ export const RitualsRoadmapView: React.FC<RitualsRoadmapViewProps> = ({
             </div>
 
             <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-              {openTasks.map((task) => (
-                <label
-                  key={task.id}
-                  className={`flex items-center justify-between rounded-lg border px-3 py-2 text-xs cursor-pointer ${
-                    task.isMit
-                      ? 'border-blue-400 bg-blue-50/70 dark:bg-blue-500/15'
-                      : 'border-slate-200 dark:border-slate-800'
-                  }`}
-                >
-                  <span className="flex items-center gap-2 min-w-0 pr-2">
-                    <input
-                      type="checkbox"
-                      checked={Boolean(task.isMit)}
-                      onChange={() => toggleMit(task.id)}
-                      className="rounded border-slate-300 text-blue-600"
-                    />
-                    <span className="truncate font-medium">{task.title}</span>
-                  </span>
-                  <span className="font-mono text-[11px] text-slate-500">{task.estimatedMinutes}p</span>
-                </label>
-              ))}
+              {openTasks.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-slate-200 dark:border-slate-700 p-3 text-center text-xs text-slate-500">
+                  Chưa có đầu việc mở nào. Hãy thêm đầu việc ở Lịch hoặc Mục tiêu để chọn Top 3 MIT.
+                </p>
+              ) : (
+                openTasks.map((task) => (
+                  <label
+                    key={task.id}
+                    className={`flex items-center justify-between rounded-lg border px-3 py-2 text-xs cursor-pointer ${
+                      task.isMit
+                        ? 'border-blue-400 bg-blue-50/70 dark:bg-blue-500/15'
+                        : 'border-slate-200 dark:border-slate-800'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 min-w-0 pr-2">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(task.isMit)}
+                        onChange={() => toggleMit(task.id)}
+                        className="rounded border-slate-300 text-blue-600"
+                      />
+                      <span className="truncate font-medium">{task.title}</span>
+                    </span>
+                    <span className="font-mono text-[11px] text-slate-500">{task.estimatedMinutes}p</span>
+                  </label>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -354,14 +361,39 @@ export const RitualsRoadmapView: React.FC<RitualsRoadmapViewProps> = ({
               <span>Khôi phục từ JSON</span>
             </button>
 
-            <button
-              type="button"
-              onClick={onResetSampleDb}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 dark:border-red-800 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              <span>Khôi phục dữ liệu mẫu</span>
-            </button>
+            {!confirmReset ? (
+              <button
+                type="button"
+                data-testid="chronos-reset-blank-btn"
+                onClick={() => setConfirmReset(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 dark:border-red-800 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 cursor-pointer"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span>Xóa &amp; Đặt lại dữ liệu trắng</span>
+              </button>
+            ) : (
+              <div className="inline-flex items-center gap-1.5">
+                <button
+                  type="button"
+                  data-testid="chronos-reset-blank-confirm-btn"
+                  onClick={() => {
+                    onResetSampleDb();
+                    setConfirmReset(false);
+                    setDbFeedback('Đã xóa toàn bộ và đặt lại dữ liệu trắng hoàn toàn.');
+                  }}
+                  className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-700 cursor-pointer"
+                >
+                  Xác nhận xóa trắng
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmReset(false)}
+                  className="rounded-lg border border-slate-200 dark:border-slate-700 px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  Hủy
+                </button>
+              </div>
+            )}
           </div>
         </div>
         {dbFeedback && <p className="text-xs text-emerald-600 dark:text-emerald-400">{dbFeedback}</p>}

@@ -41,6 +41,7 @@ interface PlannerTimelineViewProps {
   onUpdateDb: (updater: (prev: ChronosDatabase) => ChronosDatabase) => void;
   onStartFocusTask: (taskId?: string, customTitle?: string, suggestedMinutes?: number) => void;
   onOpenQuickCapture: () => void;
+  onOpenGuide?: () => void;
 }
 
 const START_HOUR = 7;
@@ -64,6 +65,7 @@ export const PlannerTimelineView: React.FC<PlannerTimelineViewProps> = ({
   onUpdateDb,
   onStartFocusTask,
   onOpenQuickCapture,
+  onOpenGuide,
 }) => {
   const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
   const [selectedDay, setSelectedDay] = useState(0);
@@ -75,9 +77,14 @@ export const PlannerTimelineView: React.FC<PlannerTimelineViewProps> = ({
   const [undoSnapshot, setUndoSnapshot] = useState<TimeBlock[] | null>(null);
 
   const [urgentOpen, setUrgentOpen] = useState(false);
-  const [urgentTitle, setUrgentTitle] = useState('Khách hàng Enterprise báo lỗi kết nối');
+  const [urgentTitle, setUrgentTitle] = useState('');
   const [urgentStartHour, setUrgentStartHour] = useState('10:30');
   const [urgentDuration, setUrgentDuration] = useState(30);
+
+  const [addingAccount, setAddingAccount] = useState(false);
+  const [newAccProvider, setNewAccProvider] = useState<'google' | 'outlook' | 'apple'>('google');
+  const [newAccLabel, setNewAccLabel] = useState('');
+  const [newAccEmail, setNewAccEmail] = useState('');
 
   const [aiLoading, setAiLoading] = useState(false);
   const [aiCoachResult, setAiCoachResult] = useState<AiCoachResponse | null>(null);
@@ -313,18 +320,44 @@ export const PlannerTimelineView: React.FC<PlannerTimelineViewProps> = ({
 
   const handleUrgentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const cleaned = urgentTitle.trim() || 'Việc khẩn xen ngang';
     const [hh, mm] = urgentStartHour.split(':').map(Number);
     const startMin = (Number.isFinite(hh) ? hh : 10) * 60 + (Number.isFinite(mm) ? mm : 30);
     const res = insertUrgentInterruption(
       db.blocks,
       selectedDay,
       db.energyProfile,
-      urgentTitle,
+      cleaned,
       startMin,
       urgentDuration
     );
     commitReschedule(res);
+    setUrgentTitle('');
     setUrgentOpen(false);
+  };
+
+  const handleAddCalendarAccount = (e: React.FormEvent) => {
+    e.preventDefault();
+    const label = newAccLabel.trim();
+    const email = newAccEmail.trim();
+    if (!label || !email) return;
+    onUpdateDb((prev) => ({
+      ...prev,
+      calendarAccounts: [
+        ...prev.calendarAccounts,
+        {
+          id: `cal-${Date.now()}`,
+          provider: newAccProvider,
+          label,
+          email,
+          enabled: true,
+          lastSyncedAt: new Date().toISOString(),
+        },
+      ],
+    }));
+    setNewAccLabel('');
+    setNewAccEmail('');
+    setAddingAccount(false);
   };
 
   const totalHoursCount = END_HOUR - START_HOUR;
@@ -459,6 +492,7 @@ export const PlannerTimelineView: React.FC<PlannerTimelineViewProps> = ({
                 type="text"
                 value={urgentTitle}
                 onChange={(e) => setUrgentTitle(e.target.value)}
+                placeholder="Ví dụ: Xử lý sự cố đột xuất hoặc cuộc gọi khẩn..."
                 className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-3 py-1.5 text-xs"
               />
             </div>
@@ -620,8 +654,41 @@ export const PlannerTimelineView: React.FC<PlannerTimelineViewProps> = ({
 
             <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
               {trayTasks.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-700 p-4 text-center text-xs text-slate-500">
-                  Tất cả đầu việc trong bộ lọc đã được phân bổ khung giờ.
+                <div
+                  data-testid="chronos-empty-tray"
+                  className="rounded-lg border border-dashed border-slate-200 dark:border-slate-700 p-4 text-center text-xs text-slate-500 space-y-2.5"
+                >
+                  {db.tasks.length === 0 ? (
+                    <>
+                      <p className="text-slate-600 dark:text-slate-300 font-medium">
+                        Không gian làm việc đang trống hoàn toàn.
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Hãy thêm đầu việc đầu tiên của bạn hoặc mở Sách hướng dẫn để xem cách dùng nhanh.
+                      </p>
+                      <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={onOpenQuickCapture}
+                          className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-blue-700 cursor-pointer"
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span>Tạo đầu việc đầu tiên</span>
+                        </button>
+                        {onOpenGuide && (
+                          <button
+                            type="button"
+                            onClick={onOpenGuide}
+                            className="inline-flex items-center gap-1 rounded-md border border-slate-300 dark:border-slate-700 px-2.5 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                          >
+                            <span>Mở Sách hướng dẫn</span>
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <span>Tất cả đầu việc trong bộ lọc đã được phân bổ khung giờ.</span>
+                  )}
                 </div>
               ) : (
                 trayTasks.map((task) => {
@@ -704,49 +771,119 @@ export const PlannerTimelineView: React.FC<PlannerTimelineViewProps> = ({
                 <button
                   type="button"
                   onClick={() => icsInputRef.current?.click()}
-                  className="inline-flex items-center gap-1 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="inline-flex items-center gap-1 whitespace-nowrap shrink-0 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                   title="Nhập sự kiện từ file .ics (Google/Apple/Outlook)"
                 >
-                  <Upload className="h-3 w-3" />
+                  <Upload className="h-3 w-3 shrink-0" />
                   <span>Nhập .ics</span>
                 </button>
                 <button
                   type="button"
                   onClick={handleExportIcs}
-                  className="inline-flex items-center gap-1 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  className="inline-flex items-center gap-1 whitespace-nowrap shrink-0 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
                   title="Xuất lịch ChronosFlow ra chuẩn iCalendar (.ics)"
                 >
-                  <Download className="h-3 w-3" />
+                  <Download className="h-3 w-3 shrink-0" />
                   <span>.ics</span>
                 </button>
               </div>
             </div>
 
             <div className="space-y-2">
-              {db.calendarAccounts.map((acc) => (
-                <label
-                  key={acc.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-800 px-2.5 py-2 text-xs cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/50"
+              {db.calendarAccounts.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-700 p-3 text-xs text-slate-500 space-y-2">
+                  <p>Chưa kết nối nguồn lịch ngoài nào. Bạn có thể nhập file .ics thật hoặc thêm nguồn lịch thủ công.</p>
+                  <button
+                    type="button"
+                    onClick={() => setAddingAccount((v) => !v)}
+                    className="inline-flex items-center gap-1 rounded border border-slate-300 dark:border-slate-700 px-2 py-1 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span>Thêm nguồn lịch</span>
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {db.calendarAccounts.map((acc) => (
+                    <label
+                      key={acc.id}
+                      className="flex items-center justify-between rounded-lg border border-slate-200 dark:border-slate-800 px-2.5 py-2 text-xs cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/50"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <div className="font-medium text-slate-800 dark:text-slate-200 truncate">{acc.label}</div>
+                        <div className="text-[11px] font-mono text-slate-500 truncate">{acc.email}</div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={acc.enabled}
+                        onChange={() =>
+                          onUpdateDb((prev) => ({
+                            ...prev,
+                            calendarAccounts: prev.calendarAccounts.map((c) =>
+                              c.id === acc.id ? { ...c, enabled: !c.enabled, lastSyncedAt: new Date().toISOString() } : c
+                            ),
+                          }))
+                        }
+                        className="rounded border-slate-300 text-blue-600"
+                      />
+                    </label>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setAddingAccount((v) => !v)}
+                    className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span>Thêm nguồn lịch khác</span>
+                  </button>
+                </>
+              )}
+
+              {addingAccount && (
+                <form
+                  onSubmit={handleAddCalendarAccount}
+                  className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 p-2.5 space-y-2"
                 >
-                  <div className="min-w-0 pr-2">
-                    <div className="font-medium text-slate-800 dark:text-slate-200 truncate">{acc.label}</div>
-                    <div className="text-[11px] font-mono text-slate-500 truncate">{acc.email}</div>
-                  </div>
+                  <select
+                    value={newAccProvider}
+                    onChange={(e) => setNewAccProvider(e.target.value as 'google' | 'outlook' | 'apple')}
+                    className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs"
+                  >
+                    <option value="google">Google Calendar</option>
+                    <option value="outlook">Outlook / Microsoft 365</option>
+                    <option value="apple">Apple iCloud Calendar</option>
+                  </select>
                   <input
-                    type="checkbox"
-                    checked={acc.enabled}
-                    onChange={() =>
-                      onUpdateDb((prev) => ({
-                        ...prev,
-                        calendarAccounts: prev.calendarAccounts.map((c) =>
-                          c.id === acc.id ? { ...c, enabled: !c.enabled, lastSyncedAt: new Date().toISOString() } : c
-                        ),
-                      }))
-                    }
-                    className="rounded border-slate-300 text-blue-600"
+                    type="text"
+                    value={newAccLabel}
+                    onChange={(e) => setNewAccLabel(e.target.value)}
+                    placeholder="Tên hiển thị (VD: Lịch Cá nhân)..."
+                    className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs"
                   />
-                </label>
-              ))}
+                  <input
+                    type="email"
+                    value={newAccEmail}
+                    onChange={(e) => setNewAccEmail(e.target.value)}
+                    placeholder="Email tài khoản lịch..."
+                    className="w-full rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs"
+                  />
+                  <div className="flex justify-end gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setAddingAccount(false)}
+                      className="rounded border border-slate-300 dark:border-slate-700 px-2 py-1 text-[11px] text-slate-600 dark:text-slate-300"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="submit"
+                      className="rounded bg-blue-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-blue-700"
+                    >
+                      Lưu lịch
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         </div>

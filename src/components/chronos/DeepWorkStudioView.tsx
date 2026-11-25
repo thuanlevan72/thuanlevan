@@ -9,7 +9,6 @@ import {
   RotateCcw,
   Shield,
   Snowflake,
-  Sparkles,
   Volume2,
   VolumeX,
   X,
@@ -24,7 +23,6 @@ import {
   FOCUS_PRESETS,
   RPG_UPGRADE_COSTS,
   activateStreakFreeze,
-  applyFocusSessionToRpg,
   upgradeRpgItem,
 } from '../../utils/chronosEngine.ts';
 import { chronosAudio } from '../../utils/chronosAudio.ts';
@@ -107,7 +105,6 @@ export const DeepWorkStudioView: React.FC<DeepWorkStudioViewProps> = ({
   const ss = String(secondsLeft % 60).padStart(2, '0');
 
   const openTasks = db.tasks.filter((t) => t.status !== 'done');
-  const currentTask = db.tasks.find((t) => t.id === selectedTaskId);
 
   const handleFinishNow = (subtractIdle = 0) => {
     const loggedMinutes = Math.max(5, Math.round(elapsedSeconds / 60) || presetMeta.focusMin);
@@ -135,29 +132,6 @@ export const DeepWorkStudioView: React.FC<DeepWorkStudioViewProps> = ({
     onUpdateDb((prev) => ({
       ...prev,
       rpg: upgradeRpgItem(prev.rpg, key),
-    }));
-  };
-
-  const handleQuickLogDemoSession = () => {
-    const mins = 25;
-    chronosAudio.playChime();
-    onUpdateDb((prev) => ({
-      ...prev,
-      rpg: applyFocusSessionToRpg(prev.rpg, mins),
-      focusLogs: [
-        {
-          id: `log-${Date.now()}`,
-          taskId: currentTask?.id,
-          taskTitle: currentTask?.title ?? 'Phiên tập trung sâu 25p',
-          preset: activePreset,
-          plannedMinutes: mins,
-          actualMinutes: mins,
-          idleSubtractedMinutes: 0,
-          crystalsEarned: Math.round(mins * 0.6),
-          completedAt: new Date().toISOString(),
-        },
-        ...prev.focusLogs,
-      ],
     }));
   };
 
@@ -512,14 +486,6 @@ export const DeepWorkStudioView: React.FC<DeepWorkStudioViewProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleQuickLogDemoSession}
-                  className="inline-flex items-center gap-1 rounded border border-slate-200 dark:border-slate-700 px-2 py-1 text-[11px] hover:bg-slate-50 dark:hover:bg-slate-800"
-                >
-                  <Sparkles className="h-3 w-3 text-amber-500" />
-                  <span>+25p Ghi nhận nhanh</span>
-                </button>
-                <button
-                  type="button"
                   disabled={db.rpg.streakFreezeActiveToday || db.rpg.streakFreezeTokens <= 0}
                   onClick={() =>
                     onUpdateDb((prev) => ({
@@ -613,31 +579,37 @@ export const DeepWorkStudioView: React.FC<DeepWorkStudioViewProps> = ({
                 </button>
               </form>
 
-              <div className="flex flex-wrap gap-1.5">
-                {db.focusShield.blockedSites.map((site) => (
-                  <span
-                    key={site}
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2 py-0.5 font-mono text-[11px] text-slate-700 dark:text-slate-300"
-                  >
-                    <span>{site}</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateDb((prev) => ({
-                          ...prev,
-                          focusShield: {
-                            ...prev.focusShield,
-                            blockedSites: prev.focusShield.blockedSites.filter((s) => s !== site),
-                          },
-                        }))
-                      }
-                      className="text-slate-400 hover:text-red-500"
+              {db.focusShield.blockedSites.length === 0 ? (
+                <p className="text-[11px] text-slate-400">
+                  Chưa có trang web gây xao nhãng nào được thêm vào danh sách chặn.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {db.focusShield.blockedSites.map((site) => (
+                    <span
+                      key={site}
+                      className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 px-2 py-0.5 font-mono text-[11px] text-slate-700 dark:text-slate-300"
                     >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
+                      <span>{site}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateDb((prev) => ({
+                            ...prev,
+                            focusShield: {
+                              ...prev.focusShield,
+                              blockedSites: prev.focusShield.blockedSites.filter((s) => s !== site),
+                            },
+                          }))
+                        }
+                        className="text-slate-400 hover:text-red-500"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
