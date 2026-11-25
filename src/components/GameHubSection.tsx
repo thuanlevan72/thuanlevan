@@ -17,6 +17,7 @@ import {
   Minimize2,
   Network,
   Sparkles,
+  Sprout,
   Zap,
 } from 'lucide-react';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
@@ -61,8 +62,14 @@ const ThanhMinhGameSection = lazyWithRetry(() =>
     default: m.ThanhMinhGameSection,
   }))
 );
+const CloudValleyGameSection = lazyWithRetry(() =>
+  import('./cloudValley/CloudValleyGameSection.tsx').then((m) => ({
+    default: m.CloudValleyGameSection,
+  }))
+);
 
 type GameId =
+  | 'cloud_valley'
   | 'xiangqi'
   | 'anomaly'
   | 'luong_cuoc_duong'
@@ -123,6 +130,16 @@ interface GameCatalogItem {
 }
 
 export const GAME_CATALOG: readonly GameCatalogItem[] = [
+  {
+    id: 'cloud-valley',
+    category: 'casual',
+    title: 'Thung Lũng Mây',
+    shortTitle: 'Thung Lũng Mây',
+    subtitle: '2.5D Cozy Farm Sim · Lai tạo thực vật, Xưởng 3 tầng, 4 mùa & Tự động hóa Tinh Linh Đất',
+    badge: '2.5D Nông Trại',
+    playable: true,
+    gameKey: 'cloud_valley',
+  },
   {
     id: 'xiangqi',
     category: 'strategy',
@@ -259,6 +276,16 @@ interface GameHubSectionProps {
 }
 
 function renderGameIcon(gameKey: GameId | undefined, isSelected: boolean) {
+  if (gameKey === 'cloud_valley') {
+    return (
+      <Sprout
+        className={`w-3.5 h-3.5 shrink-0 ${
+          isSelected ? 'text-emerald-200' : 'text-emerald-600 dark:text-emerald-400'
+        }`}
+        aria-hidden="true"
+      />
+    );
+  }
   if (gameKey === 'cat_finder') {
     return (
       <Cat
@@ -366,6 +393,16 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
   const [activeGame, setActiveGame] = useState<GameId>(() => {
     if (typeof window !== 'undefined') {
       const playParam = new URLSearchParams(window.location.search).get('play');
+      if (
+        playParam === 'cloudvalley' ||
+        playParam === 'cloud-valley' ||
+        playParam === 'cloud_valley' ||
+        playParam === 'thunglungmay' ||
+        playParam === 'thung-lung-may' ||
+        playParam === 'farm'
+      ) {
+        return 'cloud_valley';
+      }
       if (
         playParam === 'cat' ||
         playParam === 'timmeo' ||
@@ -772,7 +809,8 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
           activeGame !== 'traffic_router' &&
           activeGame !== 'cat_finder' &&
           activeGame !== 'luong_cuoc_duong' &&
-          activeGame !== 'thanh_minh' && (
+          activeGame !== 'thanh_minh' &&
+          activeGame !== 'cloud_valley' && (
           <button
             type="button"
             data-testid="hub-exit-fullscreen-btn"
@@ -801,6 +839,12 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
                 </div>
               }
             >
+              {activeGame === 'cloud_valley' && (
+                <CloudValleyGameSection
+                  isFullscreen={isFullscreen}
+                  onToggleFullscreen={toggleFullscreen}
+                />
+              )}
               {activeGame === 'xiangqi' && <XiangqiGameSection theme={theme} onToggleTheme={onToggleTheme} />}
               {activeGame === 'cat_finder' && (
                 <CatFinderGameSection

@@ -1,6 +1,6 @@
 export type ThemeMode = 'light' | 'dark';
 
-export type AppRoute = 'profile' | 'gallery' | 'cv' | 'game' | 'studio' | 'chronos';
+export type AppRoute = 'profile' | 'gallery' | 'cv' | 'game' | 'studio' | 'chronos' | 'cloud_valley';
 
 export type GalleryCategory = 'all' | 'imperial' | 'poetic' | 'portrait' | 'moments';
 
@@ -207,6 +207,14 @@ export function parseAppRoute(pathname: string, hash = ''): AppRoute {
   ) {
     return 'chronos';
   }
+  if (
+    cleanPath === '/thung-lung-may' ||
+    cleanPath === '/cloud-valley' ||
+    cleanHash === 'thung-lung-may' ||
+    cleanHash === 'cloud-valley'
+  ) {
+    return 'cloud_valley';
+  }
   return 'profile';
 }
 
@@ -216,10 +224,23 @@ export function getRoutePath(route: AppRoute): string {
   if (route === 'game') return '/game';
   if (route === 'studio') return '/studio';
   if (route === 'chronos') return '/chronos';
+  if (route === 'cloud_valley') return '/thung-lung-may';
   return '/';
 }
 
 export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
+  if (route === 'cloud_valley') {
+    return {
+      title: 'Thung Lũng Mây (Cloud Valley Homestead) — Nông Trại Lai Tạo & Tự Động Hóa',
+      description:
+        'Game quản lý nông trại Isometric 2.5D trên tầng mây: canh tác luân canh, lai tạo giống cây đột biến, xưởng thủ công 3 tầng, 4 mùa & Tinh Linh Đất.',
+      keywords:
+        'Thung Lũng Mây, Cloud Valley Homestead, game nông trại, lai tạo thực vật, tự động hóa, IndexedDB',
+      ogType: 'website',
+      ogImageAlt: 'Thung Lũng Mây — Cloud Valley Homestead',
+      path: '/thung-lung-may',
+    };
+  }
   if (route === 'chronos') {
     return {
       title: 'ChronosFlow — Hệ Điều Hành Thời Gian, Năng Lượng & AI Time-Blocking',
@@ -270,13 +291,13 @@ export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
   }
   if (route === 'game') {
     return {
-      title: 'Khu Trò Chơi 2D & 3D — Cờ Tướng, Pháo Đài & Kinh Dị',
+      title: 'Khu Trò Chơi 2D & 3D — Thung Lũng Mây, Cờ Tướng, Pháo Đài',
       description:
-        'Chơi 11 game web: Cờ Tướng AI, Pháo Đài, Tìm Mèo, Hồ Sơ Dị Biệt, Lưỡng Cước Dương 3D, Học Viện Cô Sơn 2.5D, Chuẩn OCD, Túi Mù, Ubuntu CLI & FE.',
+        'Chơi 12 game web: Thung Lũng Mây, Cờ Tướng AI, Pháo Đài, Tìm Mèo, Hồ Sơ Dị Biệt, Lưỡng Cước Dương 3D, Học Viện Cô Sơn 2.5D, Chuẩn OCD, Túi Mù & FE.',
       keywords:
-        'Game Web, Cờ Tướng AI, Thủ Thành Pháo Đài, Tìm Mèo, Lưỡng Cước Dương 3D, Thanh Minh Học Viện Cô Sơn, Hồ Sơ Dị Biệt, Sắp Xếp OCD, Tiệm Xé Túi Mù, Ubuntu CLI, Thiết Kế Kiến Trúc, Thuận Lê',
+        'Game Web, Thung Lũng Mây, Cloud Valley Homestead, Cờ Tướng AI, Thủ Thành Pháo Đài, Tìm Mèo, Lưỡng Cước Dương 3D, Thanh Minh Học Viện Cô Sơn, Hồ Sơ Dị Biệt, Sắp Xếp OCD, Tiệm Xé Túi Mù, Ubuntu CLI, Thuận Lê',
       ogType: 'website',
-      ogImageAlt: 'Khu Trò Chơi 2D & 3D gồm Cờ Tướng AI, Thủ Thành Pháo Đài, Thanh Minh: Học Viện Cô Sơn và Lưỡng Cước Dương',
+      ogImageAlt: 'Khu Trò Chơi 2D & 3D gồm Thung Lũng Mây, Cờ Tướng AI, Thủ Thành Pháo Đài và các game web',
       path: '/game',
     };
   }

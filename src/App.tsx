@@ -37,6 +37,11 @@ const ProfileLofiPlayer = lazyWithRetry(() =>
     default: m.ProfileLofiPlayer,
   }))
 );
+const CloudValleyGameSection = lazyWithRetry(() =>
+  import('./components/cloudValley/CloudValleyGameSection.tsx').then((m) => ({
+    default: m.CloudValleyGameSection,
+  }))
+);
 import { GALLERY_ARTWORKS } from './data/portfolioData.ts';
 import {
   AppRoute,
@@ -235,6 +240,22 @@ export default function App() {
     },
     [activeList]
   );
+
+  if (activeRoute === 'cloud_valley') {
+    return (
+      <LazyLoadErrorBoundary resetKey={activeRoute} label="Thung Lũng Mây">
+        <Suspense
+          fallback={
+            <div className="w-full h-[100dvh] flex items-center justify-center bg-[#FBF4E6] text-sm font-semibold text-[#5C3A21]">
+              Đang mở Thung Lũng Mây...
+            </div>
+          }
+        >
+          <CloudValleyGameSection fullViewport />
+        </Suspense>
+      </LazyLoadErrorBoundary>
+    );
+  }
 
   return (
     <div className="min-h-screen editorial-grid-bg flex flex-col">
