@@ -28,6 +28,7 @@ import {
   parseSectionKaraokeLines,
   PIANO_MAX_MIDI,
   PIANO_MIN_MIDI,
+  pickMonotonicVoiceSlot,
   PROGRESSION_PRESETS,
   quantizePitchFramesToNotes,
   reorderSongSections,
@@ -39,6 +40,7 @@ import {
   resolvePairedInstrumentsForMelody,
   resolvePianistVoicing,
   RHYTHM_STYLE_META,
+  sanitizePartSchedule,
   snapFrequencyToScaleMidi,
   snapMidiToScale,
   SONG_IDEA_TEMPLATES,
@@ -804,4 +806,49 @@ test('resolvePairedInstrumentsForBacking and resolvePairedInstrumentsForMelody s
     melodyInstrument: 'synth',
   });
 });
+
+test('pickMonotonicVoiceSlot prevents StateTimeline collisions on overlapping hits and future restarts', () => {
+  // Reuses idle voice whose lastEndTime has already elapsed
+  assert.deepEqual(
+    pickMonotonicVoiceSlot([{ lastEndTime: 1.5 }, { lastEndTime: 0.4 }], 1.0, 4),
+    { index: 1, action: 'reuse' }
+  );
+
+  // Grows pool when all existing voices overlap (e.g. fast 16th-note kicks with 0.5s envelope release)
+  assert.deepEqual(
+    pickMonotonicVoiceSlot([{ lastEndTime: 1.5 }, { lastEndTime: 1.62 }], 1.25, 4),
+    { index: 2, action: 'grow' }
+  );
+
+  // Replaces stale future-scheduled voice when pool reaches maxVoices (e.g. rapid track switch/audition restart)
+  assert.deepEqual(
+    pickMonotonicVoiceSlot(
+      [{ lastEndTime: 18.0 }, { lastEndTime: 15.2 }, { lastEndTime: 16.5 }],
+      10.1,
+      3
+    ),
+    { index: 1, action: 'replace' }
+  );
+});
+
+test('sanitizePartSchedule sorts events chronologically and clamps swing offsets within loop bounds', () => {
+  const dirty: Array<[number, string]> = [
+    [3.9999, 'late-swing'],
+    [1.5, 'mid'],
+    [-0.02, 'early'],
+    [0.5, 'second'],
+    [Number.NaN, 'invalid'],
+  ];
+  const loopCleaned = sanitizePartSchedule(dirty, 4.0, true);
+  assert.deepEqual(loopCleaned, [
+    [0, 'early'],
+    [0.5, 'second'],
+    [1.5, 'mid'],
+    [3.998, 'late-swing'],
+  ]);
+
+  const nonLoopCleaned = sanitizePartSchedule(dirty, 4.0, false);
+  assert.equal(nonLoopCleaned[3][0], 3.9999);
+});
+
 

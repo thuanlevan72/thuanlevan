@@ -31,32 +31,213 @@ import {
   midiToNoteName,
   type MoodStyleId,
   type PianistVoicing,
+  pickMonotonicVoiceSlot,
   type PitchFrame,
   resolveBeatsPerBar,
   resolveConcreteArpPattern,
   resolveMelodyPlaybackMode,
   resolvePianistVoicing,
   type RhythmStyle20Id,
+  sanitizePartSchedule,
   type SketchpadDraft,
   type SongSection,
   type TimeSignatureId,
+  type VoiceSlotState,
 } from './lyricGrooveEngine.ts';
+
+interface PitchedSlot<T extends Tone.MembraneSynth | Tone.MonoSynth> extends VoiceSlotState {
+  synth: T;
+}
+
+class SafePitchedVoicePool<T extends Tone.MembraneSynth | Tone.MonoSynth> {
+  private slots: Array<PitchedSlot<T>> = [];
+  private readonly context: Tone.BaseContext;
+  private readonly maxVoices: number;
+  private readonly factory: () => T;
+
+  constructor(context: Tone.BaseContext, maxVoices: number, factory: () => T) {
+    this.context = context;
+    this.maxVoices = maxVoices;
+    this.factory = factory;
+    this.slots.push({ synth: this.factory(), lastEndTime: -1 });
+  }
+
+  trigger(
+    note: Tone.Unit.Frequency,
+    duration: Tone.Unit.Time,
+    time: number,
+    velocity?: number
+  ): void {
+    const ctxNow = this.context.currentTime;
+    const requestedTime = Number.isFinite(time) ? time : ctxNow;
+    const safeTime = Math.max(ctxNow, requestedTime);
+    const effectiveMax = this.context.isOffline ? Math.max(this.maxVoices, 16) : this.maxVoices;
+    const choice = pickMonotonicVoiceSlot(this.slots, safeTime, effectiveMax);
+
+    let slot: PitchedSlot<T>;
+    if (choice.action === 'grow') {
+      slot = { synth: this.factory(), lastEndTime: -1 };
+      this.slots.push(slot);
+    } else if (choice.action === 'replace' && !this.context.isOffline) {
+      try {
+        this.slots[choice.index].synth.dispose();
+      } catch {
+        // Ignore disposal edge case
+      }
+      slot = { synth: this.factory(), lastEndTime: -1 };
+      this.slots[choice.index] = slot;
+    } else {
+      slot = this.slots[choice.index];
+    }
+
+    const durSec = Math.max(0.015, slot.synth.toSeconds(duration));
+    const attDecSec =
+      slot.synth.toSeconds(slot.synth.envelope.attack) +
+      slot.synth.toSeconds(slot.synth.envelope.decay);
+    const relSec = slot.synth.toSeconds(slot.synth.envelope.release);
+    const finalTime =
+      slot.lastEndTime >= 0 ? Math.max(safeTime, slot.lastEndTime + 0.003) : safeTime;
+    slot.lastEndTime = finalTime + Math.max(attDecSec, durSec + relSec) + 0.02;
+
+    try {
+      slot.synth.triggerAttackRelease(note, durSec, finalTime, velocity);
+    } catch {
+      // Never allow an edge WebAudio timing drift to crash playback
+    }
+  }
+
+  resetFuture(): void {
+    if (this.context.isOffline) return;
+    const now = this.context.currentTime;
+    for (let i = 0; i < this.slots.length; i++) {
+      if (this.slots[i].lastEndTime > now - 0.01) {
+        try {
+          this.slots[i].synth.dispose();
+        } catch {
+          // Ignore disposal edge case
+        }
+        this.slots[i] = { synth: this.factory(), lastEndTime: -1 };
+      }
+    }
+  }
+
+  dispose(): void {
+    this.slots.forEach((s) => {
+      try {
+        s.synth.dispose();
+      } catch {
+        // Ignore disposal edge case
+      }
+    });
+    this.slots = [];
+  }
+}
+
+interface NoiseSlot extends VoiceSlotState {
+  synth: Tone.NoiseSynth;
+}
+
+class SafeNoiseVoicePool {
+  private slots: NoiseSlot[] = [];
+  private readonly context: Tone.BaseContext;
+  private readonly maxVoices: number;
+  private readonly factory: () => Tone.NoiseSynth;
+
+  constructor(
+    context: Tone.BaseContext,
+    maxVoices: number,
+    factory: () => Tone.NoiseSynth
+  ) {
+    this.context = context;
+    this.maxVoices = maxVoices;
+    this.factory = factory;
+    this.slots.push({ synth: this.factory(), lastEndTime: -1 });
+  }
+
+  trigger(duration: Tone.Unit.Time, time: number, velocity?: number): void {
+    const ctxNow = this.context.currentTime;
+    const requestedTime = Number.isFinite(time) ? time : ctxNow;
+    const safeTime = Math.max(ctxNow, requestedTime);
+    const effectiveMax = this.context.isOffline ? Math.max(this.maxVoices, 16) : this.maxVoices;
+    const choice = pickMonotonicVoiceSlot(this.slots, safeTime, effectiveMax);
+
+    let slot: NoiseSlot;
+    if (choice.action === 'grow') {
+      slot = { synth: this.factory(), lastEndTime: -1 };
+      this.slots.push(slot);
+    } else if (choice.action === 'replace' && !this.context.isOffline) {
+      try {
+        this.slots[choice.index].synth.dispose();
+      } catch {
+        // Ignore disposal edge case
+      }
+      slot = { synth: this.factory(), lastEndTime: -1 };
+      this.slots[choice.index] = slot;
+    } else {
+      slot = this.slots[choice.index];
+    }
+
+    const durSec = Math.max(0.015, slot.synth.toSeconds(duration));
+    const attDecSec =
+      slot.synth.toSeconds(slot.synth.envelope.attack) +
+      slot.synth.toSeconds(slot.synth.envelope.decay);
+    const relSec = slot.synth.toSeconds(slot.synth.envelope.release);
+    const finalTime =
+      slot.lastEndTime >= 0 ? Math.max(safeTime, slot.lastEndTime + 0.003) : safeTime;
+    slot.lastEndTime = finalTime + Math.max(attDecSec, durSec + relSec) + 0.02;
+
+    try {
+      slot.synth.triggerAttackRelease(durSec, finalTime, velocity);
+    } catch {
+      // Never allow an edge WebAudio timing drift to crash playback
+    }
+  }
+
+  resetFuture(): void {
+    if (this.context.isOffline) return;
+    const now = this.context.currentTime;
+    for (let i = 0; i < this.slots.length; i++) {
+      if (this.slots[i].lastEndTime > now - 0.01) {
+        try {
+          this.slots[i].synth.dispose();
+        } catch {
+          // Ignore disposal edge case
+        }
+        this.slots[i] = { synth: this.factory(), lastEndTime: -1 };
+      }
+    }
+  }
+
+  dispose(): void {
+    this.slots.forEach((s) => {
+      try {
+        s.synth.dispose();
+      } catch {
+        // Ignore disposal edge case
+      }
+    });
+    this.slots = [];
+  }
+}
 
 interface SynthRig {
   grandPiano: GrandPianoEngine;
   acousticGuitar: AcousticGuitarEngine;
   rhodes: Tone.PolySynth;
-  bass: Tone.MonoSynth;
-  kick: Tone.MembraneSynth;
-  snare: Tone.NoiseSynth;
-  hat: Tone.NoiseSynth;
-  slap: Tone.NoiseSynth;
-  metronome: Tone.MembraneSynth;
+  bass: SafePitchedVoicePool<Tone.MonoSynth>;
+  kick: SafePitchedVoicePool<Tone.MembraneSynth>;
+  snare: SafeNoiseVoicePool;
+  hat: SafeNoiseVoicePool;
+  slap: SafeNoiseVoicePool;
+  bodyThump: SafePitchedVoicePool<Tone.MembraneSynth>;
+  bodySlap: SafeNoiseVoicePool;
+  metronome: SafePitchedVoicePool<Tone.MembraneSynth>;
   stringsPad: Tone.PolySynth;
   melodySynth: Tone.PolySynth;
   masterGain: Tone.Gain;
   fftAnalyser: Tone.Analyser | null;
   waveAnalyser: Tone.Analyser | null;
+  resetFutureVoices: () => void;
   dispose: () => void;
 }
 
@@ -109,58 +290,96 @@ function createSynthRig(
     predecodedGuitarBuffers
   );
 
-  const bass = new Tone.MonoSynth({
-    oscillator: { type: 'triangle' },
-    filter: { Q: 1.2, type: 'lowpass', rolloff: -12 },
-    envelope: { attack: 0.025, decay: 0.34, sustain: 0.45, release: 0.38 },
-    filterEnvelope: {
-      attack: 0.014,
-      decay: 0.22,
-      sustain: 0.28,
-      release: 0.3,
-      baseFrequency: 68,
-      octaves: 1.4,
-    },
-    volume: -12,
-  }).connect(masterGain);
+  const bass = new SafePitchedVoicePool(masterGain.context, 4, () =>
+    new Tone.MonoSynth({
+      context: masterGain.context,
+      oscillator: { type: 'triangle' },
+      filter: { Q: 1.2, type: 'lowpass', rolloff: -12 },
+      envelope: { attack: 0.025, decay: 0.34, sustain: 0.45, release: 0.38 },
+      filterEnvelope: {
+        attack: 0.014,
+        decay: 0.22,
+        sustain: 0.28,
+        release: 0.3,
+        baseFrequency: 68,
+        octaves: 1.4,
+      },
+      volume: -12,
+    }).connect(masterGain)
+  );
 
-  const kick = new Tone.MembraneSynth({
-    pitchDecay: 0.04,
-    octaves: 4.5,
-    oscillator: { type: 'sine' },
-    envelope: { attack: 0.002, decay: 0.28, sustain: 0.01, release: 0.25 },
-    volume: -6,
-  }).connect(masterGain);
+  const kick = new SafePitchedVoicePool(masterGain.context, 4, () =>
+    new Tone.MembraneSynth({
+      context: masterGain.context,
+      pitchDecay: 0.04,
+      octaves: 4.5,
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.002, decay: 0.28, sustain: 0.01, release: 0.25 },
+      volume: -6,
+    }).connect(masterGain)
+  );
 
   const snareFilter = new Tone.Filter(1800, 'bandpass').connect(reverb);
-  const snare = new Tone.NoiseSynth({
-    noise: { type: 'pink' },
-    envelope: { attack: 0.003, decay: 0.14, sustain: 0 },
-    volume: -14,
-  }).connect(snareFilter);
+  const snare = new SafeNoiseVoicePool(masterGain.context, 4, () =>
+    new Tone.NoiseSynth({
+      context: masterGain.context,
+      noise: { type: 'pink' },
+      envelope: { attack: 0.003, decay: 0.14, sustain: 0, release: 0.05 },
+      volume: -14,
+    }).connect(snareFilter)
+  );
 
   const hatFilter = new Tone.Filter(6800, 'highpass').connect(masterGain);
-  const hat = new Tone.NoiseSynth({
-    noise: { type: 'white' },
-    envelope: { attack: 0.001, decay: 0.045, sustain: 0 },
-    volume: -20,
-  }).connect(hatFilter);
+  const hat = new SafeNoiseVoicePool(masterGain.context, 4, () =>
+    new Tone.NoiseSynth({
+      context: masterGain.context,
+      noise: { type: 'white' },
+      envelope: { attack: 0.001, decay: 0.045, sustain: 0, release: 0.03 },
+      volume: -20,
+    }).connect(hatFilter)
+  );
 
   const slapFilter = new Tone.Filter(980, 'bandpass').connect(masterGain);
   slapFilter.Q.value = 1.6;
-  const slap = new Tone.NoiseSynth({
-    noise: { type: 'brown' },
-    envelope: { attack: 0.001, decay: 0.055, sustain: 0 },
-    volume: -10,
-  }).connect(slapFilter);
+  const slap = new SafeNoiseVoicePool(masterGain.context, 4, () =>
+    new Tone.NoiseSynth({
+      context: masterGain.context,
+      noise: { type: 'brown' },
+      envelope: { attack: 0.001, decay: 0.055, sustain: 0, release: 0.04 },
+      volume: -10,
+    }).connect(slapFilter)
+  );
 
-  const metronome = new Tone.MembraneSynth({
-    pitchDecay: 0.012,
-    octaves: 2.0,
-    oscillator: { type: 'sine' },
-    envelope: { attack: 0.001, decay: 0.055, sustain: 0, release: 0.025 },
-    volume: -12,
-  }).connect(masterGain);
+  const bodyThump = new SafePitchedVoicePool(masterGain.context, 3, () =>
+    new Tone.MembraneSynth({
+      context: masterGain.context,
+      pitchDecay: 0.04,
+      octaves: 4.5,
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.002, decay: 0.24, sustain: 0.01, release: 0.18 },
+      volume: -6,
+    }).connect(masterGain)
+  );
+
+  const bodySlap = new SafeNoiseVoicePool(masterGain.context, 3, () =>
+    new Tone.NoiseSynth({
+      context: masterGain.context,
+      noise: { type: 'brown' },
+      envelope: { attack: 0.001, decay: 0.055, sustain: 0, release: 0.04 },
+      volume: -10,
+    }).connect(slapFilter)
+  );
+
+  const metronome = new SafePitchedVoicePool(masterGain.context, 3, () =>
+    new Tone.MembraneSynth({
+      context: masterGain.context,
+      pitchDecay: 0.012,
+      octaves: 2.0,
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.001, decay: 0.055, sustain: 0, release: 0.025 },
+      volume: -12,
+    }).connect(masterGain)
+  );
 
   const stringsFilter = new Tone.Filter(1250, 'lowpass').connect(reverb);
   const stringsPad = new Tone.PolySynth(Tone.Synth, {
@@ -176,6 +395,17 @@ function createSynthRig(
     volume: -8,
   }).connect(synthFilter);
 
+  const resetFutureVoices = () => {
+    bass.resetFuture();
+    kick.resetFuture();
+    snare.resetFuture();
+    hat.resetFuture();
+    slap.resetFuture();
+    bodyThump.resetFuture();
+    bodySlap.resetFuture();
+    metronome.resetFuture();
+  };
+
   return {
     grandPiano,
     acousticGuitar,
@@ -185,12 +415,15 @@ function createSynthRig(
     snare,
     hat,
     slap,
+    bodyThump,
+    bodySlap,
     metronome,
     stringsPad,
     melodySynth,
     masterGain,
     fftAnalyser,
     waveAnalyser,
+    resetFutureVoices,
     dispose: () => {
       grandPiano.dispose();
       acousticGuitar.dispose();
@@ -203,6 +436,8 @@ function createSynthRig(
       hat.dispose();
       hatFilter.dispose();
       slap.dispose();
+      bodyThump.dispose();
+      bodySlap.dispose();
       slapFilter.dispose();
       metronome.dispose();
       stringsPad.dispose();
@@ -575,8 +810,8 @@ function triggerGrandPianoBacking(
         rightHandMidis
       );
       if (hasSlap) {
-        rig.slap.triggerAttackRelease('32n', when, step.vel);
-        rig.kick.triggerAttackRelease('G1', '32n', when, step.vel * 0.26);
+        rig.bodySlap.trigger('32n', when, step.vel);
+        rig.bodyThump.trigger('G1', '32n', when, step.vel * 0.26);
       }
       const noteDurSec = Math.max(
         0.16,
@@ -936,14 +1171,14 @@ function triggerChordWithStyle(
       sustainPedal
     );
     if (options?.addSoftBass) {
-      rig.bass.triggerAttackRelease(
+      rig.bass.trigger(
         bassNote,
         Math.min(durationSec * 0.72, 1.9),
         time,
         0.34
       );
       if (durationBeats >= 3.25) {
-        rig.bass.triggerAttackRelease(
+        rig.bass.trigger(
           bassNote,
           Math.max(0.35, secPerBeat * 1.1),
           time + secPerBeat * 2.5,
@@ -981,8 +1216,8 @@ function triggerChordWithStyle(
         activeTreble
       );
       if (hasSlap) {
-        rig.slap.triggerAttackRelease('32n', when, step.vel);
-        rig.kick.triggerAttackRelease('G1', '32n', when, step.vel * 0.3);
+        rig.bodySlap.trigger('32n', when, step.vel);
+        rig.bodyThump.trigger('G1', '32n', when, step.vel * 0.3);
       }
       const noteDurSec = Math.max(
         0.14,
@@ -1005,7 +1240,7 @@ function triggerChordWithStyle(
         });
       } else {
         if (isBassOnly) {
-          rig.bass.triggerAttackRelease(
+          rig.bass.trigger(
             noteNames[0],
             step.staccato ? Math.min(0.28, noteDurSec) : Math.min(noteDurSec, 1.4),
             when,
@@ -1170,7 +1405,7 @@ function triggerChordWithStyle(
     }
   }
 
-  rig.bass.triggerAttackRelease(
+  rig.bass.trigger(
     bassNote,
     Math.min(durationSec * 0.72, 1.6),
     time,
@@ -1250,6 +1485,9 @@ export async function auditionChord(
 export function stopProgressionAudition(): void {
   progressionTimers.forEach((id) => window.clearTimeout(id));
   progressionTimers = [];
+  if (liveRig && activeLoopParts.length === 0) {
+    liveRig.resetFutureVoices();
+  }
 }
 
 export async function auditionProgression(
@@ -1432,6 +1670,17 @@ export function stopGrooveLoop(): void {
   } catch {
     // Ignore transport reset edge cases
   }
+  if (liveRig) {
+    liveRig.resetFutureVoices();
+    try {
+      const now = liveRig.masterGain.context.currentTime;
+      liveRig.rhodes.releaseAll(now);
+      liveRig.stringsPad.releaseAll(now);
+      liveRig.melodySynth.releaseAll(now);
+    } catch {
+      // Ignore release edge cases
+    }
+  }
 }
 
 export function seekGroovePlayback(beat: number, bpm: number): void {
@@ -1443,9 +1692,10 @@ export function seekGroovePlayback(beat: number, bpm: number): void {
     if (wasStarted) {
       transport.pause();
     }
+    liveRig?.resetFutureVoices();
     transport.seconds = targetSec;
     if (wasStarted) {
-      transport.start('+0.01', targetSec);
+      transport.start('+0.03', targetSec);
     }
   } catch {
     // Ignore seek edge case
@@ -1772,6 +2022,9 @@ function schedulePatternToTransport(
     ];
   });
 
+  const loopEndSec = Math.max(0.25, totalBeats * secPerBeat);
+  const safeChordSchedule = sanitizePartSchedule(chordSchedule, loopEndSec, isLoop);
+
   const chordPart = new Tone.Part((time, item) => {
     const { ev, nextSymbol, addSoftBass } = item;
     triggerChordWithStyle(
@@ -1805,10 +2058,10 @@ function schedulePatternToTransport(
         });
       }, time);
     }
-  }, chordSchedule);
+  }, safeChordSchedule);
 
   chordPart.loop = isLoop;
-  chordPart.loopEnd = totalBeats * secPerBeat;
+  chordPart.loopEnd = loopEndSec;
   chordPart.start(0);
   activeLoopParts.push(chordPart);
 
@@ -1851,11 +2104,12 @@ function schedulePatternToTransport(
     });
 
     if (stringsSchedule.length > 0) {
+      const safeStringsSchedule = sanitizePartSchedule(stringsSchedule, loopEndSec, isLoop);
       const stringsPart = new Tone.Part((time, item) => {
         rig.stringsPad.triggerAttackRelease(item.notes, item.durSec, time, item.vel);
-      }, stringsSchedule);
+      }, safeStringsSchedule);
       stringsPart.loop = isLoop;
-      stringsPart.loopEnd = totalBeats * secPerBeat;
+      stringsPart.loopEnd = loopEndSec;
       stringsPart.start(0);
       activeLoopParts.push(stringsPart);
     }
@@ -1897,6 +2151,7 @@ function schedulePatternToTransport(
   });
 
   if (melodySchedule.length > 0) {
+    const safeMelodySchedule = sanitizePartSchedule(melodySchedule, loopEndSec, isLoop);
     const melodyPart = new Tone.Part((time, ev) => {
       triggerMelodyNote(
         rig,
@@ -1919,9 +2174,9 @@ function schedulePatternToTransport(
           });
         }, time);
       }
-    }, melodySchedule);
+    }, safeMelodySchedule);
     melodyPart.loop = isLoop;
-    melodyPart.loopEnd = totalBeats * secPerBeat;
+    melodyPart.loopEnd = loopEndSec;
     melodyPart.start(0);
     activeLoopParts.push(melodyPart);
   }
@@ -1932,16 +2187,17 @@ function schedulePatternToTransport(
     for (let beat = 0; beat < totalBeats; beat++) {
       metroEvents.push([beat * secPerBeat, { isBarAccent: beat % beatsPerBar === 0 }]);
     }
+    const safeMetroEvents = sanitizePartSchedule(metroEvents, loopEndSec, isLoop);
     const metroPart = new Tone.Part((time, ev) => {
-      rig.metronome.triggerAttackRelease(
+      rig.metronome.trigger(
         ev.isBarAccent ? 'G5' : 'C5',
         '32n',
         time,
         ev.isBarAccent ? 0.72 : 0.42
       );
-    }, metroEvents);
+    }, safeMetroEvents);
     metroPart.loop = isLoop;
-    metroPart.loopEnd = totalBeats * secPerBeat;
+    metroPart.loopEnd = loopEndSec;
     metroPart.start(0);
     activeLoopParts.push(metroPart);
   }
@@ -2063,14 +2319,15 @@ function schedulePatternToTransport(
     }
 
     if (drumEvents.length > 0) {
+      const safeDrumEvents = sanitizePartSchedule(drumEvents, loopEndSec, isLoop);
       const drumPart = new Tone.Part((time, ev) => {
-        if (ev.kick) rig.kick.triggerAttackRelease('C1', '8n', time, ev.kickVel);
-        if (ev.snare) rig.snare.triggerAttackRelease('16n', time, ev.snareVel);
-        if (ev.hat) rig.hat.triggerAttackRelease('32n', time, ev.hatVel);
-        if (ev.slap) rig.slap.triggerAttackRelease('32n', time, ev.slapVel);
-      }, drumEvents);
+        if (ev.kick) rig.kick.trigger('C1', '8n', time, ev.kickVel);
+        if (ev.snare) rig.snare.trigger('16n', time, ev.snareVel);
+        if (ev.hat) rig.hat.trigger('32n', time, ev.hatVel);
+        if (ev.slap) rig.slap.trigger('32n', time, ev.slapVel);
+      }, safeDrumEvents);
       drumPart.loop = isLoop;
-      drumPart.loopEnd = totalBeats * secPerBeat;
+      drumPart.loopEnd = loopEndSec;
       drumPart.start(0);
       activeLoopParts.push(drumPart);
     }
@@ -2105,6 +2362,7 @@ export async function startGrooveLoop(options: LoopPlaybackOptions): Promise<voi
   const transport = Tone.getTransport();
   const repeatLoop = options.repeatLoop ?? true;
 
+  rig.resetFutureVoices();
   const { totalBeats, sectionBeatSpans, chordEvents } = schedulePatternToTransport(
     rig,
     options,
@@ -2120,7 +2378,7 @@ export async function startGrooveLoop(options: LoopPlaybackOptions): Promise<voi
   );
   const startOffsetSec = startBeatOffset * secPerBeat;
   transport.seconds = startOffsetSec;
-  transport.start(undefined, startOffsetSec);
+  transport.start('+0.03', startOffsetSec);
   const startedWallMs = performance.now();
   let hasObservedStarted = transport.state === 'started';
 

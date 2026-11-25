@@ -4661,3 +4661,61 @@ export function buildProfilePlaylist(studioDrafts?: SketchpadDraft[]): Sketchpad
     });
 }
 
+export interface VoiceSlotState {
+  lastEndTime: number;
+}
+
+/**
+ * Picks a monophonic synth slot whose previous note has already finished before targetTime
+ * (or grows/replaces a stale slot) so Tone.js StateTimeline never receives out-of-order times.
+ */
+export function pickMonotonicVoiceSlot(
+  slots: readonly VoiceSlotState[],
+  targetTime: number,
+  maxVoices: number
+): { index: number; action: 'reuse' | 'grow' | 'replace' } {
+  const safeTarget = Number.isFinite(targetTime) ? targetTime : 0;
+  let bestIdx = -1;
+  let oldestEnd = Infinity;
+
+  for (let i = 0; i < slots.length; i++) {
+    const end = slots[i].lastEndTime;
+    if (end <= safeTarget - 0.002 && end < oldestEnd) {
+      oldestEnd = end;
+      bestIdx = i;
+    }
+  }
+  if (bestIdx >= 0) {
+    return { index: bestIdx, action: 'reuse' };
+  }
+  if (slots.length < Math.max(1, maxVoices)) {
+    return { index: slots.length, action: 'grow' };
+  }
+
+  let fallbackIdx = 0;
+  let minEnd = slots[0]?.lastEndTime ?? 0;
+  for (let i = 1; i < slots.length; i++) {
+    if (slots[i].lastEndTime < minEnd) {
+      minEnd = slots[i].lastEndTime;
+      fallbackIdx = i;
+    }
+  }
+  return { index: fallbackIdx, action: 'replace' };
+}
+
+/**
+ * Sorts Tone.Part schedule entries chronologically and clamps loop times inside [0, loopEndSec).
+ */
+export function sanitizePartSchedule<T>(
+  entries: ReadonlyArray<[number, T]>,
+  loopEndSec: number,
+  isLoop: boolean
+): Array<[number, T]> {
+  const maxTime = isLoop ? Math.max(0.001, loopEndSec - 0.002) : Infinity;
+  return entries
+    .filter(([t]) => Number.isFinite(t))
+    .map(([t, payload]): [number, T] => [Math.max(0, Math.min(maxTime, t)), payload])
+    .sort((a, b) => a[0] - b[0]);
+}
+
+
