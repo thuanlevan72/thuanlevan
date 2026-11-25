@@ -512,50 +512,91 @@ export class ThanhMinhAudioEngine {
     if (this.muted || !this.ctx || !this.masterGain || !this.noiseBuffer) return;
     const now = this.ctx.currentTime;
 
-    // 1. Cinematic Sub-Bass Terror Impact Boom
+    // 1. Sudden Ambush Slam + Sub-Bass Terror Drop
     const boom = this.ctx.createOscillator();
     const bg = this.ctx.createGain();
     boom.type = 'sine';
-    boom.frequency.setValueAtTime(98, now);
-    boom.frequency.exponentialRampToValueAtTime(24, now + 1.2);
-    bg.gain.setValueAtTime(0.55, now);
-    bg.gain.exponentialRampToValueAtTime(0.001, now + 1.3);
+    boom.frequency.setValueAtTime(112, now);
+    boom.frequency.exponentialRampToValueAtTime(26, now + 1.35);
+    bg.gain.setValueAtTime(0.58, now);
+    bg.gain.exponentialRampToValueAtTime(0.001, now + 1.4);
     boom.connect(bg);
     bg.connect(this.masterGain);
     boom.start(now);
-    boom.stop(now + 1.35);
+    boom.stop(now + 1.45);
 
-    // 2. Discordant Waterphone Metallic Bow Shriek
+    // 2. Rhythmic Muffled Strangulation ("Bóp cổ") Choking Gasps & Constricted Airway Bursts
+    for (const [offset, startFreq, endFreq, dur] of [
+      [0.14, 1180, 340, 0.36],
+      [0.54, 920, 260, 0.34],
+      [0.94, 680, 190, 0.32],
+    ] as const) {
+      const breathSrc = this.ctx.createBufferSource();
+      breathSrc.buffer = this.noiseBuffer;
+      const chokeBp = this.ctx.createBiquadFilter();
+      chokeBp.type = 'bandpass';
+      chokeBp.Q.setValueAtTime(4.2, now + offset);
+      chokeBp.frequency.setValueAtTime(startFreq, now + offset);
+      chokeBp.frequency.exponentialRampToValueAtTime(endFreq, now + offset + dur);
+
+      const cg = this.ctx.createGain();
+      cg.gain.setValueAtTime(0.001, now + offset);
+      cg.gain.linearRampToValueAtTime(0.32, now + offset + 0.06);
+      cg.gain.exponentialRampToValueAtTime(0.001, now + offset + dur);
+
+      breathSrc.connect(chokeBp);
+      chokeBp.connect(cg);
+      cg.connect(this.masterGain);
+      breathSrc.start(now + offset);
+      breathSrc.stop(now + offset + dur + 0.04);
+    }
+
+    // 3. Accelerating Hypoxic Heartbeat Pulses ("lub-dub") Before Blackout
+    for (const beatAt of [0.2, 0.56, 0.88, 1.18, 1.45]) {
+      const hb = this.ctx.createOscillator();
+      const hg = this.ctx.createGain();
+      hb.type = 'sine';
+      hb.frequency.setValueAtTime(52, now + beatAt);
+      hb.frequency.exponentialRampToValueAtTime(32, now + beatAt + 0.16);
+      hg.gain.setValueAtTime(0.36, now + beatAt);
+      hg.gain.exponentialRampToValueAtTime(0.001, now + beatAt + 0.18);
+      hb.connect(hg);
+      hg.connect(this.masterGain);
+      hb.start(now + beatAt);
+      hb.stop(now + beatAt + 0.2);
+    }
+
+    // 4. Discordant Detention Waterphone Metallic Bow Shriek
     for (const freq of [415, 442, 622, 880]) {
       const osc = this.ctx.createOscillator();
       const g = this.ctx.createGain();
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(freq, now + 0.05);
-      osc.frequency.linearRampToValueAtTime(freq * 1.14, now + 1.4);
+      osc.frequency.linearRampToValueAtTime(freq * 1.12, now + 1.5);
       g.gain.setValueAtTime(0.001, now);
-      g.gain.linearRampToValueAtTime(0.085, now + 0.18);
-      g.gain.exponentialRampToValueAtTime(0.001, now + 1.9);
+      g.gain.linearRampToValueAtTime(0.075, now + 0.2);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 1.95);
       osc.connect(g);
       g.connect(this.masterGain);
       osc.start(now);
-      osc.stop(now + 1.95);
+      osc.stop(now + 2.0);
     }
 
-    // 3. Killer Signature Sound (Metallic Iron Shear Snap vs Paper Rustle + Lantern Glass Shatter)
+    // 5. Fatal Snap / Iron Shear Slam at 1.48s
     const src = this.ctx.createBufferSource();
     src.buffer = this.noiseBuffer;
     const hp = this.ctx.createBiquadFilter();
     hp.type = killerKind === 'tongue_warden' ? 'bandpass' : 'highpass';
-    hp.frequency.setValueAtTime(killerKind === 'tongue_warden' ? 2400 : 3200, now + 0.55);
+    hp.frequency.setValueAtTime(killerKind === 'tongue_warden' ? 2350 : 2900, now + 1.48);
     const sg = this.ctx.createGain();
-    sg.gain.setValueAtTime(0.001, now + 0.5);
-    sg.gain.linearRampToValueAtTime(0.38, now + 0.58);
-    sg.gain.exponentialRampToValueAtTime(0.001, now + 0.95);
+    sg.gain.setValueAtTime(0.001, now + 1.45);
+    sg.gain.linearRampToValueAtTime(0.42, now + 1.5);
+    sg.gain.exponentialRampToValueAtTime(0.001, now + 1.82);
     src.connect(hp);
     hp.connect(sg);
     sg.connect(this.masterGain);
-    src.start(now + 0.5);
-    src.stop(now + 1.0);
+    src.start(now + 1.45);
+    src.stop(now + 1.85);
   }
 
   public playRealmShift(toRealm: RealmMode): void {

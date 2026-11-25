@@ -5,11 +5,16 @@
 import {
   findNearbyHotspot,
   type GhostEntity,
+  type GhostVariant,
   SCENE_HOTSPOTS,
   SCENE_META,
   type SceneId,
   type ThanhMinhState,
 } from './thanhMinhEngine.ts';
+import killPaperHatImgUrl from '../assets/images/detention_kill_paperhat_1795575727125.jpg';
+import killWardenImgUrl from '../assets/images/detention_kill_warden_1795575729219.jpg';
+import killAuditorImgUrl from '../assets/images/detention_kill_auditor_pov_1795575748938.jpg';
+import killLibrarianImgUrl from '../assets/images/detention_kill_librarian_1795575748624.jpg';
 
 const FONT_SERIF = '"Noto Serif", "Plus Jakarta Sans", serif';
 const FONT_MONO = '"JetBrains Mono", "Noto Sans", monospace';
@@ -66,8 +71,23 @@ export class ThanhMinhCanvasRenderer {
   private grainPattern: CanvasPattern | null = null;
   private paperCanvas: HTMLCanvasElement | null = null;
   private paperPattern: CanvasPattern | null = null;
+  private killPlates: Partial<Record<GhostVariant, HTMLImageElement>> = {};
 
   constructor() {
+    if (typeof Image !== 'undefined') {
+      const plateUrls: Record<GhostVariant, string> = {
+        paper_hat: killPaperHatImgUrl,
+        tongue_warden: killWardenImgUrl,
+        auditor_specter: killAuditorImgUrl,
+        librarian_wraith: killLibrarianImgUrl,
+      };
+      (Object.keys(plateUrls) as GhostVariant[]).forEach((variant) => {
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = plateUrls[variant];
+        this.killPlates[variant] = img;
+      });
+    }
     for (let i = 0; i < 64; i += 1) {
       this.rainDrops.push({
         x: Math.random() * 1400,
@@ -514,506 +534,271 @@ export class ThanhMinhCanvasRenderer {
     const p = Math.min(1, dc.timer / dc.duration);
     const cx = width * 0.5;
     const cy = height * 0.5;
-    const paperPat = this.ensurePaperTexturePattern(ctx);
 
-    // 1. Abrupt Lantern Snuff-Out, Encroaching Ink Darkness & 16mm Photochemical Impact Flash
-    const darkness = p < 0.18 ? 0.54 + p * 2.1 : p > 0.65 ? 0.96 : 0.88;
-    ctx.fillStyle = `rgba(6, 2, 3, ${Math.min(0.97, darkness)})`;
+    // 1. Base Ink Blackout & Sudden Lantern Snuff Impact
+    ctx.fillStyle = '#040102';
     ctx.fillRect(0, 0, width, height);
 
-    // Tightening radial blackness crushing inward like a snuffed oil lamp
-    const chokeRadius = Math.max(width * 0.18, width * (0.72 - p * 0.42));
-    const chokeGrad = ctx.createRadialGradient(cx, cy, chokeRadius * 0.25, cx, cy, chokeRadius);
-    chokeGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-    chokeGrad.addColorStop(0.7, 'rgba(18, 3, 5, 0.46)');
-    chokeGrad.addColorStop(1, 'rgba(2, 1, 2, 0.94)');
-    ctx.fillStyle = chokeGrad;
-    ctx.fillRect(0, 0, width, height);
+    const variantKey: GhostVariant = dc.killerVariant ?? dc.killerKind;
+    const plate = this.killPlates[variantKey] ?? this.killPlates[dc.killerKind];
+    const plateReady = Boolean(plate && plate.complete && plate.naturalWidth > 0);
 
-    if (p < 0.16) {
-      // Negative silver-halide photo flash + blood shockwave
-      const strobe = Math.sin(timeSec * 86) > 0 ? 0.62 : 0.26;
-      ctx.fillStyle = `rgba(185, 22, 26, ${(0.16 - p) * 3.1})`;
-      ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = `rgba(231, 229, 228, ${(0.16 - p) * strobe * 1.65})`;
-      ctx.fillRect(0, 0, width, height);
-    }
+    // Rhythmic first-person strangulation ("bóp cổ") squeeze waves (4 desperate choking spasms)
+    const rawBeat = p > 0.08 && p < 0.68 ? Math.sin((p - 0.08) * Math.PI * 6.8) : 0;
+    const squeeze = Math.pow(Math.max(0, rawBeat), 1.8);
+    const hypoxia = Math.max(0, Math.min(1, (p - 0.08) / 0.56));
+    const plateFadeOut = p > 0.56 ? Math.max(0, 1 - (p - 0.56) / 0.16) : 1;
 
-    // 2. Realistic Detention Chiaroscuro Monster Lunge + Double-Exposure Ink Ghosting
-    if (p < 0.78) {
-      const surge = p < 0.34 ? p / 0.34 : 1;
-      const lungeScale = 0.64 + Math.pow(surge, 0.68) * 0.84 + Math.max(0, p - 0.34) * 0.22;
-      const shakeDecay = Math.max(0.18, 1 - p * 1.1);
-      const jitterX = Math.sin(timeSec * 62) * shakeDecay * 12;
-      const jitterY = Math.cos(timeSec * 53) * shakeDecay * 9;
-      const fadeOut = p > 0.56 ? Math.max(0, (0.78 - p) / 0.22) : 1;
+    // Camera violent struggle & neck-snap recoil
+    const ambushRecoilY = p < 0.12 ? (1 - p / 0.12) * 24 : 0;
+    const snapJolt = p > 0.52 && p < 0.66 ? Math.sin((p - 0.52) * Math.PI * 14) * 0.055 : 0;
+    const struggleJitterX =
+      (Math.sin(timeSec * 58) * (4 + squeeze * 11) + Math.cos(timeSec * 31) * 3) * (1 - hypoxia * 0.35);
+    const struggleJitterY =
+      (Math.cos(timeSec * 49) * (3 + squeeze * 13) + ambushRecoilY) * (1 - hypoxia * 0.25);
+    const struggleTilt = Math.sin(timeSec * 19) * (0.018 + squeeze * 0.028) + snapJolt;
 
-      const drawHorrorEye = (ex: number, ey: number, rx: number, ry: number, tilt: number, crimsonGlow = 1) => {
+    // 2. Photorealistic Detention Strangulation Plate + Dynamic Zoom & Chromatic Aberration
+    if (p < 0.72) {
+      const surge = p < 0.28 ? p / 0.28 : 1;
+      const zoom = 1.04 + Math.pow(surge, 0.72) * 0.22 + p * 0.22 + squeeze * 0.065;
+
+      ctx.save();
+      ctx.globalAlpha = plateFadeOut;
+      ctx.translate(cx + struggleJitterX, cy + struggleJitterY);
+      ctx.rotate(struggleTilt);
+      ctx.scale(zoom, zoom);
+
+      if (plateReady && plate) {
+        const imgAspect = plate.naturalWidth / plate.naturalHeight;
+        const viewAspect = width / height;
+        let drawW = width;
+        let drawH = height;
+        if (imgAspect > viewAspect) {
+          drawH = height;
+          drawW = height * imgAspect;
+        } else {
+          drawW = width;
+          drawH = width / imgAspect;
+        }
+
+        // Main sharp 16mm photographic/charcoal chiaroscuro plate
+        ctx.drawImage(plate, -drawW * 0.5, -drawH * 0.5, drawW, drawH);
+
+        // Chromatic red terror double-exposure shudder during choke spasms
+        if (squeeze > 0.18 || p < 0.16) {
+          ctx.save();
+          ctx.globalAlpha = plateFadeOut * (p < 0.16 ? 0.32 : squeeze * 0.26);
+          ctx.globalCompositeOperation = 'screen';
+          ctx.drawImage(
+            plate,
+            -drawW * 0.5 + Math.sin(timeSec * 72) * 14,
+            -drawH * 0.5 - 4,
+            drawW,
+            drawH
+          );
+          ctx.fillStyle = 'rgba(153, 27, 27, 0.38)';
+          ctx.fillRect(-width, -height, width * 2, height * 2);
+          ctx.restore();
+        }
+      } else {
+        // Fallback dark charcoal silhouette while image decodes
+        const fbGrad = ctx.createRadialGradient(0, -30, 12, 0, 0, width * 0.45);
+        fbGrad.addColorStop(0, '#2a2224');
+        fbGrad.addColorStop(1, '#050203');
+        ctx.fillStyle = fbGrad;
+        ctx.fillRect(-width, -height, width * 2, height * 2);
+      }
+
+      // Live killer-specific anatomical/weapon overlay anchored to scene space
+      if (dc.killerVariant === 'tongue_warden') {
+        // Massive cold iron shears violently snapping across the center at p = 0.46
+        const snapAngle = p < 0.46 ? Math.max(0.015, 0.62 - (p / 0.46) * 0.605) : 0.015;
         ctx.save();
-        ctx.translate(ex, ey);
-        ctx.rotate(tilt);
-
-        // Deep orbital bone cavity shadow
-        const socketGrad = ctx.createRadialGradient(0, 0, rx * 0.2, 0, 0, ry * 1.45);
-        socketGrad.addColorStop(0, 'rgba(3, 2, 3, 0.98)');
-        socketGrad.addColorStop(0.62, 'rgba(10, 4, 6, 0.85)');
-        socketGrad.addColorStop(1, 'rgba(10, 4, 6, 0)');
-        ctx.fillStyle = socketGrad;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, rx * 1.38, ry * 1.42, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Bloodshot pale sclera peeking inside sunken cavity
-        ctx.fillStyle = '#c8c1b8';
-        ctx.beginPath();
-        ctx.ellipse(0, 0, rx * 0.82, ry * 0.58, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Fine red scleral capillaries
-        ctx.strokeStyle = `rgba(153, 27, 27, ${0.75 * crimsonGlow})`;
-        ctx.lineWidth = 1.1;
-        for (const veinAngle of [-2.6, -1.9, 0.4, 2.2]) {
+        ctx.translate(0, 32);
+        ctx.globalAlpha = plateFadeOut * 0.92;
+        for (const dir of [-1, 1] as const) {
+          ctx.save();
+          ctx.rotate(dir * snapAngle);
+          const bladeGrad = ctx.createLinearGradient(0, -20, dir * 240, 18);
+          bladeGrad.addColorStop(0, '#1e293b');
+          bladeGrad.addColorStop(0.55, '#94a3b8');
+          bladeGrad.addColorStop(0.9, '#475569');
+          bladeGrad.addColorStop(1, '#450a0a');
+          ctx.fillStyle = bladeGrad;
           ctx.beginPath();
-          ctx.moveTo(Math.cos(veinAngle) * rx * 0.78, Math.sin(veinAngle) * ry * 0.5);
-          ctx.lineTo(Math.cos(veinAngle) * rx * 0.34, Math.sin(veinAngle) * ry * 0.25);
+          ctx.moveTo(-dir * 16, -6);
+          ctx.lineTo(dir * 240, -28);
+          ctx.lineTo(dir * 260, 6);
+          ctx.lineTo(0, 20);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = 'rgba(241, 245, 249, 0.55)';
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(0, -3);
+          ctx.lineTo(dir * 238, -25);
           ctx.stroke();
+          ctx.restore();
         }
-
-        // Pinpoint dilated crimson/black iris + stark wet corneal specular dot
-        ctx.fillStyle = crimsonGlow > 0.5 ? '#7f1d1d' : '#18181b';
-        ctx.beginPath();
-        ctx.arc(0, 0, Math.min(rx, ry) * 0.34, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#050203';
-        ctx.beginPath();
-        ctx.arc(0, 0, Math.min(rx, ry) * 0.16, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#fef2f2';
-        ctx.beginPath();
-        ctx.arc(-1.8, -1.8, 1.6, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Darkened lower eyelid crease & weeping dried-blood tear
-        ctx.strokeStyle = 'rgba(127, 29, 29, 0.9)';
-        ctx.lineWidth = 2.6;
-        ctx.beginPath();
-        ctx.moveTo(0, ry * 0.55);
-        ctx.quadraticCurveTo(2, ry * 1.4, -1, ry * 2.35);
-        ctx.stroke();
         ctx.restore();
-      };
-
-      const drawMonsterFace = (ghostPass: boolean, alpha: number) => {
-        ctx.save();
-        ctx.globalAlpha = alpha * fadeOut;
-        ctx.translate(
-          cx + jitterX + (ghostPass ? Math.sin(timeSec * 37) * 16 : 0),
-          cy + 18 + jitterY + (ghostPass ? Math.cos(timeSec * 31) * 9 : 0)
-        );
-        ctx.scale(lungeScale, lungeScale);
-        if (ghostPass) {
-          ctx.rotate(Math.sin(timeSec * 29) * 0.048);
-        }
-
-        // Shredded funeral shroud & tattered rice-paper collage shoulders
-        const shroudGrad = ctx.createLinearGradient(0, -86, 0, 235);
-        shroudGrad.addColorStop(0, ghostPass ? 'rgba(140, 14, 18, 0.52)' : '#12090b');
-        shroudGrad.addColorStop(1, '#030102');
-        ctx.fillStyle = shroudGrad;
+      } else if (dc.killerVariant === 'auditor_specter') {
+        // Pulsing bruised-crimson megaphone distortion waves
+        const wavePhase = (timeSec * 3.1) % 1;
+        ctx.strokeStyle = `rgba(185, 28, 28, ${(1 - wavePhase) * 0.48 * plateFadeOut})`;
+        ctx.lineWidth = 3;
         ctx.beginPath();
-        ctx.moveTo(-162, 235);
-        ctx.quadraticCurveTo(-136, 8, -48, -48);
-        ctx.lineTo(48, -48);
-        ctx.quadraticCurveTo(136, 8, 162, 235);
+        ctx.arc(-cx * 0.14, 24, 48 + wavePhase * 220, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (dc.killerVariant === 'librarian_wraith') {
+        // Drifting glowing embers & burnt poetry ash rising past the lens
+        for (let e = 0; e < 18; e += 1) {
+          const ep = (timeSec * 1.4 + e * 0.09) % 1;
+          const ex = Math.sin(e * 2.3 + timeSec * 3.8) * (width * 0.34);
+          const ey = height * 0.46 - ep * height * 0.92;
+          ctx.fillStyle =
+            e % 3 === 0
+              ? `rgba(251, 146, 60, ${(1 - ep) * 0.85 * plateFadeOut})`
+              : `rgba(220, 38, 38, ${(1 - ep) * 0.65 * plateFadeOut})`;
+          ctx.fillRect(ex - 1.5, ey - 1.5, 3.2, 3.2);
+        }
+      }
+
+      ctx.restore();
+
+      // 3. LIVE Animated Foreground Strangulation Grip ("Bóp cổ") Clamping Around Throat
+      // Two dark shadowed anatomical hands lunge from bottom corners and visibly constrict inward on every squeeze pulse
+      const gripAlpha = Math.min(0.92, p * 5.2) * plateFadeOut;
+      const clampX = 28 + squeeze * 54 + hypoxia * 26;
+      const clampY = squeeze * -20;
+      ctx.save();
+      ctx.globalAlpha = gripAlpha;
+      for (const side of [-1, 1] as const) {
+        const palmX = side === -1 ? -40 + clampX : width + 40 - clampX;
+        const palmY = height * 0.86 + clampY;
+
+        // Forearm & wrist thrusting up from viewer's lower sides
+        const armGrad = ctx.createLinearGradient(
+          palmX - side * 120,
+          height + 40,
+          palmX + side * 70,
+          palmY - 70
+        );
+        armGrad.addColorStop(0, 'rgba(3, 1, 2, 0.98)');
+        armGrad.addColorStop(0.65, 'rgba(24, 18, 20, 0.92)');
+        armGrad.addColorStop(1, 'rgba(58, 49, 46, 0.72)');
+        ctx.fillStyle = armGrad;
+        ctx.beginPath();
+        ctx.moveTo(palmX - side * 130, height + 40);
+        ctx.lineTo(palmX - side * 35, palmY - 25);
+        ctx.quadraticCurveTo(palmX + side * 22, palmY - 62, palmX + side * 48, palmY - 22);
+        ctx.lineTo(palmX + side * 15, height + 40);
         ctx.closePath();
         ctx.fill();
-        if (paperPat && !ghostPass) {
-          ctx.save();
-          ctx.globalAlpha *= 0.65;
-          ctx.fillStyle = paperPat;
-          ctx.fill();
-          ctx.restore();
-        }
 
-        if (dc.killerKind === 'paper_hat' && dc.killerVariant !== 'librarian_wraith') {
-          // Towering stained parchment dunce cap with central crease & blood characters
-          const hatGrad = ctx.createLinearGradient(-56, -298, 58, -54);
-          hatGrad.addColorStop(0, ghostPass ? '#7f1d1d' : '#b8b0a2');
-          hatGrad.addColorStop(0.55, ghostPass ? '#450a0a' : '#7c736a');
-          hatGrad.addColorStop(1, '#26211e');
-          ctx.fillStyle = hatGrad;
-          ctx.beginPath();
-          ctx.moveTo(-78, -54);
-          ctx.lineTo(-9, -298);
-          ctx.lineTo(7, -290);
-          ctx.lineTo(76, -54);
-          ctx.closePath();
-          ctx.fill();
-          if (paperPat && !ghostPass) {
-            ctx.fillStyle = paperPat;
-            ctx.fill();
-          }
+        // Curled squeezing thumb & 4 articulated fingers wrapping inward toward center throat
+        for (let f = 0; f < 5; f += 1) {
+          const isThumb = f === 0;
+          const baseAng = isThumb ? -0.15 : -0.82 + f * 0.22;
+          const reach = isThumb ? 96 : 122 - Math.abs(f - 2) * 14;
+          const startX = palmX + side * (isThumb ? 38 : 16 + f * 4);
+          const startY = palmY + (isThumb ? -8 : -46 + f * 18);
+          const knuckleX = startX + side * Math.cos(baseAng) * (reach * 0.56 + squeeze * 18);
+          const knuckleY = startY + Math.sin(baseAng) * (reach * 0.42) - squeeze * 8;
+          const tipX = knuckleX + side * (isThumb ? 34 : 46 + squeeze * 22);
+          const tipY = knuckleY + (isThumb ? -14 : 18 + f * 4);
 
-          // Vertical crease + tattered paper prayer ribbons whipping in wind
-          ctx.strokeStyle = 'rgba(18, 10, 8, 0.65)';
-          ctx.lineWidth = 2.2;
-          ctx.beginPath();
-          ctx.moveTo(-3, -290);
-          ctx.lineTo(-9, -55);
-          ctx.stroke();
-
-          for (const stripX of [-62, 54]) {
-            const whip = Math.sin(timeSec * 21 + stripX) * 16;
-            ctx.fillStyle = 'rgba(214, 211, 209, 0.78)';
-            ctx.beginPath();
-            ctx.moveTo(stripX, -58);
-            ctx.lineTo(stripX + whip - 8, 22);
-            ctx.lineTo(stripX + whip + 7, 15);
-            ctx.closePath();
-            ctx.fill();
-          }
-
-          if (!ghostPass) {
-            ctx.save();
-            ctx.fillStyle = 'rgba(127, 29, 29, 0.94)';
-            ctx.font = `700 24px ${FONT_SERIF}`;
-            ctx.textAlign = 'center';
-            ctx.fillText('TỘI', -2, -172);
-            ctx.fillText('NHÂN', 2, -138);
-            ctx.restore();
-          }
-
-          // Chiaroscuro gaunt decayed skull with hollowed zygomatic cheeks
-          const skullGrad = ctx.createRadialGradient(-10, -34, 8, 0, -10, 88);
-          skullGrad.addColorStop(0, ghostPass ? '#991b1b' : '#c2bbb0');
-          skullGrad.addColorStop(0.55, ghostPass ? '#450a0a' : '#6b645e');
-          skullGrad.addColorStop(1, '#191517');
-          ctx.fillStyle = skullGrad;
-          ctx.beginPath();
-          ctx.moveTo(-56, -58);
-          ctx.quadraticCurveTo(-66, -10, -46, 38);
-          ctx.quadraticCurveTo(0, 74, 46, 38);
-          ctx.quadraticCurveTo(66, -10, 56, -58);
-          ctx.closePath();
-          ctx.fill();
-
-          // Zygomatic hollow shadows & cracked parchment lines
-          ctx.fillStyle = 'rgba(10, 5, 7, 0.62)';
-          ctx.beginPath();
-          ctx.ellipse(-36, 4, 13, 22, 0.32, 0, Math.PI * 2);
-          ctx.ellipse(36, 4, 13, 22, -0.32, 0, Math.PI * 2);
-          ctx.fill();
-
-          drawHorrorEye(-24, -25, 14, 16, 0.14);
-          drawHorrorEye(24, -25, 14, 16, -0.14);
-
-          // Unhinged screaming jaw + upper/lower jagged teeth + wet coiling crimson tongue
-          ctx.fillStyle = '#050203';
-          ctx.beginPath();
-          ctx.ellipse(0, 32, 24, 38, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          if (!ghostPass) {
-            ctx.fillStyle = '#d6cfc2';
-            for (let t = -3; t <= 3; t += 1) {
-              ctx.fillRect(t * 6.2 - 2.2, -4 + Math.abs(t) * 1.4, 4.4, 8);
-              ctx.fillRect(t * 6.0 - 2.1, 60 - Math.abs(t) * 1.2, 4.2, 7.5);
-            }
-          }
-
-          const tongueExtend = Math.min(1.12, p * 2.7);
-          const sway = Math.sin(timeSec * 17) * 34;
-          ctx.strokeStyle = '#5c0a0e';
-          ctx.lineWidth = 28;
+          ctx.strokeStyle = 'rgba(10, 6, 8, 0.95)';
           ctx.lineCap = 'round';
+          ctx.lineWidth = isThumb ? 22 : 17;
           ctx.beginPath();
-          ctx.moveTo(0, 28);
-          ctx.bezierCurveTo(-62 * tongueExtend, 82, 74 * tongueExtend, 138, sway, 206 * tongueExtend);
-          ctx.stroke();
-          ctx.strokeStyle = '#991b1b';
-          ctx.lineWidth = 17;
-          ctx.stroke();
-          ctx.strokeStyle = 'rgba(248, 113, 113, 0.48)';
-          ctx.lineWidth = 4;
-          ctx.stroke();
-        } else if (dc.killerVariant === 'auditor_specter') {
-          // Ác Linh Tự Vệ — Trương Vệ Quốc: violently snapped 60° neck, waterlogged bruised skull, cracked megaphone
-          ctx.save();
-          ctx.rotate(0.34 + Math.sin(timeSec * 21) * 0.045);
-
-          const guardGrad = ctx.createRadialGradient(-8, -28, 8, 0, -18, 90);
-          guardGrad.addColorStop(0, ghostPass ? '#991b1b' : '#a1a8b3');
-          guardGrad.addColorStop(0.58, ghostPass ? '#450a0a' : '#4b5563');
-          guardGrad.addColorStop(1, '#111827');
-          ctx.fillStyle = guardGrad;
-          ctx.beginPath();
-          ctx.ellipse(0, -24, 56, 70, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Livor-mortis waterlogged cheek bruises
-          ctx.fillStyle = 'rgba(30, 27, 46, 0.55)';
-          ctx.beginPath();
-          ctx.ellipse(-30, 8, 16, 12, 0.2, 0, Math.PI * 2);
-          ctx.ellipse(28, 12, 15, 11, -0.2, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Red Guard peaked cloth cap with tarnished crimson star
-          ctx.fillStyle = '#1f2937';
-          ctx.beginPath();
-          ctx.moveTo(-60, -56);
-          ctx.quadraticCurveTo(0, -114, 60, -56);
-          ctx.lineTo(50, -40);
-          ctx.lineTo(-50, -40);
-          ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = '#7f1d1d';
-          ctx.beginPath();
-          ctx.arc(0, -68, 7.5, 0, Math.PI * 2);
-          ctx.fill();
-
-          drawHorrorEye(-22, -26, 13, 14, -0.1);
-          drawHorrorEye(22, -26, 13, 14, 0.1);
-
-          // Fused dented tin megaphone screaming crimson acoustic distortion waves
-          const megaPulse = 1 + Math.sin(timeSec * 30) * 0.085;
-          ctx.save();
-          ctx.translate(0, 34);
-          ctx.scale(megaPulse, megaPulse);
-          const megaGrad = ctx.createLinearGradient(-45, 0, 55, 40);
-          megaGrad.addColorStop(0, '#475569');
-          megaGrad.addColorStop(0.5, '#334155');
-          megaGrad.addColorStop(1, '#1e293b');
-          ctx.fillStyle = megaGrad;
-          ctx.beginPath();
-          ctx.moveTo(-24, -16);
-          ctx.lineTo(24, -16);
-          ctx.lineTo(72, 46);
-          ctx.lineTo(-72, 46);
-          ctx.closePath();
-          ctx.fill();
-          ctx.fillStyle = '#070406';
-          ctx.beginPath();
-          ctx.ellipse(0, 46, 70, 19, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Torn red-ink propaganda slips spilling out of horn
-          ctx.fillStyle = '#d6d3d1';
-          ctx.fillRect(-30, 22, 18, 28);
-          ctx.fillRect(10, 20, 20, 30);
-          if (!ghostPass) {
-            const wavePhase = (timeSec * 2.8) % 1;
-            ctx.strokeStyle = `rgba(220, 38, 38, ${(1 - wavePhase) * 0.72})`;
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.ellipse(0, 48, 74 + wavePhase * 85, 22 + wavePhase * 28, 0, 0, Math.PI * 2);
-            ctx.stroke();
-          }
-          ctx.restore();
-          ctx.restore();
-        } else if (dc.killerVariant === 'librarian_wraith') {
-          // Thủ Thư Đốt Sách: shattered round spectacles, charred ash cracks, embers pouring from screaming mouth
-          const libGrad = ctx.createRadialGradient(-8, -28, 8, 0, -14, 88);
-          libGrad.addColorStop(0, ghostPass ? '#991b1b' : '#b8b0a0');
-          libGrad.addColorStop(0.58, ghostPass ? '#450a0a' : '#4a433d');
-          libGrad.addColorStop(1, '#141110');
-          ctx.fillStyle = libGrad;
-          ctx.beginPath();
-          ctx.ellipse(0, -22, 54, 72, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          drawHorrorEye(-22, -28, 13, 15, 0.08);
-          drawHorrorEye(22, -28, 13, 15, -0.08);
-
-          // Shattered circular horn-rimmed spectacles
-          ctx.strokeStyle = '#1c1917';
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.arc(-22, -28, 19, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.arc(22, -28, 19, 0.3, Math.PI * 1.85);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(-3, -28);
-          ctx.lineTo(3, -28);
-          ctx.stroke();
-          // Spiderweb glass crack inside left lens
-          ctx.strokeStyle = 'rgba(241, 245, 249, 0.65)';
-          ctx.lineWidth = 1.1;
-          ctx.beginPath();
-          ctx.moveTo(-34, -40);
-          ctx.lineTo(-15, -20);
-          ctx.moveTo(-12, -38);
-          ctx.lineTo(-28, -16);
+          ctx.moveTo(startX, startY);
+          ctx.quadraticCurveTo(knuckleX, knuckleY, tipX, tipY);
           ctx.stroke();
 
-          // Unhinged screaming mouth pouring glowing embers & charred poetry shreds
-          ctx.fillStyle = '#070303';
+          // Faint corpse-pale rim shadow on upper knuckle ridge
+          ctx.strokeStyle = 'rgba(168, 162, 158, 0.22)';
+          ctx.lineWidth = 3.2;
           ctx.beginPath();
-          ctx.ellipse(0, 28, 22, 34, 0, 0, Math.PI * 2);
-          ctx.fill();
-          if (!ghostPass) {
-            for (let e = 0; e < 14; e += 1) {
-              const ep = (timeSec * 1.8 + e * 0.13) % 1;
-              const ex = Math.sin(e * 2.1 + timeSec * 5) * (12 + ep * 42);
-              const ey = 28 + ep * 125;
-              ctx.fillStyle = e % 2 === 0 ? `rgba(249, 115, 22, ${1 - ep})` : `rgba(220, 38, 38, ${1 - ep})`;
-              ctx.fillRect(ex - 2, ey - 2, 4.5, 4.5);
-            }
-          }
-        } else {
-          // Quỷ Sai Cắt Lưỡi: iron shackle collar, bleeding blindfold gashes, giant notched iron shears snapping shut
-          const hoodGrad = ctx.createRadialGradient(0, -32, 10, 0, -24, 90);
-          hoodGrad.addColorStop(0, ghostPass ? '#991b1b' : '#9499a0');
-          hoodGrad.addColorStop(0.58, ghostPass ? '#3b0709' : '#4a4e54');
-          hoodGrad.addColorStop(1, '#100e12');
-          ctx.fillStyle = hoodGrad;
-          ctx.beginPath();
-          ctx.ellipse(0, -34, 58, 76, 0, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Soaked black execution blindfold + weeping blood-tear gashes + staring slits
-          ctx.fillStyle = '#090608';
-          ctx.fillRect(-56, -58, 112, 24);
-          for (const side of [-1, 1] as const) {
-            ctx.fillStyle = '#991b1b';
-            ctx.fillRect(side * 24 - 3, -44, 6.5, 62);
-            drawHorrorEye(side * 24, -46, 10, 10, side * 0.1);
-          }
-
-          // Heavy rusted shackle collar & hanging chain links
-          ctx.strokeStyle = '#574238';
-          ctx.lineWidth = 8;
-          ctx.beginPath();
-          ctx.moveTo(-78, 44);
-          ctx.quadraticCurveTo(0, 92, 78, 44);
-          ctx.stroke();
-          ctx.strokeStyle = '#856555';
-          ctx.lineWidth = 2;
-          ctx.setLineDash([7, 5]);
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          // Massive notched rusted iron scissor blades violently slamming shut at p = 0.36
-          const snapAngle = p < 0.36 ? Math.max(0.02, 0.58 - (p / 0.36) * 0.56) : 0.02;
-          for (const dir of [-1, 1] as const) {
-            ctx.save();
-            ctx.translate(0, 50);
-            ctx.rotate(dir * snapAngle);
-            const bladeGrad = ctx.createLinearGradient(0, -20, dir * 208, 18);
-            bladeGrad.addColorStop(0, '#334155');
-            bladeGrad.addColorStop(0.52, '#94a3b8');
-            bladeGrad.addColorStop(0.84, '#64748b');
-            bladeGrad.addColorStop(1, '#7f1d1d');
-            ctx.fillStyle = bladeGrad;
-            ctx.beginPath();
-            ctx.moveTo(-dir * 14, -5);
-            ctx.lineTo(dir * 208, -26);
-            ctx.lineTo(dir * 226, 6);
-            ctx.lineTo(0, 19);
-            ctx.closePath();
-            ctx.fill();
-
-            // Cold steel bevel highlight & blood-stained edge
-            ctx.strokeStyle = 'rgba(241, 245, 249, 0.68)';
-            ctx.lineWidth = 1.8;
-            ctx.beginPath();
-            ctx.moveTo(0, -2);
-            ctx.lineTo(dir * 206, -24);
-            ctx.stroke();
-            ctx.restore();
-          }
-          // Heavy central shear pivot bolt
-          ctx.fillStyle = '#1e293b';
-          ctx.beginPath();
-          ctx.arc(0, 52, 8, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = '#94a3b8';
-          ctx.lineWidth = 1.5;
+          ctx.moveTo(startX, startY - 4);
+          ctx.lineTo(knuckleX, knuckleY - 4);
           ctx.stroke();
         }
+      }
+      ctx.restore();
 
-        // Dense clumping wet black hair strands whipping across forehead & jawline
-        for (let h = -6; h <= 6; h += 1) {
-          const sx = h * 11.5;
-          const hairWave = Math.sin(timeSec * 23 + h * 1.3) * 19;
-          ctx.strokeStyle = ghostPass ? 'rgba(69, 10, 10, 0.45)' : h % 2 === 0 ? 'rgba(5, 4, 6, 0.92)' : 'rgba(20, 14, 16, 0.72)';
-          ctx.lineWidth = h % 3 === 0 ? 4.2 : 2.1;
+      // 4. Hypoxic Strangulation Tunnel Vision & Throbbing Blood-Pressure Vignette
+      const clearRadius = Math.max(
+        width * 0.14,
+        width * (0.56 - hypoxia * 0.34 - squeeze * 0.08)
+      );
+      const hypoxiaGrad = ctx.createRadialGradient(
+        cx,
+        cy - 18,
+        clearRadius * 0.35,
+        cx,
+        cy,
+        clearRadius + 165
+      );
+      hypoxiaGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      hypoxiaGrad.addColorStop(0.55, `rgba(69, 8, 12, ${0.28 + squeeze * 0.36 + hypoxia * 0.25})`);
+      hypoxiaGrad.addColorStop(1, `rgba(2, 1, 2, ${0.86 + hypoxia * 0.12})`);
+      ctx.fillStyle = hypoxiaGrad;
+      ctx.fillRect(0, 0, width, height);
+
+      // Subtle throbbing ocular capillaries around peripheral vision during choke
+      if (squeeze > 0.12 || hypoxia > 0.25) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(0.55, squeeze * 0.45 + hypoxia * 0.25) * plateFadeOut;
+        ctx.strokeStyle = 'rgba(127, 29, 29, 0.72)';
+        ctx.lineWidth = 1.4;
+        for (let v = 0; v < 12; v += 1) {
+          const ang = (v * Math.PI * 2) / 12 + 0.15;
+          const rStart = width * 0.56;
+          const rEnd = rStart - (85 + squeeze * 55 + hypoxia * 40);
           ctx.beginPath();
-          ctx.moveTo(sx, -82);
-          ctx.quadraticCurveTo(sx + hairWave * 0.45, -18, sx + hairWave, 64);
+          ctx.moveTo(cx + Math.cos(ang) * rStart, cy + Math.sin(ang) * rStart);
+          ctx.quadraticCurveTo(
+            cx + Math.cos(ang + 0.08) * ((rStart + rEnd) * 0.5),
+            cy + Math.sin(ang + 0.08) * ((rStart + rEnd) * 0.5),
+            cx + Math.cos(ang - 0.04) * rEnd,
+            cy + Math.sin(ang - 0.04) * rEnd
+          );
           ctx.stroke();
         }
-
         ctx.restore();
-      };
-
-      // Chromatic red double-exposure afterimage + sharp sculpted foreground horror
-      drawMonsterFace(true, 0.42);
-      drawMonsterFace(false, 0.97);
-
-      // Jointed anatomical skeletal hands slamming & dragging down left/right lens edges
-      const clawReach = Math.min(1, p * 2.4) * fadeOut;
-      const dragDown = Math.max(0, p - 0.25) * 48;
-      if (clawReach > 0.05) {
-        for (const side of [-1, 1] as const) {
-          const baseX = side === -1 ? -18 + clawReach * 66 : width + 18 - clawReach * 66;
-          const handY = height * 0.54 + dragDown + Math.sin(timeSec * 24 + side) * 5;
-          ctx.save();
-          ctx.globalAlpha = 0.88 * fadeOut;
-          ctx.lineCap = 'round';
-          for (let f = -2; f <= 2; f += 1) {
-            const fy = handY + f * 21;
-            const k1x = baseX - side * 12;
-            const k1y = fy - 4;
-            const k2x = baseX + side * 18;
-            const k2y = fy - 11 + f * 2;
-            const tipX = baseX + side * 38;
-            const tipY = fy + 6 + f * 3;
-
-            // Pale gaunt phalanges
-            ctx.strokeStyle = '#6b7280';
-            ctx.lineWidth = 6.2;
-            ctx.beginPath();
-            ctx.moveTo(baseX - side * 48, fy + 4);
-            ctx.lineTo(k1x, k1y);
-            ctx.lineTo(k2x, k2y);
-            ctx.lineTo(tipX, tipY);
-            ctx.stroke();
-
-            // Knuckle shadow accent
-            ctx.fillStyle = '#27272a';
-            ctx.beginPath();
-            ctx.arc(k2x, k2y, 3.2, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Bloodstained jagged nail tip + trailing scratch streak
-            ctx.fillStyle = '#991b1b';
-            ctx.beginPath();
-            ctx.ellipse(tipX + side * 2, tipY + 1, 4.2, 2.4, side * 0.35, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(153, 27, 27, 0.52)';
-            ctx.lineWidth = 1.6;
-            ctx.beginPath();
-            ctx.moveTo(tipX, tipY - dragDown * 0.7);
-            ctx.lineTo(tipX, tipY);
-            ctx.stroke();
-          }
-          ctx.restore();
-        }
       }
     }
 
-    // 3. Impact Blood Slash, Lens Splatter & Shattered Camera Glass Fractures (p > 0.34)
-    if (p > 0.34) {
-      const impactAge = p - 0.34;
-      const crackAlpha = Math.max(0.18, Math.min(0.65, 0.65 - impactAge * 0.55));
+    // 5. Abrupt Photochemical Ambush Flash (p < 0.14) & Fallen Lantern Sparks
+    if (p < 0.14) {
+      const flashAlpha = (0.14 - p) / 0.14;
+      const strobe = Math.sin(timeSec * 88) > 0 ? 0.58 : 0.2;
+      ctx.fillStyle = `rgba(127, 17, 20, ${flashAlpha * 0.45})`;
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = `rgba(231, 229, 228, ${flashAlpha * strobe * 0.68})`;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    if (p > 0.08 && p < 0.54) {
+      ctx.fillStyle = 'rgba(251, 191, 36, 0.72)';
+      for (let i = 0; i < 10; i += 1) {
+        const sx = cx - 90 + Math.cos(i * 0.85) * (p * 195);
+        const sy = height * 0.82 + Math.sin(i * 1.1) * (p * 48);
+        ctx.fillRect(sx, sy, 3, 3);
+      }
+    }
+
+    // 6. Hairline Lens Fractures on Fatal Snap / Shear Impact (p > 0.46)
+    if (p > 0.46) {
+      const impactAge = p - 0.46;
+      const crackAlpha = Math.max(0.14, Math.min(0.55, 0.55 - impactAge * 0.65));
       ctx.save();
       ctx.globalAlpha = crackAlpha;
-      ctx.strokeStyle = 'rgba(226, 232, 240, 0.42)';
-      ctx.lineWidth = 1.2;
-      const crackCenterX = cx + (dc.killerKind === 'tongue_warden' ? 0 : -16);
-      const crackCenterY = cy + 6;
+      ctx.strokeStyle = 'rgba(226, 232, 240, 0.36)';
+      ctx.lineWidth = 1.1;
+      const crackCenterX = cx + (dc.killerKind === 'tongue_warden' ? 0 : -14);
+      const crackCenterY = cy + 4;
       for (let c = 0; c < 7; c += 1) {
         const ang = (c * Math.PI * 2) / 7 + 0.32;
         const len = 110 + (c % 3) * 75;
@@ -1023,61 +808,27 @@ export class ThanhMinhCanvasRenderer {
           crackCenterX + Math.cos(ang) * len * 0.48,
           crackCenterY + Math.sin(ang) * len * 0.48 + 12
         );
-        ctx.lineTo(crackCenterX + Math.cos(ang + 0.14) * len, crackCenterY + Math.sin(ang + 0.14) * len);
+        ctx.lineTo(
+          crackCenterX + Math.cos(ang + 0.14) * len,
+          crackCenterY + Math.sin(ang + 0.14) * len
+        );
         ctx.stroke();
       }
       ctx.restore();
-
-      if (p < 0.74) {
-        const slashAlpha = Math.max(0, 1 - impactAge / 0.4) * 0.72;
-        ctx.save();
-        ctx.globalAlpha = slashAlpha;
-        ctx.strokeStyle = '#dc2626';
-        ctx.lineWidth = 6.5;
-        ctx.beginPath();
-        ctx.moveTo(cx - 180, cy - 115);
-        ctx.lineTo(cx + 180, cy + 115);
-        if (dc.killerKind === 'tongue_warden') {
-          ctx.moveTo(cx + 175, cy - 110);
-          ctx.lineTo(cx - 175, cy + 110);
-        }
-        ctx.stroke();
-
-        ctx.fillStyle = '#7f1d1d';
-        for (let b = 0; b < 11; b += 1) {
-          const bx = cx + Math.sin(b * 2.4) * 210;
-          const by = cy + Math.cos(b * 1.9) * 130 + impactAge * 135;
-          ctx.beginPath();
-          ctx.ellipse(bx, by, 3.5 + (b % 3), 9 + (b % 4) * 3.5, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        ctx.restore();
-      }
     }
 
-    // 4. Fallen Extinguished Oil Lantern Sparks -> Curling Smoke Wisp
-    if (p > 0.1 && p < 0.56) {
-      ctx.fillStyle = 'rgba(251, 191, 36, 0.78)';
-      for (let i = 0; i < 10; i += 1) {
-        const sx = cx - 80 + Math.cos(i * 0.85) * (p * 170);
-        const sy = height * 0.8 + Math.sin(i * 1.1) * (p * 42);
-        ctx.fillRect(sx, sy, 3.5, 3.5);
-      }
-    }
-
-    // 5. Authentic Detention "亡 / TỬ VONG" Ending Death Card + Crisp Vietnamese Typography
-    if (p > 0.46) {
-      const burn = Math.min(1, (p - 0.46) * 2.1);
+    // 7. Authentic Detention "亡" Death Card & Extinguished Lantern Aftermath (p > 0.56)
+    if (p > 0.56) {
+      const cardFade = Math.min(1, (p - 0.56) * 3.2);
       const burnGrad = ctx.createRadialGradient(cx, cy, width * 0.2, cx, cy, width * 0.68);
       burnGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-      burnGrad.addColorStop(0.76, `rgba(120, 20, 12, ${burn * 0.34})`);
-      burnGrad.addColorStop(1, `rgba(180, 65, 18, ${burn * 0.48})`);
+      burnGrad.addColorStop(0.76, `rgba(105, 18, 12, ${cardFade * 0.32})`);
+      burnGrad.addColorStop(1, `rgba(155, 52, 16, ${cardFade * 0.45})`);
       ctx.fillStyle = burnGrad;
       ctx.fillRect(0, 0, width, height);
 
-      const textAlpha = Math.min(1, (p - 0.46) * 2.8);
       ctx.save();
-      ctx.globalAlpha = textAlpha;
+      ctx.globalAlpha = cardFade;
 
       // Tipped extinguished brass oil lantern at bottom center with curling smoke
       const lanY = height * 0.82;
@@ -1105,14 +856,14 @@ export class ThanhMinhCanvasRenderer {
 
       // Atmospheric dark plate framing the Detention verdict
       const boxW = Math.min(680, width - 64);
-      ctx.fillStyle = 'rgba(5, 2, 3, 0.78)';
-      ctx.fillRect(cx - boxW * 0.5, height * 0.34, boxW, 146);
+      ctx.fillStyle = 'rgba(5, 2, 3, 0.84)';
+      ctx.fillRect(cx - boxW * 0.5, height * 0.34, boxW, 148);
       ctx.strokeStyle = 'rgba(153, 27, 27, 0.45)';
       ctx.lineWidth = 1;
-      ctx.strokeRect(cx - boxW * 0.5, height * 0.34, boxW, 146);
+      ctx.strokeRect(cx - boxW * 0.5, height * 0.34, boxW, 148);
 
       // Vermilion carved ink-seal stamp (亡)
-      ctx.fillStyle = 'rgba(153, 27, 27, 0.88)';
+      ctx.fillStyle = 'rgba(153, 27, 27, 0.9)';
       ctx.fillRect(cx - 16, height * 0.36, 32, 32);
       ctx.strokeStyle = 'rgba(254, 202, 202, 0.55)';
       ctx.lineWidth = 1;
@@ -3954,6 +3705,8 @@ export class ThanhMinhCanvasRenderer {
     ctx.save();
     for (let x = 140; x < worldSpan; x += 380) {
       const fx = x + camX * 0.14;
+      const sx = fx - camX;
+      if (sx < -40 || sx > this.viewWidth + 40) continue;
       ctx.save();
       ctx.translate(fx, height * 0.03);
       ctx.rotate(Math.sin(timeSec * 1.9 + x) * 0.15);
@@ -3981,6 +3734,7 @@ export class ThanhMinhCanvasRenderer {
     ctx.fillStyle = isYin ? 'rgba(10, 2, 3, 0.72)' : 'rgba(3, 4, 6, 0.78)';
     for (let x = 260; x < worldSpan + width; x += 640) {
       const fgX = x - camX * 0.28;
+      if (fgX < -40 || fgX > width + 40) continue;
       ctx.fillRect(fgX, 0, 24, height);
     }
     ctx.restore();
