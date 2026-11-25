@@ -72,6 +72,7 @@ export class ThanhMinhCanvasRenderer {
   private paperCanvas: HTMLCanvasElement | null = null;
   private paperPattern: CanvasPattern | null = null;
   private killPlates: Partial<Record<GhostVariant, HTMLImageElement>> = {};
+  private doorTransitionTimer = 0;
 
   constructor() {
     if (typeof Image !== 'undefined') {
@@ -131,6 +132,10 @@ export class ThanhMinhCanvasRenderer {
 
   public triggerShake(amount: number): void {
     this.shakeIntensity = Math.max(this.shakeIntensity, amount);
+  }
+
+  public triggerDoorTransition(): void {
+    this.doorTransitionTimer = 0.62;
   }
 
   private ensureGrainPattern(ctx: CanvasRenderingContext2D): CanvasPattern | null {
@@ -388,27 +393,30 @@ export class ThanhMinhCanvasRenderer {
         : (1 + Math.sin(timeSec * 14.3) * 0.03 + Math.cos(timeSec * 23.1) * 0.02 + dreadFlicker) *
           fatigueDim *
           dreadTighten;
-      const lanternX = playerScreenX + state.playerFacing * 32;
-      const lanternY = height * (state.exhausted ? 0.65 : 0.60);
-      // Balanced Detention-style chiaroscuro cone: warm amber/crimson halo + clearly readable architecture
-      const lanternRadius = Math.max(255, width * 0.46) * flicker;
+      const lanternX = playerScreenX + state.playerFacing * 28;
+      const lanternY = floorY - (state.exhausted ? 66 : 84);
+      // Expanded (+20%) Detention-style lantern pocket: warm clear pocket around Lâm Tĩnh & nearby props while outer surroundings remain pitch-dark
+      const lanternRadius = Math.max(190, width * 0.264) * flicker;
 
-      // Directional subtle flashlight/lantern beam forward
+      // Soft feathered forward directional spill (no hard polygon cut edges)
       ctx.save();
-      const beamEndX = lanternX + state.playerFacing * 310 * flicker;
-      const coneGrad = ctx.createLinearGradient(lanternX, lanternY, beamEndX, lanternY + 26);
+      const forwardCenterX = lanternX + state.playerFacing * 68 * flicker;
+      const forwardRadius = 178 * flicker;
+      ctx.translate(forwardCenterX, lanternY + 4);
+      ctx.scale(1.15, 0.78);
+      const coneGrad = ctx.createRadialGradient(0, 0, 8, 0, 0, forwardRadius);
       coneGrad.addColorStop(
         0,
-        isYin ? 'rgba(220, 38, 38, 0.22)' : isDarkroom ? 'rgba(239, 68, 68, 0.22)' : 'rgba(246, 206, 128, 0.2)'
+        isYin ? 'rgba(220, 38, 38, 0.16)' : isDarkroom ? 'rgba(239, 68, 68, 0.16)' : 'rgba(246, 206, 128, 0.18)'
+      );
+      coneGrad.addColorStop(
+        0.52,
+        isYin ? 'rgba(185, 28, 28, 0.06)' : isDarkroom ? 'rgba(220, 38, 38, 0.06)' : 'rgba(242, 190, 108, 0.07)'
       );
       coneGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = coneGrad;
       ctx.beginPath();
-      ctx.moveTo(lanternX, lanternY - 14);
-      ctx.lineTo(beamEndX, lanternY - 126);
-      ctx.lineTo(beamEndX, lanternY + 138);
-      ctx.lineTo(lanternX, lanternY + 16);
-      ctx.closePath();
+      ctx.arc(0, 0, forwardRadius, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
@@ -416,24 +424,25 @@ export class ThanhMinhCanvasRenderer {
         lanternX,
         lanternY,
         18,
-        playerScreenX,
-        height * 0.58,
+        lanternX,
+        lanternY,
         lanternRadius
       );
       if (isDarkroom) {
-        lanternGrad.addColorStop(0, 'rgba(239, 68, 68, 0.12)');
-        lanternGrad.addColorStop(0.45, 'rgba(26, 2, 4, 0.48)');
-        lanternGrad.addColorStop(1, 'rgba(5, 1, 2, 0.84)');
+        lanternGrad.addColorStop(0, 'rgba(239, 68, 68, 0.14)');
+        lanternGrad.addColorStop(0.4, 'rgba(20, 2, 4, 0.68)');
+        lanternGrad.addColorStop(0.72, 'rgba(6, 1, 2, 0.9)');
+        lanternGrad.addColorStop(1, 'rgba(2, 0, 1, 0.96)');
       } else if (isYin) {
-        lanternGrad.addColorStop(0, 'rgba(185, 28, 28, 0.08)');
-        lanternGrad.addColorStop(0.45, 'rgba(12, 4, 5, 0.42)');
-        lanternGrad.addColorStop(0.8, 'rgba(6, 2, 3, 0.68)');
-        lanternGrad.addColorStop(1, 'rgba(3, 1, 2, 0.82)');
+        lanternGrad.addColorStop(0, 'rgba(185, 28, 28, 0.11)');
+        lanternGrad.addColorStop(0.4, 'rgba(12, 3, 5, 0.66)');
+        lanternGrad.addColorStop(0.72, 'rgba(5, 1, 2, 0.9)');
+        lanternGrad.addColorStop(1, 'rgba(2, 0, 1, 0.96)');
       } else {
-        lanternGrad.addColorStop(0, 'rgba(255, 204, 120, 0.11)');
-        lanternGrad.addColorStop(0.44, 'rgba(8, 10, 12, 0.34)');
-        lanternGrad.addColorStop(0.78, 'rgba(5, 7, 9, 0.62)');
-        lanternGrad.addColorStop(1, 'rgba(3, 4, 6, 0.78)');
+        lanternGrad.addColorStop(0, 'rgba(255, 204, 120, 0.14)');
+        lanternGrad.addColorStop(0.4, 'rgba(6, 8, 10, 0.6)');
+        lanternGrad.addColorStop(0.72, 'rgba(3, 5, 7, 0.86)');
+        lanternGrad.addColorStop(1, 'rgba(2, 3, 5, 0.94)');
       }
       ctx.fillStyle = lanternGrad;
       ctx.fillRect(0, 0, width, height);
@@ -494,7 +503,37 @@ export class ThanhMinhCanvasRenderer {
       ctx.strokeRect(5, 5, width - 10, height - 10);
     }
 
-    // 9. Vintage 16mm Grain + Projector Film-Gate Corners
+    // 9. Realistic Detention Door-Opening Threshold Swing & Fade
+    if (this.doorTransitionTimer > 0) {
+      this.doorTransitionTimer = Math.max(0, this.doorTransitionTimer - dt);
+      const tNorm = 1 - this.doorTransitionTimer / 0.62;
+      if (tNorm < 0.45) {
+        const closeP = tNorm / 0.45;
+        const leafW = width * 0.52 * closeP;
+        ctx.fillStyle = `rgba(3, 2, 2, ${0.42 + closeP * 0.56})`;
+        ctx.fillRect(0, 0, width, height);
+        // Swinging timber door leaf & vertical brass hinge highlight
+        ctx.fillStyle = '#18100c';
+        ctx.fillRect(width - leafW, 0, leafW, height);
+        ctx.strokeStyle = 'rgba(92, 68, 48, 0.55)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(width - leafW, 0);
+        ctx.lineTo(width - leafW, height);
+        ctx.stroke();
+      } else {
+        const openP = (tNorm - 0.45) / 0.55;
+        const slitHalf = (width * 0.54) * Math.pow(openP, 1.35);
+        const fadeDark = Math.max(0, 1 - openP) * 0.96;
+        ctx.fillStyle = `rgba(2, 1, 2, ${fadeDark})`;
+        ctx.fillRect(0, 0, Math.max(0, width * 0.5 - slitHalf), height);
+        ctx.fillRect(Math.min(width, width * 0.5 + slitHalf), 0, width, height);
+        ctx.fillStyle = `rgba(2, 1, 2, ${fadeDark * 0.78})`;
+        ctx.fillRect(0, 0, width, height);
+      }
+    }
+
+    // 10. Vintage 16mm Grain + Projector Film-Gate Corners
     this.drawOldFilmGrain(ctx, width, height, timeSec, isYin || isDarkroom);
     this.drawProjectorFilmGate(ctx, width, height);
 
@@ -1193,55 +1232,123 @@ export class ThanhMinhCanvasRenderer {
           ctx.restore();
         }
 
-        // Iconic 1960s Wooden Louver Windows (Cửa chớp gỗ Cô Sơn)
+        // Iconic 1960s Recessed Wooden Casement & Louver Storm Windows (Cửa sổ chớp gỗ Cô Sơn)
         if (!isDarkroom && !isPrison) {
           const winX = x + 56;
-          const winY = height * 0.18 + skew;
+          const winY = height * 0.175 + skew;
           const winW = 148;
-          const winH = height * 0.34;
-          // Deep stormy exterior glass inset
-          ctx.fillStyle = isYin ? '#1f0709' : '#10181b';
+          const winH = height * 0.345;
+          const transH = 52;
+
+          // Outer recessed wall reveal shadow + weathered wooden casing
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+          ctx.fillRect(winX - 6, winY - 4, winW + 12, winH + 14);
+
+          // Deep stormy night exterior glass backdrop
+          const skyGrad = ctx.createLinearGradient(winX, winY, winX, winY + winH);
+          if (isYin) {
+            skyGrad.addColorStop(0, '#1a0406');
+            skyGrad.addColorStop(1, '#31090e');
+          } else {
+            skyGrad.addColorStop(0, this.lightningFlash > 0.1 ? '#334155' : '#090e12');
+            skyGrad.addColorStop(1, this.lightningFlash > 0.1 ? '#1e293b' : '#131d21');
+          }
+          ctx.fillStyle = skyGrad;
           ctx.fillRect(winX, winY, winW, winH);
-          // Silhouette mountain pines visible through window panes
-          ctx.fillStyle = isYin ? '#350a0f' : '#192626';
+
+          // Distant & mid-ground misty mountain pines swaying outside glass
+          ctx.fillStyle = isYin ? '#29070b' : '#0b1214';
           ctx.beginPath();
           ctx.moveTo(winX, winY + winH);
-          ctx.lineTo(winX + 36, winY + winH * 0.45);
-          ctx.lineTo(winX + 74, winY + winH * 0.72);
-          ctx.lineTo(winX + 114, winY + winH * 0.35);
+          ctx.lineTo(winX + 28, winY + winH * 0.55);
+          ctx.lineTo(winX + 64, winY + winH * 0.78);
+          ctx.lineTo(winX + 102, winY + winH * 0.42);
+          ctx.lineTo(winX + 132, winY + winH * 0.65);
           ctx.lineTo(winX + winW, winY + winH);
           ctx.closePath();
           ctx.fill();
 
-          // Diagonal eerie window light shaft falling across floorboards
-          const shaftAlpha = (isYin ? 0.08 : 0.065) + this.lightningFlash * 0.22;
+          // Swaying rain-soaked tree branch shadow pressed behind lower glass pane
+          const branchSway = Math.sin(timeSec * 2.2 + x * 0.03) * 6;
+          ctx.strokeStyle = 'rgba(4, 6, 8, 0.78)';
+          ctx.lineWidth = 2.6;
+          ctx.beginPath();
+          ctx.moveTo(winX, winY + winH * 0.75);
+          ctx.quadraticCurveTo(winX + 48, winY + winH * 0.58 + branchSway, winX + 94, winY + winH * 0.44 + branchSway);
+          ctx.stroke();
+
+          // Rain streaks sliding diagonally down weathered window glass
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(winX + 4, winY + transH + 6, winW - 8, winH - transH - 10);
+          ctx.clip();
+          ctx.strokeStyle = isYin ? 'rgba(252, 165, 165, 0.18)' : 'rgba(203, 213, 225, 0.16)';
+          ctx.lineWidth = 1;
+          for (let r = 0; r < 9; r += 1) {
+            const rx = winX + 12 + r * 15;
+            const ry = winY + transH + 8 + ((timeSec * (58 + (r % 3) * 18) + r * 29) % (winH - transH));
+            ctx.beginPath();
+            ctx.moveTo(rx, ry);
+            ctx.lineTo(rx - 4, ry + 13);
+            ctx.stroke();
+          }
+          // Subtle aged glass corner dust & condensation frost
+          const glassGrime = ctx.createRadialGradient(
+            winX + winW * 0.5,
+            winY + transH + (winH - transH) * 0.5,
+            12,
+            winX + winW * 0.5,
+            winY + transH + (winH - transH) * 0.5,
+            winW * 0.65
+          );
+          glassGrime.addColorStop(0, 'rgba(200, 215, 210, 0.04)');
+          glassGrime.addColorStop(1, 'rgba(6, 8, 10, 0.44)');
+          ctx.fillStyle = glassGrime;
+          ctx.fillRect(winX, winY + transH, winW, winH - transH);
+          ctx.restore();
+
+          // Diagonal eerie light shaft falling across floorboards
+          const shaftAlpha = (isYin ? 0.06 : 0.05) + this.lightningFlash * 0.2;
           const beamGrad = ctx.createLinearGradient(x + 120, winY, x + 36, floorY);
           beamGrad.addColorStop(
             0,
-            isYin
-              ? `rgba(220, 45, 55, ${shaftAlpha * 1.4})`
-              : `rgba(196, 214, 212, ${shaftAlpha})`
+            isYin ? `rgba(220, 45, 55, ${shaftAlpha * 1.4})` : `rgba(196, 214, 212, ${shaftAlpha})`
           );
           beamGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           ctx.fillStyle = beamGrad;
           ctx.beginPath();
-          ctx.moveTo(winX + 4, winY);
-          ctx.lineTo(winX + winW - 4, winY);
+          ctx.moveTo(winX + 4, winY + transH);
+          ctx.lineTo(winX + winW - 4, winY + transH);
           ctx.lineTo(x + 120, floorY);
           ctx.lineTo(x - 20, floorY);
           ctx.closePath();
           ctx.fill();
 
-          // Slanted wooden louver slats across upper transom + dark teak mullions
-          ctx.fillStyle = isYin ? '#2a1618' : '#2f2218';
-          for (let ly = winY + 12; ly < winY + 52; ly += 9) {
-            ctx.fillRect(winX + 3, ly, winW - 6, 4);
+          // Upper transom slanted 3D beveled wooden louver slats
+          for (let ly = winY + 8; ly < winY + transH - 2; ly += 8.5) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+            ctx.fillRect(winX + 3, ly + 4, winW - 6, 2.5);
+            ctx.fillStyle = isYin ? '#321417' : '#35251a';
+            ctx.fillRect(winX + 3, ly, winW - 6, 4.5);
           }
-          ctx.fillRect(winX + winW * 0.5 - 3, winY, 6, winH);
-          ctx.fillRect(winX, winY + 54, winW, 9);
-          ctx.strokeStyle = isYin ? '#451519' : '#3a2b1f';
-          ctx.lineWidth = 4;
+
+          // Divided 2x2 wooden casement mullions + rusted latch + deep projecting wooden windowsill
+          const woodCol = isYin ? '#2a1214' : '#2a1d14';
+          ctx.fillStyle = woodCol;
+          ctx.fillRect(winX, winY + transH, winW, 8);
+          ctx.fillRect(winX + winW * 0.5 - 3.5, winY, 7, winH);
+          ctx.fillRect(winX, winY + transH + (winH - transH) * 0.52, winW, 5);
+          ctx.strokeStyle = isYin ? '#42161a' : '#3d2c1e';
+          ctx.lineWidth = 5;
           ctx.strokeRect(winX, winY, winW, winH);
+          // Tarnished window center lock latch
+          ctx.fillStyle = '#78716c';
+          ctx.fillRect(winX + winW * 0.5 - 2, winY + winH * 0.72, 4, 10);
+          // Projecting timber windowsill ledge & shadow beneath
+          ctx.fillStyle = isYin ? '#381519' : '#3b291c';
+          ctx.fillRect(winX - 7, winY + winH - 2, winW + 14, 7);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+          ctx.fillRect(winX - 5, winY + winH + 5, winW + 10, 5);
         }
 
         if (is1986) {
@@ -1631,45 +1738,130 @@ export class ThanhMinhCanvasRenderer {
           (hs.requiredFlag && !state.flags[hs.requiredFlag]) ||
             (hs.requiredItem && !state.inventory.includes(hs.requiredItem))
         );
-        // Outer wooden doorframe & threshold step (towering ~186px above 156px Lâm Tĩnh)
-        ctx.fillStyle = '#18110c';
-        ctx.fillRect(-43, -192, 86, 192);
-        const doorGrad = ctx.createLinearGradient(-37, -184, 37, 0);
+        // Deep doorway threshold step & outer 3D molded timber jamb (authentic tall 2.2m colonial school doorway)
+        ctx.fillStyle = '#090706';
+        ctx.fillRect(-47, -214, 94, 214);
+        ctx.fillStyle = '#2b1e15';
+        ctx.fillRect(-44, -210, 88, 210);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.fillRect(-40, -204, 80, 204);
+
+        // Weathered timber door leaf with wood grain & bevel shading
+        const doorGrad = ctx.createLinearGradient(-38, -202, 38, 0);
         if (hs.kind === 'illogical_door') {
-          doorGrad.addColorStop(0, '#3a181e');
-          doorGrad.addColorStop(1, '#1a0a0d');
+          doorGrad.addColorStop(0, '#3e181e');
+          doorGrad.addColorStop(0.5, '#290f14');
+          doorGrad.addColorStop(1, '#140709');
         } else {
-          doorGrad.addColorStop(0, '#332419');
-          doorGrad.addColorStop(1, '#1b120d');
+          doorGrad.addColorStop(0, '#36261a');
+          doorGrad.addColorStop(0.55, '#271b13');
+          doorGrad.addColorStop(1, '#150e09');
         }
         ctx.fillStyle = doorGrad;
-        ctx.fillRect(-37, -184, 74, 184);
-        ctx.strokeStyle = isActive ? '#f59e0b' : '#4a382b';
-        ctx.lineWidth = isActive ? 2.5 : 2;
-        ctx.strokeRect(-37, -184, 74, 184);
+        ctx.fillRect(-38, -202, 76, 202);
 
-        // Recessed upper/lower wooden panels & glass transom window
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.34)';
-        ctx.fillRect(-29, -174, 58, 34);
-        ctx.strokeStyle = 'rgba(87, 67, 52, 0.7)';
-        ctx.lineWidth = 1.2;
-        ctx.strokeRect(-27, -128, 54, 48);
-        ctx.strokeRect(-27, -70, 54, 58);
+        // Subtle vertical timber grain & hinge pins on left jamb
+        ctx.strokeStyle = 'rgba(10, 6, 4, 0.45)';
+        ctx.lineWidth = 1;
+        for (let gx = -30; gx <= 30; gx += 12) {
+          ctx.beginPath();
+          ctx.moveTo(gx, -200);
+          ctx.lineTo(gx, -2);
+          ctx.stroke();
+        }
+        ctx.fillStyle = '#475569';
+        ctx.fillRect(-38, -172, 4, 12);
+        ctx.fillRect(-38, -48, 4, 12);
 
-        ctx.fillStyle = '#d97706';
+        // Upper frosted wire-glass door pane revealing dark corridor/red void behind
+        ctx.fillStyle = hs.kind === 'illogical_door' ? '#240509' : '#0a0f12';
+        ctx.fillRect(-27, -189, 54, 46);
+        ctx.strokeStyle = 'rgba(148, 163, 184, 0.14)';
+        ctx.lineWidth = 0.8;
         ctx.beginPath();
-        ctx.arc(25, -88, 3.8, 0, Math.PI * 2);
+        ctx.moveTo(0, -189);
+        ctx.lineTo(0, -143);
+        ctx.moveTo(-27, -166);
+        ctx.lineTo(27, -166);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(72, 52, 38, 0.85)';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(-27, -189, 54, 46);
+
+        // Beveled lower recessed timber panels
+        for (const [py, ph] of [
+          [-128, 52],
+          [-64, 52],
+        ] as const) {
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+          ctx.fillRect(-26, py, 52, ph);
+          ctx.strokeStyle = 'rgba(87, 67, 52, 0.65)';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(-26, py, 52, ph);
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+          ctx.beginPath();
+          ctx.moveTo(-25, py + ph - 1);
+          ctx.lineTo(-25, py + 1);
+          ctx.lineTo(25, py + 1);
+          ctx.stroke();
+        }
+
+        // Tarnished brass escutcheon lockplate, keyhole & doorknob
+        ctx.fillStyle = '#57432a';
+        ctx.fillRect(21, -104, 9, 26);
+        ctx.fillStyle = '#09090b';
+        ctx.fillRect(24.5, -86, 2, 5);
+        ctx.fillStyle = isActive ? '#fbbf24' : '#b45309';
+        ctx.beginPath();
+        ctx.arc(25.5, -96, 4.2, 0, Math.PI * 2);
         ctx.fill();
 
+        // Peeling room nameplate plaque above door window
+        ctx.fillStyle = '#d6cab2';
+        ctx.fillRect(-19, -223, 38, 11);
+        ctx.strokeStyle = '#3f2e21';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-19, -223, 38, 11);
+        ctx.fillStyle = '#1c1917';
+        ctx.font = `bold 6.5px ${FONT_MONO}`;
+        ctx.textAlign = 'center';
+        const tagText = hs.kind === 'illogical_door' ? 'CẤM' : hs.targetScene === 'teachers_office' ? 'GV' : hs.targetScene === 'infirmary_wing' ? 'Y TẾ' : 'CỬA';
+        ctx.fillText(tagText, 0, -215.5);
+
+        // Active frame highlight (subtle warm rim instead of harsh neon box)
+        ctx.strokeStyle = isActive ? 'rgba(245, 158, 11, 0.78)' : '#3c2b1e';
+        ctx.lineWidth = isActive ? 2 : 1.5;
+        ctx.strokeRect(-38, -202, 76, 202);
+
         if (locked) {
-          ctx.strokeStyle = '#991b1b';
-          ctx.lineWidth = 7;
-          ctx.beginPath();
-          ctx.moveTo(-34, -138);
-          ctx.lineTo(34, -56);
-          ctx.moveTo(34, -138);
-          ctx.lineTo(-34, -56);
-          ctx.stroke();
+          // Realistic nailed weathered barricade planks + torn crimson/yellow paper talisman seal
+          for (const [ang, py] of [
+            [-0.14, -122],
+            [0.12, -74],
+          ] as const) {
+            ctx.save();
+            ctx.translate(0, py);
+            ctx.rotate(ang);
+            ctx.fillStyle = '#3d281a';
+            ctx.fillRect(-40, -6, 80, 12);
+            ctx.strokeStyle = '#1a1009';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-40, -6, 80, 12);
+            // Iron nail heads
+            ctx.fillStyle = '#64748b';
+            ctx.fillRect(-34, -1.5, 3, 3);
+            ctx.fillRect(31, -1.5, 3, 3);
+            ctx.restore();
+          }
+          // Hanging paper seal talisman & rusted padlock on handle
+          ctx.fillStyle = '#d6b665';
+          ctx.fillRect(-7, -110, 14, 34);
+          ctx.fillStyle = '#991b1b';
+          ctx.font = `bold 8px ${FONT_SERIF}`;
+          ctx.textAlign = 'center';
+          ctx.fillText('封', 0, -90);
+          ctx.fillStyle = '#475569';
+          ctx.fillRect(21, -86, 9, 10);
         }
       } else if (hs.kind === 'wuxing_altar') {
         const solved = Boolean(state.flags.wuxing_solved);
@@ -2152,20 +2344,143 @@ export class ThanhMinhCanvasRenderer {
         ctx.fillStyle = '#40342b';
         ctx.fillRect(-18, -94, 36, 42);
       } else {
-        ctx.fillStyle = '#332419';
-        ctx.fillRect(-28, -48, 56, 48);
+        // Detailed 1960s weathered wooden table / cabinet + bespoke miniature artifact art
+        ctx.fillStyle = '#1f150f';
+        ctx.fillRect(-30, -48, 7, 48);
+        ctx.fillRect(23, -48, 7, 48);
+        ctx.fillStyle = '#291c13';
+        ctx.fillRect(-26, -48, 52, 22);
+        ctx.strokeStyle = '#140c08';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(-22, -44, 44, 14);
+        ctx.fillStyle = '#b45309';
+        ctx.fillRect(-4, -38, 8, 2.5);
+        // Table top plank overhang with wood rim
+        ctx.fillStyle = '#3a271a';
+        ctx.fillRect(-34, -52, 68, 6);
+
         const uncollected =
           (hs.kind === 'pickup' && hs.itemReward && !state.inventory.includes(hs.itemReward.id)) ||
           (hs.kind === 'keepsake' &&
             hs.keepsakeId &&
             !state.collectedKeepsakeIds.includes(hs.keepsakeId));
+
         if (uncollected) {
-          const glowR = 11 + Math.sin(timeSec * 4) * 3;
-          const glint = ctx.createRadialGradient(0, -60, 1, 0, -60, glowR);
-          glint.addColorStop(0, 'rgba(251, 191, 36, 0.95)');
-          glint.addColorStop(1, 'rgba(251, 191, 36, 0)');
+          const itemId = hs.itemReward?.id;
+          if (itemId === 'incense_bundle') {
+            // Red-paper wrapped bamboo incense sticks + gold joss paper packet (Vàng Mã)
+            for (let s = -4; s <= 4; s += 2) {
+              ctx.strokeStyle = '#a16207';
+              ctx.lineWidth = 1.3;
+              ctx.beginPath();
+              ctx.moveTo(-9 + s * 0.6, -52);
+              ctx.lineTo(-11 + s * 1.1, -70);
+              ctx.stroke();
+              ctx.fillStyle = '#dc2626';
+              ctx.fillRect(-11.8 + s * 1.1, -72, 1.8, 3);
+            }
+            ctx.fillStyle = '#991b1b';
+            ctx.fillRect(-15, -62, 12, 10);
+            // Gold joss paper stack beside incense
+            ctx.fillStyle = '#ca8a04';
+            ctx.fillRect(4, -59, 18, 7);
+            ctx.fillStyle = '#dc2626';
+            ctx.fillRect(10, -58, 6, 5);
+          } else if (itemId === 'teachers_key' || itemId === 'darkroom_key') {
+            // Ornate brass/iron skeleton key + red cord & wooden key tag
+            ctx.strokeStyle = itemId === 'darkroom_key' ? '#b91c1c' : '#d97706';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(-8, -58, 4.5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = itemId === 'darkroom_key' ? '#cbd5e1' : '#f59e0b';
+            ctx.fillRect(-4, -59, 15, 2.2);
+            ctx.fillRect(6, -57, 2, 4);
+            ctx.fillRect(10, -57, 2, 3);
+            // Wooden room key tag
+            ctx.fillStyle = '#78350f';
+            ctx.fillRect(-20, -57, 8, 5);
+          } else if (itemId === 'lantern_oil') {
+            // Ribbed vintage glass kerosene bottle with amber oil & cork stopper
+            ctx.fillStyle = '#57534e';
+            ctx.fillRect(-2, -73, 4, 4);
+            ctx.fillStyle = 'rgba(186, 230, 253, 0.35)';
+            ctx.fillRect(-6, -69, 12, 17);
+            ctx.fillStyle = '#d97706';
+            ctx.fillRect(-5, -61, 10, 8);
+            ctx.fillStyle = '#e7dcc8';
+            ctx.fillRect(-4, -65, 8, 5);
+            ctx.strokeStyle = 'rgba(241, 245, 249, 0.55)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(-6, -69, 12, 17);
+          } else if (itemId === 'radio_battery') {
+            // 1960s heavy twin-cell dry battery box with brass terminals
+            ctx.fillStyle = '#7f1d1d';
+            ctx.fillRect(-10, -68, 20, 16);
+            ctx.fillStyle = '#d6d3d1';
+            ctx.fillRect(-10, -61, 20, 4);
+            ctx.fillStyle = '#fbbf24';
+            ctx.fillRect(-6, -71, 3, 3);
+            ctx.fillRect(3, -71, 3, 3);
+          } else if (itemId === 'bell_mallet') {
+            // Carved dark wood temple mallet wrapped in crimson ritual cord
+            ctx.save();
+            ctx.translate(0, -56);
+            ctx.rotate(-0.2);
+            ctx.fillStyle = '#573b26';
+            ctx.fillRect(-16, -2, 22, 4);
+            ctx.fillStyle = '#3f2718';
+            ctx.fillRect(4, -6, 11, 12);
+            ctx.fillStyle = '#991b1b';
+            ctx.fillRect(-6, -2.5, 5, 5);
+            ctx.restore();
+          } else if (itemId === 'wine_cup') {
+            // Pale celadon Qingming offering cup on dark lacquered tray
+            ctx.fillStyle = '#1c1917';
+            ctx.fillRect(-10, -54, 20, 2.5);
+            ctx.fillStyle = '#cbd5e1';
+            ctx.beginPath();
+            ctx.moveTo(-6, -63);
+            ctx.lineTo(6, -63);
+            ctx.lineTo(4, -54);
+            ctx.lineTo(-4, -54);
+            ctx.closePath();
+            ctx.fill();
+          } else {
+            // Keepsakes: open yellowed diary, tied scroll, tarnished bronze badge & fountain pen
+            ctx.fillStyle = '#e7dcc4';
+            ctx.fillRect(-14, -59, 16, 7);
+            ctx.fillStyle = '#991b1b';
+            ctx.fillRect(-10, -58, 5, 2);
+            ctx.fillStyle = '#d97706';
+            ctx.beginPath();
+            ctx.arc(10, -56, 4.5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#991b1b';
+            ctx.lineWidth = 1.4;
+            ctx.beginPath();
+            ctx.moveTo(6, -54);
+            ctx.lineTo(14, -59);
+            ctx.stroke();
+          }
+
+          // Subtle warm cross-sparkle glint above uncollected item
+          const pulse = 0.55 + Math.sin(timeSec * 4.2) * 0.35;
+          const glowR = 13 + Math.sin(timeSec * 4) * 2.5;
+          const glint = ctx.createRadialGradient(0, -64, 1, 0, -64, glowR);
+          glint.addColorStop(0, `rgba(253, 224, 71, ${0.42 * pulse})`);
+          glint.addColorStop(1, 'rgba(253, 224, 71, 0)');
           ctx.fillStyle = glint;
-          ctx.fillRect(-glowR, -60 - glowR, glowR * 2, glowR * 2);
+          ctx.fillRect(-glowR, -64 - glowR, glowR * 2, glowR * 2);
+
+          ctx.strokeStyle = `rgba(254, 240, 138, ${0.72 * pulse})`;
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.moveTo(-5, -64);
+          ctx.lineTo(5, -64);
+          ctx.moveTo(0, -69);
+          ctx.lineTo(0, -59);
+          ctx.stroke();
         }
       }
 
@@ -2240,415 +2555,389 @@ export class ThanhMinhCanvasRenderer {
     const proximity = Math.max(0, 1 - dist / 260);
     const dread = ghost.alerted ? Math.max(0.76, proximity) : proximity * 0.78;
     const isTwitch =
-      Math.sin(timeSec * 31 + ghost.x * 0.13) > (ghost.alerted ? 0.82 : 0.93);
-    const neckSnap = isTwitch ? Math.sin(timeSec * 73) * 0.4 : 0;
-    const strideBob = Math.sin(timeSec * (ghost.alerted ? 4.6 : 2.6)) * 2.4;
-    const crouchHunch = 0.08 + dread * 0.13;
+      Math.sin(timeSec * 31 + ghost.x * 0.13) > (ghost.alerted ? 0.8 : 0.92);
+    const neckSnap = isTwitch ? Math.sin(timeSec * 73) * 0.42 : 0;
+    const strideBob = Math.sin(timeSec * (ghost.alerted ? 4.4 : 2.3)) * 2.1;
+    const crouchHunch = 0.1 + dread * 0.14;
     const lanternSide = state.playerX < ghost.x ? -1 : 1;
+    const paperPat = this.ensurePaperTexturePattern(ctx);
 
     ctx.save();
     ctx.translate(ghost.x, floorY);
 
     // 1. Towering Distorted Wall Shadow Cast by Lâm Tĩnh's Lantern
     const shadowDir = Math.sign(ghost.x - state.playerX) || ghost.facing;
-    const shadowReach = shadowDir * (46 + proximity * 60);
-    const shadowAlpha = isYin ? 0.48 : 0.36 + proximity * 0.25;
+    const shadowReach = shadowDir * (48 + proximity * 64);
+    const shadowAlpha = isYin ? 0.54 : 0.42 + proximity * 0.28;
     ctx.save();
     ctx.fillStyle = `rgba(2, 1, 4, ${shadowAlpha})`;
     ctx.beginPath();
     ctx.moveTo(-24, 0);
     ctx.quadraticCurveTo(
       shadowReach * 0.45,
-      -155,
+      -175,
       shadowReach + Math.sin(timeSec * 3.1) * 9,
-      ghost.kind === 'paper_hat' ? -305 : -270
+      ghost.kind === 'paper_hat' ? -330 : -295
     );
-    ctx.lineTo(shadowReach + shadowDir * 28, -215);
-    ctx.lineTo(shadowReach + shadowDir * (64 + dread * 28), -178 + Math.sin(timeSec * 5) * 10);
-    ctx.lineTo(shadowReach + shadowDir * 28, -148);
+    ctx.lineTo(shadowReach + shadowDir * 28, -235);
+    ctx.lineTo(shadowReach + shadowDir * (68 + dread * 32), -190 + Math.sin(timeSec * 5) * 10);
+    ctx.lineTo(shadowReach + shadowDir * 28, -155);
     ctx.lineTo(30, 0);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
 
-    // 2. Cold Ground Fog + Dark Ash / Wet Blood Pool Shadow under Ghost
-    const groundShadow = ctx.createRadialGradient(0, 2, 4, 0, 2, 48);
-    groundShadow.addColorStop(0, 'rgba(0, 0, 0, 0.85)');
-    groundShadow.addColorStop(0.6, 'rgba(38, 4, 7, 0.42)');
+    // 2. Cold Ground Fog + Dark Ash / Wet Blood Pool Shadow under Lingerer
+    const groundShadow = ctx.createRadialGradient(0, 2, 4, 0, 2, 52);
+    groundShadow.addColorStop(0, 'rgba(0, 0, 0, 0.9)');
+    groundShadow.addColorStop(0.6, 'rgba(32, 4, 7, 0.48)');
     groundShadow.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = groundShadow;
-    ctx.fillRect(-52, -12, 104, 28);
-
-    for (let w = 0; w < 5; w += 1) {
-      const phase = (timeSec * 0.85 + w * 0.2) % 1;
-      const wx = Math.sin(timeSec * 2.2 + w * 2.1) * 20 - ghost.facing * phase * 26;
-      const wy = -8 - phase * 76;
-      ctx.fillStyle = `rgba(${ghost.alerted ? '96, 10, 14' : '12, 16, 22'}, ${(1 - phase) * 0.38})`;
-      ctx.beginPath();
-      ctx.arc(wx, wy, 7 + phase * 12, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    ctx.fillRect(-56, -12, 112, 28);
 
     const renderArticulatedGhost = (isAfterimage: boolean) => {
       ctx.save();
       if (isAfterimage) {
-        const glitchX = Math.sin(timeSec * 41) * (ghost.alerted ? 8.5 : 4.5);
-        const glitchY = Math.cos(timeSec * 33) * 2.8;
+        const glitchX = Math.sin(timeSec * 41) * (ghost.alerted ? 9.5 : 5.0);
+        const glitchY = Math.cos(timeSec * 33) * 3.0;
         ctx.translate(glitchX, glitchY);
-        ctx.globalAlpha = ghost.alerted ? 0.4 : 0.24;
+        ctx.globalAlpha = ghost.alerted ? 0.42 : 0.24;
       }
 
       ctx.scale(ghost.facing, 1);
 
-      const flowBack = -16 - Math.sin(timeSec * 4.2) * 5.5;
-      const upperSway = Math.sin(timeSec * 2.3 + ghost.x * 0.02) * 2.8;
+      const flowBack = -18 - Math.sin(timeSec * 4.2) * 5.5;
+      const upperSway = Math.sin(timeSec * 2.1 + ghost.x * 0.02) * 2.6;
 
-      // Gaunt Pale Exposed Feet / Tattered Trouser Hem under Shroud
+      // Gaunt Pale Exposed Bare Feet / Shriveled Ankles
       if (!isAfterimage) {
-        ctx.fillStyle = '#525760';
-        ctx.fillRect(-8, -11, 5, 11);
-        ctx.fillRect(5, -9, 5, 9);
+        ctx.fillStyle = '#474c54';
+        ctx.fillRect(-8, -12, 4.2, 12);
+        ctx.fillRect(5, -10, 4.2, 10);
       }
 
-      // A. Layered Wet Tattered Funeral Shroud / Guard Uniform (Towering up to -168 shoulder height)
-      const shroudBaseGrad = ctx.createLinearGradient(-24, -172, 24, 0);
+      // A. Tall Emaciated Detention Lingerer Funeral Coat / Shroud (-188px shoulder height)
+      const shroudBaseGrad = ctx.createLinearGradient(-22, -194, 22, 0);
       if (isAfterimage) {
         shroudBaseGrad.addColorStop(0, '#7f1d1d');
         shroudBaseGrad.addColorStop(1, '#1a0406');
       } else if (isYin) {
-        shroudBaseGrad.addColorStop(0, '#31070c');
-        shroudBaseGrad.addColorStop(0.55, '#160406');
-        shroudBaseGrad.addColorStop(1, '#060102');
+        shroudBaseGrad.addColorStop(0, '#2e070b');
+        shroudBaseGrad.addColorStop(0.55, '#130406');
+        shroudBaseGrad.addColorStop(1, '#040102');
       } else {
-        shroudBaseGrad.addColorStop(0, ghost.kind === 'tongue_warden' ? '#201b20' : '#1b2029');
-        shroudBaseGrad.addColorStop(0.6, '#0d0f14');
-        shroudBaseGrad.addColorStop(1, '#040507');
+        shroudBaseGrad.addColorStop(0, ghost.kind === 'tongue_warden' ? '#1c181d' : '#1b1f24');
+        shroudBaseGrad.addColorStop(0.6, '#0c0e11');
+        shroudBaseGrad.addColorStop(1, '#030406');
       }
 
+      // Ragged trailing strips blowing behind in storm draft
       for (let r = 0; r < 3; r += 1) {
         const wave = Math.sin(timeSec * (4.6 + r) + r * 1.3) * (7 + r * 2.2);
         ctx.fillStyle = isAfterimage
           ? 'rgba(127, 29, 29, 0.35)'
           : r === 0
-            ? 'rgba(12, 15, 22, 0.86)'
-            : 'rgba(28, 19, 22, 0.68)';
+            ? 'rgba(10, 12, 16, 0.9)'
+            : 'rgba(24, 18, 20, 0.72)';
         ctx.beginPath();
-        ctx.moveTo(-14 + r * 4, -162 + r * 20);
-        ctx.quadraticCurveTo(flowBack - r * 5 + wave * 0.5, -88, flowBack - 12 + wave, -5 - r * 3);
-        ctx.lineTo(-4 + r * 5, -14);
+        ctx.moveTo(-13 + r * 4, -182 + r * 24);
+        ctx.quadraticCurveTo(flowBack - r * 5 + wave * 0.5, -96, flowBack - 13 + wave, -6 - r * 3);
+        ctx.lineTo(-4 + r * 5, -15);
         ctx.closePath();
         ctx.fill();
       }
 
-      // Main Draped Shroud with Fold Creases & Muddy Torn Hem
+      // Tall gaunt layered body silhouette
       ctx.fillStyle = shroudBaseGrad;
       ctx.beginPath();
-      ctx.moveTo(-21 + upperSway, -168 + strideBob);
-      ctx.quadraticCurveTo(23 + upperSway, -162 + strideBob, 23, -82);
-      ctx.lineTo(27 + Math.sin(timeSec * 3.8) * 3.5, -6);
-      ctx.quadraticCurveTo(11, -15, 2, -3);
-      ctx.quadraticCurveTo(-11, -16, -26 + Math.cos(timeSec * 3.4) * 3.5, -5);
-      ctx.lineTo(-24, -90);
+      ctx.moveTo(-19 + upperSway, -188 + strideBob);
+      ctx.quadraticCurveTo(21 + upperSway, -182 + strideBob, 21, -92);
+      ctx.lineTo(25 + Math.sin(timeSec * 3.8) * 3.2, -5);
+      ctx.quadraticCurveTo(10, -16, 2, -2);
+      ctx.quadraticCurveTo(-11, -17, -25 + Math.cos(timeSec * 3.4) * 3.2, -5);
+      ctx.lineTo(-22, -100);
       ctx.closePath();
       ctx.fill();
 
-      // Subtle Chiaroscuro Cloth Fold & Bloodstain Streaks on Torso
+      // Tactile rice-paper / charcoal collage grain directly over shroud
+      if (paperPat && !isAfterimage) {
+        ctx.save();
+        ctx.clip();
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = paperPat;
+        ctx.fillRect(-35, -200, 70, 205);
+        ctx.restore();
+      }
+
       if (!isAfterimage) {
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+        // Deep chiaroscuro vertical coat folds
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.65)';
         ctx.lineWidth = 1.6;
         ctx.beginPath();
-        ctx.moveTo(-6 + upperSway, -160 + strideBob);
-        ctx.quadraticCurveTo(-10, -90, -12, -16);
-        ctx.moveTo(7 + upperSway, -156 + strideBob);
-        ctx.quadraticCurveTo(10, -84, 9, -15);
+        ctx.moveTo(-6 + upperSway, -178 + strideBob);
+        ctx.quadraticCurveTo(-11, -96, -13, -15);
+        ctx.moveTo(7 + upperSway, -174 + strideBob);
+        ctx.quadraticCurveTo(10, -90, 9, -15);
         ctx.stroke();
 
-        // Oil-lantern rim highlight along facing silhouette
-        if (proximity > 0.12) {
-          const rimX = lanternSide * ghost.facing > 0 ? 20 : -20;
+        // Harsh side lantern rim-light along edge facing player
+        if (proximity > 0.1) {
+          const rimX = lanternSide * ghost.facing > 0 ? 19 : -19;
           ctx.strokeStyle = isYin
-            ? `rgba(220, 38, 38, ${proximity * 0.42})`
-            : `rgba(251, 191, 36, ${proximity * 0.32})`;
-          ctx.lineWidth = 2.2;
+            ? `rgba(220, 38, 38, ${proximity * 0.48})`
+            : `rgba(251, 191, 36, ${proximity * 0.36})`;
+          ctx.lineWidth = 2.0;
           ctx.beginPath();
-          ctx.moveTo(rimX, -158 + strideBob);
-          ctx.quadraticCurveTo(rimX * 1.15, -82, rimX * 1.12, -14);
+          ctx.moveTo(rimX, -178 + strideBob);
+          ctx.quadraticCurveTo(rimX * 1.12, -92, rimX * 1.1, -14);
           ctx.stroke();
         }
       }
 
-      if (ghost.kind === 'paper_hat') {
-        // B. Gaunt Skeletal Neck & Hunched Realistic Haunted Skull + Tall Dunce Cap (~194px head, cap tip -295)
-        ctx.strokeStyle = isAfterimage ? '#7f1d1d' : '#636873';
-        ctx.lineWidth = 5.5;
+      const drawHollowSocketEye = (ex: number, ey: number, radius: number, crimson = false) => {
+        ctx.fillStyle = '#030203';
         ctx.beginPath();
-        ctx.moveTo(2 + upperSway, -168 + strideBob);
-        ctx.lineTo(7 + upperSway, -176 + strideBob);
+        ctx.ellipse(ex, ey, radius * 1.15, radius * 1.35, 0.08, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = crimson ? '#dc2626' : '#f1f5f9';
+        ctx.beginPath();
+        ctx.arc(ex + 0.8, ey, radius * 0.32, 0, Math.PI * 2);
+        ctx.fill();
+      };
+
+      if (ghost.kind === 'paper_hat' && ghost.variant !== 'librarian_wraith') {
+        // B. Gaunt Stretched Neck & Asymmetrical Sunken Skull + Tall Soiled Paper Cone Cap
+        ctx.strokeStyle = isAfterimage ? '#7f1d1d' : '#4b5059';
+        ctx.lineWidth = 4.6;
+        ctx.beginPath();
+        ctx.moveTo(2 + upperSway, -188 + strideBob);
+        ctx.lineTo(7 + upperSway, -198 + strideBob);
         ctx.stroke();
 
         ctx.save();
-        ctx.translate(7 + upperSway, -178 + strideBob);
+        ctx.translate(7 + upperSway, -200 + strideBob);
         ctx.rotate(crouchHunch + neckSnap);
 
-        const skullGrad = ctx.createRadialGradient(4, -2, 2, 0, 0, 18);
-        skullGrad.addColorStop(0, isAfterimage ? '#991b1b' : '#9aa0aa');
-        skullGrad.addColorStop(0.6, isAfterimage ? '#450a0a' : '#434852');
-        skullGrad.addColorStop(1, '#101217');
+        const skullGrad = ctx.createRadialGradient(4, -2, 2, 0, 0, 19);
+        skullGrad.addColorStop(0, isAfterimage ? '#991b1b' : '#9ca3af');
+        skullGrad.addColorStop(0.58, isAfterimage ? '#450a0a' : '#3f444c');
+        skullGrad.addColorStop(1, '#0d0e12');
         ctx.fillStyle = skullGrad;
         ctx.beginPath();
-        ctx.moveTo(-12, -15);
+        ctx.moveTo(-11, -15);
         ctx.quadraticCurveTo(13, -17, 15, -2);
-        ctx.quadraticCurveTo(14, 14, 3, 17);
-        ctx.quadraticCurveTo(-13, 12, -12, -15);
+        ctx.quadraticCurveTo(13, 15, 2, 18);
+        ctx.quadraticCurveTo(-12, 13, -11, -15);
         ctx.closePath();
         ctx.fill();
 
-        // Sunken cheekbone shadow + hollow orbital socket + pinpoint crimson pupil + dried blood tear
-        ctx.fillStyle = '#050406';
-        ctx.beginPath();
-        ctx.ellipse(7.2, -3.2, 4.6, 5.4, 0.1, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#dc2626';
-        ctx.beginPath();
-        ctx.arc(8.2, -2.8, 1.6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = '#fecaca';
-        ctx.fillRect(7.9, -3.4, 0.9, 0.9);
+        // Hollow bruised socket + pinpoint unblinking staring eye + weeping blood streak
+        drawHollowSocketEye(7.4, -3.5, 4.2, ghost.alerted);
+        ctx.fillStyle = 'rgba(127, 29, 29, 0.88)';
+        ctx.fillRect(6.4, 2, 1.8, 10);
 
-        ctx.fillStyle = 'rgba(127, 29, 29, 0.9)';
-        ctx.fillRect(6.2, 1.8, 2.0, 10);
-        ctx.fillStyle = '#070304';
+        // Shadowed unhinged jaw with faint pale teeth slits
+        ctx.fillStyle = '#050203';
         ctx.beginPath();
-        ctx.ellipse(7.5, 9.8, 4.4, 5.8, 0, 0, Math.PI * 2);
+        ctx.ellipse(7.5, 10.5, 4.2, 6.2, 0, 0, Math.PI * 2);
         ctx.fill();
+        if (!isAfterimage) {
+          ctx.fillStyle = '#cbd5e1';
+          ctx.fillRect(5.5, 5.2, 1.4, 2.2);
+          ctx.fillRect(8.2, 5.4, 1.4, 2.2);
+          ctx.fillRect(6.5, 13.8, 1.4, 2.0);
+        }
 
-        // Weathered yellowed dunce cap with blood-ink characters & fluttering paper strips
-        const capGrad = ctx.createLinearGradient(-17, -108, 17, -9);
-        capGrad.addColorStop(0, isAfterimage ? '#7f1d1d' : '#a8a29e');
-        capGrad.addColorStop(0.7, isAfterimage ? '#450a0a' : '#78716c');
-        capGrad.addColorStop(1, '#3b2b28');
+        // Clumping wet black hair strands hanging over brow & cheeks
+        ctx.strokeStyle = '#050507';
+        ctx.lineWidth = 1.6;
+        for (const hx of [-6, -2, 2, 9]) {
+          ctx.beginPath();
+          ctx.moveTo(hx, -14);
+          ctx.quadraticCurveTo(hx + Math.sin(timeSec * 4 + hx) * 2, 2, hx - 2, 17);
+          ctx.stroke();
+        }
+
+        // Tall crumpled burial paper cone hat + smudged red ink stamp
+        const capGrad = ctx.createLinearGradient(-16, -114, 16, -9);
+        capGrad.addColorStop(0, isAfterimage ? '#7f1d1d' : '#a8a095');
+        capGrad.addColorStop(0.7, isAfterimage ? '#450a0a' : '#6e675e');
+        capGrad.addColorStop(1, '#2b2421');
         ctx.fillStyle = capGrad;
         ctx.beginPath();
-        ctx.moveTo(-17, -10);
-        ctx.lineTo(-3, -110);
-        ctx.lineTo(2, -108);
+        ctx.moveTo(-16, -10);
+        ctx.lineTo(-2, -114);
+        ctx.lineTo(3, -112);
         ctx.lineTo(16, -10);
         ctx.closePath();
         ctx.fill();
+        if (paperPat && !isAfterimage) {
+          ctx.save();
+          ctx.clip();
+          ctx.globalAlpha = 0.5;
+          ctx.fillStyle = paperPat;
+          ctx.fillRect(-18, -116, 36, 110);
+          ctx.restore();
+        }
 
         const tagSwing = Math.sin(timeSec * 5.2) * 4.5;
-        ctx.fillStyle = 'rgba(214, 211, 209, 0.74)';
+        ctx.fillStyle = 'rgba(214, 211, 209, 0.72)';
         ctx.beginPath();
         ctx.moveTo(-14, -10);
-        ctx.lineTo(-16 + tagSwing, 14);
-        ctx.lineTo(-11 + tagSwing, 14);
+        ctx.lineTo(-16 + tagSwing, 16);
+        ctx.lineTo(-11 + tagSwing, 16);
         ctx.closePath();
         ctx.fill();
 
         if (!isAfterimage) {
-          ctx.fillStyle = 'rgba(127, 29, 29, 0.92)';
-          ctx.font = `bold 9.5px ${FONT_SERIF}`;
+          ctx.fillStyle = 'rgba(127, 29, 29, 0.9)';
+          ctx.font = `bold 9px ${FONT_SERIF}`;
           ctx.textAlign = 'center';
-          ctx.fillText('TỘI', 0, -38);
+          ctx.fillText('TỘI', 0, -40);
         }
         ctx.restore();
 
-        // C. Wet Glossy Crimson Tongue + Dripping Drops
-        const tongueWhip = Math.sin(timeSec * (ghost.alerted ? 7.5 : 4.2)) * (9 + dread * 10);
-        const tongueBaseX = 15 + upperSway;
-        const tongueBaseY = -165 + strideBob;
-        const tongueTipX = 30 + Math.cos(timeSec * 3.8) * 14 + dread * 10;
-        const tongueTipY = -3;
-
-        ctx.strokeStyle = isAfterimage ? 'rgba(127, 29, 29, 0.45)' : '#5c0a0e';
-        ctx.lineWidth = 8.0;
-        ctx.lineCap = 'round';
+        // C. Scarred Wooden Guilt Placard hanging on frayed hemp rope
+        ctx.strokeStyle = '#6b5740';
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
-        ctx.moveTo(tongueBaseX, tongueBaseY);
-        ctx.bezierCurveTo(
-          38 + dread * 9,
-          -116,
-          6 + tongueWhip,
-          -52,
-          tongueTipX,
-          tongueTipY
-        );
+        ctx.moveTo(-6 + upperSway, -182);
+        ctx.lineTo(-15, -162);
+        ctx.moveTo(10 + upperSway, -182);
+        ctx.lineTo(15, -162);
         ctx.stroke();
-
-        if (!isAfterimage) {
-          ctx.strokeStyle = '#991b1b';
-          ctx.lineWidth = 4.5;
-          ctx.stroke();
-          ctx.strokeStyle = 'rgba(248, 113, 113, 0.42)';
-          ctx.lineWidth = 1.3;
-          ctx.stroke();
-
-          const dropPhase = (timeSec * 1.45) % 1;
-          ctx.fillStyle = `rgba(153, 27, 27, ${1 - dropPhase * 0.5})`;
-          ctx.beginPath();
-          ctx.ellipse(24, -74 + dropPhase * 72, 1.9, 3.6, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        // D. Scarred Wooden Guilt Placard hanging from frayed hemp cord
-        ctx.strokeStyle = '#786248';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(-6 + upperSway, -162);
-        ctx.lineTo(-15, -143);
-        ctx.moveTo(10 + upperSway, -162);
-        ctx.lineTo(15, -143);
-        ctx.stroke();
-
-        ctx.fillStyle = isAfterimage ? '#450a0a' : '#573c26';
-        ctx.fillRect(-19, -144, 40, 22);
-        ctx.strokeStyle = '#291b10';
+        ctx.fillStyle = isAfterimage ? '#450a0a' : '#4a3220';
+        ctx.fillRect(-19, -163, 40, 21);
+        ctx.strokeStyle = '#1f140d';
         ctx.lineWidth = 1;
-        ctx.strokeRect(-19, -144, 40, 22);
+        ctx.strokeRect(-19, -163, 40, 21);
         if (!isAfterimage) {
           ctx.fillStyle = '#09090b';
           ctx.font = `bold 7px ${FONT_SERIF}`;
           ctx.textAlign = 'center';
-          ctx.fillText(ghost.placardText, 1, -130);
+          ctx.fillText(ghost.placardText, 1, -150);
         }
 
-        // E. Reaching Articulated Skeletal Forearm & Gaunt Clawed Fingers
-        const armLift = dread * 0.82;
+        // D. Unnaturally Long Hanging & Lunging Skeletal Arm + Multi-Fingered Claws (Lingerer silhouette!)
+        const armLift = dread * 0.92;
         const shoulderX = 5 + upperSway;
-        const shoulderY = -152 + strideBob;
-        const elbowX = shoulderX + 7 + armLift * 20;
-        const elbowY = shoulderY + 38 - armLift * 26;
-        const handX = elbowX + 6 + armLift * 24;
-        const handY = elbowY + 36 - armLift * 24 + Math.sin(timeSec * 6) * 2.5;
+        const shoulderY = -172 + strideBob;
+        const elbowX = shoulderX + 6 + armLift * 24;
+        const elbowY = shoulderY + 52 - armLift * 36;
+        const handX = elbowX + 8 + armLift * 28;
+        const handY = elbowY + 54 - armLift * 36 + Math.sin(timeSec * 6) * 2.5;
 
-        ctx.fillStyle = isAfterimage ? '#7f1d1d' : '#1b1e24';
+        ctx.strokeStyle = isAfterimage ? '#7f1d1d' : '#16181d';
+        ctx.lineWidth = 6.2;
+        ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(shoulderX - 3.8, shoulderY);
-        ctx.lineTo(shoulderX + 3.8, shoulderY);
-        ctx.lineTo(elbowX + 2.6, elbowY);
-        ctx.lineTo(handX + 1.8, handY);
-        ctx.lineTo(handX - 1.8, handY);
-        ctx.lineTo(elbowX - 2.6, elbowY);
-        ctx.closePath();
-        ctx.fill();
+        ctx.moveTo(shoulderX, shoulderY);
+        ctx.lineTo(elbowX, elbowY);
+        ctx.lineTo(handX, handY);
+        ctx.stroke();
 
-        ctx.strokeStyle = isAfterimage ? '#991b1b' : '#94a3b8';
+        ctx.strokeStyle = isAfterimage ? '#991b1b' : '#717882';
         ctx.lineWidth = 1.6;
-        for (let f = -1; f <= 1; f += 1) {
+        for (let f = -1.5; f <= 1.5; f += 1) {
           ctx.beginPath();
           ctx.moveTo(handX, handY);
-          ctx.lineTo(handX + 9 + armLift * 5, handY + f * 3.8 + 4.5);
+          ctx.lineTo(handX + 9 + armLift * 6, handY + f * 3.6 + 6);
           ctx.stroke();
         }
       } else if (ghost.variant === 'librarian_wraith') {
-        // Thủ Thư Đốt Sách (~188px tall gaunt scholar robe, crooked horn-rimmed spectacles, orbiting burned poetry sheets)
+        // Thủ Thư Đốt Sách (~202px tall gaunt burnt scholar, cracked round spectacles, drifting embers)
         ctx.save();
-        ctx.translate(4 + upperSway, -178 + strideBob);
-        ctx.rotate(crouchHunch * 0.7 + neckSnap);
+        ctx.translate(5 + upperSway, -198 + strideBob);
+        ctx.rotate(crouchHunch * 0.8 + neckSnap);
         const libFace = ctx.createRadialGradient(2, -2, 2, 0, 0, 17);
-        libFace.addColorStop(0, isAfterimage ? '#991b1b' : '#b8b0a0');
-        libFace.addColorStop(0.68, isAfterimage ? '#450a0a' : '#4a433d');
-        libFace.addColorStop(1, '#121010');
+        libFace.addColorStop(0, isAfterimage ? '#991b1b' : '#afa798');
+        libFace.addColorStop(0.68, isAfterimage ? '#450a0a' : '#3d3732');
+        libFace.addColorStop(1, '#0e0c0c');
         ctx.fillStyle = libFace;
         ctx.beginPath();
-        ctx.ellipse(0, 0, 13, 16, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, 12.5, 16, 0, 0, Math.PI * 2);
         ctx.fill();
-
-        // Crooked circular horn-rimmed spectacles + crimson glare
+        drawHollowSocketEye(5.5, -2.5, 3.8, true);
+        // Cracked circular horn-rimmed glasses
         ctx.strokeStyle = '#1c1917';
-        ctx.lineWidth = 1.6;
+        ctx.lineWidth = 1.7;
         ctx.beginPath();
-        ctx.arc(5.5, -2, 4.5, 0, Math.PI * 2);
+        ctx.arc(5.5, -2.5, 5, 0, Math.PI * 2);
         ctx.stroke();
-        ctx.fillStyle = '#dc2626';
+        ctx.fillStyle = '#050203';
         ctx.beginPath();
-        ctx.arc(6.5, -2, 1.8, 0, Math.PI * 2);
+        ctx.ellipse(5, 9, 3.8, 5.2, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
 
-        // Orbiting charred poetry pages around shoulders
         if (!isAfterimage) {
           for (let p = 0; p < 3; p += 1) {
             const ang = timeSec * 2.1 + (p * Math.PI * 2) / 3;
             const px = Math.cos(ang) * 26;
-            const py = -126 + Math.sin(ang * 1.4) * 14;
+            const py = -142 + Math.sin(ang * 1.4) * 14;
             ctx.save();
             ctx.translate(px, py);
             ctx.rotate(Math.sin(timeSec * 3 + p) * 0.4);
-            ctx.fillStyle = '#d6cab4';
+            ctx.fillStyle = '#cfc3ad';
             ctx.fillRect(-5, -7, 10, 14);
-            ctx.fillStyle = '#991b1b';
+            ctx.fillStyle = '#7f1d1d';
             ctx.fillRect(-3, -2, 6, 2);
             ctx.restore();
           }
         }
 
-        // Ink-stained placard
-        ctx.fillStyle = isAfterimage ? '#450a0a' : '#573c26';
-        ctx.fillRect(-19, -144, 40, 21);
-        if (!isAfterimage) {
-          ctx.fillStyle = '#09090b';
-          ctx.font = `bold 7px ${FONT_SERIF}`;
-          ctx.textAlign = 'center';
-          ctx.fillText(ghost.placardText, 1, -130);
-        }
-
-        // Reaching charred-ink forearm clutching a burning ash trail
-        const libReach = dread * 0.78;
+        const libReach = dread * 0.85;
         const lShX = 4 + upperSway;
-        const lShY = -150 + strideBob;
-        const lHandX = lShX + 18 + libReach * 34;
-        const lHandY = lShY + 62 - libReach * 42 + Math.sin(timeSec * 5.2) * 3;
-        ctx.strokeStyle = isAfterimage ? '#7f1d1d' : '#1b1715';
-        ctx.lineWidth = 6.2;
+        const lShY = -170 + strideBob;
+        const lHandX = lShX + 20 + libReach * 38;
+        const lHandY = lShY + 78 - libReach * 52 + Math.sin(timeSec * 5.2) * 3;
+        ctx.strokeStyle = isAfterimage ? '#7f1d1d' : '#181412';
+        ctx.lineWidth = 5.8;
         ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(lShX, lShY);
-        ctx.lineTo(lShX + 10 + libReach * 16, lShY + 34 - libReach * 18);
+        ctx.lineTo(lShX + 10 + libReach * 18, lShY + 42 - libReach * 24);
         ctx.lineTo(lHandX, lHandY);
         ctx.stroke();
-        ctx.strokeStyle = isAfterimage ? '#991b1b' : '#a8a29e';
+        ctx.strokeStyle = isAfterimage ? '#991b1b' : '#9ca3af';
         ctx.lineWidth = 1.5;
-        for (let f = -1; f <= 1; f += 1) {
+        for (let f = -1.5; f <= 1.5; f += 1) {
           ctx.beginPath();
           ctx.moveTo(lHandX, lHandY);
-          ctx.lineTo(lHandX + 8 + libReach * 4, lHandY + f * 3.5 + 3);
+          ctx.lineTo(lHandX + 8 + libReach * 4, lHandY + f * 3.4 + 4);
           ctx.stroke();
         }
       } else if (ghost.variant === 'auditor_specter') {
-        // Ác Linh Tự Vệ — Trương Vệ Quốc (~188px tall, 70° snapped neck, Red Guard armband, cracked megaphone & heavy spiked ruler)
+        // Ác Linh Tự Vệ (~205px tall, violently 70° snapped neck, Red Guard cap, dented megaphone)
         if (!isAfterimage) {
-          ctx.fillStyle = '#881337';
-          ctx.fillRect(-17 + upperSway, -148 + strideBob, 12, 16);
-          ctx.fillStyle = '#ef4444';
-          ctx.fillRect(-15 + upperSway, -143 + strideBob, 8, 2.2);
+          ctx.fillStyle = '#7f1d1d';
+          ctx.fillRect(-16 + upperSway, -166 + strideBob, 11, 16);
+          ctx.fillStyle = '#dc2626';
+          ctx.fillRect(-14 + upperSway, -161 + strideBob, 7, 2.2);
         }
 
         ctx.save();
-        ctx.translate(7 + upperSway, -182 + strideBob);
-        ctx.rotate(0.68 + neckSnap * 0.6);
+        ctx.translate(7 + upperSway, -202 + strideBob);
+        ctx.rotate(0.72 + neckSnap * 0.6);
         const auditorFace = ctx.createRadialGradient(2, -2, 2, 0, 0, 18);
-        auditorFace.addColorStop(0, isAfterimage ? '#991b1b' : '#a1a8b3');
-        auditorFace.addColorStop(0.68, isAfterimage ? '#450a0a' : '#374151');
+        auditorFace.addColorStop(0, isAfterimage ? '#991b1b' : '#9aa1ac');
+        auditorFace.addColorStop(0.68, isAfterimage ? '#450a0a' : '#333a45');
         auditorFace.addColorStop(1, '#09090b');
         ctx.fillStyle = auditorFace;
         ctx.beginPath();
-        ctx.ellipse(0, 0, 14, 16, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, 13.5, 16, 0, 0, Math.PI * 2);
         ctx.fill();
+        drawHollowSocketEye(6.2, -1.5, 3.8, true);
 
         ctx.fillStyle = '#18181b';
         ctx.beginPath();
-        ctx.arc(0, -6, 15, Math.PI, 0);
+        ctx.arc(0, -6, 14.5, Math.PI, 0);
         ctx.fill();
         ctx.fillRect(-5, -11, 22, 4.2);
-        ctx.fillStyle = '#dc2626';
-        ctx.beginPath();
-        ctx.arc(6.5, -1, 2.3, 0, Math.PI * 2);
-        ctx.fill();
         ctx.restore();
 
         const megaX = 18 + upperSway;
-        const megaY = -156 + strideBob;
+        const megaY = -172 + strideBob;
         ctx.fillStyle = isAfterimage ? '#7f1d1d' : '#475569';
         ctx.beginPath();
         ctx.moveTo(megaX - 7, megaY - 5.5);
@@ -2658,87 +2947,67 @@ export class ThanhMinhCanvasRenderer {
         ctx.closePath();
         ctx.fill();
 
-        if (!isAfterimage) {
-          const waveP = (timeSec * 1.9) % 1;
-          ctx.strokeStyle = `rgba(220, 38, 38, ${(1 - waveP) * 0.58})`;
-          ctx.lineWidth = 1.8;
-          ctx.beginPath();
-          ctx.arc(megaX + 21, megaY, 8 + waveP * 28, -0.7, 0.7);
-          ctx.stroke();
-        }
-
         const armThrust = Math.sin(timeSec * (ghost.alerted ? 6 : 3)) * 5.5;
-        ctx.strokeStyle = isAfterimage ? '#7f1d1d' : '#262b27';
-        ctx.lineWidth = 6.5;
+        ctx.strokeStyle = isAfterimage ? '#7f1d1d' : '#1e2420';
+        ctx.lineWidth = 6.2;
         ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(0 + upperSway, -148 + strideBob);
-        ctx.lineTo(14, -100);
-        ctx.lineTo(24 + armThrust, -66);
+        ctx.moveTo(0 + upperSway, -166 + strideBob);
+        ctx.lineTo(14, -112);
+        ctx.lineTo(24 + armThrust, -74);
         ctx.stroke();
 
-        ctx.strokeStyle = isAfterimage ? '#991b1b' : '#573b24';
-        ctx.lineWidth = 4.8;
+        ctx.strokeStyle = isAfterimage ? '#991b1b' : '#4a321e';
+        ctx.lineWidth = 4.6;
         ctx.beginPath();
-        ctx.moveTo(24 + armThrust, -68);
+        ctx.moveTo(24 + armThrust, -76);
         ctx.lineTo(42 + armThrust * 0.8, -2);
         ctx.stroke();
-
-        ctx.fillStyle = isAfterimage ? '#450a0a' : '#573c26';
-        ctx.fillRect(-19, -138, 40, 21);
-        if (!isAfterimage) {
-          ctx.fillStyle = '#09090b';
-          ctx.font = `bold 7px ${FONT_SERIF}`;
-          ctx.textAlign = 'center';
-          ctx.fillText(ghost.placardText, 1, -124);
-        }
       } else {
-        // Quỷ Sai Cắt Lưỡi (~192px tall Stooped Prison Warden, Rusted Shackle Chains, Thrusting Notched Shears)
+        // Quỷ Sai Cắt Lưỡi (~208px tall stooped executioner, rusted iron collar & chain, snapping heavy tailor shears)
         const chainSwing = Math.sin(timeSec * 3.6) * 7.5;
         ctx.strokeStyle = isAfterimage ? '#7f1d1d' : '#574236';
         ctx.lineWidth = 2.8;
         ctx.setLineDash([4.5, 2.2]);
         ctx.beginPath();
-        ctx.moveTo(-13, -114);
-        ctx.quadraticCurveTo(-24 + chainSwing, -54, -20 + chainSwing * 1.2, -2);
+        ctx.moveTo(-13, -132);
+        ctx.quadraticCurveTo(-24 + chainSwing, -62, -20 + chainSwing * 1.2, -2);
         ctx.stroke();
         ctx.setLineDash([]);
 
         ctx.save();
-        ctx.translate(5 + upperSway, -184 + strideBob);
-        ctx.rotate(crouchHunch * 0.8 + neckSnap);
+        ctx.translate(5 + upperSway, -204 + strideBob);
+        ctx.rotate(crouchHunch * 0.85 + neckSnap);
 
         const wardenFaceGrad = ctx.createRadialGradient(3, -3, 2, 0, 0, 19);
         wardenFaceGrad.addColorStop(0, isAfterimage ? '#991b1b' : '#848a94');
-        wardenFaceGrad.addColorStop(0.68, isAfterimage ? '#450a0a' : '#31343b');
-        wardenFaceGrad.addColorStop(1, '#101014');
+        wardenFaceGrad.addColorStop(0.68, isAfterimage ? '#450a0a' : '#2e3138');
+        wardenFaceGrad.addColorStop(1, '#0d0d10');
         ctx.fillStyle = wardenFaceGrad;
         ctx.beginPath();
-        ctx.ellipse(0, 0, 15, 18, 0, 0, Math.PI * 2);
+        ctx.ellipse(0, 0, 14, 17.5, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.fillStyle = '#09090b';
-        ctx.fillRect(-14, -16, 31, 7.5);
-        ctx.fillStyle = '#991b1b';
-        ctx.fillRect(5.5, -3, 2.8, 14);
-        ctx.fillStyle = '#ef4444';
-        ctx.beginPath();
-        ctx.arc(7.0, -4.5, 1.9, 0, Math.PI * 2);
-        ctx.fill();
+        // Soaked execution blindfold + bleeding vertical slit over sunken eye
+        ctx.fillStyle = '#080608';
+        ctx.fillRect(-14, -10, 29, 7.5);
+        ctx.fillStyle = '#7f1d1d';
+        ctx.fillRect(5.2, -4, 2.5, 14);
+        drawHollowSocketEye(6.5, -5.5, 3.5, true);
         ctx.restore();
 
         const snipCycle = Math.sin(timeSec * (ghost.alerted ? 7.2 : 4.8));
-        const thrust = Math.max(0, snipCycle) * (8 + dread * 10);
+        const thrust = Math.max(0, snipCycle) * (10 + dread * 12);
         const snipAngle = Math.abs(snipCycle) * 0.34;
-        const shearPivotX = 20 + thrust;
-        const shearPivotY = -120 + strideBob;
+        const shearPivotX = 22 + thrust;
+        const shearPivotY = -132 + strideBob;
 
-        ctx.strokeStyle = isAfterimage ? '#7f1d1d' : '#261417';
-        ctx.lineWidth = 6.8;
+        ctx.strokeStyle = isAfterimage ? '#7f1d1d' : '#1f1215';
+        ctx.lineWidth = 6.5;
         ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(2 + upperSway, -154 + strideBob);
-        ctx.lineTo(13, -132);
+        ctx.moveTo(2 + upperSway, -172 + strideBob);
+        ctx.lineTo(14, -148);
         ctx.lineTo(shearPivotX, shearPivotY);
         ctx.stroke();
 
@@ -2747,15 +3016,15 @@ export class ThanhMinhCanvasRenderer {
         for (const dir of [-1, 1] as const) {
           ctx.save();
           ctx.rotate(dir * snipAngle);
-          const bladeGrad = ctx.createLinearGradient(0, 0, 48, 0);
-          bladeGrad.addColorStop(0, '#475569');
+          const bladeGrad = ctx.createLinearGradient(0, 0, 52, 0);
+          bladeGrad.addColorStop(0, '#334155');
           bladeGrad.addColorStop(0.7, '#94a3b8');
           bladeGrad.addColorStop(1, '#7f1d1d');
           ctx.fillStyle = isAfterimage ? '#7f1d1d' : bladeGrad;
           ctx.beginPath();
           ctx.moveTo(-2, 0);
-          ctx.lineTo(48, dir * 6.5);
-          ctx.lineTo(0, dir * 5.6);
+          ctx.lineTo(52, dir * 6.8);
+          ctx.lineTo(0, dir * 5.8);
           ctx.closePath();
           ctx.fill();
           if (!isAfterimage) {
@@ -2763,20 +3032,20 @@ export class ThanhMinhCanvasRenderer {
             ctx.lineWidth = 1.1;
             ctx.beginPath();
             ctx.moveTo(0, dir * 1.2);
-            ctx.lineTo(46, dir * 6.0);
+            ctx.lineTo(50, dir * 6.2);
             ctx.stroke();
           }
           ctx.restore();
         }
         ctx.restore();
 
-        ctx.fillStyle = isAfterimage ? '#450a0a' : '#573c26';
-        ctx.fillRect(-19, -150, 40, 21);
+        ctx.fillStyle = isAfterimage ? '#450a0a' : '#4a3220';
+        ctx.fillRect(-19, -166, 40, 21);
         if (!isAfterimage) {
           ctx.fillStyle = '#09090b';
           ctx.font = `bold 7px ${FONT_SERIF}`;
           ctx.textAlign = 'center';
-          ctx.fillText(ghost.placardText, 1, -136);
+          ctx.fillText(ghost.placardText, 1, -153);
         }
       }
 
@@ -3300,339 +3569,330 @@ export class ThanhMinhCanvasRenderer {
     const isExhausted = state.exhausted;
     const stride = isMoving ? Math.sin(state.walkPhase * Math.PI) : 0;
 
-    // Distinct posture & cadence by state: Running -> Upright/Agile, Exhausted -> Heavy Slumped Limp + Panting!
+    // Realistic 1960s high-school girl (~174px tall, 1:6.5 human proportions inspired by Fang Ray-Shin in Detention)
     const walkBob = isExhausted
-      ? Math.abs(stride) * 2.1 + Math.max(0, Math.sin(timeSec * 8.2)) * 2.2 // Heavy downward sag & rapid panting heave
+      ? Math.abs(stride) * 2.0 + Math.max(0, Math.sin(timeSec * 8.2)) * 2.0
       : isRunning
-        ? Math.abs(stride) * 5.2
-        : Math.abs(stride) * 3.0;
+        ? Math.abs(stride) * 4.4
+        : Math.abs(stride) * 2.4;
     const idleBreathe = isExhausted
-      ? Math.sin(timeSec * 8.2) * 1.9
-      : Math.sin(timeSec * 2.1) * 1.1;
+      ? Math.sin(timeSec * 8.2) * 1.6
+      : Math.sin(timeSec * 2.0) * 0.85;
 
     const torsoLean = isExhausted
-      ? 0.22 + Math.sin(timeSec * 8.2) * 0.025 // Visibly hunched forward with fatigue!
+      ? 0.19 + Math.sin(timeSec * 8.2) * 0.025
       : state.holdingBreath
-        ? 0.1
+        ? 0.09
         : isRunning
-          ? 0.15
+          ? 0.13
           : state.gazeExposure > 35
-            ? 0.07
-            : 0.02;
-    const panicTremble = state.sanity < 50 ? Math.sin(timeSec * 34) * 0.85 : 0;
+            ? 0.06
+            : 0.015;
+    const panicTremble = state.sanity < 50 ? Math.sin(timeSec * 34) * 0.75 : 0;
 
     ctx.save();
     ctx.translate(state.playerX, floorY);
 
-    // Anchored soft elliptical ground shadow (widens slightly during sprint)
+    // Anchored elliptical floor shadow
     const shadowGrad = ctx.createRadialGradient(0, 3, 2, 0, 3, isRunning ? 26 : 22);
-    shadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0.72)');
+    shadowGrad.addColorStop(0, 'rgba(0, 0, 0, 0.76)');
     shadowGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = shadowGrad;
     ctx.beginPath();
-    ctx.ellipse(0, 3.5, isRunning ? 24 : 20, 5.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 3.5, isRunning ? 24 : 19, 5, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.translate(panicTremble, (isExhausted ? 3.5 : 0) - walkBob + idleBreathe);
-    ctx.scale(state.playerFacing, 1);
+    ctx.translate(panicTremble, (isExhausted ? 3.2 : 0) - walkBob + idleBreathe);
+    const PLAYER_SCALE = 0.87;
+    ctx.scale(state.playerFacing * PLAYER_SCALE, PLAYER_SCALE);
 
-    // 1. Sculpted Anatomical Legs (Thigh -> Knee -> Calf -> Ankle, Sock Cuffs & Mary-Jane Shoes)
-    const strideSpan = isRunning ? 17.5 : isExhausted ? 7.2 : 11.8;
+    // 1. Slender Natural Schoolgirl Legs (Hip -> Knee -> Ankle -> Mid-calf White Socks & Dark Leather Loafers)
+    const strideSpan = isRunning ? 17.5 : isExhausted ? 7.5 : 12.2;
     const swingA = stride * strideSpan;
     const swingB = -stride * strideSpan;
-    const kneeBendDrop = isExhausted ? 3.5 : 0;
+    const kneeBendDrop = isExhausted ? 3.0 : 0;
 
     for (const [legIdx, hipSwing] of [
       [0, swingB],
       [1, swingA],
     ] as const) {
-      const kneeX = hipSwing * 0.56 + (isRunning ? 4 : isExhausted ? 3.5 : 2);
-      const kneeY = -27 + kneeBendDrop;
+      const kneeX = hipSwing * 0.54 + (isRunning ? 3.5 : 1.5);
+      const kneeY = -34 + kneeBendDrop;
       const footX = hipSwing;
-      const footLift = isRunning ? Math.max(0, -hipSwing * 0.22) : isExhausted ? 0 : Math.max(0, -hipSwing * 0.1);
+      const footLift = isRunning ? Math.max(0, -hipSwing * 0.22) : isExhausted ? 0 : Math.max(0, -hipSwing * 0.09);
       const footY = -3 - footLift;
 
-      // Upper thigh + lower calf with realistic anatomical taper
-      ctx.fillStyle = legIdx === 0 ? '#c3a48f' : '#e6cbb7';
+      // Slender calf & knee taper
+      ctx.fillStyle = legIdx === 0 ? '#b79782' : '#d6b7a2';
       ctx.beginPath();
-      ctx.moveTo((legIdx === 0 ? -3.5 : 1.5) - 4.2, -52);
-      ctx.lineTo((legIdx === 0 ? -3.5 : 1.5) + 4.2, -52);
-      ctx.quadraticCurveTo(kneeX + 3.6, kneeY, footX + 2.1, footY);
-      ctx.lineTo(footX - 2.1, footY);
-      ctx.quadraticCurveTo(kneeX - 3.2, kneeY, (legIdx === 0 ? -3.5 : 1.5) - 4.2, -52);
+      ctx.moveTo((legIdx === 0 ? -3 : 1.5) - 3.6, -68);
+      ctx.lineTo((legIdx === 0 ? -3 : 1.5) + 3.6, -68);
+      ctx.quadraticCurveTo(kneeX + 3.1, kneeY, footX + 1.9, footY);
+      ctx.lineTo(footX - 1.9, footY);
+      ctx.quadraticCurveTo(kneeX - 2.9, kneeY, (legIdx === 0 ? -3 : 1.5) - 3.6, -68);
       ctx.closePath();
       ctx.fill();
 
-      // Knee-sock cuff & Mary-Jane buckled leather shoe
-      ctx.fillStyle = legIdx === 0 ? '#cbd5e1' : '#f1f5f9';
+      // Fold-over school socks & realistic dark leather loafers
+      ctx.fillStyle = legIdx === 0 ? '#94a3b8' : '#cbd5e1';
       ctx.beginPath();
-      ctx.moveTo(footX - 2.8, footY - 12);
-      ctx.lineTo(footX + 2.8, footY - 12);
-      ctx.lineTo(footX + 2.2, footY);
-      ctx.lineTo(footX - 2.2, footY);
+      ctx.moveTo(footX - 2.4, footY - 15);
+      ctx.lineTo(footX + 2.4, footY - 15);
+      ctx.lineTo(footX + 2.0, footY);
+      ctx.lineTo(footX - 2.0, footY);
       ctx.closePath();
       ctx.fill();
 
-      ctx.fillStyle = '#090d16';
+      ctx.fillStyle = '#090b10';
       ctx.beginPath();
-      ctx.ellipse(footX + 2.4, footY + 1.2, 6.8, 2.8, isRunning ? -0.1 : 0, 0, Math.PI * 2);
+      ctx.ellipse(footX + 2.5, footY + 1.2, 6.5, 2.5, isRunning ? -0.08 : 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillRect(footX - 0.5, footY - 0.8, 2.5, 1.0);
     }
 
-    // 2. Upper Body Pivot (Waist up — leans forward naturally on sprint or slumps heavily when exhausted)
+    // 2. Upper Body Pivot (Natural 1960s Student Proportions from Waist -68 up to Shoulder -118)
     ctx.save();
-    ctx.translate(0, -52);
+    ctx.translate(0, -68);
     ctx.rotate(torsoLean);
 
-    // Back swinging arm (visible behind skirt/torso during walk & sprint!)
+    // Back arm (slender sleeve + hand)
     if (!state.holdingBreath) {
       const backArmAngle = isExhausted
-        ? -0.25 + stride * 0.14
+        ? -0.22 + stride * 0.14
         : isRunning
-          ? -stride * 0.85
-          : -stride * 0.35;
+          ? -stride * 0.78
+          : -stride * 0.32;
       ctx.save();
-      ctx.translate(-3, -38);
+      ctx.translate(-3, -46);
       ctx.rotate(backArmAngle);
       ctx.fillStyle = '#94a3b8';
       ctx.beginPath();
-      ctx.moveTo(-2.5, 0);
-      ctx.lineTo(2.5, 0);
-      ctx.lineTo(1.8, 28);
-      ctx.lineTo(-2.0, 28);
+      ctx.moveTo(-2.4, 0);
+      ctx.lineTo(2.4, 0);
+      ctx.lineTo(1.9, 34);
+      ctx.lineTo(-1.8, 34);
       ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = '#cfaea0';
+      ctx.fillStyle = '#caa792';
       ctx.beginPath();
-      ctx.arc(0, 29, 2.3, 0, Math.PI * 2);
+      ctx.arc(0, 35.5, 2.0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
 
-    // Flowing pleated navy Cô Sơn uniform skirt with realistic lighting pleats
-    const skirtFlare = (isRunning ? 8 : Math.abs(stride) * 3.8);
-    const skirtGrad = ctx.createLinearGradient(-13, -39, 13, 3);
-    skirtGrad.addColorStop(0, '#1e293b');
-    skirtGrad.addColorStop(0.6, '#172554');
-    skirtGrad.addColorStop(1, '#0b1120');
+    // Below-knee Pleated Dark Navy Schoolgirl Skirt (-46 down to +22 relative to hip = midi length!)
+    const skirtFlare = isRunning ? 7.5 : Math.abs(stride) * 3.5;
+    const skirtGrad = ctx.createLinearGradient(-12, -46, 12, 22);
+    skirtGrad.addColorStop(0, '#162033');
+    skirtGrad.addColorStop(0.6, '#111a2e');
+    skirtGrad.addColorStop(1, '#070b14');
     ctx.fillStyle = skirtGrad;
     ctx.beginPath();
-    ctx.moveTo(-9.5, -39);
-    ctx.lineTo(9.5, -39);
-    ctx.quadraticCurveTo(15 + skirtFlare, -18, 16 + skirtFlare, 3);
-    ctx.quadraticCurveTo(0, 7, -16 - skirtFlare, 3);
-    ctx.quadraticCurveTo(-14, -18, -9.5, -39);
+    ctx.moveTo(-8.5, -46);
+    ctx.lineTo(8.5, -46);
+    ctx.quadraticCurveTo(13.5 + skirtFlare, -12, 15.5 + skirtFlare, 22);
+    ctx.quadraticCurveTo(0, 26, -15.5 - skirtFlare, 22);
+    ctx.quadraticCurveTo(-13.5, -12, -8.5, -46);
     ctx.closePath();
     ctx.fill();
 
-    // Crisp accordion pleat shadows + waist band
-    ctx.strokeStyle = 'rgba(2, 6, 23, 0.78)';
-    ctx.lineWidth = 1.1;
-    for (const px of [-5.5, 0, 5.5]) {
+    // Accordion skirt pleats
+    ctx.strokeStyle = 'rgba(2, 6, 16, 0.8)';
+    ctx.lineWidth = 1;
+    for (const px of [-5, 0, 5]) {
       ctx.beginPath();
-      ctx.moveTo(px * 0.7, -37);
-      ctx.lineTo(px * 1.45, 3.5);
+      ctx.moveTo(px * 0.65, -44);
+      ctx.lineTo(px * 1.5, 23);
       ctx.stroke();
     }
 
-    // Tailored 1960s Student Blouse with contoured waist & oil-lantern cloth rim
-    const blouseGrad = ctx.createLinearGradient(-10, -82, 11, -39);
-    blouseGrad.addColorStop(0, '#f1f5f9');
+    // Tailored 1960s Long-Sleeved Ivory Student Blouse (-96 to -46) + Dark Sailor Collar & Tie
+    const blouseGrad = ctx.createLinearGradient(-9, -96, 10, -46);
+    blouseGrad.addColorStop(0, '#e2e8f0');
     blouseGrad.addColorStop(0.55, '#cbd5e1');
     blouseGrad.addColorStop(1, '#94a3b8');
     ctx.fillStyle = blouseGrad;
     ctx.beginPath();
-    ctx.moveTo(-9.5, -39);
-    ctx.quadraticCurveTo(-11.5, -62, -9, -82);
-    ctx.lineTo(9, -82);
-    ctx.quadraticCurveTo(11.5, -62, 9.5, -39);
+    ctx.moveTo(-8.5, -46);
+    ctx.quadraticCurveTo(-10.5, -72, -8, -96);
+    ctx.lineTo(8, -96);
+    ctx.quadraticCurveTo(10.5, -72, 8.5, -46);
     ctx.closePath();
     ctx.fill();
 
-    // Sailor collar flap, crimson silk ribbon & Cô Sơn stitched badge
+    // Classic 1960s Taiwanese/Vietnamese school uniform navy collar & dark tie
     ctx.fillStyle = '#1e293b';
     ctx.beginPath();
-    ctx.moveTo(-9, -82);
-    ctx.lineTo(0, -64);
-    ctx.lineTo(9, -82);
+    ctx.moveTo(-8.5, -96);
+    ctx.lineTo(0, -76);
+    ctx.lineTo(8.5, -96);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = '#b91c1c';
+    ctx.fillStyle = '#7f1d1d';
     ctx.beginPath();
-    ctx.moveTo(0, -65);
-    ctx.lineTo(-3.2, -56);
-    ctx.lineTo(2, -55);
+    ctx.moveTo(0, -78);
+    ctx.lineTo(-2.5, -66);
+    ctx.lineTo(2.0, -65);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(3.5, -64, 4.5, 2.2);
 
-    // 3. Sculpted Realistic Head, Jawline, Tracking Eye, Sweat Drops (when Exhausted) & Flowing Braids
+    // 3. Slender Realistic Girl Head (-108 pivot, smaller ~1:6.5 human proportion + dark shoulder-length hair!)
     ctx.save();
-    ctx.translate(1, -93);
+    ctx.translate(1, -106);
     const headPitch = isExhausted
-      ? 0.16 + Math.sin(timeSec * 8.2) * 0.035 // Exhausted head hangs low & heaves!
+      ? 0.16 + Math.sin(timeSec * 8.2) * 0.032
       : state.holdingBreath
-        ? 0.07
+        ? 0.06
         : -0.02;
     ctx.rotate(headPitch);
 
-    // Slender neck
-    ctx.fillStyle = '#d3b49d';
-    ctx.fillRect(-2.8, 5, 5.6, 9);
+    // Slender human neck
+    ctx.fillStyle = '#cba892';
+    ctx.fillRect(-2.4, 4, 4.8, 10);
 
-    // Twin dynamic braided pigtails with crimson silk ties (billow back strongly when sprinting!)
-    const braidPullBack = isRunning ? -14 : isExhausted ? -2 : 0;
-    const hairSwing = Math.sin(timeSec * (isRunning ? 9 : 4.2) + state.walkPhase * 2) * (isMoving ? 5 : 1.5);
-    ctx.strokeStyle = '#09090b';
-    ctx.lineWidth = 5.0;
-    ctx.lineCap = 'round';
+    // Flowing dark shoulder-length bob / back hair swaying softly behind neck & collar
+    const hairBackPull = isRunning ? -9 : isExhausted ? -2 : 0;
+    const hairWave = Math.sin(timeSec * (isRunning ? 8.5 : 3.6) + state.walkPhase * 2) * (isMoving ? 3.5 : 1.1);
+    ctx.fillStyle = '#09090d';
     ctx.beginPath();
-    ctx.moveTo(-7, -3);
-    ctx.quadraticCurveTo(-13 + braidPullBack * 0.5 - hairSwing * 0.5, 11, -11 + braidPullBack - hairSwing, 26);
-    ctx.stroke();
-    ctx.fillStyle = '#dc2626';
-    ctx.fillRect(-13 + braidPullBack - hairSwing * 0.85, 20, 4.5, 2.4);
-
-    // Realistic contoured jawline & soft subsurface-lit face
-    const faceGrad = ctx.createRadialGradient(2.5, -2.5, 1.5, 0, -1, 11.5);
-    faceGrad.addColorStop(0, '#f6e4d5');
-    faceGrad.addColorStop(0.7, '#dfbfa8');
-    faceGrad.addColorStop(1, '#b18b73');
-    ctx.fillStyle = faceGrad;
-    ctx.beginPath();
-    ctx.moveTo(-8.2, -9);
-    ctx.quadraticCurveTo(0, -15, 8.6, -8);
-    ctx.quadraticCurveTo(9.8, 1, 7.4, 7.2);
-    ctx.quadraticCurveTo(3.2, 10.2, -3.5, 8.8);
-    ctx.quadraticCurveTo(-9, 3, -8.2, -9);
+    ctx.moveTo(-6, -8);
+    ctx.quadraticCurveTo(-11 + hairBackPull * 0.5, 4, -10 + hairBackPull - hairWave, 20);
+    ctx.quadraticCurveTo(-4, 21, 2, 16);
+    ctx.lineTo(3, -6);
     ctx.closePath();
     ctx.fill();
 
-    // Cheek tint + parted mouth when exhausted/panting
-    ctx.fillStyle = isExhausted ? 'rgba(225, 105, 105, 0.28)' : 'rgba(225, 135, 135, 0.18)';
+    // Realistic contoured oval profile face (NO giant doll face!)
+    const faceGrad = ctx.createRadialGradient(2.2, -1.8, 1, 0, -1, 9.5);
+    faceGrad.addColorStop(0, '#ecd2be');
+    faceGrad.addColorStop(0.7, '#d1ad94');
+    faceGrad.addColorStop(1, '#9f7b65');
+    ctx.fillStyle = faceGrad;
     ctx.beginPath();
-    ctx.ellipse(4.2, 3.2, 2.6, 1.5, 0, 0, Math.PI * 2);
+    ctx.moveTo(-6.2, -7.5);
+    ctx.quadraticCurveTo(0, -12, 6.8, -6.5);
+    ctx.quadraticCurveTo(7.8, 0.5, 6.2, 5.5);
+    ctx.quadraticCurveTo(2.4, 7.8, -2.5, 6.8);
+    ctx.quadraticCurveTo(-7, 2.5, -6.2, -7.5);
+    ctx.closePath();
     ctx.fill();
+
+    // Subtle realistic nose shadow & closed/parted lips
     if (isExhausted) {
-      // Open panting mouth silhouette
       ctx.fillStyle = '#5c2626';
       ctx.beginPath();
-      ctx.ellipse(5.5, 6.2, 1.7, 1.1 + Math.sin(timeSec * 8.2) * 0.35, 0, 0, Math.PI * 2);
+      ctx.ellipse(4.8, 4.8, 1.3, 0.9 + Math.sin(timeSec * 8.2) * 0.25, 0, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      ctx.strokeStyle = 'rgba(130, 75, 65, 0.65)';
-      ctx.lineWidth = 0.9;
+      ctx.strokeStyle = 'rgba(110, 62, 52, 0.65)';
+      ctx.lineWidth = 0.8;
       ctx.beginPath();
-      ctx.moveTo(4.0, 6.2);
-      ctx.lineTo(6.4, 5.9);
+      ctx.moveTo(3.5, 4.8);
+      ctx.lineTo(5.6, 4.6);
       ctx.stroke();
     }
 
-    // Layered expressive eye tracking nearest ghost danger
+    // Refined natural human eye (small expressive gaze, NOT huge anime doll eye)
     const ghostBehind =
       nearestGhost &&
       Math.abs(nearestGhost.x - state.playerX) < 260 &&
       (nearestGhost.x - state.playerX) * state.playerFacing < 0;
-    const irisX = ghostBehind ? 3.8 : 5.5;
-    ctx.fillStyle = '#f8fafc';
+    const irisX = ghostBehind ? 3.1 : 4.4;
+    ctx.fillStyle = '#e2e8f0';
     ctx.beginPath();
-    ctx.ellipse(5.1, -1.5, 2.4, 1.6, 0, 0, Math.PI * 2);
+    ctx.ellipse(4.1, -1.2, 1.8, 1.0, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#09090b';
     ctx.beginPath();
-    ctx.arc(irisX, -1.5, 1.35, 0, Math.PI * 2);
+    ctx.arc(irisX, -1.2, 0.95, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(irisX + 0.3, -2.2, 0.75, 0.75);
     ctx.strokeStyle = '#09090b';
-    ctx.lineWidth = 1.25;
+    ctx.lineWidth = 1.0;
     ctx.beginPath();
-    ctx.arc(5.1, -1.6, 2.5, Math.PI * 1.1, Math.PI * 1.9);
+    ctx.moveTo(2.3, -2.0);
+    ctx.lineTo(5.8, -1.7);
     ctx.stroke();
 
-    // Exhausted / terrified brow furrow
-    ctx.strokeStyle = '#1e293b';
-    ctx.lineWidth = 1.1;
+    // Subtle eyebrow
+    ctx.strokeStyle = '#18181b';
+    ctx.lineWidth = 0.95;
     ctx.beginPath();
     if (isExhausted || state.holdingBreath || state.gazeExposure > 25) {
-      ctx.moveTo(2.4, -4.8);
-      ctx.lineTo(7.4, -6.2);
+      ctx.moveTo(2.0, -3.9);
+      ctx.lineTo(6.0, -5.0);
     } else {
-      ctx.moveTo(2.6, -5.2);
-      ctx.lineTo(7.2, -5.0);
+      ctx.moveTo(2.2, -4.1);
+      ctx.lineTo(5.8, -4.0);
     }
     ctx.stroke();
 
-    // Glossy bangs & crown highlight
-    ctx.fillStyle = '#09090b';
+    // Natural parted 1960s student hair crown, ear-tuck strand & soft wispy bangs
+    ctx.fillStyle = '#09090d';
     ctx.beginPath();
-    ctx.moveTo(-9, -2);
-    ctx.quadraticCurveTo(-10.8, -16, 0, -16.2);
-    ctx.quadraticCurveTo(9.8, -15.5, 9.2, -6);
-    ctx.quadraticCurveTo(3.5, -10, -4, -3);
+    ctx.moveTo(-7.2, -1);
+    ctx.quadraticCurveTo(-8.5, -13, 0, -13.2);
+    ctx.quadraticCurveTo(7.8, -12.6, 7.2, -4.8);
+    ctx.quadraticCurveTo(3.2, -8, -1.8, -3);
+    ctx.quadraticCurveTo(-2.5, 4, -4.5, 11);
+    ctx.lineTo(-7.5, 11);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
-    ctx.lineWidth = 0.9;
+    // Subtle warm lantern rim highlight on hair edge
+    ctx.strokeStyle = 'rgba(251, 191, 36, 0.25)';
+    ctx.lineWidth = 0.8;
     ctx.beginPath();
-    ctx.arc(-1, -6, 8, Math.PI * 1.15, Math.PI * 1.65);
+    ctx.arc(-0.5, -5, 6.8, Math.PI * 1.2, Math.PI * 1.75);
     ctx.stroke();
 
-    // Glistening cold sweat droplets rolling down temple when exhausted!
     if (isExhausted) {
       const sweatPhase = (timeSec * 1.35) % 1;
-      ctx.fillStyle = `rgba(186, 230, 253, ${(1 - sweatPhase) * 0.9})`;
+      ctx.fillStyle = `rgba(186, 230, 253, ${(1 - sweatPhase) * 0.85})`;
       ctx.beginPath();
-      ctx.ellipse(2.2, -4 + sweatPhase * 11, 1.0, 1.7, 0, 0, Math.PI * 2);
+      ctx.ellipse(2.0, -3 + sweatPhase * 9, 0.9, 1.5, 0, 0, Math.PI * 2);
       ctx.fill();
     }
 
     ctx.restore();
 
-    // 4. Front Arm & Ornate Brass Oil Lantern / Exhausted Chest Clutch / Breath-Hold Pose
+    // 4. Front Arm & Held Brass Storm Oil Lantern
     if (state.holdingBreath) {
       ctx.fillStyle = '#cbd5e1';
       ctx.beginPath();
-      ctx.moveTo(2, -77);
-      ctx.lineTo(13, -68);
-      ctx.lineTo(10, -90);
-      ctx.lineTo(5, -90);
-      ctx.lineTo(8, -70);
-      ctx.lineTo(-1, -74);
+      ctx.moveTo(2, -91);
+      ctx.lineTo(11, -80);
+      ctx.lineTo(8, -104);
+      ctx.lineTo(4, -104);
+      ctx.lineTo(6, -82);
+      ctx.lineTo(-1, -88);
       ctx.closePath();
       ctx.fill();
-      ctx.fillStyle = '#edd4c0';
+      ctx.fillStyle = '#e6c6af';
       ctx.beginPath();
-      ctx.arc(8.5, -90, 2.8, 0, Math.PI * 2);
+      ctx.arc(6.5, -104, 2.3, 0, Math.PI * 2);
       ctx.fill();
     } else if (isExhausted) {
-      // Exhausted pose: lantern hangs low & slackly near knees while body heaves for air
-      const heave = Math.sin(timeSec * 8.2) * 2.5;
+      const heave = Math.sin(timeSec * 8.2) * 2.2;
       ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 4.6;
+      ctx.lineWidth = 4.2;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.beginPath();
-      ctx.moveTo(4, -77);
-      ctx.lineTo(11, -56);
-      ctx.lineTo(14, -36 + heave * 0.4);
+      ctx.moveTo(3, -90);
+      ctx.lineTo(10, -64);
+      ctx.lineTo(14, -42 + heave * 0.4);
       ctx.stroke();
 
-      ctx.fillStyle = '#ecd8c7';
+      ctx.fillStyle = '#e5c6b0';
       ctx.beginPath();
-      ctx.arc(14, -35 + heave * 0.4, 2.6, 0, Math.PI * 2);
+      ctx.arc(14, -41 + heave * 0.4, 2.2, 0, Math.PI * 2);
       ctx.fill();
 
-      const lanternX = 14.5 + Math.sin(timeSec * 6.5) * 1.8;
-      const lanternY = -34 + heave * 0.4;
-      const halo = ctx.createRadialGradient(lanternX, lanternY + 8, 2, lanternX, lanternY + 8, 26);
-      halo.addColorStop(0, 'rgba(251, 191, 36, 0.72)');
+      const lanternX = 14.5 + Math.sin(timeSec * 6.5) * 1.6;
+      const lanternY = -39 + heave * 0.4;
+      const halo = ctx.createRadialGradient(lanternX, lanternY + 8, 2, lanternX, lanternY + 8, 24);
+      halo.addColorStop(0, 'rgba(251, 191, 36, 0.78)');
       halo.addColorStop(1, 'rgba(251, 191, 36, 0)');
       ctx.fillStyle = halo;
-      ctx.fillRect(lanternX - 26, lanternY - 18, 52, 52);
+      ctx.fillRect(lanternX - 24, lanternY - 16, 48, 48);
 
       ctx.fillStyle = '#78350f';
       ctx.fillRect(lanternX - 4.5, lanternY, 9, 3);
@@ -3642,38 +3902,37 @@ export class ThanhMinhCanvasRenderer {
       ctx.fillStyle = '#fde68a';
       ctx.fillRect(lanternX - 2.6, lanternY + 4.5, 5.2, 8);
 
-      // Rapid heavy panting breath puffs!
       for (let pIdx = 0; pIdx < 2; pIdx += 1) {
         const puff = (timeSec * 2.4 + pIdx * 0.5) % 1;
         ctx.fillStyle = `rgba(226, 232, 240, ${(1 - puff) * 0.42})`;
         ctx.beginPath();
-        ctx.arc(13 + puff * 22, -88 - puff * 6, 3.2 + puff * 5, 0, Math.PI * 2);
+        ctx.arc(12 + puff * 20, -101 - puff * 6, 3 + puff * 4.5, 0, Math.PI * 2);
         ctx.fill();
       }
     } else {
-      const armSwing = isRunning ? stride * 5.5 : Math.sin(timeSec * 3.5) * 1.8;
+      const armSwing = isRunning ? stride * 5.0 : Math.sin(timeSec * 3.5) * 1.6;
       ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 4.6;
+      ctx.lineWidth = 4.2;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.beginPath();
-      ctx.moveTo(4, -77);
-      ctx.lineTo(14, -62);
-      ctx.lineTo(19, -54 + armSwing * 0.4);
+      ctx.moveTo(3, -90);
+      ctx.lineTo(13, -72);
+      ctx.lineTo(19, -62 + armSwing * 0.4);
       ctx.stroke();
 
-      ctx.fillStyle = '#ecd8c7';
+      ctx.fillStyle = '#e5c6b0';
       ctx.beginPath();
-      ctx.arc(19, -53 + armSwing * 0.4, 2.6, 0, Math.PI * 2);
+      ctx.arc(19, -61 + armSwing * 0.4, 2.2, 0, Math.PI * 2);
       ctx.fill();
 
-      const lanternX = 20 + Math.sin(timeSec * (isRunning ? 10 : 4)) * (isRunning ? 3.5 : 2.0);
-      const lanternY = -53 + armSwing * 0.4;
-      const halo = ctx.createRadialGradient(lanternX, lanternY + 8, 2, lanternX, lanternY + 8, 34);
-      halo.addColorStop(0, 'rgba(251, 191, 36, 0.94)');
+      const lanternX = 20 + Math.sin(timeSec * (isRunning ? 10 : 4)) * (isRunning ? 3.2 : 1.8);
+      const lanternY = -61 + armSwing * 0.4;
+      const halo = ctx.createRadialGradient(lanternX, lanternY + 8, 2, lanternX, lanternY + 8, 32);
+      halo.addColorStop(0, 'rgba(251, 191, 36, 0.96)');
       halo.addColorStop(1, 'rgba(251, 191, 36, 0)');
       ctx.fillStyle = halo;
-      ctx.fillRect(lanternX - 34, lanternY - 26, 68, 68);
+      ctx.fillRect(lanternX - 32, lanternY - 24, 64, 64);
 
       ctx.fillStyle = '#78350f';
       ctx.fillRect(lanternX - 5, lanternY, 10, 3);
@@ -3686,7 +3945,7 @@ export class ThanhMinhCanvasRenderer {
       const puff = (timeSec * 1.1) % 1;
       ctx.fillStyle = `rgba(226, 232, 240, ${(1 - puff) * 0.25})`;
       ctx.beginPath();
-      ctx.arc(14 + puff * 16, -90 - puff * 7, 2.8 + puff * 3.8, 0, Math.PI * 2);
+      ctx.arc(13 + puff * 15, -103 - puff * 6, 2.6 + puff * 3.5, 0, Math.PI * 2);
       ctx.fill();
     }
 

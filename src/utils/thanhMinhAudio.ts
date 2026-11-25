@@ -652,6 +652,61 @@ export class ThanhMinhAudioEngine {
     src.stop(now + 0.3);
   }
 
+  public playDoorTransition(): void {
+    if (this.muted || !this.ctx || !this.masterGain || !this.noiseBuffer) return;
+    const now = this.ctx.currentTime;
+
+    // 1. Metallic brass latch click
+    const latch = this.ctx.createBufferSource();
+    latch.buffer = this.noiseBuffer;
+    const latchHp = this.ctx.createBiquadFilter();
+    latchHp.type = 'bandpass';
+    latchHp.frequency.setValueAtTime(2400, now);
+    latchHp.Q.setValueAtTime(3.2, now);
+    const lg = this.ctx.createGain();
+    lg.gain.setValueAtTime(0.28, now);
+    lg.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+    latch.connect(latchHp);
+    latchHp.connect(lg);
+    lg.connect(this.masterGain);
+    latch.start(now);
+    latch.stop(now + 0.1);
+
+    // 2. Heavy timber hinge creak
+    const creak = this.ctx.createOscillator();
+    const creakBp = this.ctx.createBiquadFilter();
+    creak.type = 'sawtooth';
+    creak.frequency.setValueAtTime(165, now + 0.06);
+    creak.frequency.exponentialRampToValueAtTime(295, now + 0.24);
+    creak.frequency.exponentialRampToValueAtTime(142, now + 0.42);
+    creakBp.type = 'bandpass';
+    creakBp.frequency.setValueAtTime(620, now + 0.06);
+    creakBp.Q.setValueAtTime(4.5, now + 0.06);
+    const cg = this.ctx.createGain();
+    cg.gain.setValueAtTime(0.001, now + 0.05);
+    cg.gain.linearRampToValueAtTime(0.09, now + 0.14);
+    cg.gain.exponentialRampToValueAtTime(0.001, now + 0.44);
+    creak.connect(creakBp);
+    creakBp.connect(cg);
+    cg.connect(this.masterGain);
+    creak.start(now + 0.05);
+    creak.stop(now + 0.46);
+
+    // 3. Soft heavy doorway thud on entry
+    const thud = this.ctx.createOscillator();
+    const tg = this.ctx.createGain();
+    thud.type = 'sine';
+    thud.frequency.setValueAtTime(78, now + 0.4);
+    thud.frequency.exponentialRampToValueAtTime(34, now + 0.58);
+    tg.gain.setValueAtTime(0.001, now + 0.39);
+    tg.gain.linearRampToValueAtTime(0.26, now + 0.42);
+    tg.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+    thud.connect(tg);
+    tg.connect(this.masterGain);
+    thud.start(now + 0.39);
+    thud.stop(now + 0.62);
+  }
+
   public playDawnChord(): void {
     if (this.muted || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;

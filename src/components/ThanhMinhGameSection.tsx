@@ -297,6 +297,10 @@ export function ThanhMinhGameSection({
     audioRef.current?.unlock();
     const prev = stateRef.current;
     const next = interactWithHotspot(prev);
+    if (next.scene !== prev.scene) {
+      audioRef.current?.playDoorTransition();
+      rendererRef.current?.triggerDoorTransition();
+    }
     if (next.flags.saw_20_years_ruin && !prev.flags.saw_20_years_ruin) {
       audioRef.current?.playMirrorCrack();
       rendererRef.current?.triggerShake(7);
