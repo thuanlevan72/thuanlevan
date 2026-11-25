@@ -155,14 +155,14 @@ function drawShareCardDataUrl(opts: {
   ctx.strokeRect(36, 36, 888, 468);
 
   ctx.fillStyle = '#DB527E';
-  ctx.font = 'bold 20px sans-serif';
+  ctx.font = 'bold 20px "Plus Jakarta Sans", "Noto Sans", sans-serif';
   ctx.fillText(`TÌM MÈO & ĐỒ XINH · ${opts.difficultyLabel.toUpperCase()}`, 68, 92);
 
   ctx.fillStyle = '#5A3E44';
-  ctx.font = 'bold 40px Georgia, serif';
+  ctx.font = 'bold 40px "Noto Serif", "Plus Jakarta Sans", serif';
   ctx.fillText(opts.stageTitle, 68, 148);
 
-  ctx.font = '44px sans-serif';
+  ctx.font = '44px "Plus Jakarta Sans", "Noto Sans", sans-serif';
   for (let i = 0; i < 3; i++) {
     ctx.fillStyle = i < opts.stars ? '#FBBF24' : '#F0DCE3';
     ctx.fillText('★', 68 + i * 56, 212);
@@ -183,11 +183,11 @@ function drawShareCardDataUrl(opts: {
     ctx.strokeRect(bx, by, 175, 118);
 
     ctx.fillStyle = '#9D7782';
-    ctx.font = 'bold 13px sans-serif';
+    ctx.font = 'bold 13px "Plus Jakarta Sans", "Noto Sans", sans-serif';
     ctx.fillText(box.label, bx + 18, by + 34);
 
     ctx.fillStyle = '#5A3E44';
-    ctx.font = 'bold 34px monospace';
+    ctx.font = 'bold 34px "JetBrains Mono", "Noto Sans", monospace';
     ctx.fillText(box.value, bx + 18, by + 88);
   });
 
@@ -197,7 +197,7 @@ function drawShareCardDataUrl(opts: {
   ctx.lineWidth = 2;
   ctx.strokeRect(68, 396, 565, 66);
   ctx.fillStyle = '#5A3E44';
-  ctx.font = 'bold 20px sans-serif';
+  ctx.font = 'bold 20px "Plus Jakarta Sans", "Noto Sans", sans-serif';
   ctx.fillText(
     opts.foundSecret
       ? '★ Đã tìm thấy Bé Mèo Vàng Bí Mật!'

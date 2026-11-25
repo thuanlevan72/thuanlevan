@@ -6694,7 +6694,7 @@ export function PrismTdGameSection({
           ctx.stroke();
           ctx.restore();
           ctx.fillStyle = '#FECDD3';
-          ctx.font = 'bold 10px monospace';
+          ctx.font = 'bold 10px "JetBrains Mono", "Plus Jakarta Sans", monospace';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText('CỔNG', spawnPt.x, spawnPt.y);
@@ -7260,7 +7260,7 @@ export function PrismTdGameSection({
           for (const ft of s.floatingTexts) {
             ctx.save();
             ctx.globalAlpha = ft.alpha * Math.max(0.72, vfxDamp.beamAlphaScale);
-            ctx.font = `bold ${Math.round(11 * ft.scale)}px monospace`;
+            ctx.font = `bold ${Math.round(11 * ft.scale)}px "JetBrains Mono", "Plus Jakarta Sans", monospace`;
             ctx.textAlign = 'center';
             ctx.fillStyle = '#070B14';
             ctx.fillText(ft.text, ft.x + 1, ft.y + 1);

@@ -1851,7 +1851,7 @@ export function drawGunTurretSprite(
   ctx.fill();
   ctx.stroke();
   ctx.fillStyle = tier >= 2 ? '#070B14' : '#E2E8F0';
-  ctx.font = 'bold 8.5px monospace';
+  ctx.font = 'bold 8.5px "JetBrains Mono", "Plus Jakarta Sans", monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const vPrefix = isOmega ? 'ω' : 'α';
@@ -2548,7 +2548,7 @@ export function drawEnemySprite(
       ctx.fillStyle = 'rgba(7, 11, 20, 0.94)';
       ctx.fillRect(-bw / 2 - 2, by - 13, bw + 4, 22);
       ctx.fillStyle = (en.silencedTimer ?? 0) > 0 ? '#34D399' : en.windupTimer > 0 ? '#38BDF8' : isPhase2 ? '#F43F5E' : bossPrimary;
-      ctx.font = 'bold 8.5px monospace';
+      ctx.font = 'bold 8.5px "JetBrains Mono", "Plus Jakarta Sans", monospace';
       ctx.textAlign = 'center';
       ctx.fillText(
         en.windupTimer > 0
@@ -2583,7 +2583,7 @@ export function drawEnemySprite(
       ctx.fillStyle = 'rgba(7, 11, 20, 0.92)';
       ctx.fillRect(-bw / 2 - 2, by - 12, bw + 4, 20);
       ctx.fillStyle = (en.silencedTimer ?? 0) > 0 ? '#34D399' : en.windupTimer > 0 ? '#38BDF8' : bossPrimary;
-      ctx.font = 'bold 8px monospace';
+      ctx.font = 'bold 8px "JetBrains Mono", "Plus Jakarta Sans", monospace';
       ctx.textAlign = 'center';
       ctx.fillText(
         en.windupTimer > 0
@@ -2764,7 +2764,7 @@ export function drawSingularityHoles(
 
     if (hole.killsAbsorbed > 0) {
       ctx.fillStyle = '#FDE047';
-      ctx.font = 'bold 8.5px monospace';
+      ctx.font = 'bold 8.5px "JetBrains Mono", "Plus Jakarta Sans", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(`×${hole.killsAbsorbed}`, 0, -coreRadius - 8);
@@ -2901,7 +2901,7 @@ export function drawChronoFieldsAndSlashes(
 
     if (field.recordedDamage > 0) {
       ctx.fillStyle = '#E0F2FE';
-      ctx.font = 'bold 9px monospace';
+      ctx.font = 'bold 9px "JetBrains Mono", "Plus Jakarta Sans", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(`⏳ ECHO ${Math.round(field.recordedDamage)}`, 0, -fr * 0.56);

@@ -199,7 +199,7 @@ function createParchmentTexture(maxAniso: number): THREE.CanvasTexture {
   }
 
   ctx.fillStyle = 'rgba(28, 18, 12, 0.78)';
-  ctx.font = 'bold 34px serif';
+  ctx.font = 'bold 34px "Noto Serif", "Plus Jakarta Sans", serif';
   ctx.fillText('糧 倉 檢 簿', 152, 92);
 
   // Brush-stroke tally blocks

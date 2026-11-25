@@ -417,7 +417,7 @@ export function SongTimelinePlayer({
       const arpTag = arpMeta?.shortLabel ?? '';
       let arpTagW = 0;
       if (w > 96 && arpTag) {
-        ctx.font = '600 8.5px sans-serif';
+        ctx.font = '600 8.5px "Plus Jakarta Sans", "Noto Sans", sans-serif';
         arpTagW = ctx.measureText(arpTag).width + 10;
         const badgeX = x + w - arpTagW - 5;
         const badgeY = y + 7;
@@ -536,7 +536,7 @@ export function SongTimelinePlayer({
         rawPlayhead < item.absEnd;
       const passed = (isPlaying || rawPlayhead > 0) && item.absEnd <= rawPlayhead;
 
-      ctx.font = isCurrent ? '700 11.5px sans-serif' : '500 10.5px sans-serif';
+      ctx.font = isCurrent ? '700 11.5px "Plus Jakarta Sans", "Noto Sans", sans-serif' : '500 10.5px "Plus Jakarta Sans", "Noto Sans", sans-serif';
       if (isCurrent) {
         const tw = ctx.measureText(item.text).width;
         ctx.fillStyle = isDark
@@ -809,7 +809,7 @@ export function SongTimelinePlayer({
 
       if (tr.h >= 38) {
         ctx.fillStyle = isDark ? '#64748B' : '#64748B';
-        ctx.font = '500 9px sans-serif';
+        ctx.font = '500 9px "Plus Jakarta Sans", "Noto Sans", sans-serif';
         ctx.fillText(tr.sub, 8, tr.y + 30);
       }
     });

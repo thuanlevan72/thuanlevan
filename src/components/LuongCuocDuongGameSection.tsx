@@ -646,7 +646,7 @@ export function LuongCuocDuongGameSection({
                   textAnchor="middle"
                   fill="#F3E6D0"
                   fontSize="24"
-                  fontFamily="serif"
+                  fontFamily='"Noto Serif", "Plus Jakarta Sans", serif'
                   fontWeight="700"
                 >
                   兩腳
@@ -657,7 +657,7 @@ export function LuongCuocDuongGameSection({
                   textAnchor="middle"
                   fill="#F3E6D0"
                   fontSize="24"
-                  fontFamily="serif"
+                  fontFamily='"Noto Serif", "Plus Jakarta Sans", serif'
                   fontWeight="700"
                 >
                   羊簿

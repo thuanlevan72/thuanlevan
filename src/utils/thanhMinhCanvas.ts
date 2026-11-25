@@ -11,6 +11,10 @@ import {
   type ThanhMinhState,
 } from './thanhMinhEngine.ts';
 
+const FONT_SERIF = '"Noto Serif", "Plus Jakarta Sans", serif';
+const FONT_MONO = '"JetBrains Mono", "Noto Sans", monospace';
+const FONT_SANS = '"Plus Jakarta Sans", "Noto Sans", sans-serif';
+
 interface RainDrop {
   x: number;
   y: number;
@@ -53,15 +57,18 @@ export class ThanhMinhCanvasRenderer {
   private smokeWisps: SmokeWisp[] = [];
 
   private camX = 0;
+  private viewWidth = 960;
   private lastScene: SceneId | null = null;
   private shakeIntensity = 0;
   private lightningFlash = 0;
   private nextLightningIn = 5.5;
   private grainCanvas: HTMLCanvasElement | null = null;
   private grainPattern: CanvasPattern | null = null;
+  private paperCanvas: HTMLCanvasElement | null = null;
+  private paperPattern: CanvasPattern | null = null;
 
   constructor() {
-    for (let i = 0; i < 120; i += 1) {
+    for (let i = 0; i < 64; i += 1) {
       this.rainDrops.push({
         x: Math.random() * 1400,
         y: Math.random() * 760,
@@ -131,6 +138,52 @@ export class ThanhMinhCanvasRenderer {
     return this.grainPattern;
   }
 
+  // Hand-collaged Detention-style weathered rice paper & limewash fiber texture
+  private ensurePaperTexturePattern(ctx: CanvasRenderingContext2D): CanvasPattern | null {
+    if (this.paperPattern) return this.paperPattern;
+    if (typeof document === 'undefined') return null;
+    if (!this.paperCanvas) {
+      const tile = document.createElement('canvas');
+      tile.width = 180;
+      tile.height = 180;
+      const pctx = tile.getContext('2d');
+      if (pctx) {
+        pctx.clearRect(0, 0, 180, 180);
+        // Subtle water-blotch speckles
+        for (let i = 0; i < 42; i += 1) {
+          const bx = Math.random() * 180;
+          const by = Math.random() * 180;
+          const br = 8 + Math.random() * 22;
+          pctx.fillStyle = i % 2 === 0 ? 'rgba(218, 206, 178, 0.06)' : 'rgba(18, 16, 12, 0.08)';
+          pctx.beginPath();
+          pctx.arc(bx, by, br, 0, Math.PI * 2);
+          pctx.fill();
+        }
+        // Fine mulberry/rice-paper hair fibers
+        pctx.lineWidth = 0.7;
+        for (let f = 0; f < 65; f += 1) {
+          const fx = Math.random() * 180;
+          const fy = Math.random() * 180;
+          const ang = Math.random() * Math.PI * 2;
+          const len = 6 + Math.random() * 14;
+          pctx.strokeStyle = f % 3 === 0 ? 'rgba(225, 214, 188, 0.12)' : 'rgba(14, 12, 10, 0.1)';
+          pctx.beginPath();
+          pctx.moveTo(fx, fy);
+          pctx.quadraticCurveTo(
+            fx + Math.cos(ang) * len * 0.5 + (Math.random() - 0.5) * 4,
+            fy + Math.sin(ang) * len * 0.5 + (Math.random() - 0.5) * 4,
+            fx + Math.cos(ang) * len,
+            fy + Math.sin(ang) * len
+          );
+          pctx.stroke();
+        }
+      }
+      this.paperCanvas = tile;
+    }
+    this.paperPattern = ctx.createPattern(this.paperCanvas, 'repeat');
+    return this.paperPattern;
+  }
+
   public render(
     ctx: CanvasRenderingContext2D,
     width: number,
@@ -147,6 +200,7 @@ export class ThanhMinhCanvasRenderer {
     const isDarkroom = state.scene === 'darkroom';
     const is1986 = state.scene === 'ruined_hall_1986';
 
+    this.viewWidth = width;
     const meta = SCENE_META[state.scene];
     const worldSpan = meta.maxX - meta.minX + 160;
     const maxCam = Math.max(0, worldSpan - width);
@@ -183,7 +237,7 @@ export class ThanhMinhCanvasRenderer {
     ctx.save();
     ctx.translate(shakeX, shakeY);
 
-    // 1. Deep Oppressive Horror Sky Gradient
+    // 1. Detention-Inspired Desaturated Slate/Sepia/Crimson Atmosphere Sky
     const skyGrad = ctx.createLinearGradient(0, 0, 0, height);
     if (isDawn) {
       const p = Math.min(1, state.endingTimer / 4.2);
@@ -207,21 +261,23 @@ export class ThanhMinhCanvasRenderer {
       skyGrad.addColorStop(0.55, '#4b0f07');
       skyGrad.addColorStop(1, '#0d0202');
     } else if (isDarkroom) {
-      skyGrad.addColorStop(0, '#140103');
-      skyGrad.addColorStop(0.6, '#2b0407');
-      skyGrad.addColorStop(1, '#060001');
+      skyGrad.addColorStop(0, '#180204');
+      skyGrad.addColorStop(0.6, '#360609');
+      skyGrad.addColorStop(1, '#080102');
     } else if (isYin) {
-      skyGrad.addColorStop(0, '#0a0102');
-      skyGrad.addColorStop(0.55, '#220307');
-      skyGrad.addColorStop(1, '#040001');
+      // Stark Bone-Monochrome + Blood-Crimson Ink Sky
+      skyGrad.addColorStop(0, '#121011');
+      skyGrad.addColorStop(0.5, '#2b090d');
+      skyGrad.addColorStop(1, '#070506');
     } else if (is1986) {
-      skyGrad.addColorStop(0, '#090d0b');
-      skyGrad.addColorStop(0.55, '#101814');
-      skyGrad.addColorStop(1, '#040605');
+      skyGrad.addColorStop(0, '#141915');
+      skyGrad.addColorStop(0.55, '#202821');
+      skyGrad.addColorStop(1, '#0a0d0b');
     } else {
-      skyGrad.addColorStop(0, '#030407');
-      skyGrad.addColorStop(0.55, '#090d13');
-      skyGrad.addColorStop(1, '#020204');
+      // 1960s Typhoon Mountain Dusk (Detention overcast sage-slate)
+      skyGrad.addColorStop(0, '#0f1617');
+      skyGrad.addColorStop(0.55, '#192222');
+      skyGrad.addColorStop(1, '#080b0b');
     }
     ctx.fillStyle = skyGrad;
     ctx.fillRect(-16, -16, width + 32, height + 32);
@@ -255,6 +311,7 @@ export class ThanhMinhCanvasRenderer {
 
       for (const ghost of state.ghosts) {
         if (ghost.scene !== state.scene || ghost.pacified) continue;
+        if (ghost.x + 160 < this.camX || ghost.x - 160 > this.camX + width) continue;
         this.drawGhostEntity(ctx, floorY, ghost, state, timeSec, isYin);
       }
 
@@ -311,25 +368,26 @@ export class ThanhMinhCanvasRenderer {
         : (1 + Math.sin(timeSec * 14.3) * 0.03 + Math.cos(timeSec * 23.1) * 0.02 + dreadFlicker) *
           fatigueDim *
           dreadTighten;
-      const lanternX = playerScreenX + state.playerFacing * 28;
-      const lanternY = height * (state.exhausted ? 0.65 : 0.61);
-      const lanternRadius = Math.max(210, width * 0.38) * flicker;
+      const lanternX = playerScreenX + state.playerFacing * 32;
+      const lanternY = height * (state.exhausted ? 0.65 : 0.60);
+      // Balanced Detention-style chiaroscuro cone: warm amber/crimson halo + clearly readable architecture
+      const lanternRadius = Math.max(255, width * 0.46) * flicker;
 
-      // Directional subtle lantern cone forward
+      // Directional subtle flashlight/lantern beam forward
       ctx.save();
-      const beamEndX = lanternX + state.playerFacing * 250 * flicker;
-      const coneGrad = ctx.createLinearGradient(lanternX, lanternY, beamEndX, lanternY + 28);
+      const beamEndX = lanternX + state.playerFacing * 310 * flicker;
+      const coneGrad = ctx.createLinearGradient(lanternX, lanternY, beamEndX, lanternY + 26);
       coneGrad.addColorStop(
         0,
-        isYin ? 'rgba(220, 38, 38, 0.16)' : isDarkroom ? 'rgba(239, 68, 68, 0.18)' : 'rgba(253, 211, 130, 0.14)'
+        isYin ? 'rgba(220, 38, 38, 0.22)' : isDarkroom ? 'rgba(239, 68, 68, 0.22)' : 'rgba(246, 206, 128, 0.2)'
       );
       coneGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = coneGrad;
       ctx.beginPath();
-      ctx.moveTo(lanternX, lanternY - 12);
-      ctx.lineTo(beamEndX, lanternY - 108);
-      ctx.lineTo(beamEndX, lanternY + 122);
-      ctx.lineTo(lanternX, lanternY + 14);
+      ctx.moveTo(lanternX, lanternY - 14);
+      ctx.lineTo(beamEndX, lanternY - 126);
+      ctx.lineTo(beamEndX, lanternY + 138);
+      ctx.lineTo(lanternX, lanternY + 16);
       ctx.closePath();
       ctx.fill();
       ctx.restore();
@@ -337,23 +395,25 @@ export class ThanhMinhCanvasRenderer {
       const lanternGrad = ctx.createRadialGradient(
         lanternX,
         lanternY,
-        12,
+        18,
         playerScreenX,
         height * 0.58,
         lanternRadius
       );
       if (isDarkroom) {
-        lanternGrad.addColorStop(0, 'rgba(239, 68, 68, 0.14)');
-        lanternGrad.addColorStop(0.4, 'rgba(26, 2, 4, 0.62)');
-        lanternGrad.addColorStop(1, 'rgba(4, 0, 1, 0.96)');
+        lanternGrad.addColorStop(0, 'rgba(239, 68, 68, 0.12)');
+        lanternGrad.addColorStop(0.45, 'rgba(26, 2, 4, 0.48)');
+        lanternGrad.addColorStop(1, 'rgba(5, 1, 2, 0.84)');
+      } else if (isYin) {
+        lanternGrad.addColorStop(0, 'rgba(185, 28, 28, 0.08)');
+        lanternGrad.addColorStop(0.45, 'rgba(12, 4, 5, 0.42)');
+        lanternGrad.addColorStop(0.8, 'rgba(6, 2, 3, 0.68)');
+        lanternGrad.addColorStop(1, 'rgba(3, 1, 2, 0.82)');
       } else {
-        lanternGrad.addColorStop(
-          0,
-          isYin ? 'rgba(185, 28, 28, 0.08)' : 'rgba(255, 198, 112, 0.1)'
-        );
-        lanternGrad.addColorStop(0.38, 'rgba(3, 4, 8, 0.56)');
-        lanternGrad.addColorStop(0.76, 'rgba(2, 2, 5, 0.84)');
-        lanternGrad.addColorStop(1, 'rgba(1, 1, 3, 0.97)');
+        lanternGrad.addColorStop(0, 'rgba(255, 204, 120, 0.11)');
+        lanternGrad.addColorStop(0.44, 'rgba(8, 10, 12, 0.34)');
+        lanternGrad.addColorStop(0.78, 'rgba(5, 7, 9, 0.62)');
+        lanternGrad.addColorStop(1, 'rgba(3, 4, 6, 0.78)');
       }
       ctx.fillStyle = lanternGrad;
       ctx.fillRect(0, 0, width, height);
@@ -421,6 +481,27 @@ export class ThanhMinhCanvasRenderer {
     ctx.restore();
   }
 
+  private wrapCanvasLines(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    maxWidth: number
+  ): string[] {
+    const words = text.split(/\s+/);
+    const lines: string[] = [];
+    let current = '';
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+      if (ctx.measureText(candidate).width > maxWidth && current) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = candidate;
+      }
+    }
+    if (current) lines.push(current);
+    return lines;
+  }
+
   private drawKillAnimationCutscene(
     ctx: CanvasRenderingContext2D,
     width: number,
@@ -433,403 +514,632 @@ export class ThanhMinhCanvasRenderer {
     const p = Math.min(1, dc.timer / dc.duration);
     const cx = width * 0.5;
     const cy = height * 0.5;
+    const paperPat = this.ensurePaperTexturePattern(ctx);
 
-    // 1. Darkening nightmare shroud & 16mm photo-negative impact flash
-    const darkness = p < 0.22 ? 0.48 + p * 1.9 : p > 0.72 ? 0.96 : 0.84;
-    ctx.fillStyle = `rgba(9, 2, 3, ${Math.min(0.97, darkness)})`;
+    // 1. Abrupt Lantern Snuff-Out, Encroaching Ink Darkness & 16mm Photochemical Impact Flash
+    const darkness = p < 0.18 ? 0.54 + p * 2.1 : p > 0.65 ? 0.96 : 0.88;
+    ctx.fillStyle = `rgba(6, 2, 3, ${Math.min(0.97, darkness)})`;
     ctx.fillRect(0, 0, width, height);
 
-    if (p < 0.14) {
-      // Negative film exposure flash + crimson shockwave
-      const strobe = Math.sin(timeSec * 82) > 0 ? 0.52 : 0.24;
-      ctx.fillStyle = `rgba(185, 22, 26, ${(0.14 - p) * 3.4})`;
+    // Tightening radial blackness crushing inward like a snuffed oil lamp
+    const chokeRadius = Math.max(width * 0.18, width * (0.72 - p * 0.42));
+    const chokeGrad = ctx.createRadialGradient(cx, cy, chokeRadius * 0.25, cx, cy, chokeRadius);
+    chokeGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+    chokeGrad.addColorStop(0.7, 'rgba(18, 3, 5, 0.46)');
+    chokeGrad.addColorStop(1, 'rgba(2, 1, 2, 0.94)');
+    ctx.fillStyle = chokeGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    if (p < 0.16) {
+      // Negative silver-halide photo flash + blood shockwave
+      const strobe = Math.sin(timeSec * 86) > 0 ? 0.62 : 0.26;
+      ctx.fillStyle = `rgba(185, 22, 26, ${(0.16 - p) * 3.1})`;
       ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = `rgba(226, 232, 240, ${(0.14 - p) * strobe * 1.6})`;
+      ctx.fillStyle = `rgba(231, 229, 228, ${(0.16 - p) * strobe * 1.65})`;
       ctx.fillRect(0, 0, width, height);
     }
 
-    // 2. Monster Lunge Close-Up with Double Exposure & Clawed Hands Gripping Borders
-    if (p < 0.8) {
-      const surge = p < 0.36 ? p / 0.36 : 1;
-      const lungeScale = 0.62 + Math.pow(surge, 0.72) * 0.76 + Math.max(0, p - 0.36) * 0.28;
-      const shakeDecay = Math.max(0.22, 1 - p);
-      const jitterX = Math.sin(timeSec * 58) * shakeDecay * 11;
-      const jitterY = Math.cos(timeSec * 51) * shakeDecay * 8;
-      const fadeOut = p > 0.62 ? Math.max(0, (0.8 - p) / 0.18) : 1;
+    // 2. Realistic Detention Chiaroscuro Monster Lunge + Double-Exposure Ink Ghosting
+    if (p < 0.78) {
+      const surge = p < 0.34 ? p / 0.34 : 1;
+      const lungeScale = 0.64 + Math.pow(surge, 0.68) * 0.84 + Math.max(0, p - 0.34) * 0.22;
+      const shakeDecay = Math.max(0.18, 1 - p * 1.1);
+      const jitterX = Math.sin(timeSec * 62) * shakeDecay * 12;
+      const jitterY = Math.cos(timeSec * 53) * shakeDecay * 9;
+      const fadeOut = p > 0.56 ? Math.max(0, (0.78 - p) / 0.22) : 1;
+
+      const drawHorrorEye = (ex: number, ey: number, rx: number, ry: number, tilt: number, crimsonGlow = 1) => {
+        ctx.save();
+        ctx.translate(ex, ey);
+        ctx.rotate(tilt);
+
+        // Deep orbital bone cavity shadow
+        const socketGrad = ctx.createRadialGradient(0, 0, rx * 0.2, 0, 0, ry * 1.45);
+        socketGrad.addColorStop(0, 'rgba(3, 2, 3, 0.98)');
+        socketGrad.addColorStop(0.62, 'rgba(10, 4, 6, 0.85)');
+        socketGrad.addColorStop(1, 'rgba(10, 4, 6, 0)');
+        ctx.fillStyle = socketGrad;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rx * 1.38, ry * 1.42, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Bloodshot pale sclera peeking inside sunken cavity
+        ctx.fillStyle = '#c8c1b8';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rx * 0.82, ry * 0.58, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Fine red scleral capillaries
+        ctx.strokeStyle = `rgba(153, 27, 27, ${0.75 * crimsonGlow})`;
+        ctx.lineWidth = 1.1;
+        for (const veinAngle of [-2.6, -1.9, 0.4, 2.2]) {
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(veinAngle) * rx * 0.78, Math.sin(veinAngle) * ry * 0.5);
+          ctx.lineTo(Math.cos(veinAngle) * rx * 0.34, Math.sin(veinAngle) * ry * 0.25);
+          ctx.stroke();
+        }
+
+        // Pinpoint dilated crimson/black iris + stark wet corneal specular dot
+        ctx.fillStyle = crimsonGlow > 0.5 ? '#7f1d1d' : '#18181b';
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.min(rx, ry) * 0.34, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#050203';
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.min(rx, ry) * 0.16, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fef2f2';
+        ctx.beginPath();
+        ctx.arc(-1.8, -1.8, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Darkened lower eyelid crease & weeping dried-blood tear
+        ctx.strokeStyle = 'rgba(127, 29, 29, 0.9)';
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.moveTo(0, ry * 0.55);
+        ctx.quadraticCurveTo(2, ry * 1.4, -1, ry * 2.35);
+        ctx.stroke();
+        ctx.restore();
+      };
 
       const drawMonsterFace = (ghostPass: boolean, alpha: number) => {
         ctx.save();
         ctx.globalAlpha = alpha * fadeOut;
         ctx.translate(
-          cx + jitterX + (ghostPass ? Math.sin(timeSec * 37) * 14 : 0),
-          cy + 22 + jitterY + (ghostPass ? Math.cos(timeSec * 31) * 7 : 0)
+          cx + jitterX + (ghostPass ? Math.sin(timeSec * 37) * 16 : 0),
+          cy + 18 + jitterY + (ghostPass ? Math.cos(timeSec * 31) * 9 : 0)
         );
         ctx.scale(lungeScale, lungeScale);
         if (ghostPass) {
-          ctx.rotate(Math.sin(timeSec * 29) * 0.045);
+          ctx.rotate(Math.sin(timeSec * 29) * 0.048);
         }
 
-        // Shredded ink-black funeral shroud rising behind face
-        const shroudGrad = ctx.createLinearGradient(0, -80, 0, 220);
-        shroudGrad.addColorStop(0, ghostPass ? 'rgba(140, 14, 18, 0.5)' : '#12080a');
-        shroudGrad.addColorStop(1, '#040203');
+        // Shredded funeral shroud & tattered rice-paper collage shoulders
+        const shroudGrad = ctx.createLinearGradient(0, -86, 0, 235);
+        shroudGrad.addColorStop(0, ghostPass ? 'rgba(140, 14, 18, 0.52)' : '#12090b');
+        shroudGrad.addColorStop(1, '#030102');
         ctx.fillStyle = shroudGrad;
         ctx.beginPath();
-        ctx.moveTo(-145, 230);
-        ctx.quadraticCurveTo(-125, 10, -45, -45);
-        ctx.lineTo(45, -45);
-        ctx.quadraticCurveTo(125, 10, 145, 230);
+        ctx.moveTo(-162, 235);
+        ctx.quadraticCurveTo(-136, 8, -48, -48);
+        ctx.lineTo(48, -48);
+        ctx.quadraticCurveTo(136, 8, 162, 235);
         ctx.closePath();
         ctx.fill();
+        if (paperPat && !ghostPass) {
+          ctx.save();
+          ctx.globalAlpha *= 0.65;
+          ctx.fillStyle = paperPat;
+          ctx.fill();
+          ctx.restore();
+        }
 
-        if (dc.killerKind === 'paper_hat') {
-          // Towering stained parchment dunce cap
-          const hatGrad = ctx.createLinearGradient(-50, -295, 55, -55);
-          hatGrad.addColorStop(0, ghostPass ? '#7f1d1d' : '#a8a29e');
-          hatGrad.addColorStop(0.55, ghostPass ? '#450a0a' : '#78716c');
-          hatGrad.addColorStop(1, '#292524');
+        if (dc.killerKind === 'paper_hat' && dc.killerVariant !== 'librarian_wraith') {
+          // Towering stained parchment dunce cap with central crease & blood characters
+          const hatGrad = ctx.createLinearGradient(-56, -298, 58, -54);
+          hatGrad.addColorStop(0, ghostPass ? '#7f1d1d' : '#b8b0a2');
+          hatGrad.addColorStop(0.55, ghostPass ? '#450a0a' : '#7c736a');
+          hatGrad.addColorStop(1, '#26211e');
           ctx.fillStyle = hatGrad;
           ctx.beginPath();
-          ctx.moveTo(-76, -54);
-          ctx.lineTo(-8, -295);
-          ctx.lineTo(6, -288);
-          ctx.lineTo(74, -54);
+          ctx.moveTo(-78, -54);
+          ctx.lineTo(-9, -298);
+          ctx.lineTo(7, -290);
+          ctx.lineTo(76, -54);
           ctx.closePath();
           ctx.fill();
+          if (paperPat && !ghostPass) {
+            ctx.fillStyle = paperPat;
+            ctx.fill();
+          }
 
-          // Crease & dangling torn paper talisman strips
-          ctx.strokeStyle = 'rgba(20, 12, 10, 0.55)';
-          ctx.lineWidth = 2;
+          // Vertical crease + tattered paper prayer ribbons whipping in wind
+          ctx.strokeStyle = 'rgba(18, 10, 8, 0.65)';
+          ctx.lineWidth = 2.2;
           ctx.beginPath();
-          ctx.moveTo(-4, -285);
-          ctx.lineTo(-10, -56);
+          ctx.moveTo(-3, -290);
+          ctx.lineTo(-9, -55);
           ctx.stroke();
 
-          for (const stripX of [-58, 52]) {
-            const whip = Math.sin(timeSec * 19 + stripX) * 14;
-            ctx.fillStyle = 'rgba(214, 211, 209, 0.72)';
+          for (const stripX of [-62, 54]) {
+            const whip = Math.sin(timeSec * 21 + stripX) * 16;
+            ctx.fillStyle = 'rgba(214, 211, 209, 0.78)';
             ctx.beginPath();
             ctx.moveTo(stripX, -58);
-            ctx.lineTo(stripX + whip - 7, 18);
-            ctx.lineTo(stripX + whip + 6, 12);
+            ctx.lineTo(stripX + whip - 8, 22);
+            ctx.lineTo(stripX + whip + 7, 15);
             ctx.closePath();
             ctx.fill();
           }
 
-          // Vertical crooked blood inscription on dunce hat
-          ctx.save();
-          ctx.fillStyle = 'rgba(127, 29, 29, 0.92)';
-          ctx.font = 'bold 26px serif';
-          ctx.textAlign = 'center';
-          ctx.fillText('TỘI', -2, -168);
-          ctx.fillText('NHÂN', 2, -132);
-          ctx.restore();
+          if (!ghostPass) {
+            ctx.save();
+            ctx.fillStyle = 'rgba(127, 29, 29, 0.94)';
+            ctx.font = `700 24px ${FONT_SERIF}`;
+            ctx.textAlign = 'center';
+            ctx.fillText('TỘI', -2, -172);
+            ctx.fillText('NHÂN', 2, -138);
+            ctx.restore();
+          }
 
-          // Chiaroscuro gaunt decayed skull
-          const skullGrad = ctx.createRadialGradient(-10, -34, 8, 0, -14, 82);
-          skullGrad.addColorStop(0, ghostPass ? '#991b1b' : '#b8b2aa');
-          skullGrad.addColorStop(0.55, ghostPass ? '#450a0a' : '#65605c');
-          skullGrad.addColorStop(1, '#1c181a');
+          // Chiaroscuro gaunt decayed skull with hollowed zygomatic cheeks
+          const skullGrad = ctx.createRadialGradient(-10, -34, 8, 0, -10, 88);
+          skullGrad.addColorStop(0, ghostPass ? '#991b1b' : '#c2bbb0');
+          skullGrad.addColorStop(0.55, ghostPass ? '#450a0a' : '#6b645e');
+          skullGrad.addColorStop(1, '#191517');
           ctx.fillStyle = skullGrad;
           ctx.beginPath();
-          ctx.moveTo(-54, -58);
-          ctx.quadraticCurveTo(-64, -10, -44, 34);
-          ctx.quadraticCurveTo(0, 62, 44, 34);
-          ctx.quadraticCurveTo(64, -10, 54, -58);
+          ctx.moveTo(-56, -58);
+          ctx.quadraticCurveTo(-66, -10, -46, 38);
+          ctx.quadraticCurveTo(0, 74, 46, 38);
+          ctx.quadraticCurveTo(66, -10, 56, -58);
           ctx.closePath();
           ctx.fill();
 
-          // Hollowed cheekbone shadows
-          ctx.fillStyle = 'rgba(10, 6, 8, 0.55)';
+          // Zygomatic hollow shadows & cracked parchment lines
+          ctx.fillStyle = 'rgba(10, 5, 7, 0.62)';
           ctx.beginPath();
-          ctx.ellipse(-34, 2, 13, 20, 0.35, 0, Math.PI * 2);
-          ctx.ellipse(34, 2, 13, 20, -0.35, 0, Math.PI * 2);
+          ctx.ellipse(-36, 4, 13, 22, 0.32, 0, Math.PI * 2);
+          ctx.ellipse(36, 4, 13, 22, -0.32, 0, Math.PI * 2);
           ctx.fill();
 
-          // Deep sunken orbital sockets + dilated staring pinpoint pupils
-          for (const side of [-1, 1] as const) {
-            ctx.fillStyle = '#050304';
-            ctx.beginPath();
-            ctx.ellipse(side * 24, -24, 15, 19, side * 0.12, 0, Math.PI * 2);
-            ctx.fill();
+          drawHorrorEye(-24, -25, 14, 16, 0.14);
+          drawHorrorEye(24, -25, 14, 16, -0.14);
 
-            ctx.fillStyle = '#dc2626';
-            ctx.beginPath();
-            ctx.arc(side * 23, -23, 3.2, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#fef2f2';
-            ctx.beginPath();
-            ctx.arc(side * 23, -23, 1.3, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Dried ink/blood tears
-            ctx.strokeStyle = 'rgba(127, 29, 29, 0.85)';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(side * 23, -6);
-            ctx.lineTo(side * 25, 22);
-            ctx.stroke();
-          }
-
-          // Unhinged screaming mouth + wet coiling crimson tongue with specular slime sheen
+          // Unhinged screaming jaw + upper/lower jagged teeth + wet coiling crimson tongue
           ctx.fillStyle = '#050203';
           ctx.beginPath();
-          ctx.ellipse(0, 26, 22, 34, 0, 0, Math.PI * 2);
+          ctx.ellipse(0, 32, 24, 38, 0, 0, Math.PI * 2);
           ctx.fill();
 
-          const tongueExtend = Math.min(1.05, p * 2.5);
-          const sway = Math.sin(timeSec * 16) * 32;
+          if (!ghostPass) {
+            ctx.fillStyle = '#d6cfc2';
+            for (let t = -3; t <= 3; t += 1) {
+              ctx.fillRect(t * 6.2 - 2.2, -4 + Math.abs(t) * 1.4, 4.4, 8);
+              ctx.fillRect(t * 6.0 - 2.1, 60 - Math.abs(t) * 1.2, 4.2, 7.5);
+            }
+          }
+
+          const tongueExtend = Math.min(1.12, p * 2.7);
+          const sway = Math.sin(timeSec * 17) * 34;
           ctx.strokeStyle = '#5c0a0e';
-          ctx.lineWidth = 26;
+          ctx.lineWidth = 28;
           ctx.lineCap = 'round';
           ctx.beginPath();
-          ctx.moveTo(0, 24);
-          ctx.bezierCurveTo(-58 * tongueExtend, 78, 72 * tongueExtend, 134, sway, 198 * tongueExtend);
+          ctx.moveTo(0, 28);
+          ctx.bezierCurveTo(-62 * tongueExtend, 82, 74 * tongueExtend, 138, sway, 206 * tongueExtend);
           ctx.stroke();
-
           ctx.strokeStyle = '#991b1b';
           ctx.lineWidth = 17;
           ctx.stroke();
-
-          ctx.strokeStyle = 'rgba(248, 113, 113, 0.42)';
+          ctx.strokeStyle = 'rgba(248, 113, 113, 0.48)';
           ctx.lineWidth = 4;
           ctx.stroke();
         } else if (dc.killerVariant === 'auditor_specter') {
-          // Ác Linh Tự Vệ — Trương Vệ Quốc close-up: snapped neck tilt, bruised face, cracked tin megaphone
+          // Ác Linh Tự Vệ — Trương Vệ Quốc: violently snapped 60° neck, waterlogged bruised skull, cracked megaphone
           ctx.save();
-          ctx.rotate(0.28 + Math.sin(timeSec * 21) * 0.04);
-          // Bruised swollen water-pale face
-          const guardGrad = ctx.createRadialGradient(-8, -28, 8, 0, -18, 86);
-          guardGrad.addColorStop(0, ghostPass ? '#991b1b' : '#9ca3af');
-          guardGrad.addColorStop(0.6, ghostPass ? '#450a0a' : '#4b5563');
+          ctx.rotate(0.34 + Math.sin(timeSec * 21) * 0.045);
+
+          const guardGrad = ctx.createRadialGradient(-8, -28, 8, 0, -18, 90);
+          guardGrad.addColorStop(0, ghostPass ? '#991b1b' : '#a1a8b3');
+          guardGrad.addColorStop(0.58, ghostPass ? '#450a0a' : '#4b5563');
           guardGrad.addColorStop(1, '#111827');
           ctx.fillStyle = guardGrad;
           ctx.beginPath();
-          ctx.ellipse(0, -24, 54, 68, 0, 0, Math.PI * 2);
+          ctx.ellipse(0, -24, 56, 70, 0, 0, Math.PI * 2);
           ctx.fill();
 
-          // Red Guard peaked cloth cap with broken visor
+          // Livor-mortis waterlogged cheek bruises
+          ctx.fillStyle = 'rgba(30, 27, 46, 0.55)';
+          ctx.beginPath();
+          ctx.ellipse(-30, 8, 16, 12, 0.2, 0, Math.PI * 2);
+          ctx.ellipse(28, 12, 15, 11, -0.2, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Red Guard peaked cloth cap with tarnished crimson star
           ctx.fillStyle = '#1f2937';
           ctx.beginPath();
-          ctx.moveTo(-58, -56);
-          ctx.quadraticCurveTo(0, -112, 58, -56);
-          ctx.lineTo(48, -42);
-          ctx.lineTo(-48, -42);
+          ctx.moveTo(-60, -56);
+          ctx.quadraticCurveTo(0, -114, 60, -56);
+          ctx.lineTo(50, -40);
+          ctx.lineTo(-50, -40);
           ctx.closePath();
           ctx.fill();
           ctx.fillStyle = '#7f1d1d';
           ctx.beginPath();
-          ctx.arc(0, -68, 7, 0, Math.PI * 2);
+          ctx.arc(0, -68, 7.5, 0, Math.PI * 2);
           ctx.fill();
 
-          // Bloodshot staring eyes + water-logged bruises
-          for (const side of [-1, 1] as const) {
-            ctx.fillStyle = '#09090b';
-            ctx.beginPath();
-            ctx.ellipse(side * 22, -26, 13, 15, side * -0.1, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#ef4444';
-            ctx.beginPath();
-            ctx.arc(side * 21, -26, 3.8, 0, Math.PI * 2);
-            ctx.fill();
-          }
+          drawHorrorEye(-22, -26, 13, 14, -0.1);
+          drawHorrorEye(22, -26, 13, 14, 0.1);
 
-          // Fused cracked tin megaphone screaming acoustic crimson rings
-          const megaPulse = 1 + Math.sin(timeSec * 28) * 0.08;
+          // Fused dented tin megaphone screaming crimson acoustic distortion waves
+          const megaPulse = 1 + Math.sin(timeSec * 30) * 0.085;
           ctx.save();
-          ctx.translate(0, 32);
+          ctx.translate(0, 34);
           ctx.scale(megaPulse, megaPulse);
-          ctx.fillStyle = '#334155';
+          const megaGrad = ctx.createLinearGradient(-45, 0, 55, 40);
+          megaGrad.addColorStop(0, '#475569');
+          megaGrad.addColorStop(0.5, '#334155');
+          megaGrad.addColorStop(1, '#1e293b');
+          ctx.fillStyle = megaGrad;
           ctx.beginPath();
-          ctx.moveTo(-22, -16);
-          ctx.lineTo(22, -16);
-          ctx.lineTo(68, 42);
-          ctx.lineTo(-68, 42);
+          ctx.moveTo(-24, -16);
+          ctx.lineTo(24, -16);
+          ctx.lineTo(72, 46);
+          ctx.lineTo(-72, 46);
           ctx.closePath();
           ctx.fill();
-          ctx.fillStyle = '#090507';
+          ctx.fillStyle = '#070406';
           ctx.beginPath();
-          ctx.ellipse(0, 42, 66, 18, 0, 0, Math.PI * 2);
+          ctx.ellipse(0, 46, 70, 19, 0, 0, Math.PI * 2);
           ctx.fill();
-          // Wet propaganda paper tatters stuffed behind megaphone rim
+
+          // Torn red-ink propaganda slips spilling out of horn
           ctx.fillStyle = '#d6d3d1';
-          ctx.fillRect(-28, 22, 18, 24);
-          ctx.fillRect(10, 20, 20, 26);
+          ctx.fillRect(-30, 22, 18, 28);
+          ctx.fillRect(10, 20, 20, 30);
+          if (!ghostPass) {
+            const wavePhase = (timeSec * 2.8) % 1;
+            ctx.strokeStyle = `rgba(220, 38, 38, ${(1 - wavePhase) * 0.72})`;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.ellipse(0, 48, 74 + wavePhase * 85, 22 + wavePhase * 28, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          }
           ctx.restore();
           ctx.restore();
-        } else {
-          // Quỷ Sai Cắt Lưỡi close-up: Rusted iron chain collar, weeping mask skull, giant notched shears
-          const hoodGrad = ctx.createRadialGradient(0, -32, 10, 0, -24, 86);
-          hoodGrad.addColorStop(0, ghostPass ? '#991b1b' : '#9499a0');
-          hoodGrad.addColorStop(0.58, ghostPass ? '#3b0709' : '#4a4e54');
-          hoodGrad.addColorStop(1, '#121013');
-          ctx.fillStyle = hoodGrad;
+        } else if (dc.killerVariant === 'librarian_wraith') {
+          // Thủ Thư Đốt Sách: shattered round spectacles, charred ash cracks, embers pouring from screaming mouth
+          const libGrad = ctx.createRadialGradient(-8, -28, 8, 0, -14, 88);
+          libGrad.addColorStop(0, ghostPass ? '#991b1b' : '#b8b0a0');
+          libGrad.addColorStop(0.58, ghostPass ? '#450a0a' : '#4a433d');
+          libGrad.addColorStop(1, '#141110');
+          ctx.fillStyle = libGrad;
           ctx.beginPath();
-          ctx.ellipse(0, -34, 58, 74, 0, 0, Math.PI * 2);
+          ctx.ellipse(0, -22, 54, 72, 0, 0, Math.PI * 2);
           ctx.fill();
 
-          // Dark blind-cloth & jagged blood-tear gashes
-          ctx.fillStyle = '#090608';
-          ctx.fillRect(-54, -56, 108, 22);
-          for (const side of [-1, 1] as const) {
-            ctx.fillStyle = '#991b1b';
-            ctx.fillRect(side * 24 - 3, -44, 6, 56);
-            ctx.fillStyle = '#ef4444';
-            ctx.beginPath();
-            ctx.arc(side * 24, -45, 3.6, 0, Math.PI * 2);
-            ctx.fill();
-          }
+          drawHorrorEye(-22, -28, 13, 15, 0.08);
+          drawHorrorEye(22, -28, 13, 15, -0.08);
 
-          // Heavy rusted shackle chain draped across neck
-          ctx.strokeStyle = '#574238';
-          ctx.lineWidth = 7;
+          // Shattered circular horn-rimmed spectacles
+          ctx.strokeStyle = '#1c1917';
+          ctx.lineWidth = 4;
           ctx.beginPath();
-          ctx.moveTo(-75, 42);
-          ctx.quadraticCurveTo(0, 86, 75, 42);
+          ctx.arc(-22, -28, 19, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(22, -28, 19, 0.3, Math.PI * 1.85);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(-3, -28);
+          ctx.lineTo(3, -28);
+          ctx.stroke();
+          // Spiderweb glass crack inside left lens
+          ctx.strokeStyle = 'rgba(241, 245, 249, 0.65)';
+          ctx.lineWidth = 1.1;
+          ctx.beginPath();
+          ctx.moveTo(-34, -40);
+          ctx.lineTo(-15, -20);
+          ctx.moveTo(-12, -38);
+          ctx.lineTo(-28, -16);
           ctx.stroke();
 
+          // Unhinged screaming mouth pouring glowing embers & charred poetry shreds
+          ctx.fillStyle = '#070303';
+          ctx.beginPath();
+          ctx.ellipse(0, 28, 22, 34, 0, 0, Math.PI * 2);
+          ctx.fill();
+          if (!ghostPass) {
+            for (let e = 0; e < 14; e += 1) {
+              const ep = (timeSec * 1.8 + e * 0.13) % 1;
+              const ex = Math.sin(e * 2.1 + timeSec * 5) * (12 + ep * 42);
+              const ey = 28 + ep * 125;
+              ctx.fillStyle = e % 2 === 0 ? `rgba(249, 115, 22, ${1 - ep})` : `rgba(220, 38, 38, ${1 - ep})`;
+              ctx.fillRect(ex - 2, ey - 2, 4.5, 4.5);
+            }
+          }
+        } else {
+          // Quỷ Sai Cắt Lưỡi: iron shackle collar, bleeding blindfold gashes, giant notched iron shears snapping shut
+          const hoodGrad = ctx.createRadialGradient(0, -32, 10, 0, -24, 90);
+          hoodGrad.addColorStop(0, ghostPass ? '#991b1b' : '#9499a0');
+          hoodGrad.addColorStop(0.58, ghostPass ? '#3b0709' : '#4a4e54');
+          hoodGrad.addColorStop(1, '#100e12');
+          ctx.fillStyle = hoodGrad;
+          ctx.beginPath();
+          ctx.ellipse(0, -34, 58, 76, 0, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Soaked black execution blindfold + weeping blood-tear gashes + staring slits
+          ctx.fillStyle = '#090608';
+          ctx.fillRect(-56, -58, 112, 24);
+          for (const side of [-1, 1] as const) {
+            ctx.fillStyle = '#991b1b';
+            ctx.fillRect(side * 24 - 3, -44, 6.5, 62);
+            drawHorrorEye(side * 24, -46, 10, 10, side * 0.1);
+          }
+
+          // Heavy rusted shackle collar & hanging chain links
+          ctx.strokeStyle = '#574238';
+          ctx.lineWidth = 8;
+          ctx.beginPath();
+          ctx.moveTo(-78, 44);
+          ctx.quadraticCurveTo(0, 92, 78, 44);
+          ctx.stroke();
+          ctx.strokeStyle = '#856555';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([7, 5]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
           // Massive notched rusted iron scissor blades violently slamming shut at p = 0.36
-          const snapAngle = p < 0.36 ? Math.max(0.03, 0.56 - (p / 0.36) * 0.53) : 0.03;
+          const snapAngle = p < 0.36 ? Math.max(0.02, 0.58 - (p / 0.36) * 0.56) : 0.02;
           for (const dir of [-1, 1] as const) {
             ctx.save();
-            ctx.translate(0, 48);
+            ctx.translate(0, 50);
             ctx.rotate(dir * snapAngle);
-            const bladeGrad = ctx.createLinearGradient(0, -18, dir * 195, 16);
-            bladeGrad.addColorStop(0, '#475569');
-            bladeGrad.addColorStop(0.55, '#94a3b8');
+            const bladeGrad = ctx.createLinearGradient(0, -20, dir * 208, 18);
+            bladeGrad.addColorStop(0, '#334155');
+            bladeGrad.addColorStop(0.52, '#94a3b8');
+            bladeGrad.addColorStop(0.84, '#64748b');
             bladeGrad.addColorStop(1, '#7f1d1d');
             ctx.fillStyle = bladeGrad;
             ctx.beginPath();
-            ctx.moveTo(-dir * 12, -4);
-            ctx.lineTo(dir * 195, -24);
-            ctx.lineTo(dir * 212, 5);
-            ctx.lineTo(0, 17);
+            ctx.moveTo(-dir * 14, -5);
+            ctx.lineTo(dir * 208, -26);
+            ctx.lineTo(dir * 226, 6);
+            ctx.lineTo(0, 19);
             ctx.closePath();
             ctx.fill();
 
-            // Cold steel highlight edge
-            ctx.strokeStyle = 'rgba(241, 245, 249, 0.55)';
-            ctx.lineWidth = 1.6;
+            // Cold steel bevel highlight & blood-stained edge
+            ctx.strokeStyle = 'rgba(241, 245, 249, 0.68)';
+            ctx.lineWidth = 1.8;
             ctx.beginPath();
             ctx.moveTo(0, -2);
-            ctx.lineTo(dir * 194, -22);
+            ctx.lineTo(dir * 206, -24);
             ctx.stroke();
             ctx.restore();
           }
+          // Heavy central shear pivot bolt
+          ctx.fillStyle = '#1e293b';
+          ctx.beginPath();
+          ctx.arc(0, 52, 8, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
         }
 
-        // Whipping tangled wet black hair strands across forehead/cheeks
-        ctx.strokeStyle = ghostPass ? 'rgba(69, 10, 10, 0.55)' : 'rgba(6, 5, 7, 0.88)';
-        ctx.lineWidth = 3.2;
-        for (let h = -3; h <= 3; h += 1) {
-          const sx = h * 17;
-          const hairWave = Math.sin(timeSec * 22 + h * 1.4) * 18;
+        // Dense clumping wet black hair strands whipping across forehead & jawline
+        for (let h = -6; h <= 6; h += 1) {
+          const sx = h * 11.5;
+          const hairWave = Math.sin(timeSec * 23 + h * 1.3) * 19;
+          ctx.strokeStyle = ghostPass ? 'rgba(69, 10, 10, 0.45)' : h % 2 === 0 ? 'rgba(5, 4, 6, 0.92)' : 'rgba(20, 14, 16, 0.72)';
+          ctx.lineWidth = h % 3 === 0 ? 4.2 : 2.1;
           ctx.beginPath();
-          ctx.moveTo(sx, -78);
-          ctx.quadraticCurveTo(sx + hairWave * 0.5, -18, sx + hairWave, 55);
+          ctx.moveTo(sx, -82);
+          ctx.quadraticCurveTo(sx + hairWave * 0.45, -18, sx + hairWave, 64);
           ctx.stroke();
         }
 
         ctx.restore();
       };
 
-      // Chromatic double-exposure afterimage + sharp main nightmare face
-      drawMonsterFace(true, 0.38);
-      drawMonsterFace(false, 0.96);
+      // Chromatic red double-exposure afterimage + sharp sculpted foreground horror
+      drawMonsterFace(true, 0.42);
+      drawMonsterFace(false, 0.97);
 
-      // Clawed skeletal fingers gripping left & right viewport edges
-      const clawReach = Math.min(1, p * 2.2) * fadeOut;
+      // Jointed anatomical skeletal hands slamming & dragging down left/right lens edges
+      const clawReach = Math.min(1, p * 2.4) * fadeOut;
+      const dragDown = Math.max(0, p - 0.25) * 48;
       if (clawReach > 0.05) {
         for (const side of [-1, 1] as const) {
-          const baseX = side === -1 ? -14 + clawReach * 52 : width + 14 - clawReach * 52;
-          const handY = height * 0.56 + Math.sin(timeSec * 26 + side) * 6;
+          const baseX = side === -1 ? -18 + clawReach * 66 : width + 18 - clawReach * 66;
+          const handY = height * 0.54 + dragDown + Math.sin(timeSec * 24 + side) * 5;
           ctx.save();
-          ctx.globalAlpha = 0.85 * fadeOut;
-          ctx.strokeStyle = '#52525b';
-          ctx.lineWidth = 7;
+          ctx.globalAlpha = 0.88 * fadeOut;
           ctx.lineCap = 'round';
           for (let f = -2; f <= 2; f += 1) {
+            const fy = handY + f * 21;
+            const k1x = baseX - side * 12;
+            const k1y = fy - 4;
+            const k2x = baseX + side * 18;
+            const k2y = fy - 11 + f * 2;
+            const tipX = baseX + side * 38;
+            const tipY = fy + 6 + f * 3;
+
+            // Pale gaunt phalanges
+            ctx.strokeStyle = '#6b7280';
+            ctx.lineWidth = 6.2;
             ctx.beginPath();
-            ctx.moveTo(baseX - side * 40, handY + f * 18);
-            ctx.quadraticCurveTo(
-              baseX + side * 12,
-              handY + f * 20 - 8,
-              baseX + side * 34,
-              handY + f * 24 + 6
-            );
+            ctx.moveTo(baseX - side * 48, fy + 4);
+            ctx.lineTo(k1x, k1y);
+            ctx.lineTo(k2x, k2y);
+            ctx.lineTo(tipX, tipY);
             ctx.stroke();
-            // Crimson bloodstained claw tip
+
+            // Knuckle shadow accent
+            ctx.fillStyle = '#27272a';
+            ctx.beginPath();
+            ctx.arc(k2x, k2y, 3.2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Bloodstained jagged nail tip + trailing scratch streak
             ctx.fillStyle = '#991b1b';
             ctx.beginPath();
-            ctx.arc(baseX + side * 35, handY + f * 24 + 6, 3.2, 0, Math.PI * 2);
+            ctx.ellipse(tipX + side * 2, tipY + 1, 4.2, 2.4, side * 0.35, 0, Math.PI * 2);
             ctx.fill();
+            ctx.strokeStyle = 'rgba(153, 27, 27, 0.52)';
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.moveTo(tipX, tipY - dragDown * 0.7);
+            ctx.lineTo(tipX, tipY);
+            ctx.stroke();
           }
           ctx.restore();
         }
       }
+    }
 
-      // Impact blood slash / crimson lens splatter around the snap/lunge peak
-      if (p > 0.34 && p < 0.72) {
-        const slashAlpha = Math.max(0, 1 - (p - 0.34) / 0.38) * 0.68;
+    // 3. Impact Blood Slash, Lens Splatter & Shattered Camera Glass Fractures (p > 0.34)
+    if (p > 0.34) {
+      const impactAge = p - 0.34;
+      const crackAlpha = Math.max(0.18, Math.min(0.65, 0.65 - impactAge * 0.55));
+      ctx.save();
+      ctx.globalAlpha = crackAlpha;
+      ctx.strokeStyle = 'rgba(226, 232, 240, 0.42)';
+      ctx.lineWidth = 1.2;
+      const crackCenterX = cx + (dc.killerKind === 'tongue_warden' ? 0 : -16);
+      const crackCenterY = cy + 6;
+      for (let c = 0; c < 7; c += 1) {
+        const ang = (c * Math.PI * 2) / 7 + 0.32;
+        const len = 110 + (c % 3) * 75;
+        ctx.beginPath();
+        ctx.moveTo(crackCenterX, crackCenterY);
+        ctx.lineTo(
+          crackCenterX + Math.cos(ang) * len * 0.48,
+          crackCenterY + Math.sin(ang) * len * 0.48 + 12
+        );
+        ctx.lineTo(crackCenterX + Math.cos(ang + 0.14) * len, crackCenterY + Math.sin(ang + 0.14) * len);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      if (p < 0.74) {
+        const slashAlpha = Math.max(0, 1 - impactAge / 0.4) * 0.72;
         ctx.save();
         ctx.globalAlpha = slashAlpha;
         ctx.strokeStyle = '#dc2626';
-        ctx.lineWidth = 6;
+        ctx.lineWidth = 6.5;
         ctx.beginPath();
-        ctx.moveTo(cx - 170, cy - 110);
-        ctx.lineTo(cx + 170, cy + 110);
+        ctx.moveTo(cx - 180, cy - 115);
+        ctx.lineTo(cx + 180, cy + 115);
         if (dc.killerKind === 'tongue_warden') {
-          ctx.moveTo(cx + 165, cy - 105);
-          ctx.lineTo(cx - 165, cy + 105);
+          ctx.moveTo(cx + 175, cy - 110);
+          ctx.lineTo(cx - 175, cy + 110);
         }
         ctx.stroke();
 
         ctx.fillStyle = '#7f1d1d';
-        for (let b = 0; b < 9; b += 1) {
-          const bx = cx + Math.sin(b * 2.4) * 195;
-          const by = cy + Math.cos(b * 1.9) * 120 + (p - 0.34) * 110;
+        for (let b = 0; b < 11; b += 1) {
+          const bx = cx + Math.sin(b * 2.4) * 210;
+          const by = cy + Math.cos(b * 1.9) * 130 + impactAge * 135;
           ctx.beginPath();
-          ctx.ellipse(bx, by, 3.5 + (b % 3), 8 + (b % 4) * 3, 0, 0, Math.PI * 2);
+          ctx.ellipse(bx, by, 3.5 + (b % 3), 9 + (b % 4) * 3.5, 0, 0, Math.PI * 2);
           ctx.fill();
         }
         ctx.restore();
       }
     }
 
-    // 3. Fallen Oil Lantern Sparks near bottom-left
-    if (p > 0.12 && p < 0.62) {
+    // 4. Fallen Extinguished Oil Lantern Sparks -> Curling Smoke Wisp
+    if (p > 0.1 && p < 0.56) {
       ctx.fillStyle = 'rgba(251, 191, 36, 0.78)';
       for (let i = 0; i < 10; i += 1) {
-        const sx = cx - 95 + Math.cos(i * 0.85) * (p * 160);
-        const sy = height * 0.78 + Math.sin(i * 1.1) * (p * 42);
+        const sx = cx - 80 + Math.cos(i * 0.85) * (p * 170);
+        const sy = height * 0.8 + Math.sin(i * 1.1) * (p * 42);
         ctx.fillRect(sx, sy, 3.5, 3.5);
       }
     }
 
-    // 4. 16mm Celluloid Film Burn Edges & Story Horror Verdict Subtitle
-    if (p > 0.44) {
-      const burn = Math.min(1, (p - 0.44) * 2.2);
-      const burnGrad = ctx.createRadialGradient(cx, cy, width * 0.22, cx, cy, width * 0.68);
+    // 5. Authentic Detention "亡 / TỬ VONG" Ending Death Card + Crisp Vietnamese Typography
+    if (p > 0.46) {
+      const burn = Math.min(1, (p - 0.46) * 2.1);
+      const burnGrad = ctx.createRadialGradient(cx, cy, width * 0.2, cx, cy, width * 0.68);
       burnGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-      burnGrad.addColorStop(0.78, `rgba(120, 20, 12, ${burn * 0.32})`);
+      burnGrad.addColorStop(0.76, `rgba(120, 20, 12, ${burn * 0.34})`);
       burnGrad.addColorStop(1, `rgba(180, 65, 18, ${burn * 0.48})`);
       ctx.fillStyle = burnGrad;
       ctx.fillRect(0, 0, width, height);
 
-      const textAlpha = Math.min(1, (p - 0.44) * 3.4);
+      const textAlpha = Math.min(1, (p - 0.46) * 2.8);
       ctx.save();
       ctx.globalAlpha = textAlpha;
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.68)';
-      ctx.fillRect(cx - 320, height * 0.39, 640, 88);
 
-      ctx.fillStyle = '#fca5a5';
-      ctx.font = 'bold 13px monospace';
+      // Tipped extinguished brass oil lantern at bottom center with curling smoke
+      const lanY = height * 0.82;
+      ctx.save();
+      ctx.translate(cx, lanY);
+      ctx.rotate(-0.42);
+      ctx.fillStyle = '#44403c';
+      ctx.fillRect(-12, -8, 24, 16);
+      ctx.fillStyle = '#78716c';
+      ctx.fillRect(-14, 6, 28, 5);
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(203, 213, 225, 0.24)';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(cx - 8, lanY - 12);
+      ctx.bezierCurveTo(
+        cx - 20 + Math.sin(timeSec * 2.4) * 8,
+        lanY - 42,
+        cx + 12 + Math.cos(timeSec * 2.1) * 9,
+        lanY - 72,
+        cx - 4,
+        lanY - 108
+      );
+      ctx.stroke();
+
+      // Atmospheric dark plate framing the Detention verdict
+      const boxW = Math.min(680, width - 64);
+      ctx.fillStyle = 'rgba(5, 2, 3, 0.78)';
+      ctx.fillRect(cx - boxW * 0.5, height * 0.34, boxW, 146);
+      ctx.strokeStyle = 'rgba(153, 27, 27, 0.45)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx - boxW * 0.5, height * 0.34, boxW, 146);
+
+      // Vermilion carved ink-seal stamp (亡)
+      ctx.fillStyle = 'rgba(153, 27, 27, 0.88)';
+      ctx.fillRect(cx - 16, height * 0.36, 32, 32);
+      ctx.strokeStyle = 'rgba(254, 202, 202, 0.55)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(cx - 14, height * 0.36 + 2, 28, 28);
+      ctx.fillStyle = '#fef2f2';
+      ctx.font = `700 17px ${FONT_SERIF}`;
       ctx.textAlign = 'center';
-      ctx.fillText(dc.killerName.toUpperCase(), cx, height * 0.44);
+      ctx.fillText('亡', cx, height * 0.36 + 22);
 
+      // Killer nameplate in clean Vietnamese-safe JetBrains Mono
+      ctx.fillStyle = '#fca5a5';
+      ctx.font = `700 12px ${FONT_MONO}`;
+      ctx.fillText(dc.killerName.toUpperCase(), cx, height * 0.455);
+
+      // Thin crimson divider rule
+      ctx.fillStyle = 'rgba(220, 38, 38, 0.52)';
+      ctx.fillRect(cx - 110, height * 0.47, 220, 1);
+
+      // Crisp wrapped Vietnamese italic verdict using Noto Serif (zero split diacritics)
       ctx.fillStyle = '#fef3c7';
-      ctx.font = 'italic 20px Georgia, serif';
-      ctx.fillText(dc.storyWhisper, cx, height * 0.52);
+      ctx.font = `italic 18px ${FONT_SERIF}`;
+      const wrapped = this.wrapCanvasLines(ctx, dc.storyWhisper, boxW - 56);
+      const startY = wrapped.length > 1 ? height * 0.515 : height * 0.535;
+      wrapped.slice(0, 2).forEach((line, idx) => {
+        ctx.fillText(line, cx, startY + idx * 25);
+      });
+
       ctx.restore();
     }
   }
@@ -952,52 +1262,140 @@ export class ThanhMinhCanvasRenderer {
   ): void {
     const meta = SCENE_META[state.scene];
     const roomW = meta.maxX + 180;
+    const viewLeft = Math.max(0, this.camX - 180);
+    const viewRight = Math.min(roomW, this.camX + this.viewWidth + 180);
+    const viewW = Math.max(1, viewRight - viewLeft);
     const isYin = state.realm === 'yin';
     const isCourtyard = state.scene === 'flooded_courtyard';
     const isRooftop = state.scene === 'roof_belltower';
     const isOffice = state.scene === 'teachers_office';
+    const isInfirmary = state.scene === 'infirmary_wing';
+    const isLibrary = state.scene === 'library_archive';
+    const isAuditorium = state.scene === 'auditorium';
+    const isMusicRoom = state.scene === 'music_classroom';
+    const isPrison = state.scene === 'prison_cells';
     const is1986 = state.scene === 'ruined_hall_1986';
     const isDarkroom = state.scene === 'darkroom';
     const isDorm = state.scene === 'dorm_hall';
 
     if (isRooftop) {
       // Storm-swept concrete rooftop parapet balustrade above crimson flood valley
-      ctx.fillStyle = isYin ? '#1d090b' : '#1b2028';
-      ctx.fillRect(0, floorY - 56, roomW, 10);
-      for (let bx = 30; bx < roomW; bx += 54) {
-        ctx.fillStyle = isYin ? '#2a0c10' : '#242b35';
-        ctx.fillRect(bx, floorY - 46, 14, 46);
+      ctx.fillStyle = isYin ? '#270a0d' : '#24292e';
+      ctx.fillRect(viewLeft, floorY - 58, viewW, 10);
+      for (let bx = 30; bx < viewRight; bx += 54) {
+        if (bx + 20 < viewLeft) continue;
+        ctx.fillStyle = isYin ? '#380e12' : '#2c3338';
+        ctx.fillRect(bx, floorY - 48, 14, 48);
       }
-      ctx.fillStyle = isYin ? '#140507' : '#11161d';
-      ctx.fillRect(0, floorY - 8, roomW, 8);
+      ctx.fillStyle = isYin ? '#140507' : '#161a1e';
+      ctx.fillRect(viewLeft, floorY - 8, viewW, 8);
     } else if (!isCourtyard) {
-      ctx.fillStyle = isDarkroom
-        ? '#240507'
-        : isYin
-          ? '#210709'
-          : is1986
-            ? '#161b18'
-            : '#171a1e';
-      ctx.fillRect(0, 0, roomW, height * 0.16);
+      // A. Detention 1960s Institutional Upper Plaster Wall (Desaturated Olive/Sepia in Yang; Bleached Bone/Ink in Yin)
+      const wallGrad = ctx.createLinearGradient(0, height * 0.14, 0, height * 0.56);
+      if (isDarkroom) {
+        wallGrad.addColorStop(0, '#2a0709');
+        wallGrad.addColorStop(1, '#170405');
+      } else if (isYin) {
+        wallGrad.addColorStop(0, '#6b655a');
+        wallGrad.addColorStop(0.55, '#46413b');
+        wallGrad.addColorStop(1, '#262120');
+      } else if (is1986) {
+        wallGrad.addColorStop(0, '#2b3329');
+        wallGrad.addColorStop(1, '#1a211b');
+      } else if (isInfirmary) {
+        wallGrad.addColorStop(0, '#3a4239');
+        wallGrad.addColorStop(1, '#272d28');
+      } else {
+        wallGrad.addColorStop(0, '#3e3a2f');
+        wallGrad.addColorStop(0.6, '#2d2b24');
+        wallGrad.addColorStop(1, '#1f1e1a');
+      }
+      ctx.fillStyle = wallGrad;
+      ctx.fillRect(viewLeft, height * 0.14, viewW, height * 0.42);
 
-      for (let x = 40; x < roomW; x += 220) {
+      // Ceiling beam & heavy overhanging cornice shadow
+      ctx.fillStyle = isDarkroom ? '#1a0304' : isYin ? '#120f0f' : '#141311';
+      ctx.fillRect(viewLeft, 0, viewW, height * 0.16);
+      ctx.fillStyle = isYin ? '#7f1d1d' : '#291f17';
+      ctx.fillRect(viewLeft, height * 0.148, viewW, 6);
+
+      // B. Lower Institutional Dado Wainscoting (Jade-Teal Painted Tile / Dark Timber)
+      const dadoGrad = ctx.createLinearGradient(0, height * 0.56, 0, floorY);
+      if (isDarkroom) {
+        dadoGrad.addColorStop(0, '#1e0507');
+        dadoGrad.addColorStop(1, '#100203');
+      } else if (isYin) {
+        dadoGrad.addColorStop(0, '#2c1012');
+        dadoGrad.addColorStop(1, '#140607');
+      } else if (is1986) {
+        dadoGrad.addColorStop(0, '#1a2721');
+        dadoGrad.addColorStop(1, '#101815');
+      } else {
+        dadoGrad.addColorStop(0, '#1e322d');
+        dadoGrad.addColorStop(0.5, '#172723');
+        dadoGrad.addColorStop(1, '#0e1916');
+      }
+      ctx.fillStyle = dadoGrad;
+      ctx.fillRect(viewLeft, height * 0.56, viewW, floorY - height * 0.56);
+
+      // Institutional ceramic tile grid lines along lower dado (batched single path, viewport culled)
+      if (!isDarkroom && !isAuditorium) {
+        ctx.strokeStyle = isYin ? 'rgba(153, 27, 27, 0.24)' : 'rgba(10, 18, 16, 0.42)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let ty = height * 0.56; ty < floorY; ty += 22) {
+          ctx.moveTo(viewLeft, ty);
+          ctx.lineTo(viewRight, ty);
+        }
+        const txStart = Math.floor(viewLeft / 38) * 38;
+        for (let tx = txStart; tx < viewRight; tx += 38) {
+          ctx.moveTo(tx, height * 0.56);
+          ctx.lineTo(tx, floorY);
+        }
+        ctx.stroke();
+      }
+
+      // Chair-rail timber molding separating plaster wall & dado
+      ctx.fillStyle = isYin ? '#3f1215' : '#2d2016';
+      ctx.fillRect(viewLeft, height * 0.552, viewW, 8);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.fillRect(viewLeft, height * 0.566, viewW, 4);
+
+      // Hand-collaged Detention rice-paper texture overlay across visible viewport walls only
+      const paperPat = this.ensurePaperTexturePattern(ctx);
+      if (paperPat) {
+        ctx.save();
+        ctx.globalAlpha = isYin ? 0.48 : 0.32;
+        ctx.fillStyle = paperPat;
+        ctx.fillRect(viewLeft, height * 0.14, viewW, floorY - height * 0.14);
+        ctx.restore();
+      }
+
+      // C. Architectural Bays, Peeling Plaster, Cracked Brick, Wooden Louver Windows & Moon/Rain Shafts
+      for (let x = 40; x < viewRight; x += 220) {
+        if (x + 220 < viewLeft) continue;
         const skew = isDorm ? Math.sin(x * 0.02 + timeSec * 0.6) * 5 : 0;
-        ctx.fillStyle = isDarkroom
-          ? '#100203'
-          : isYin
-            ? '#120304'
-            : is1986
-              ? '#0b100d'
-              : '#0b0e12';
-        ctx.fillRect(x, height * 0.14 + skew, 46, floorY - height * 0.14);
 
-        // Exposed cracked red brick & damp mold stains peeling through old limewash
-        ctx.fillStyle = isYin ? 'rgba(110, 12, 16, 0.42)' : 'rgba(65, 28, 24, 0.45)';
+        // Vertical structural timber pilaster with paper-cutout shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.36)';
+        ctx.fillRect(x + 42, height * 0.14 + skew, 9, floorY - height * 0.14);
+        ctx.fillStyle = isDarkroom
+          ? '#160405'
+          : isYin
+            ? '#1d1616'
+            : is1986
+              ? '#141914'
+              : '#1b1611';
+        ctx.fillRect(x, height * 0.14 + skew, 44, floorY - height * 0.14);
+
+        // Exposed cracked red brick & damp water-leak plaster blotches
+        ctx.fillStyle = isYin ? 'rgba(135, 18, 22, 0.46)' : 'rgba(92, 42, 34, 0.48)';
         ctx.fillRect(x + 12, height * 0.34, 18, 26);
-        ctx.fillStyle = isYin ? 'rgba(90, 8, 12, 0.48)' : 'rgba(6, 8, 12, 0.48)';
+        ctx.fillRect(x + 210, height * 0.44, 24, 16);
+        ctx.fillStyle = isYin ? 'rgba(105, 10, 14, 0.5)' : 'rgba(12, 16, 15, 0.42)';
         ctx.fillRect(x + 6, height * 0.15, 8, 150 + (x % 48));
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.62)';
+        ctx.lineWidth = 1.3;
         ctx.beginPath();
         ctx.moveTo(x + 28, height * 0.18);
         ctx.lineTo(x + 18, height * 0.31);
@@ -1006,10 +1404,10 @@ export class ThanhMinhCanvasRenderer {
         ctx.stroke();
 
         // Corner ceiling cobwebs
-        ctx.strokeStyle = 'rgba(203, 213, 225, 0.14)';
+        ctx.strokeStyle = 'rgba(220, 218, 206, 0.16)';
         for (let w = 0; w < 4; w += 1) {
           ctx.beginPath();
-          ctx.moveTo(x + 46, height * 0.16);
+          ctx.moveTo(x + 44, height * 0.16);
           ctx.quadraticCurveTo(x + 62 + w * 4, height * 0.19 + w * 4, x + 76 + w * 5, height * 0.16);
           ctx.stroke();
         }
@@ -1017,55 +1415,82 @@ export class ThanhMinhCanvasRenderer {
         // Swaying dying tungsten bulb hanging from ceiling every other bay
         if (!isDarkroom && (x / 220) % 2 === 1) {
           const swing = Math.sin(timeSec * 1.9 + x) * 0.08;
-          const bulbFlicker = Math.sin(timeSec * 31 + x) > 0.88 ? 0.12 : 0.45;
+          const bulbFlicker = Math.sin(timeSec * 31 + x) > 0.88 ? 0.14 : 0.55;
           ctx.save();
           ctx.translate(x + 130, height * 0.15);
           ctx.rotate(swing);
           ctx.strokeStyle = '#334155';
-          ctx.lineWidth = 1.5;
+          ctx.lineWidth = 1.6;
           ctx.beginPath();
           ctx.moveTo(0, 0);
           ctx.lineTo(0, 34);
           ctx.stroke();
-          ctx.fillStyle = `rgba(253, 224, 71, ${bulbFlicker})`;
+          ctx.fillStyle = isYin
+            ? `rgba(239, 68, 68, ${bulbFlicker})`
+            : `rgba(253, 224, 128, ${bulbFlicker})`;
           ctx.beginPath();
-          ctx.arc(0, 36, 4, 0, Math.PI * 2);
+          ctx.arc(0, 36, 4.2, 0, Math.PI * 2);
           ctx.fill();
-          // Soft ceiling cone cast by swaying bulb
-          const cone = ctx.createRadialGradient(0, 36, 2, 0, 95, 110);
-          cone.addColorStop(0, `rgba(253, 224, 71, ${bulbFlicker * 0.25})`);
+          const cone = ctx.createRadialGradient(0, 36, 2, 0, 105, 130);
+          cone.addColorStop(
+            0,
+            isYin ? `rgba(220, 38, 38, ${bulbFlicker * 0.28})` : `rgba(253, 224, 138, ${bulbFlicker * 0.3})`
+          );
           cone.addColorStop(1, 'rgba(0, 0, 0, 0)');
           ctx.fillStyle = cone;
-          ctx.fillRect(-100, 30, 200, 140);
+          ctx.fillRect(-120, 30, 240, 175);
           ctx.restore();
         }
 
-        if (!isDarkroom) {
-          ctx.strokeStyle = isYin ? '#381214' : '#24292e';
-          ctx.lineWidth = 3;
-          ctx.strokeRect(x + 56, height * 0.18 + skew, 148, height * 0.36);
+        // Iconic 1960s Wooden Louver Windows (Cửa chớp gỗ Cô Sơn)
+        if (!isDarkroom && !isPrison) {
+          const winX = x + 56;
+          const winY = height * 0.18 + skew;
+          const winW = 148;
+          const winH = height * 0.34;
+          // Deep stormy exterior glass inset
+          ctx.fillStyle = isYin ? '#1f0709' : '#10181b';
+          ctx.fillRect(winX, winY, winW, winH);
+          // Silhouette mountain pines visible through window panes
+          ctx.fillStyle = isYin ? '#350a0f' : '#192626';
+          ctx.beginPath();
+          ctx.moveTo(winX, winY + winH);
+          ctx.lineTo(winX + 36, winY + winH * 0.45);
+          ctx.lineTo(winX + 74, winY + winH * 0.72);
+          ctx.lineTo(winX + 114, winY + winH * 0.35);
+          ctx.lineTo(winX + winW, winY + winH);
+          ctx.closePath();
+          ctx.fill();
 
-          const shaftAlpha = (isYin ? 0.06 : 0.045) + this.lightningFlash * 0.19;
-          const beamGrad = ctx.createLinearGradient(x + 120, height * 0.18, x + 40, floorY);
+          // Diagonal eerie window light shaft falling across floorboards
+          const shaftAlpha = (isYin ? 0.08 : 0.065) + this.lightningFlash * 0.22;
+          const beamGrad = ctx.createLinearGradient(x + 120, winY, x + 36, floorY);
           beamGrad.addColorStop(
             0,
             isYin
               ? `rgba(220, 45, 55, ${shaftAlpha * 1.4})`
-              : `rgba(186, 210, 235, ${shaftAlpha})`
+              : `rgba(196, 214, 212, ${shaftAlpha})`
           );
           beamGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
           ctx.fillStyle = beamGrad;
           ctx.beginPath();
-          ctx.moveTo(x + 60, height * 0.18 + skew);
-          ctx.lineTo(x + 200, height * 0.18 + skew);
+          ctx.moveTo(winX + 4, winY);
+          ctx.lineTo(winX + winW - 4, winY);
           ctx.lineTo(x + 120, floorY);
           ctx.lineTo(x - 20, floorY);
           ctx.closePath();
           ctx.fill();
 
-          ctx.fillStyle = '#2d2118';
-          ctx.fillRect(x + 58, height * 0.29 + skew, 144, 12);
-          ctx.fillRect(x + 58, height * 0.41 + skew, 144, 12);
+          // Slanted wooden louver slats across upper transom + dark teak mullions
+          ctx.fillStyle = isYin ? '#2a1618' : '#2f2218';
+          for (let ly = winY + 12; ly < winY + 52; ly += 9) {
+            ctx.fillRect(winX + 3, ly, winW - 6, 4);
+          }
+          ctx.fillRect(winX + winW * 0.5 - 3, winY, 6, winH);
+          ctx.fillRect(winX, winY + 54, winW, 9);
+          ctx.strokeStyle = isYin ? '#451519' : '#3a2b1f';
+          ctx.lineWidth = 4;
+          ctx.strokeRect(winX, winY, winW, winH);
         }
 
         if (is1986) {
@@ -1086,25 +1511,20 @@ export class ThanhMinhCanvasRenderer {
         }
       }
 
-      ctx.fillStyle = isDarkroom
-        ? '#1a0406'
-        : isYin
-          ? '#2b0b0d'
-          : is1986
-            ? '#18211b'
-            : '#201a16';
-      ctx.fillRect(0, height * 0.56, roomW, floorY - height * 0.56);
-
       if (!isDarkroom && !is1986) {
         const uncanny = isYin || state.sanity < 70 || state.activePhantomX !== null;
-        for (let x = 160; x < roomW - 120; x += 310) {
+        for (let x = 160; x < viewRight; x += 310) {
+          if (x + 120 < viewLeft) continue;
           ctx.save();
           ctx.translate(x, height * 0.21);
           ctx.rotate(Math.sin(timeSec * 1.4 + x) * 0.04);
-          ctx.fillStyle = isYin ? '#5c0e12' : '#4a1b19';
-          ctx.fillRect(-40, 0, 80, 30);
-          ctx.fillStyle = 'rgba(235, 225, 205, 0.72)';
-          ctx.font = 'bold 10px serif';
+          ctx.fillStyle = isYin ? '#6b1218' : '#581f1b';
+          ctx.fillRect(-44, 0, 88, 30);
+          ctx.strokeStyle = 'rgba(20, 12, 10, 0.7)';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(-44, 0, 88, 30);
+          ctx.fillStyle = 'rgba(235, 225, 205, 0.8)';
+          ctx.font = `bold 10px ${FONT_SERIF}`;
           ctx.textAlign = 'center';
           ctx.fillText(uncanny ? 'ĐỪNG QUAY LẠI' : isOffice ? 'TÔN SƯ TRỌNG ĐẠO' : 'TỰ KIỂM ĐIỂM', 0, 19);
           ctx.restore();
@@ -1112,16 +1532,16 @@ export class ThanhMinhCanvasRenderer {
           ctx.save();
           ctx.translate(x + 95, height * 0.15);
           ctx.rotate(Math.sin(timeSec * 2.1 + x) * 0.09);
-          ctx.fillStyle = isYin ? 'rgba(210, 180, 180, 0.5)' : 'rgba(230, 230, 224, 0.6)';
+          ctx.fillStyle = isYin ? 'rgba(210, 180, 180, 0.58)' : 'rgba(232, 224, 205, 0.66)';
           ctx.fillRect(-5, 0, 10, 50);
           ctx.restore();
         }
       }
     }
 
-    // Teachers' Office bookshelves, vintage pendulum clock & hanging calligraphy scroll
+    // Teachers' Office bookshelves & hanging calligraphy scroll spread across expanded 1640px room
     if (isOffice) {
-      for (const sx of [190, 470, 770]) {
+      for (const sx of [250, 520, 860, 1140, 1460]) {
         ctx.fillStyle = '#241811';
         ctx.fillRect(sx - 44, floorY - 196, 88, 196);
         ctx.strokeStyle = '#3b281c';
@@ -1136,48 +1556,163 @@ export class ThanhMinhCanvasRenderer {
           }
         }
       }
-      // Hanging ink scroll beside grading desk
       ctx.fillStyle = '#d6ccb8';
       ctx.fillRect(618, height * 0.21, 44, 98);
       ctx.fillStyle = '#1c1917';
       ctx.fillRect(614, height * 0.21, 52, 5);
       ctx.fillRect(614, height * 0.21 + 96, 52, 6);
-      ctx.font = 'bold 12px serif';
+      ctx.font = `bold 12px ${FONT_SERIF}`;
       ctx.textAlign = 'center';
       ctx.fillText('清', 640, height * 0.21 + 36);
       ctx.fillText('明', 640, height * 0.21 + 66);
     }
 
-    // Overturned school desks & bloody handprints in Classroom 12B
+    // Classroom 12B: Widened Blackboard (680) + Wooden Student Desks across 1680px
     if (state.scene === 'classroom_12b') {
       const eerieBoard = isYin || state.sanity < 70 || state.activePhantomX !== null;
-      ctx.fillStyle = '#14261d';
-      ctx.fillRect(310, height * 0.25, 220, 96);
+      ctx.fillStyle = '#182b22';
+      ctx.fillRect(570, height * 0.24, 230, 98);
       ctx.strokeStyle = '#4e3726';
       ctx.lineWidth = 4;
-      ctx.strokeRect(310, height * 0.25, 220, 96);
-      ctx.fillStyle = eerieBoard ? 'rgba(252, 165, 165, 0.86)' : 'rgba(226, 232, 240, 0.78)';
-      ctx.font = 'bold 12px serif';
+      ctx.strokeRect(570, height * 0.24, 230, 98);
+      ctx.fillStyle = eerieBoard ? 'rgba(252, 165, 165, 0.88)' : 'rgba(226, 232, 240, 0.82)';
+      ctx.font = `bold 12px ${FONT_SERIF}`;
       ctx.textAlign = 'center';
-      ctx.fillText(eerieBoard ? 'NÓ ĐANG ĐỨNG SAU LƯNG' : 'ĐẢ ĐẢO TRÍ THỨC', 420, height * 0.33);
+      ctx.fillText(eerieBoard ? 'NÓ ĐANG ĐỨNG SAU LƯNG' : 'ĐẢ ĐẢO TRÍ THỨC', 685, height * 0.32);
       ctx.strokeStyle = '#b91c1c';
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.moveTo(335, height * 0.28);
-      ctx.lineTo(505, height * 0.4);
-      ctx.moveTo(505, height * 0.28);
-      ctx.lineTo(335, height * 0.4);
+      ctx.moveTo(595, height * 0.27);
+      ctx.lineTo(775, height * 0.39);
+      ctx.moveTo(775, height * 0.27);
+      ctx.lineTo(595, height * 0.39);
       ctx.stroke();
 
-      // Overturned desk silhouette at x=360 & x=705
+      // Neat & overturned 1960s desks spread down the widened classroom
+      for (const dx of [350, 510, 880, 1280, 1430]) {
+        ctx.fillStyle = '#2c1f16';
+        ctx.fillRect(dx - 24, floorY - 38, 48, 7);
+        ctx.fillRect(dx - 20, floorY - 31, 6, 31);
+        ctx.fillRect(dx + 14, floorY - 31, 6, 31);
+      }
       ctx.save();
-      ctx.translate(365, floorY);
-      ctx.rotate(-0.28);
+      ctx.translate(970, floorY);
+      ctx.rotate(-0.32);
       ctx.fillStyle = '#251a13';
       ctx.fillRect(-26, -34, 52, 8);
       ctx.fillRect(-20, -26, 6, 26);
       ctx.fillRect(14, -26, 6, 26);
       ctx.restore();
+    }
+
+    // Infirmary Wing: Iron Hospital Cots, Privacy Curtains & Red Cross Wall Plaque
+    if (isInfirmary) {
+      for (const cx of [360, 740, 1320]) {
+        // Iron bed frame + crumpled olive wool blanket
+        ctx.fillStyle = '#334155';
+        ctx.fillRect(cx - 52, floorY - 46, 5, 46);
+        ctx.fillRect(cx + 47, floorY - 36, 5, 36);
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(cx - 50, floorY - 24, 100, 7);
+        ctx.fillStyle = isYin ? '#3f1518' : '#3a463b';
+        ctx.fillRect(cx - 46, floorY - 31, 90, 10);
+        ctx.fillStyle = '#cbd5e1';
+        ctx.fillRect(cx - 44, floorY - 37, 18, 7);
+      }
+      // Red Cross porcelain sign above cabinet
+      ctx.fillStyle = '#d6cfc2';
+      ctx.fillRect(996, height * 0.24, 48, 36);
+      ctx.fillStyle = '#991b1b';
+      ctx.fillRect(1016, height * 0.24 + 8, 8, 20);
+      ctx.fillRect(1010, height * 0.24 + 14, 20, 8);
+    }
+
+    // Library Archive: Towering Double-Tier Bookshelves & Rolling Ladder
+    if (isLibrary) {
+      for (const lx of [240, 620, 1020, 1380]) {
+        ctx.fillStyle = '#1f150f';
+        ctx.fillRect(lx - 52, floorY - 225, 104, 225);
+        ctx.strokeStyle = '#38251a';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(lx - 52, floorY - 225, 104, 225);
+        for (let sy = floorY - 190; sy < floorY - 20; sy += 34) {
+          ctx.fillStyle = '#120b07';
+          ctx.fillRect(lx - 46, sy, 92, 5);
+          for (let b = 0; b < 7; b += 1) {
+            ctx.fillStyle = b % 3 === 0 ? '#4d221f' : b % 2 === 0 ? '#3a2c20' : '#262b26';
+            ctx.fillRect(lx - 42 + b * 12, sy - 20, 9, 20);
+          }
+        }
+      }
+      // Wooden library ladder leaning against shelves
+      ctx.save();
+      ctx.translate(780, floorY);
+      ctx.rotate(-0.18);
+      ctx.strokeStyle = '#4a3322';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.moveTo(-12, 0);
+      ctx.lineTo(-12, -210);
+      ctx.moveTo(12, 0);
+      ctx.lineTo(12, -210);
+      for (let r = -24; r > -200; r -= 24) {
+        ctx.moveTo(-12, r);
+        ctx.lineTo(12, r);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Auditorium: Crimson Tattered Stage Curtains & Wooden Seating Rows
+    if (isAuditorium) {
+      for (const sx of [260, 560, 960, 1140, 1340]) {
+        ctx.fillStyle = '#251a14';
+        ctx.fillRect(sx - 24, floorY - 34, 48, 34);
+        ctx.fillStyle = '#3d281e';
+        ctx.fillRect(sx - 22, floorY - 46, 44, 12);
+      }
+      // Heavy crimson velvet curtains framing Puppet Stage around x = 1620
+      ctx.fillStyle = isYin ? '#5e0a10' : '#4a1216';
+      ctx.fillRect(1430, height * 0.14, 34, floorY - height * 0.14);
+      ctx.fillRect(1776, height * 0.14, 34, floorY - height * 0.14);
+      ctx.fillRect(1430, height * 0.14, 380, 32);
+    }
+
+    // Music Classroom: Chalkboard Staves + Scattered Wooden Music Stands
+    if (isMusicRoom) {
+      ctx.fillStyle = '#15251d';
+      ctx.fillRect(420, height * 0.25, 210, 92);
+      ctx.strokeStyle = '#4a3423';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(420, height * 0.25, 210, 92);
+      ctx.strokeStyle = 'rgba(226, 232, 240, 0.35)';
+      ctx.lineWidth = 1;
+      for (let st = 0; st < 5; st += 1) {
+        const sy = height * 0.29 + st * 8;
+        ctx.beginPath();
+        ctx.moveTo(435, sy);
+        ctx.lineTo(615, sy);
+        ctx.stroke();
+      }
+      for (const mx of [740, 1380]) {
+        ctx.fillStyle = '#18181b';
+        ctx.fillRect(mx - 2, floorY - 58, 4, 58);
+        ctx.fillRect(mx - 14, floorY - 62, 28, 12);
+      }
+    }
+
+    // Prison Cells: Heavy Vertical Iron Cell Grates & Archways
+    if (isPrison) {
+      for (let cx = 220; cx < roomW - 140; cx += 310) {
+        ctx.fillStyle = '#0d1014';
+        ctx.fillRect(cx - 56, floorY - 196, 112, 196);
+        ctx.fillStyle = '#334155';
+        for (let bx = cx - 44; bx <= cx + 44; bx += 18) {
+          ctx.fillRect(bx, floorY - 192, 5, 192);
+        }
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(cx - 58, floorY - 200, 116, 10);
+      }
     }
 
     if (isDarkroom) {
@@ -1195,19 +1730,18 @@ export class ThanhMinhCanvasRenderer {
         ctx.fillRect(-17, 0, 34, 68);
         ctx.strokeStyle = '#991b1b';
         ctx.strokeRect(-17, 0, 34, 68);
-        // Eerie white negative head silhouette inside hanging film strip
         ctx.fillStyle = 'rgba(254, 202, 202, 0.35)';
         ctx.beginPath();
         ctx.arc(0, 26, 7, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
-      for (const lx of [260, 520, 760]) {
-        const bulbGrad = ctx.createRadialGradient(lx, height * 0.14, 4, lx, height * 0.14, 72);
-        bulbGrad.addColorStop(0, 'rgba(239, 68, 68, 0.58)');
+      for (const lx of [280, 660, 1080, 1460]) {
+        const bulbGrad = ctx.createRadialGradient(lx, height * 0.14, 4, lx, height * 0.14, 86);
+        bulbGrad.addColorStop(0, 'rgba(239, 68, 68, 0.62)');
         bulbGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
         ctx.fillStyle = bulbGrad;
-        ctx.fillRect(lx - 72, height * 0.14 - 72, 144, 144);
+        ctx.fillRect(lx - 86, height * 0.14 - 86, 172, 172);
         ctx.fillStyle = '#ef4444';
         ctx.beginPath();
         ctx.arc(lx, height * 0.14, 6, 0, Math.PI * 2);
@@ -1217,13 +1751,14 @@ export class ThanhMinhCanvasRenderer {
 
     if (isCourtyard) {
       const waterGrad = ctx.createLinearGradient(0, floorY, 0, height);
-      waterGrad.addColorStop(0, '#0e1721');
+      waterGrad.addColorStop(0, isYin ? '#1f080b' : '#131d24');
       waterGrad.addColorStop(1, '#06090e');
       ctx.fillStyle = waterGrad;
-      ctx.fillRect(0, floorY, roomW, height - floorY);
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.24)';
+      ctx.fillRect(viewLeft, floorY, viewW, height - floorY);
+      ctx.strokeStyle = isYin ? 'rgba(220, 38, 38, 0.28)' : 'rgba(148, 163, 184, 0.28)';
       ctx.lineWidth = 1;
-      for (let rx = 90; rx < roomW; rx += 130) {
+      for (let rx = 90; rx < viewRight; rx += 130) {
+        if (rx + 40 < viewLeft) continue;
         const rad = 8 + ((timeSec * 22 + rx) % 26);
         ctx.beginPath();
         ctx.ellipse(rx, floorY + 26, rad, rad * 0.35, 0, 0, Math.PI * 2);
@@ -1231,23 +1766,24 @@ export class ThanhMinhCanvasRenderer {
       }
     } else {
       const floorGrad = ctx.createLinearGradient(0, floorY, 0, height);
-      floorGrad.addColorStop(0, isDarkroom ? '#120304' : isYin ? '#190608' : '#120e0c');
-      floorGrad.addColorStop(0.45, '#090707');
+      floorGrad.addColorStop(0, isDarkroom ? '#170405' : isYin ? '#1b0709' : '#18130f');
+      floorGrad.addColorStop(0.45, '#0b0807');
       floorGrad.addColorStop(1, '#040304');
       ctx.fillStyle = floorGrad;
-      ctx.fillRect(0, floorY, roomW, height - floorY);
+      ctx.fillRect(viewLeft, floorY, viewW, height - floorY);
 
-      // Perspective damp floorboards + subtle rainwater sheen near window bays
-      ctx.strokeStyle = isYin ? 'rgba(110, 16, 20, 0.42)' : 'rgba(65, 52, 42, 0.36)';
+      ctx.strokeStyle = isYin ? 'rgba(120, 18, 22, 0.45)' : 'rgba(72, 56, 44, 0.42)';
       ctx.lineWidth = 1.5;
-      for (let x = 0; x < roomW; x += 68) {
-        ctx.beginPath();
+      ctx.beginPath();
+      const plankStart = Math.max(0, Math.floor(viewLeft / 68) * 68);
+      for (let x = plankStart; x < viewRight + 68; x += 68) {
         ctx.moveTo(x, floorY);
         ctx.lineTo(x - 42, height);
-        ctx.stroke();
       }
-      ctx.fillStyle = isYin ? 'rgba(140, 20, 24, 0.08)' : 'rgba(148, 163, 184, 0.05)';
-      for (let px = 110; px < roomW; px += 220) {
+      ctx.stroke();
+      ctx.fillStyle = isYin ? 'rgba(140, 20, 24, 0.1)' : 'rgba(148, 163, 184, 0.06)';
+      for (let px = 110; px < viewRight; px += 220) {
+        if (px + 60 < viewLeft) continue;
         ctx.beginPath();
         ctx.ellipse(px, floorY + 26, 48, 8, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -1264,6 +1800,8 @@ export class ThanhMinhCanvasRenderer {
     timeSec: number,
     isYin: boolean
   ): void {
+    const viewLeft = Math.max(0, this.camX - 100);
+    const viewRight = Math.min(worldSpan + 200, this.camX + this.viewWidth + 100);
     const mistGrad = ctx.createLinearGradient(0, floorY - 38, 0, floorY + 22);
     mistGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
     mistGrad.addColorStop(
@@ -1272,12 +1810,13 @@ export class ThanhMinhCanvasRenderer {
     );
     mistGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = mistGrad;
-    ctx.fillRect(0, floorY - 38, worldSpan + 200, 62);
+    ctx.fillRect(viewLeft, floorY - 38, Math.max(1, viewRight - viewLeft), 62);
 
     // Slow drifting mist ribbons along floor
     ctx.fillStyle = isYin ? 'rgba(153, 27, 27, 0.08)' : 'rgba(203, 213, 225, 0.05)';
     for (let x = 0; x < worldSpan; x += 220) {
       const drift = (x + timeSec * 18) % worldSpan;
+      if (drift + 100 < viewLeft || drift - 100 > viewRight) continue;
       ctx.beginPath();
       ctx.ellipse(drift, floorY - 4, 88, 12, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -1295,7 +1834,7 @@ export class ThanhMinhCanvasRenderer {
     ctx.globalAlpha = 0.26;
     const wave = Math.sin(timeSec * 4) * 3;
     ctx.fillStyle = '#64748b';
-    ctx.fillRect(540 - 3 + wave, floorY + 2, 6, 86);
+    ctx.fillRect(1140 - 3 + wave, floorY + 2, 6, 86);
     ctx.fillStyle = '#94a3b8';
     ctx.fillRect(state.playerX - 9 + wave, floorY + 4, 18, 56);
     const glow = ctx.createRadialGradient(
@@ -1325,6 +1864,7 @@ export class ThanhMinhCanvasRenderer {
     for (const hs of SCENE_HOTSPOTS) {
       if (hs.scene !== state.scene) continue;
       if (hs.realm !== 'both' && hs.realm !== state.realm) continue;
+      if (hs.x + 170 < this.camX || hs.x - 170 > this.camX + this.viewWidth) continue;
       const isActive = nearest?.id === hs.id;
 
       ctx.save();
@@ -1563,10 +2103,10 @@ export class ThanhMinhCanvasRenderer {
 
         // Carved Qingming inscription on stone
         ctx.fillStyle = '#94a3b8';
-        ctx.font = 'bold 12px serif';
+        ctx.font = `bold 12px ${FONT_SERIF}`;
         ctx.textAlign = 'center';
         ctx.fillText('清明', 0, -48);
-        ctx.font = '9px serif';
+        ctx.font = `9px ${FONT_SERIF}`;
         ctx.fillText('1967', 0, -30);
 
         // White Qingming chrysanthemum blossoms at base of stone
@@ -1646,6 +2186,123 @@ export class ThanhMinhCanvasRenderer {
         ctx.lineTo(12, -88);
         ctx.lineTo(-4, -64);
         ctx.stroke();
+      } else if (hs.kind === 'clock_puzzle') {
+        // Antique Grandfather Clock (02:15) + Locked Infirmary Medicine Cabinet
+        ctx.fillStyle = '#241710';
+        ctx.fillRect(-38, -172, 46, 172);
+        ctx.strokeStyle = '#4a3222';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-38, -172, 46, 172);
+        // Clock Face
+        ctx.fillStyle = '#e7dcc4';
+        ctx.beginPath();
+        ctx.arc(-15, -142, 16, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#1c1917';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        // Hour & minute hands
+        const hrAng = ((state.clockHour % 12) / 12) * Math.PI * 2 - Math.PI / 2;
+        const minAng = (state.clockMinute / 60) * Math.PI * 2 - Math.PI / 2;
+        ctx.beginPath();
+        ctx.moveTo(-15, -142);
+        ctx.lineTo(-15 + Math.cos(hrAng) * 8, -142 + Math.sin(hrAng) * 8);
+        ctx.moveTo(-15, -142);
+        ctx.lineTo(-15 + Math.cos(minAng) * 12, -142 + Math.sin(minAng) * 12);
+        ctx.stroke();
+        // Brass pendulum inside glass belly
+        ctx.fillStyle = '#140c08';
+        ctx.fillRect(-29, -114, 28, 74);
+        const pendSwing = state.clockSolved ? Math.sin(timeSec * 3.1) * 8 : 0;
+        ctx.strokeStyle = '#b45309';
+        ctx.beginPath();
+        ctx.moveTo(-15, -112);
+        ctx.lineTo(-15 + pendSwing, -54);
+        ctx.stroke();
+        ctx.fillStyle = '#d97706';
+        ctx.beginPath();
+        ctx.arc(-15 + pendSwing, -54, 5, 0, Math.PI * 2);
+        ctx.fill();
+        // Adjoining white medicine cabinet
+        ctx.fillStyle = '#9ca3af';
+        ctx.fillRect(16, -124, 34, 52);
+        ctx.fillStyle = state.clockSolved ? '#f59e0b' : '#991b1b';
+        ctx.fillRect(30, -108, 6, 18);
+        ctx.fillRect(24, -102, 18, 6);
+      } else if (hs.kind === 'bookshelf_cipher') {
+        // Forbidden Library Secret Shelf with 3 Banned Books
+        ctx.fillStyle = '#291a12';
+        ctx.fillRect(-46, -162, 92, 162);
+        ctx.strokeStyle = state.bookshelfSolved ? '#f59e0b' : '#4a3222';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-46, -162, 92, 162);
+        ctx.fillStyle = '#140c08';
+        ctx.fillRect(-38, -124, 76, 44);
+        const spineColors = ['#991b1b', '#1e3a8a', '#b45309'];
+        for (let i = 0; i < 3; i += 1) {
+          const bookId = state.bookshelfOrder[i];
+          ctx.fillStyle = spineColors[bookId] ?? '#57534e';
+          ctx.fillRect(-28 + i * 22, -120, 14, 38);
+          ctx.fillStyle = '#fef3c7';
+          ctx.font = `bold 8px ${FONT_SERIF}`;
+          ctx.textAlign = 'center';
+          ctx.fillText(bookId === 0 ? 'I' : bookId === 1 ? 'II' : 'III', -21 + i * 22, -100);
+        }
+        if (state.bookshelfSolved) {
+          ctx.fillStyle = 'rgba(251, 191, 36, 0.85)';
+          ctx.beginPath();
+          ctx.arc(0, -142, 5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (hs.kind === 'piano_puzzle') {
+        // Weathered 1960s Black Upright Parlor Piano + Sheet Music + Candle
+        ctx.fillStyle = '#111113';
+        ctx.fillRect(-58, -126, 116, 126);
+        ctx.strokeStyle = '#332419';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-58, -126, 116, 126);
+        // Music desk & torn sheet music
+        ctx.fillStyle = '#e7dcc8';
+        ctx.fillRect(-22, -112, 44, 24);
+        ctx.fillStyle = '#1c1917';
+        ctx.fillRect(-16, -105, 32, 1.5);
+        ctx.fillRect(-16, -98, 32, 1.5);
+        // Ivory & ebony keyboard fallboard
+        ctx.fillStyle = '#f5f0e6';
+        ctx.fillRect(-52, -74, 104, 14);
+        ctx.fillStyle = '#09090b';
+        for (let k = -44; k < 44; k += 12) {
+          ctx.fillRect(k, -74, 5, 8);
+        }
+        // Brass foot pedals
+        ctx.fillStyle = '#d97706';
+        ctx.fillRect(-10, -8, 6, 5);
+        ctx.fillRect(4, -8, 6, 5);
+        // Warm wax candle on top
+        ctx.fillStyle = '#fef3c7';
+        ctx.fillRect(36, -140, 6, 14);
+        ctx.fillStyle = state.pianoSolved ? '#fbbf24' : '#f97316';
+        ctx.beginPath();
+        ctx.arc(39, -144 + Math.sin(timeSec * 8) * 1, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (hs.kind === 'sanity_shrine') {
+        const used = Boolean(state.flags[`shrine_${hs.id}`]);
+        ctx.fillStyle = '#291c14';
+        ctx.fillRect(-28, -46, 56, 46);
+        ctx.fillStyle = '#57534e';
+        ctx.fillRect(-10, -58, 20, 12);
+        if (!used) {
+          const glowR = 16 + Math.sin(timeSec * 5) * 3;
+          const halo = ctx.createRadialGradient(0, -68, 2, 0, -68, glowR);
+          halo.addColorStop(0, 'rgba(251, 191, 36, 0.92)');
+          halo.addColorStop(1, 'rgba(251, 191, 36, 0)');
+          ctx.fillStyle = halo;
+          ctx.fillRect(-glowR, -68 - glowR, glowR * 2, glowR * 2);
+          ctx.fillStyle = '#ef4444';
+          ctx.beginPath();
+          ctx.arc(0, -66, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
       } else if (hs.kind === 'cipher_box') {
         // Teacher Trần Mặc's mahogany grading desk + 3-digit Thanh Minh keepsake lockbox
         ctx.fillStyle = '#2d1e15';
@@ -1769,7 +2426,7 @@ export class ThanhMinhCanvasRenderer {
         ctx.lineWidth = 1.25;
         ctx.strokeRect(-94, -214 + bob, 188, 25);
         ctx.fillStyle = '#fef3c7';
-        ctx.font = 'bold 11px sans-serif';
+        ctx.font = `bold 11px ${FONT_SANS}`;
         ctx.textAlign = 'center';
         ctx.fillText('[E] Kiểm tra / Tương tác', 0, -197 + bob);
       }
@@ -1784,7 +2441,7 @@ export class ThanhMinhCanvasRenderer {
     timeSec: number
   ): void {
     ctx.save();
-    ctx.translate(675, floorY);
+    ctx.translate(1235, floorY);
 
     // Overhead swinging interrogation lamp cone
     const lampGrad = ctx.createLinearGradient(0, -245, 0, 0);
@@ -2039,7 +2696,7 @@ export class ThanhMinhCanvasRenderer {
 
         if (!isAfterimage) {
           ctx.fillStyle = 'rgba(127, 29, 29, 0.92)';
-          ctx.font = 'bold 9.5px serif';
+          ctx.font = `bold 9.5px ${FONT_SERIF}`;
           ctx.textAlign = 'center';
           ctx.fillText('TỘI', 0, -38);
         }
@@ -2099,7 +2756,7 @@ export class ThanhMinhCanvasRenderer {
         ctx.strokeRect(-19, -144, 40, 22);
         if (!isAfterimage) {
           ctx.fillStyle = '#09090b';
-          ctx.font = 'bold 7px serif';
+          ctx.font = `bold 7px ${FONT_SERIF}`;
           ctx.textAlign = 'center';
           ctx.fillText(ghost.placardText, 1, -130);
         }
@@ -2130,6 +2787,81 @@ export class ThanhMinhCanvasRenderer {
           ctx.beginPath();
           ctx.moveTo(handX, handY);
           ctx.lineTo(handX + 9 + armLift * 5, handY + f * 3.8 + 4.5);
+          ctx.stroke();
+        }
+      } else if (ghost.variant === 'librarian_wraith') {
+        // Thủ Thư Đốt Sách (~188px tall gaunt scholar robe, crooked horn-rimmed spectacles, orbiting burned poetry sheets)
+        ctx.save();
+        ctx.translate(4 + upperSway, -178 + strideBob);
+        ctx.rotate(crouchHunch * 0.7 + neckSnap);
+        const libFace = ctx.createRadialGradient(2, -2, 2, 0, 0, 17);
+        libFace.addColorStop(0, isAfterimage ? '#991b1b' : '#b8b0a0');
+        libFace.addColorStop(0.68, isAfterimage ? '#450a0a' : '#4a433d');
+        libFace.addColorStop(1, '#121010');
+        ctx.fillStyle = libFace;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 13, 16, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Crooked circular horn-rimmed spectacles + crimson glare
+        ctx.strokeStyle = '#1c1917';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(5.5, -2, 4.5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#dc2626';
+        ctx.beginPath();
+        ctx.arc(6.5, -2, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // Orbiting charred poetry pages around shoulders
+        if (!isAfterimage) {
+          for (let p = 0; p < 3; p += 1) {
+            const ang = timeSec * 2.1 + (p * Math.PI * 2) / 3;
+            const px = Math.cos(ang) * 26;
+            const py = -126 + Math.sin(ang * 1.4) * 14;
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(Math.sin(timeSec * 3 + p) * 0.4);
+            ctx.fillStyle = '#d6cab4';
+            ctx.fillRect(-5, -7, 10, 14);
+            ctx.fillStyle = '#991b1b';
+            ctx.fillRect(-3, -2, 6, 2);
+            ctx.restore();
+          }
+        }
+
+        // Ink-stained placard
+        ctx.fillStyle = isAfterimage ? '#450a0a' : '#573c26';
+        ctx.fillRect(-19, -144, 40, 21);
+        if (!isAfterimage) {
+          ctx.fillStyle = '#09090b';
+          ctx.font = `bold 7px ${FONT_SERIF}`;
+          ctx.textAlign = 'center';
+          ctx.fillText(ghost.placardText, 1, -130);
+        }
+
+        // Reaching charred-ink forearm clutching a burning ash trail
+        const libReach = dread * 0.78;
+        const lShX = 4 + upperSway;
+        const lShY = -150 + strideBob;
+        const lHandX = lShX + 18 + libReach * 34;
+        const lHandY = lShY + 62 - libReach * 42 + Math.sin(timeSec * 5.2) * 3;
+        ctx.strokeStyle = isAfterimage ? '#7f1d1d' : '#1b1715';
+        ctx.lineWidth = 6.2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(lShX, lShY);
+        ctx.lineTo(lShX + 10 + libReach * 16, lShY + 34 - libReach * 18);
+        ctx.lineTo(lHandX, lHandY);
+        ctx.stroke();
+        ctx.strokeStyle = isAfterimage ? '#991b1b' : '#a8a29e';
+        ctx.lineWidth = 1.5;
+        for (let f = -1; f <= 1; f += 1) {
+          ctx.beginPath();
+          ctx.moveTo(lHandX, lHandY);
+          ctx.lineTo(lHandX + 8 + libReach * 4, lHandY + f * 3.5 + 3);
           ctx.stroke();
         }
       } else if (ghost.variant === 'auditor_specter') {
@@ -2205,7 +2937,7 @@ export class ThanhMinhCanvasRenderer {
         ctx.fillRect(-19, -138, 40, 21);
         if (!isAfterimage) {
           ctx.fillStyle = '#09090b';
-          ctx.font = 'bold 7px serif';
+          ctx.font = `bold 7px ${FONT_SERIF}`;
           ctx.textAlign = 'center';
           ctx.fillText(ghost.placardText, 1, -124);
         }
@@ -2291,7 +3023,7 @@ export class ThanhMinhCanvasRenderer {
         ctx.fillRect(-19, -150, 40, 21);
         if (!isAfterimage) {
           ctx.fillStyle = '#09090b';
-          ctx.font = 'bold 7px serif';
+          ctx.font = `bold 7px ${FONT_SERIF}`;
           ctx.textAlign = 'center';
           ctx.fillText(ghost.placardText, 1, -136);
         }
@@ -3228,7 +3960,7 @@ export class ThanhMinhCanvasRenderer {
       ctx.fillStyle = isYin ? 'rgba(180, 95, 95, 0.26)' : 'rgba(225, 222, 212, 0.24)';
       ctx.fillRect(-8, 0, 16, 84);
       ctx.fillStyle = isYin ? 'rgba(220, 38, 38, 0.45)' : 'rgba(127, 29, 29, 0.35)';
-      ctx.font = 'bold 9px serif';
+      ctx.font = `bold 9px ${FONT_SERIF}`;
       ctx.textAlign = 'center';
       ctx.fillText('清明', 0, 26);
       ctx.fillText('冤', 0, 52);
@@ -3328,7 +4060,7 @@ export class ThanhMinhCanvasRenderer {
         ctx.fillStyle = '#3b2d22';
         ctx.fillRect(gx - 8, floorY - 76, 16, 40);
         ctx.fillStyle = '#cbd5e1';
-        ctx.font = '9px serif';
+        ctx.font = `9px ${FONT_SERIF}`;
         ctx.textAlign = 'center';
         ctx.fillText(idx === 0 ? 'Trần Mặc' : 'Tô Dao', gx, floorY - 52);
       }
@@ -3406,9 +4138,6 @@ export class ThanhMinhCanvasRenderer {
       const ox = (timeSec * 97) % 160;
       const oy = (timeSec * 131) % 160;
       ctx.save();
-      ctx.beginPath();
-      ctx.rect(0, 0, width, height);
-      ctx.clip();
       ctx.translate(ox, oy);
       ctx.fillStyle = pat;
       ctx.fillRect(-ox, -oy, width, height);

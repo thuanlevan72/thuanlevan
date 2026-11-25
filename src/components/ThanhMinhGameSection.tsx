@@ -3,13 +3,16 @@ import {
   BookOpen,
   ChevronDown,
   ChevronUp,
+  Clock,
   Compass,
   Eye,
   Flame,
   Ghost,
+  Library,
   Lock,
   Maximize2,
   Minimize2,
+  Music,
   Pause,
   Play,
   Radio,
@@ -20,6 +23,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
+import titleBgImage from '../assets/images/thanh_minh_title_bg_1795572384085.jpg';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
 import { ThanhMinhAudioEngine } from '../utils/thanhMinhAudio.ts';
 import { ThanhMinhCanvasRenderer } from '../utils/thanhMinhCanvas.ts';
@@ -31,11 +35,15 @@ import {
   getCurrentObjectiveHint,
   interactWithHotspot,
   INVENTORY_ITEMS,
+  type PianoNoteId,
+  pressPianoKey,
   SCENE_META,
   setCipherDigit,
+  setInfirmaryClock,
   setRadioFrequency,
   STORY_LORE_ENTRIES,
   submitWuxingElement,
+  swapBookshelfSlots,
   swapPuppetSlots,
   type ThanhMinhScreenMode,
   type ThanhMinhState,
@@ -79,6 +87,20 @@ const CHARACTER_DOSSIER = [
     desc: 'Hai mươi năm sau biến cố, anh vẫn lên đỉnh Cô Sơn dâng hoa cúc trắng mỗi tiết Thanh Minh, tìm trang sự thật cuối cùng minh oan cho chị và Thầy Trần.',
   },
 ] as const;
+
+const BANNED_BOOKS: readonly { id: number; roman: string; title: string; spineTone: string }[] = [
+  { id: 0, roman: 'I', title: 'Truyện Kiều (Bản in 1958)', spineTone: 'border-red-800/60 bg-red-950/40' },
+  { id: 1, roman: 'II', title: 'Tập Thơ Tagore (Bản dịch tay)', spineTone: 'border-sky-800/60 bg-sky-950/40' },
+  { id: 2, roman: 'III', title: 'Nhật Ký Mưa Cô Sơn (1966)', spineTone: 'border-amber-700/60 bg-amber-950/40' },
+];
+
+const PIANO_KEYS: readonly { note: PianoNoteId; label: string; freq: number }[] = [
+  { note: 'Do', label: 'Đồ', freq: 261.63 },
+  { note: 'Re', label: 'Rê', freq: 293.66 },
+  { note: 'Mi', label: 'Mi', freq: 329.63 },
+  { note: 'Sol', label: 'Sol', freq: 392.0 },
+  { note: 'La', label: 'La', freq: 440.0 },
+];
 
 const PUPPET_SCENES: readonly { id: number; roman: string; title: string; detail: string }[] = [
   {
@@ -194,10 +216,18 @@ export function ThanhMinhGameSection({
   onToggleFullscreen,
   onExitFullscreen,
 }: ThanhMinhGameSectionProps) {
-  const [screenMode, setScreenMode] = useState<ThanhMinhScreenMode>('title');
+  const [screenMode, setScreenMode] = useState<ThanhMinhScreenMode>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('autostart') === '1') return 'playing';
+    }
+    return 'title';
+  });
   const [hudState, setHudState] = useState<ThanhMinhState>(() => createInitialThanhMinhState(1));
   const [muted, setMuted] = useState(false);
   const [selectedPuppetSlot, setSelectedPuppetSlot] = useState<number | null>(null);
+  const [selectedBookSlot, setSelectedBookSlot] = useState<number | null>(null);
+  const [showDossier, setShowDossier] = useState(false);
   const [showObjectiveHint, setShowObjectiveHint] = useState(false);
   const [journalTab, setJournalTab] = useState<'keepsakes' | 'lore'>('keepsakes');
 
@@ -233,14 +263,35 @@ export function ThanhMinhGameSection({
   const startGame = useCallback(
     (loopCount = 1) => {
       audioRef.current?.unlock();
+      if (typeof document !== 'undefined') {
+        document.body.dataset.state = 'playing';
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+      }
+      keysRef.current = { left: false, right: false, breath: false, sprint: false };
       const fresh = createInitialThanhMinhState(loopCount);
       setSelectedPuppetSlot(null);
+      setSelectedBookSlot(null);
+      setShowDossier(false);
       setShowObjectiveHint(false);
       commitState(fresh);
       setScreenMode('playing');
+      canvasRef.current?.focus();
     },
     [commitState]
   );
+
+  // Sync game state machine to document.body.dataset.state
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const mapped =
+      screenMode === 'ending_cutscene' || screenMode === 'gameover' ? 'gameover' : screenMode;
+    document.body.dataset.state = mapped;
+    return () => {
+      delete document.body.dataset.state;
+    };
+  }, [screenMode]);
 
   const triggerInteract = useCallback(() => {
     audioRef.current?.unlock();
@@ -278,8 +329,23 @@ export function ThanhMinhGameSection({
   // Keyboard bindings
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (screenMode !== 'playing') return;
       const code = e.code;
+      if (screenMode === 'title') {
+        if (code === 'Enter' || code === 'Space') {
+          e.preventDefault();
+          startGame(1);
+        }
+        return;
+      }
+      if (screenMode === 'paused') {
+        if (code === 'Escape' || code === 'KeyP') {
+          e.preventDefault();
+          setScreenMode('playing');
+        }
+        return;
+      }
+      if (screenMode !== 'playing') return;
+
       if (code === 'ArrowLeft' || code === 'KeyA') {
         keysRef.current.left = true;
       } else if (code === 'ArrowRight' || code === 'KeyD') {
@@ -298,10 +364,13 @@ export function ThanhMinhGameSection({
       } else if (code === 'KeyJ') {
         e.preventDefault();
         toggleJournal();
+      } else if (code === 'KeyP') {
+        e.preventDefault();
+        setScreenMode('paused');
       } else if (code === 'Escape') {
         if (stateRef.current.activeModal !== 'none') {
           commitState({ ...stateRef.current, activeModal: 'none', activeHotspotId: null });
-        } else if (!isFullscreen) {
+        } else {
           setScreenMode('paused');
         }
       }
@@ -335,13 +404,14 @@ export function ThanhMinhGameSection({
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', clearKeys);
     };
-  }, [screenMode, isFullscreen, triggerInteract, triggerRealmShift, toggleJournal, commitState]);
+  }, [screenMode, startGame, triggerInteract, triggerRealmShift, toggleJournal, commitState]);
 
   // Locked 60fps Canvas Loop with throttled (~12Hz) React HUD sync to eliminate React frame jitter
   useEffect(() => {
     let rafId = 0;
     let lastTime = performance.now();
     let ghostWhisperCooldown = 0;
+    let renderedPausedOnce = false;
 
     const frame = (now: number) => {
       const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
@@ -448,26 +518,42 @@ export function ThanhMinhGameSection({
           next.scene === 'flooded_courtyard',
           next.exhausted
         );
+
+        const canvas = canvasRef.current;
+        if (canvas) {
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            rendererRef.current?.render(
+              ctx,
+              canvas.width,
+              canvas.height,
+              stateRef.current,
+              now / 1000,
+              dt
+            );
+          }
+        }
+        rafId = requestAnimationFrame(frame);
       } else {
         audioRef.current?.update(false, cur.realm, false, 0, false, dt, false, false);
-      }
-
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          rendererRef.current?.render(
-            ctx,
-            canvas.width,
-            canvas.height,
-            stateRef.current,
-            now / 1000,
-            dt
-          );
+        if (screenMode === 'paused' && !renderedPausedOnce) {
+          renderedPausedOnce = true;
+          const canvas = canvasRef.current;
+          if (canvas) {
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              rendererRef.current?.render(
+                ctx,
+                canvas.width,
+                canvas.height,
+                stateRef.current,
+                now / 1000,
+                dt
+              );
+            }
+          }
         }
       }
-
-      rafId = requestAnimationFrame(frame);
     };
 
     rafId = requestAnimationFrame(frame);
@@ -538,6 +624,38 @@ export function ThanhMinhGameSection({
     setSelectedPuppetSlot(null);
   };
 
+  const handleBookSlotClick = (slotIdx: number) => {
+    if (selectedBookSlot === null) {
+      setSelectedBookSlot(slotIdx);
+      return;
+    }
+    if (selectedBookSlot === slotIdx) {
+      setSelectedBookSlot(null);
+      return;
+    }
+    const cur = stateRef.current;
+    const next = swapBookshelfSlots(cur, selectedBookSlot, slotIdx);
+    if (next.bookshelfSolved && !cur.bookshelfSolved) {
+      audioRef.current?.playAltarChime();
+      rendererRef.current?.triggerShake(4.5);
+    }
+    commitState(next);
+    setSelectedBookSlot(null);
+  };
+
+  const handlePianoKeyClick = (note: PianoNoteId, freq: number) => {
+    audioRef.current?.unlock();
+    audioRef.current?.playPianoNote(freq);
+    const res = pressPianoKey(stateRef.current, note);
+    if (res.solved) {
+      audioRef.current?.playAltarChime();
+      rendererRef.current?.triggerShake(4);
+    } else if (res.reset) {
+      audioRef.current?.playDistantKnock();
+    }
+    commitState(res.next);
+  };
+
   // Click / touch left or right edge of canvas to move seamlessly
   const handleCanvasPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (screenMode !== 'playing' || hudState.activeModal !== 'none') return;
@@ -563,10 +681,18 @@ export function ThanhMinhGameSection({
       aria-label="Thanh Minh: Học Viện Cô Sơn — Kinh Dị Tâm Lý 2.5D"
       data-testid="thanh-minh-game-root"
       data-screen={screenMode}
+      data-scene={hudState.scene}
+      data-act={hudState.act}
+      data-realm={hudState.realm}
+      data-player-x={Math.round(hudState.playerX)}
+      data-keepsakes={hudState.collectedKeepsakeIds.length}
+      data-lore={hudState.collectedLoreIds.length}
       data-stamina={Math.round(hudState.runStamina)}
       data-exhausted={String(hudState.exhausted)}
       data-running={String(hudState.isRunning)}
-      className={`rounded-2xl border border-[#2b221c] bg-[#0a0908] text-stone-100 shadow-2xl overflow-hidden flex flex-col ${
+      data-sanity={Math.round(hudState.sanity)}
+      data-death-cutscene={String(Boolean(hudState.deathCutscene?.active))}
+      className={`rounded-2xl border border-[#3a2c22] bg-[#0a0908] text-stone-100 shadow-2xl overflow-hidden flex flex-col ${
         isFullscreen ? 'flex-1 min-h-0 h-full' : ''
       }`}
     >
@@ -804,85 +930,139 @@ export function ThanhMinhGameSection({
           </div>
         )}
 
-        {/* TITLE SCREEN */}
+        {/* TITLE SCREEN — Detention-Inspired Bespoke Key Art + Negative-Space SVG Emblem */}
         {screenMode === 'title' && (
-          <div className="absolute inset-0 bg-gradient-to-b from-black/82 via-[#120b09]/92 to-black/95 overflow-y-auto p-3.5 sm:p-5 flex">
-            <div className="max-w-3xl w-full m-auto space-y-3.5">
-              <div className="text-center space-y-1.5">
-                <div className="text-[11px] font-mono text-stone-400 tracking-wide">
-                  Kinh Dị Tâm Lý Sinh Tồn 2.5D · Cốt Truyện 4 Hồi · 4 Kết Cục
-                </div>
-                <h1 className="text-2xl sm:text-4xl font-editorial font-bold tracking-tight text-stone-100">
-                  Thanh Minh: Học Viện Cô Sơn <span className="text-red-400">清明</span>
-                </h1>
-                <p className="text-xs text-stone-300 max-w-2xl mx-auto leading-relaxed">
-                  Cuối thập niên 1960 trên đỉnh núi Cô Sơn cô lập bởi dòng lũ đỏ ngầu. Nữ sinh{' '}
-                  <strong className="text-amber-200">Lâm Tĩnh</strong> tỉnh dậy giữa Lớp 12B trống
-                  rỗng — nơi những tờ bùa trắng bay lả tả và sự thật đêm phản bội chỉ lộ diện khi
-                  người chơi đủ can đảm đối diện tội lỗi.
-                </p>
-              </div>
+          <div className="absolute inset-0 bg-[#0b0908] overflow-hidden flex flex-col justify-between">
+            <img
+              src={titleBgImage}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 w-full h-full object-cover object-center select-none pointer-events-none opacity-92"
+            />
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background:
+                  'linear-gradient(90deg, rgba(9,7,6,0.92) 0%, rgba(9,7,6,0.72) 44%, rgba(9,7,6,0.18) 100%)',
+              }}
+            />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-left">
-                {CHARACTER_DOSSIER.map((ch) => (
-                  <div
-                    key={ch.name}
-                    className="rounded-xl border border-stone-800 bg-stone-950/80 p-2.5 space-y-0.5"
-                  >
-                    <div className="flex items-center justify-between gap-2 text-[11px]">
-                      <span className="font-semibold text-amber-200">{ch.name}</span>
-                      <span className="text-[10px] font-mono text-stone-400">{ch.role}</span>
-                    </div>
-                    <p className="text-[11px] text-stone-300 leading-snug">{ch.desc}</p>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex flex-wrap items-center justify-center gap-x-3.5 gap-y-1 text-[11px] text-stone-300 py-1.5 border-y border-stone-800/80">
-                <span>
-                  <strong className="text-amber-300">A / D</strong> hoặc{' '}
-                  <strong className="text-amber-300">Chạm màn hình</strong> Đi bộ
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>
-                  <strong className="text-emerald-300">Giữ Shift</strong> Chạy (Tốn Sức bền)
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>
-                  <strong className="text-sky-300">Giữ Space</strong> Nín thở qua Vong hồn
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>
-                  <strong className="text-amber-300">E</strong> Kiểm tra
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>
-                  <strong className="text-rose-300">Q</strong> Chuyển Âm–Dương
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>
-                  <strong className="text-stone-200">J</strong> Sổ Kỷ vật
-                </span>
-              </div>
-
-              <div className="flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => startGame(1)}
-                  className="min-h-[42px] px-6 py-2 rounded-xl bg-red-800 hover:bg-red-700 text-stone-100 font-semibold text-sm inline-flex items-center gap-2 shadow-lg cursor-pointer transition-colors"
+            <div className="relative z-10 flex-1 flex items-center px-5 sm:px-9 py-6">
+              <div className="max-w-md w-full space-y-4">
+                {/* Custom Inline SVG Title Lockup & 1967 Crimson Wax Seal */}
+                <svg
+                  viewBox="0 0 420 132"
+                  className="w-full max-w-[400px] h-auto overflow-visible"
+                  role="img"
+                  aria-label="Thanh Minh: Học Viện Cô Sơn — 清明"
                 >
-                  <Play className="w-4 h-4" aria-hidden="true" />
-                  <span>Bắt Đầu Đêm Mưa Cô Sơn</span>
-                </button>
+                  <g transform="translate(0, 6)">
+                    <rect
+                      x="2"
+                      y="6"
+                      width="48"
+                      height="48"
+                      rx="4"
+                      fill="#7f1d1d"
+                      stroke="#d6b88d"
+                      strokeWidth="1.5"
+                    />
+                    <text
+                      x="26"
+                      y="37"
+                      textAnchor="middle"
+                      fill="#f5e9d3"
+                      fontSize="21"
+                      fontFamily='"Noto Serif", "Plus Jakarta Sans", serif'
+                      fontWeight="bold"
+                    >
+                      清明
+                    </text>
+                  </g>
+                  <text
+                    x="62"
+                    y="32"
+                    fill="#d6b88d"
+                    fontSize="12"
+                    fontFamily='"JetBrains Mono", "Noto Sans", monospace'
+                    letterSpacing="2.5"
+                  >
+                    1967 · HỌC VIỆN CÔ SƠN
+                  </text>
+                  <text
+                    x="62"
+                    y="66"
+                    fill="#f5efe6"
+                    fontSize="30"
+                    fontFamily='"Noto Serif", "Plus Jakarta Sans", serif'
+                    fontWeight="bold"
+                  >
+                    THANH MINH
+                  </text>
+                  <line x1="62" y1="80" x2="388" y2="80" stroke="#7f1d1d" strokeWidth="2" />
+                  <text
+                    x="62"
+                    y="106"
+                    fill="#d6ccc0"
+                    fontSize="18"
+                    fontFamily='"Noto Serif", "Plus Jakarta Sans", serif'
+                    fontStyle="italic"
+                  >
+                    Học Viện Cô Sơn · Đêm Mưa Bão
+                  </text>
+                </svg>
+
+                <p className="text-xs sm:text-sm text-stone-300 leading-relaxed max-w-sm">
+                  Giữa cơn lũ đỏ cô lập đỉnh Cô Sơn năm 1967, nữ sinh Lâm Tĩnh tỉnh dậy trong Lớp 12B trống rỗng để đối diện tội lỗi và nỗi oan năm xưa.
+                </p>
+
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <button
+                    type="button"
+                    data-start="true"
+                    onClick={() => startGame(1)}
+                    className="min-h-[44px] px-6 py-2.5 rounded-md border border-[#d6b88d]/45 bg-[#7f1d1d] hover:bg-[#991b1b] text-[#f7efe4] font-semibold text-sm inline-flex items-center gap-2 shadow-xl cursor-pointer transition-colors"
+                  >
+                    <Play className="w-4 h-4" aria-hidden="true" />
+                    <span>Bắt Đầu Đêm Mưa Cô Sơn</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowDossier((v) => !v)}
+                    className="min-h-[44px] px-4 py-2.5 rounded-md border border-[#6a5644] bg-[#16120f]/95 hover:border-[#d6b88d] text-stone-200 text-xs font-semibold cursor-pointer transition-colors"
+                  >
+                    {showDossier ? 'Đóng Hồ Sơ' : 'Hồ Sơ Nhân Vật'}
+                  </button>
+                </div>
+
+                {showDossier && (
+                  <div className="rounded-md border border-[#5c4838] bg-[#130f0d]/96 p-3 space-y-2 max-h-[210px] overflow-y-auto shadow-2xl">
+                    {CHARACTER_DOSSIER.map((ch) => (
+                      <div key={ch.name} className="border-b border-stone-800/80 last:border-b-0 pb-1.5 last:pb-0">
+                        <div className="flex items-center justify-between gap-2 text-[11px]">
+                          <span className="font-semibold text-amber-200">{ch.name}</span>
+                          <span className="text-[10px] font-mono text-stone-400">{ch.role}</span>
+                        </div>
+                        <p className="text-[11px] text-stone-300 leading-snug">{ch.desc}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+            </div>
+
+            <div className="relative z-10 px-5 py-2.5 bg-[#090706]/90 border-t border-[#2a211b] text-center text-[11px] text-stone-400 tracking-wide">
+              A / D Đi bộ · Giữ Shift Chạy · Giữ Space Nín thở · E Kiểm tra · Q Âm/Dương · J Nhật ký · P Tạm dừng
             </div>
           </div>
         )}
 
         {/* PAUSE OVERLAY */}
         {screenMode === 'paused' && (
-          <div className="absolute inset-0 bg-black/82 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="max-w-sm w-full rounded-2xl border border-stone-700 bg-[#14110f] p-6 space-y-4 text-center">
+          <div className="absolute inset-0 bg-[#080605]/88 flex items-center justify-center p-4">
+            <div className="max-w-sm w-full rounded-lg border border-[#5c4632] bg-[#14100d] p-6 space-y-4 text-center shadow-2xl">
               <h3 className="text-xl font-editorial font-bold text-amber-200">Tạm Dừng</h3>
               <p className="text-xs text-stone-400">
                 {sceneMeta.subtitle} · Kỷ vật {hudState.collectedKeepsakeIds.length}/{TRUTH_KEEPSAKES.length}
@@ -891,14 +1071,14 @@ export function ThanhMinhGameSection({
                 <button
                   type="button"
                   onClick={() => setScreenMode('playing')}
-                  className="min-h-[42px] rounded-xl bg-amber-700 hover:bg-amber-600 text-white text-xs font-semibold cursor-pointer transition-colors"
+                  className="min-h-[42px] rounded-md bg-amber-800 hover:bg-amber-700 text-white text-xs font-semibold cursor-pointer transition-colors"
                 >
                   Tiếp Tục
                 </button>
                 <button
                   type="button"
                   onClick={() => startGame(1)}
-                  className="min-h-[42px] rounded-xl border border-stone-700 bg-stone-900 hover:border-stone-500 text-stone-200 text-xs font-semibold cursor-pointer transition-colors"
+                  className="min-h-[42px] rounded-md border border-[#5c4632] bg-[#1d1713] hover:border-amber-600 text-stone-200 text-xs font-semibold cursor-pointer transition-colors"
                 >
                   Chơi Lại Từ Đầu
                 </button>
@@ -909,10 +1089,10 @@ export function ThanhMinhGameSection({
 
         {/* INTERACTIVE STORY & PUZZLE MODALS */}
         {screenMode === 'playing' && hudState.activeModal !== 'none' && (
-          <div className="absolute inset-0 bg-black/84 backdrop-blur-sm flex p-2.5 sm:p-4 z-20 overflow-y-auto">
+          <div className="absolute inset-0 bg-[#070505]/90 flex p-2.5 sm:p-4 z-20 overflow-y-auto">
             {/* 1. JOURNAL & TRUTH KEEPSAKES + LORE CODEX */}
             {hudState.activeModal === 'journal' && (
-              <div className="max-w-2xl w-full m-auto max-h-full flex flex-col rounded-2xl border border-amber-700/40 bg-[#14110e] p-3.5 sm:p-5 gap-3">
+              <div className="max-w-2xl w-full m-auto max-h-full flex flex-col rounded-lg border border-[#6a523b] bg-[#15110d] p-3.5 sm:p-5 gap-3 shadow-2xl">
                 <div className="flex items-center justify-between gap-2 border-b border-stone-800 pb-2.5 shrink-0">
                   <div className="min-w-0">
                     <h3 className="text-base sm:text-lg font-editorial font-bold text-amber-200 truncate">
@@ -1438,9 +1618,234 @@ export function ThanhMinhGameSection({
               </div>
             )}
 
+            {/* 2C. INFIRMARY GRANDFATHER CLOCK PUZZLE (02:15) */}
+            {hudState.activeModal === 'clock_puzzle' && (
+              <div className="max-w-md w-full m-auto rounded-lg border border-[#6a523b] bg-[#16110d] p-5 space-y-4 shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-400" aria-hidden="true" />
+                    <h3 className="text-lg font-editorial font-bold text-amber-200">
+                      Đồng Hồ Quả Lắc Phòng Y Tế
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => commitState({ ...stateRef.current, activeModal: 'none' })}
+                    className="min-h-[36px] min-w-[36px] rounded-md border border-[#5c4838] flex items-center justify-center cursor-pointer"
+                    aria-label="Đóng đồng hồ"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <p className="text-xs text-stone-300 leading-relaxed">
+                  Tủ thuốc khóa bằng cơ cấu quả lắc. Chỉnh kim về đúng thời khắc cầu Cô Sơn bị lũ cuốn trôi ghi trong Sổ Trực Y Tá (<strong className="text-amber-200">02:15</strong>).
+                </p>
+
+                <div className="rounded-lg border border-[#4d3c2d] bg-[#0b0908] p-4 flex flex-col items-center gap-3">
+                  <div className="text-3xl font-mono font-bold text-amber-200 tabular-nums tracking-widest">
+                    {String(hudState.clockHour).padStart(2, '0')}:
+                    {String(hudState.clockMinute).padStart(2, '0')}
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="text-[11px] font-mono text-stone-400">Giờ</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            audioRef.current?.unlock();
+                            const res = setInfirmaryClock(
+                              stateRef.current,
+                              stateRef.current.clockHour - 1,
+                              stateRef.current.clockMinute
+                            );
+                            audioRef.current?.playClockTick(res.solved);
+                            commitState(res.next);
+                          }}
+                          className="min-h-[36px] px-3 rounded-md border border-[#5c4838] bg-[#1e1712] hover:border-amber-500 text-xs font-mono cursor-pointer"
+                        >
+                          -1h
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            audioRef.current?.unlock();
+                            const res = setInfirmaryClock(
+                              stateRef.current,
+                              stateRef.current.clockHour + 1,
+                              stateRef.current.clockMinute
+                            );
+                            audioRef.current?.playClockTick(res.solved);
+                            commitState(res.next);
+                          }}
+                          className="min-h-[36px] px-3 rounded-md border border-[#5c4838] bg-[#1e1712] hover:border-amber-500 text-xs font-mono cursor-pointer"
+                        >
+                          +1h
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-center gap-1">
+                      <span className="text-[11px] font-mono text-stone-400">Phút</span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            audioRef.current?.unlock();
+                            const res = setInfirmaryClock(
+                              stateRef.current,
+                              stateRef.current.clockHour,
+                              stateRef.current.clockMinute - 5
+                            );
+                            audioRef.current?.playClockTick(res.solved);
+                            commitState(res.next);
+                          }}
+                          className="min-h-[36px] px-3 rounded-md border border-[#5c4838] bg-[#1e1712] hover:border-amber-500 text-xs font-mono cursor-pointer"
+                        >
+                          -5m
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            audioRef.current?.unlock();
+                            const res = setInfirmaryClock(
+                              stateRef.current,
+                              stateRef.current.clockHour,
+                              stateRef.current.clockMinute + 5
+                            );
+                            audioRef.current?.playClockTick(res.solved);
+                            commitState(res.next);
+                          }}
+                          className="min-h-[36px] px-3 rounded-md border border-[#5c4838] bg-[#1e1712] hover:border-amber-500 text-xs font-mono cursor-pointer"
+                        >
+                          +5m
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 3B. FORBIDDEN LIBRARY BOOKSHELF CIPHER (ACT 2) */}
+            {hudState.activeModal === 'bookshelf_cipher' && (
+              <div className="max-w-lg w-full m-auto rounded-lg border border-[#6a523b] bg-[#16110d] p-5 space-y-4 shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Library className="w-4 h-4 text-amber-400" aria-hidden="true" />
+                    <h3 className="text-lg font-editorial font-bold text-amber-200">
+                      Giá Sách Bí Mật Nhóm Đọc Sách
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => commitState({ ...stateRef.current, activeModal: 'none' })}
+                    className="min-h-[36px] min-w-[36px] rounded-md border border-[#5c4838] flex items-center justify-center cursor-pointer"
+                    aria-label="Đóng giá sách"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <p className="text-xs text-stone-300 leading-relaxed">
+                  Chọn lần lượt 2 cuốn sách để hoán đổi vị trí, xếp lại đúng trình tự truyền đọc đêm thứ Bảy (<strong className="text-amber-200">I → II → III</strong>).
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  {hudState.bookshelfOrder.map((bookId, idx) => {
+                    const book = BANNED_BOOKS[bookId];
+                    const picked = selectedBookSlot === idx;
+                    return (
+                      <button
+                        key={`${idx}-${bookId}`}
+                        type="button"
+                        onClick={() => handleBookSlotClick(idx)}
+                        className={`text-left rounded-md border p-3 transition-colors cursor-pointer space-y-1 ${
+                          picked
+                            ? 'border-amber-400 bg-amber-950/60'
+                            : hudState.bookshelfSolved
+                              ? 'border-emerald-600/60 bg-emerald-950/35'
+                              : `${book.spineTone} hover:border-amber-500`
+                        }`}
+                      >
+                        <div className="text-[11px] font-mono text-amber-300">
+                          Ngăn #{idx + 1} · Tập {book.roman}
+                        </div>
+                        <div className="text-xs font-semibold text-stone-100 leading-snug">
+                          {book.title}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {hudState.bookshelfSolved && (
+                  <button
+                    type="button"
+                    onClick={() => commitState({ ...stateRef.current, activeModal: 'none' })}
+                    className="w-full min-h-[42px] rounded-md bg-amber-800 hover:bg-amber-700 text-white text-xs font-semibold cursor-pointer transition-colors"
+                  >
+                    Đã Mở Niêm Phong Phòng Rửa Ảnh · Đóng
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* 5B. UPRIGHT PIANO PUZZLE (ACT 3 — MUSIC CLASSROOM) */}
+            {hudState.activeModal === 'piano_puzzle' && (
+              <div className="max-w-lg w-full m-auto rounded-lg border border-[#6a523b] bg-[#15110d] p-5 space-y-4 shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Music className="w-4 h-4 text-amber-400" aria-hidden="true" />
+                    <h3 className="text-lg font-editorial font-bold text-amber-200">
+                      Dương Cầm Phòng Nhạc Cũ — “Tiếng Sáo Cô Sơn”
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => commitState({ ...stateRef.current, activeModal: 'none' })}
+                    className="min-h-[36px] min-w-[36px] rounded-md border border-[#5c4838] flex items-center justify-center cursor-pointer"
+                    aria-label="Đóng đàn dương cầm"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <p className="text-xs text-stone-300 leading-relaxed">
+                  {hudState.inventory.includes('music_sheet')
+                    ? 'Theo bản nhạc viết tay của Tô Dao nhặt ở Hội Trường: gõ đúng 4 phím Đồ → Mi → Sol → Rê.'
+                    : 'Gõ đúng 4 nốt mở đầu khúc nhạc thầy Trần và Tô Dao thường đệm (Đồ → Mi → Sol → Rê — gợi ý bản nhạc rơi trên hàng ghế đầu Hội Trường).'}
+                </p>
+
+                <div className="flex items-center justify-between text-xs font-mono text-stone-300 bg-[#0b0908] px-3 py-2 rounded-md border border-[#4d3c2d]">
+                  <span>Nốt đã gõ</span>
+                  <span className="text-amber-300 font-bold">
+                    {hudState.pianoSequence.length === 0
+                      ? 'Chưa gõ'
+                      : hudState.pianoSequence.join(' → ')}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-5 gap-2 pt-1">
+                  {PIANO_KEYS.map((k) => (
+                    <button
+                      key={k.note}
+                      type="button"
+                      onClick={() => handlePianoKeyClick(k.note, k.freq)}
+                      className="min-h-[84px] rounded-b-md border border-[#6a523b] bg-[#ebe2d0] hover:bg-[#faf3e4] active:bg-amber-200 text-[#18130e] flex flex-col items-center justify-end pb-2.5 gap-1 cursor-pointer transition-colors shadow-md"
+                    >
+                      <span className="w-4 h-8 bg-[#181411] rounded-b-xs mb-auto opacity-85" />
+                      <span className="text-xs font-bold font-editorial">{k.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* 6. FINAL INTERROGATION TRIAL (ACT 4 CLIMAX) */}
             {hudState.activeModal === 'interrogation_trial' && (
-              <div className="max-w-xl w-full m-auto rounded-2xl border border-stone-600 bg-[#12100f] p-5 space-y-4">
+              <div className="max-w-xl w-full m-auto rounded-lg border border-[#6a523b] bg-[#12100f] p-5 space-y-4 shadow-2xl">
                 <div className="space-y-1">
                   <div className="text-xs font-mono text-rose-400">
                     Hồi 4 · Phiên Tòa Của Linh Hồn ({hudState.interrogationStep + 1}/{INTERROGATION_PROMPTS.length})
@@ -1481,8 +1886,8 @@ export function ThanhMinhGameSection({
 
         {/* ENDING SUMMARY / GAMEOVER OVERLAY */}
         {screenMode === 'gameover' && (
-          <div className="absolute inset-0 bg-black/88 backdrop-blur-sm flex p-3 sm:p-4 overflow-y-auto z-30">
-            <div className="max-w-xl w-full m-auto rounded-2xl border border-stone-700 bg-[#120f0e] p-6 space-y-4">
+          <div className="absolute inset-0 bg-[#080606]/92 flex p-3 sm:p-4 overflow-y-auto z-30">
+            <div className="max-w-xl w-full m-auto rounded-lg border border-[#6a523b] bg-[#14100d] p-6 space-y-4 shadow-2xl">
               <div className={`inline-block text-[11px] font-mono px-2.5 py-1 rounded border ${endingInfo.accentClass}`}>
                 {endingInfo.tag}
               </div>

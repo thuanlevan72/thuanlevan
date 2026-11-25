@@ -5,11 +5,19 @@ import {
   createInitialThanhMinhState,
   evaluateFinalEnding,
   interactWithHotspot,
+  LEGACY_MOVEMENT_SPEEDS,
+  MOVEMENT_SPEEDS,
+  pressPianoKey,
+  SCENE_META,
   setCipherDigit,
+  setInfirmaryClock,
   setRadioFrequency,
+  SPEED_SCALE_FACTOR,
   STORY_LORE_ENTRIES,
   submitWuxingElement,
+  swapBookshelfSlots,
   swapPuppetSlots,
+  type SceneId,
   type ThanhMinhState,
   tickThanhMinhSimulation,
   toggleRealmShift,
@@ -61,7 +69,8 @@ test('thanhMinh: sprinting consumes runStamina, locks running on exhaustion (for
   });
   assert.equal(sprintStep.next.isRunning, true);
   assert.ok(sprintStep.next.runStamina < 100);
-  assert.ok(sprintStep.next.playerX > walkStep.next.playerX + 4);
+  // -35% speeds: run = 161.2 px/s (8.06px/0.05s), walk = 100.1 px/s (5.005px/0.05s) -> diff = 3.055px
+  assert.ok(sprintStep.next.playerX > walkStep.next.playerX + 2.5);
 
   // 2. Drain runStamina down to 0 -> triggers exhaustedNow and forces fatigued slow walk even while holding Shift
   let state: ThanhMinhState = {
@@ -88,7 +97,7 @@ test('thanhMinh: sprinting consumes runStamina, locks running on exhaustion (for
   assert.equal(state.runStamina, 0);
   assert.equal(state.isRunning, false);
 
-  // Moving 0.25s (5 ticks * 0.05s) while fatigued + sprinting=true locks out running and moves ~22px (88 px/s vs 154 px/s)
+  // Moving 0.25s (5 ticks * 0.05s) while fatigued + sprinting=true locks out running and moves ~14.3px (57.2 px/s)
   const xBeforeFatigueWalk = state.playerX;
   let fatigueWalkState: ThanhMinhState = state;
   for (let i = 0; i < 5; i += 1) {
@@ -103,7 +112,7 @@ test('thanhMinh: sprinting consumes runStamina, locks running on exhaustion (for
   assert.equal(fatigueWalkState.exhausted, true);
   assert.equal(fatigueWalkState.isRunning, false);
   const dxFatigue = fatigueWalkState.playerX - xBeforeFatigueWalk;
-  assert.ok(dxFatigue > 19 && dxFatigue < 25, `Expected ~22px fatigued walk, got ${dxFatigue}`);
+  assert.ok(dxFatigue > 12 && dxFatigue < 17, `Expected ~14.3px fatigued walk, got ${dxFatigue}`);
 
   // 3. Standing still recovers runStamina; remains exhausted until >= 35%
   let recState: ThanhMinhState = fatigueWalkState;
@@ -121,8 +130,8 @@ test('thanhMinh: sprinting consumes runStamina, locks running on exhaustion (for
 
 test('thanhMinh: Ngũ Hành altar requires incense from 12B and Kim -> Thủy -> Hỏa sequence', () => {
   let s = createInitialThanhMinhState();
-  // Move to incense cabinet at x=560 in classroom_12b and pick it up
-  s = { ...s, playerX: 560 };
+  // Move to incense cabinet at x=1120 in widened classroom_12b and pick it up
+  s = { ...s, playerX: 1120 };
   s = interactWithHotspot(s);
   assert.ok(s.inventory.includes('incense_bundle'));
 
@@ -183,11 +192,11 @@ test('thanhMinh: evaluates all 4 endings based on honesty, keepsakes %, Act 3 ra
   };
   assert.equal(evaluateFinalEnding(s2, true), 'ending_2_ashes');
 
-  // Ending 3: Confesses all, 4/6 keepsakes, missing Act 3 secret radio
+  // Ending 3: Confesses all, >= 50% keepsakes (5/10), missing Act 3 secret radio
   let s3 = {
     ...createInitialThanhMinhState(),
     confessionAnswers: [true, true],
-    collectedKeepsakeIds: TRUTH_KEEPSAKES.slice(0, 4).map((k) => k.id),
+    collectedKeepsakeIds: TRUTH_KEEPSAKES.slice(0, 5).map((k) => k.id),
     radioSecretAct3Solved: false,
   };
   assert.equal(evaluateFinalEnding(s3, true), 'ending_3_late_qingming');
@@ -218,11 +227,11 @@ test('thanhMinh: getCurrentObjectiveHint tracks current Act and key flags', asyn
 
 test('thanhMinh: triggers 3.4s monster kill cutscene on sanity collapse and respawns cleanly', () => {
   let s = createInitialThanhMinhState();
-  // Place Lâm Tĩnh in corridor_act1 directly beside Vong Hồn Mũ Giấy with low sanity
+  // Place Lâm Tĩnh in widened corridor_act1 directly beside Vong Hồn Mũ Giấy (starts at x=1220) with low sanity
   s = {
     ...s,
     scene: 'corridor_act1',
-    playerX: 760,
+    playerX: 1200,
     sanity: 1,
     holdingBreath: false,
   };
@@ -242,41 +251,41 @@ test('thanhMinh: triggers 3.4s monster kill cutscene on sanity collapse and resp
   assert.equal(cur.sanity, 52);
 });
 
-test('thanhMinh: expanded lore archive (14), darkroom_key unlock, and 1986 Qingming memorial tribute work properly', () => {
-  assert.equal(STORY_LORE_ENTRIES.length, 14);
-  assert.equal(TRUTH_KEEPSAKES.length, 8);
+test('thanhMinh: expanded lore archive (18), keepsakes (10), darkroom_key unlock, and 1986 Qingming memorial tribute work properly', () => {
+  assert.equal(STORY_LORE_ENTRIES.length, 18);
+  assert.equal(TRUTH_KEEPSAKES.length, 10);
 
-  // 1. Lore echo pickup in Classroom 12B
-  let s = { ...createInitialThanhMinhState(), playerX: 405 };
+  // 1. Lore echo pickup in widened Classroom 12B (x=680)
+  let s = { ...createInitialThanhMinhState(), playerX: 680 };
   s = interactWithHotspot(s);
   assert.equal(s.activeModal, 'memory_echo');
   assert.equal(s.activeLoreId, 'lore-1-blackboard');
   assert.ok(s.collectedLoreIds.includes('lore-1-blackboard'));
 
-  // 2. Darkroom ledger secret unlocks when holding darkroom_key
+  // 2. Darkroom ledger secret unlocks when holding darkroom_key (x=560)
   s = {
     ...s,
     activeModal: 'none',
     scene: 'darkroom',
-    playerX: 305,
+    playerX: 560,
     inventory: ['darkroom_key'],
   };
   s = interactWithHotspot(s);
   assert.equal(s.flags.darkroom_drawer_opened, true);
   assert.equal(s.activeLoreId, 'lore-7-darkroom-ledger');
 
-  // 3. 1986 Wine Cup pickup + Memorial tribute with Tô Viễn restores sanity
+  // 3. 1986 Wine Cup pickup (x=420) + Memorial tribute with Tô Viễn (x=1140) restores sanity
   s = {
     ...s,
     activeModal: 'none',
     scene: 'ruined_hall_1986',
-    playerX: 225,
+    playerX: 420,
     sanity: 70,
   };
   s = interactWithHotspot(s);
   assert.ok(s.inventory.includes('wine_cup'));
 
-  s = { ...s, playerX: 555 };
+  s = { ...s, playerX: 1140 };
   s = interactWithHotspot(s);
   assert.equal(s.flags.offered_qingming_tribute, true);
   assert.equal(s.sanity, 88);
@@ -287,21 +296,21 @@ test('thanhMinh: teachers_office requires teachers_key & cipher_box unlocks ks-7
   let s: ThanhMinhState = {
     ...createInitialThanhMinhState(),
     scene: 'corridor_act1',
-    playerX: 840,
+    playerX: 1720,
   };
   const blocked = interactWithHotspot(s);
   assert.equal(blocked.scene, 'corridor_act1');
 
-  // Pick up teachers_key at x=430
-  s = interactWithHotspot({ ...s, playerX: 430 });
+  // Pick up teachers_key at x=1040
+  s = interactWithHotspot({ ...s, playerX: 1040 });
   assert.ok(s.inventory.includes('teachers_key'));
 
-  // Open teachers_office door at x=840
-  s = interactWithHotspot({ ...s, playerX: 840 });
+  // Open teachers_office door at x=1720
+  s = interactWithHotspot({ ...s, playerX: 1720 });
   assert.equal(s.scene, 'teachers_office');
 
-  // Interact with cipher_box at x=640
-  s = interactWithHotspot({ ...s, playerX: 640 });
+  // Interact with cipher_box at x=1260
+  s = interactWithHotspot({ ...s, playerX: 1260 });
   assert.equal(s.activeModal, 'cipher_lock');
 
   // Dial 4-0-5
@@ -318,7 +327,7 @@ test('thanhMinh: roof_belltower bronze bell requires bell_mallet and completes 3
   let s: ThanhMinhState = {
     ...createInitialThanhMinhState(),
     scene: 'roof_belltower',
-    playerX: 520,
+    playerX: 1040,
     act: 3,
   };
   const blockedBell = interactWithHotspot(s);
@@ -363,4 +372,98 @@ test('thanhMinh: peripheral horror phantom spawns behind player and triggers sti
   assert.equal(turnRes.events.horrorEvent, 'sting');
   assert.equal(turnRes.next.activePhantomX, null);
 });
+
+test('thanhMinh: movement speeds are reduced by exact 35% and all 15 scenes are widened', () => {
+  assert.equal(SPEED_SCALE_FACTOR, 0.65);
+  assert.ok(Math.abs(MOVEMENT_SPEEDS.walk - LEGACY_MOVEMENT_SPEEDS.walk * 0.65) < 1e-6);
+  assert.ok(Math.abs(MOVEMENT_SPEEDS.run - LEGACY_MOVEMENT_SPEEDS.run * 0.65) < 1e-6);
+  assert.ok(Math.abs(MOVEMENT_SPEEDS.holdBreath - LEGACY_MOVEMENT_SPEEDS.holdBreath * 0.65) < 1e-6);
+  assert.ok(Math.abs(MOVEMENT_SPEEDS.exhausted - LEGACY_MOVEMENT_SPEEDS.exhausted * 0.65) < 1e-6);
+
+  const sceneKeys = Object.keys(SCENE_META) as SceneId[];
+  assert.equal(sceneKeys.length, 15);
+  for (const key of sceneKeys) {
+    const span = SCENE_META[key].maxX - SCENE_META[key].minX;
+    assert.ok(span >= 1475, `Expected widened scene ${key} span >= 1475, got ${span}`);
+  }
+});
+
+test('thanhMinh: Infirmary Clock (02:15) unlocks lantern_oil, ks-9 & stair gate with wuxing_solved', () => {
+  let s: ThanhMinhState = {
+    ...createInitialThanhMinhState(),
+    scene: 'infirmary_wing',
+    playerX: 1020,
+    sanity: 70,
+  };
+  s = interactWithHotspot(s);
+  assert.equal(s.activeModal, 'clock_puzzle');
+
+  const wrong = setInfirmaryClock(s, 3, 20);
+  assert.equal(wrong.solved, false);
+
+  const right = setInfirmaryClock(wrong.next, 2, 15);
+  assert.equal(right.solved, true);
+  assert.equal(right.next.clockSolved, true);
+  assert.equal(right.next.flags.clock_solved, true);
+  assert.ok(right.next.inventory.includes('lantern_oil'));
+  assert.ok(right.next.collectedKeepsakeIds.includes('ks-9-medical-slip'));
+  const infGhost = right.next.ghosts.find((g) => g.scene === 'infirmary_wing');
+  assert.equal(infGhost?.pacified, true);
+
+  // Stair gate in corridor_act1 at x=2230 requires both wuxing_solved AND lantern_oil
+  let gateState: ThanhMinhState = {
+    ...right.next,
+    activeModal: 'none',
+    scene: 'corridor_act1',
+    playerX: 2230,
+    flags: { ...right.next.flags, wuxing_solved: false },
+  };
+  gateState = interactWithHotspot(gateState);
+  assert.equal(gateState.scene, 'corridor_act1');
+
+  gateState = interactWithHotspot({
+    ...gateState,
+    flags: { ...gateState.flags, wuxing_solved: true },
+  });
+  assert.equal(gateState.scene, 'flooded_courtyard');
+});
+
+test('thanhMinh: Library bookshelf cipher [0,1,2] grants red_ribbon, ks-10 & pacifies librarian_wraith', () => {
+  // Initial bookshelfOrder is [1, 2, 0]
+  let s = createInitialThanhMinhState();
+  s = swapBookshelfSlots(s, 0, 2); // [0, 2, 1]
+  assert.equal(s.bookshelfSolved, false);
+  s = swapBookshelfSlots(s, 1, 2); // [0, 1, 2]
+  assert.equal(s.bookshelfSolved, true);
+  assert.equal(s.flags.library_books_solved, true);
+  assert.ok(s.inventory.includes('red_ribbon'));
+  assert.ok(s.collectedKeepsakeIds.includes('ks-10-reading-club-seal'));
+  const libGhost = s.ghosts.find((g) => g.variant === 'librarian_wraith');
+  assert.equal(libGhost?.pacified, true);
+});
+
+test('thanhMinh: Music classroom piano puzzle solves on Do -> Mi -> Sol -> Re and resets on wrong note', () => {
+  let s: ThanhMinhState = {
+    ...createInitialThanhMinhState(),
+    scene: 'music_classroom',
+    act: 3,
+    playerX: 1060,
+  };
+  s = interactWithHotspot(s);
+  assert.equal(s.activeModal, 'piano_puzzle');
+
+  const wrong = pressPianoKey(s, 'La');
+  assert.equal(wrong.reset, true);
+  assert.equal(wrong.next.pianoSequence.length, 0);
+
+  s = pressPianoKey(wrong.next, 'Do').next;
+  s = pressPianoKey(s, 'Mi').next;
+  s = pressPianoKey(s, 'Sol').next;
+  const done = pressPianoKey(s, 'Re');
+  assert.equal(done.solved, true);
+  assert.equal(done.next.pianoSolved, true);
+  assert.equal(done.next.flags.piano_solved, true);
+  assert.ok(done.next.collectedLoreIds.includes('lore-18-piano-duet'));
+});
+
 

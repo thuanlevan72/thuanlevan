@@ -808,6 +808,53 @@ export class ThanhMinhAudioEngine {
     }
   }
 
+  public playClockTick(isChime = false): void {
+    if (this.muted || !this.ctx || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = isChime ? 'sine' : 'triangle';
+    osc.frequency.setValueAtTime(isChime ? 523.25 : 1320, now);
+    osc.frequency.exponentialRampToValueAtTime(isChime ? 520 : 420, now + (isChime ? 0.9 : 0.04));
+    g.gain.setValueAtTime(isChime ? 0.18 : 0.1, now);
+    g.gain.exponentialRampToValueAtTime(0.0008, now + (isChime ? 1.1 : 0.055));
+    osc.connect(g);
+    g.connect(this.masterGain);
+    osc.start(now);
+    osc.stop(now + (isChime ? 1.15 : 0.06));
+  }
+
+  public playPianoNote(freq: number): void {
+    if (this.muted || !this.ctx || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+    // Slightly detuned 1960s haunted upright piano partials
+    for (const [detuneCents, gainLevel, decay] of [
+      [0, 0.16, 1.5],
+      [7, 0.08, 1.25],
+      [-5, 0.05, 0.9],
+    ] as const) {
+      const osc = this.ctx.createOscillator();
+      const lp = this.ctx.createBiquadFilter();
+      const g = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now);
+      osc.detune.setValueAtTime(detuneCents, now);
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(2200, now);
+      lp.frequency.exponentialRampToValueAtTime(520, now + decay);
+
+      g.gain.setValueAtTime(0.001, now);
+      g.gain.linearRampToValueAtTime(gainLevel, now + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0008, now + decay);
+
+      osc.connect(lp);
+      lp.connect(g);
+      g.connect(this.masterGain);
+      osc.start(now);
+      osc.stop(now + decay + 0.05);
+    }
+  }
+
   public dispose(): void {
     try {
       this.droneOsc?.stop();

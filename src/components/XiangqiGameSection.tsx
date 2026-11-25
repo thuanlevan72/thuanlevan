@@ -511,7 +511,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
       ctx.fillStyle = textCol;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = `700 ${Math.round(radius * 0.96)}px "Noto Serif Display", "Cormorant Garamond", Georgia, serif`;
+      ctx.font = `700 ${Math.round(radius * 0.96)}px "Noto Serif Display", "Noto Serif", "Plus Jakarta Sans", serif`;
       ctx.fillText(info.hanzi, x, y - radius * 0.08);
 
       ctx.font = `600 ${Math.max(8, Math.round(radius * 0.3))}px "Plus Jakarta Sans", sans-serif`;
@@ -662,7 +662,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const riverFontSize = Math.max(12, Math.round(cellSize * 0.34));
-    ctx.font = `600 ${riverFontSize}px "Cormorant Garamond", Georgia, serif`;
+    ctx.font = `600 ${riverFontSize}px "Noto Serif", "Plus Jakarta Sans", serif`;
     const riverCenterY = riverY1 + cellSize * 0.5;
     ctx.fillText(isFlipped ? '漢 界 · HÁN GIỚI' : '楚 河 · SỞ HÀ', gridLeft + cellSize * 2, riverCenterY);
     ctx.fillText(isFlipped ? '楚 河 · SỞ HÀ' : '漢 界 · HÁN GIỚI', gridLeft + cellSize * 6, riverCenterY);
@@ -1418,7 +1418,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                         fontSize="20"
                         fontWeight="700"
                         fill="#B91C1C"
-                        fontFamily="serif"
+                        fontFamily='"Noto Serif", "Plus Jakarta Sans", serif'
                       >
                         帥
                       </text>
@@ -1431,7 +1431,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                         fontSize="20"
                         fontWeight="700"
                         fill="#0F172A"
-                        fontFamily="serif"
+                        fontFamily='"Noto Serif", "Plus Jakarta Sans", serif'
                       >
                         將
                       </text>

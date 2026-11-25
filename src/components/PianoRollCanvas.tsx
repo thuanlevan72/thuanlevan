@@ -402,7 +402,7 @@ export function PianoRollCanvas({
         isPlayheadInSection &&
         localBeat >= word.startBeat &&
         localBeat < word.endBeat;
-      ctx.font = isCurrentWord ? '700 10px sans-serif' : '500 9.5px sans-serif';
+      ctx.font = isCurrentWord ? '700 10px "Plus Jakarta Sans", "Noto Sans", sans-serif' : '500 9.5px "Plus Jakarta Sans", "Noto Sans", sans-serif';
       ctx.fillStyle = isCurrentWord
         ? isDark
           ? '#34D399'

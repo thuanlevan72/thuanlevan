@@ -829,20 +829,20 @@ export function LinuxHackerGameSection({ theme: _theme }: LinuxHackerGameSection
                   <g key={n.label}>
                     <rect x={n.x} y="24" width="44" height="44" rx="6" fill="#081812" stroke={n.color} strokeWidth="1.4" />
                     <circle cx={n.x + 36} cy="32" r="3" fill={n.color} />
-                    <text x={n.x + 22} y="47" textAnchor="middle" fill="#E2E8F0" fontSize="10" fontFamily="monospace" fontWeight="700">
+                    <text x={n.x + 22} y="47" textAnchor="middle" fill="#E2E8F0" fontSize="10" fontFamily='"JetBrains Mono", "Noto Sans", monospace' fontWeight="700">
                       {n.label}
                     </text>
-                    <text x={n.x + 22} y="60" textAnchor="middle" fill={n.color} fontSize="8" fontFamily="monospace">
+                    <text x={n.x + 22} y="60" textAnchor="middle" fill={n.color} fontSize="8" fontFamily='"JetBrains Mono", "Noto Sans", monospace'>
                       {n.sub}
                     </text>
                   </g>
                 ))}
                 {/* Live prompt bar inside preview */}
                 <rect x="18" y="82" width="304" height="30" rx="5" fill="#020504" stroke="#166534" strokeWidth="1" />
-                <text x="28" y="100" fill="#4ADE80" fontSize="10.5" fontFamily="monospace" fontWeight="700">
+                <text x="28" y="100" fill="#4ADE80" fontSize="10.5" fontFamily='"JetBrains Mono", "Noto Sans", monospace' fontWeight="700">
                   ubuntu@prod-node:{selectedMissionDef.initialCwd}$
                 </text>
-                <text x="268" y="100" fill="#38BDF8" fontSize="9.5" fontFamily="monospace">
+                <text x="268" y="100" fill="#38BDF8" fontSize="9.5" fontFamily='"JetBrains Mono", "Noto Sans", monospace'>
                   {selectedMissionDef.requireTokenVerify ? 'VERIFY' : 'AUTO'}
                 </text>
               </svg>

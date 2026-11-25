@@ -797,7 +797,7 @@ export function AnomalyGameSection({ theme }: AnomalyGameSectionProps) {
                       textAnchor="middle"
                       fontSize="13"
                       fontWeight="700"
-                      fontFamily="monospace"
+                      fontFamily='"JetBrains Mono", "Noto Sans", monospace'
                       fill="currentColor"
                     >
                       KIỂM DUYỆT
