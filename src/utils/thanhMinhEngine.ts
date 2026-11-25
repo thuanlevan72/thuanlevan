@@ -2948,3 +2948,413 @@ export function getCurrentObjectiveHint(state: ThanhMinhState): string {
   }
   return 'Bước vào Phòng Thẩm Vấn Cuối Cùng và ngồi xuống ghế đối diện chính mình.';
 }
+
+// ---------------------------------------------------------------------------
+// SAVE / LOAD SYSTEM (Auto-save + 3 Manual Slots with Safe State Hydration)
+// ---------------------------------------------------------------------------
+
+export type ThanhMinhSaveSlotId = 'auto' | 'slot1' | 'slot2' | 'slot3';
+
+export const THANH_MINH_SAVE_SLOTS: readonly ThanhMinhSaveSlotId[] = [
+  'auto',
+  'slot1',
+  'slot2',
+  'slot3',
+];
+
+export const THANH_MINH_SAVE_KEY_PREFIX = 'thanh_minh_coson_save_v1_';
+
+export interface ThanhMinhSaveRecord {
+  version: 1;
+  slotId: ThanhMinhSaveSlotId;
+  savedAt: number;
+  state: ThanhMinhState;
+}
+
+export interface ThanhMinhSaveSummary {
+  slotId: ThanhMinhSaveSlotId;
+  savedAt: number;
+  act: ActNumber;
+  scene: SceneId;
+  sceneTitle: string;
+  realm: RealmMode;
+  sanity: number;
+  keepsakesCount: number;
+  loreCount: number;
+  loopCount: number;
+}
+
+export interface SaveStorageLike {
+  getItem: (key: string) => string | null;
+  setItem: (key: string, value: string) => void;
+  removeItem: (key: string) => void;
+}
+
+function resolveBrowserStorage(custom?: SaveStorageLike): SaveStorageLike | null {
+  if (custom) return custom;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function clampFinite(val: unknown, min: number, max: number, fallback: number): number {
+  if (typeof val !== 'number' || !Number.isFinite(val)) return fallback;
+  return Math.max(min, Math.min(max, val));
+}
+
+export function sanitizeStateForSave(state: ThanhMinhState): ThanhMinhState {
+  const validScene: SceneId =
+    state.scene in SCENE_META ? state.scene : 'classroom_12b';
+  const sceneBounds = SCENE_META[validScene];
+  const safePlayerX = clampFinite(
+    state.playerX,
+    sceneBounds.minX,
+    sceneBounds.maxX,
+    sceneBounds.minX + 120
+  );
+
+  return {
+    ...state,
+    scene: validScene,
+    act: sceneBounds.act,
+    realm: state.realm === 'yin' ? 'yin' : 'yang',
+    playerX: safePlayerX,
+    playerFacing: state.playerFacing === -1 ? -1 : 1,
+    holdingBreath: false,
+    isRunning: false,
+    isMoving: false,
+    breathStamina: clampFinite(state.breathStamina, 0, 100, 100),
+    runStamina: clampFinite(state.runStamina, 0, 100, 100),
+    sanity: clampFinite(state.sanity, 12, 100, 100),
+    gazeExposure: 0,
+    gaspPenaltyTimer: 0,
+    inventory: [...state.inventory],
+    collectedKeepsakeIds: [...state.collectedKeepsakeIds],
+    collectedLoreIds: [...state.collectedLoreIds],
+    flags: { ...state.flags },
+    wuxingSequence: [...state.wuxingSequence],
+    cipherDigits: [...state.cipherDigits] as [number, number, number],
+    bookshelfOrder: [...state.bookshelfOrder] as [number, number, number],
+    puppetOrder: [...state.puppetOrder] as [number, number, number, number],
+    pianoSequence: [...state.pianoSequence],
+    confessionAnswers: [...state.confessionAnswers],
+    sceneVisitCounts: { ...state.sceneVisitCounts },
+    ghosts: state.ghosts.map((g) => ({ ...g, alerted: false })),
+    activePhantomX: null,
+    activePhantomTimer: 0,
+    activePhantomKind: null,
+    audioVacuumTimer: 0,
+    pendingDreadBeat: null,
+    panicTimer: 0,
+    doorJamTimer: 0,
+    lanternSputterTimer: 0,
+    fakeoutKind: null,
+    fakeoutX: null,
+    fakeoutTimer: 0,
+    postFakeoutAmbushTimer: 0,
+    modalReadTimer: 0,
+    uiIntrusionTimer: 0,
+    deathCutscene: null,
+    activeModal: 'none',
+    activeLoreId: null,
+    activeHotspotId: null,
+    subtitleText: '',
+    subtitleTimer: 0,
+    ending: 'none',
+    endingTimer: 0,
+  };
+}
+
+export function serializeThanhMinhSave(
+  state: ThanhMinhState,
+  slotId: ThanhMinhSaveSlotId,
+  savedAt = Date.now()
+): string {
+  const record: ThanhMinhSaveRecord = {
+    version: 1,
+    slotId,
+    savedAt: Number.isFinite(savedAt) ? savedAt : Date.now(),
+    state: sanitizeStateForSave(state),
+  };
+  return JSON.stringify(record);
+}
+
+export function deserializeThanhMinhSave(raw: string | null | undefined): ThanhMinhSaveRecord | null {
+  if (!raw || typeof raw !== 'string') return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<ThanhMinhSaveRecord>;
+    if (!parsed || parsed.version !== 1 || !parsed.state || typeof parsed.state !== 'object') {
+      return null;
+    }
+    const slotId: ThanhMinhSaveSlotId = THANH_MINH_SAVE_SLOTS.includes(
+      parsed.slotId as ThanhMinhSaveSlotId
+    )
+      ? (parsed.slotId as ThanhMinhSaveSlotId)
+      : 'auto';
+
+    const rawState = parsed.state as Partial<ThanhMinhState>;
+    const loopCount = Math.max(1, Math.round(clampFinite(rawState.loopCount, 1, 99, 1)));
+    const base = createInitialThanhMinhState(loopCount);
+
+    const validScene: SceneId =
+      typeof rawState.scene === 'string' && rawState.scene in SCENE_META
+        ? (rawState.scene as SceneId)
+        : 'classroom_12b';
+    const meta = SCENE_META[validScene];
+
+    const validItems = new Set(Object.keys(INVENTORY_ITEMS));
+    const validKeepsakes = new Set(TRUTH_KEEPSAKES.map((k) => k.id));
+    const validLore = new Set(STORY_LORE_ENTRIES.map((l) => l.id));
+    const validPiano = new Set<PianoNoteId>(['Do', 'Re', 'Mi', 'Sol', 'La']);
+
+    const ghostMap = new Map(
+      Array.isArray(rawState.ghosts)
+        ? rawState.ghosts
+            .filter((g) => g && typeof g.id === 'string')
+            .map((g) => [g.id, g])
+        : []
+    );
+
+    const hydratedGhosts = base.ghosts.map((bg) => {
+      const sg = ghostMap.get(bg.id);
+      if (!sg) return bg;
+      return {
+        ...bg,
+        x: clampFinite(sg.x, bg.minX, bg.maxX, bg.x),
+        facing: sg.facing === -1 ? (-1 as const) : (1 as const),
+        pacified: Boolean(sg.pacified),
+        alerted: false,
+      };
+    });
+
+    const sanitizedVisits: Partial<Record<SceneId, number>> = { ...base.sceneVisitCounts };
+    if (rawState.sceneVisitCounts && typeof rawState.sceneVisitCounts === 'object') {
+      for (const [k, v] of Object.entries(rawState.sceneVisitCounts)) {
+        if (k in SCENE_META && typeof v === 'number' && Number.isFinite(v) && v >= 0) {
+          sanitizedVisits[k as SceneId] = Math.round(v);
+        }
+      }
+    }
+    if (!sanitizedVisits[validScene]) {
+      sanitizedVisits[validScene] = 1;
+    }
+
+    const sanitizedFlags: Record<string, boolean> = {};
+    if (rawState.flags && typeof rawState.flags === 'object') {
+      for (const [k, v] of Object.entries(rawState.flags)) {
+        if (typeof v === 'boolean') sanitizedFlags[k] = v;
+      }
+    }
+
+    const rawCipher = Array.isArray(rawState.cipherDigits) ? rawState.cipherDigits : base.cipherDigits;
+    const cipherDigits: [number, number, number] = [
+      Math.round(clampFinite(rawCipher[0], 0, 9, base.cipherDigits[0])),
+      Math.round(clampFinite(rawCipher[1], 0, 9, base.cipherDigits[1])),
+      Math.round(clampFinite(rawCipher[2], 0, 9, base.cipherDigits[2])),
+    ];
+
+    const rawBooks = Array.isArray(rawState.bookshelfOrder)
+      ? rawState.bookshelfOrder
+      : base.bookshelfOrder;
+    const bookshelfOrder: [number, number, number] =
+      rawBooks.length === 3 && [0, 1, 2].every((d) => rawBooks.includes(d))
+        ? ([rawBooks[0], rawBooks[1], rawBooks[2]] as [number, number, number])
+        : base.bookshelfOrder;
+
+    const rawPuppets = Array.isArray(rawState.puppetOrder)
+      ? rawState.puppetOrder
+      : base.puppetOrder;
+    const puppetOrder: [number, number, number, number] =
+      rawPuppets.length === 4 && [0, 1, 2, 3].every((d) => rawPuppets.includes(d))
+        ? ([rawPuppets[0], rawPuppets[1], rawPuppets[2], rawPuppets[3]] as [
+            number,
+            number,
+            number,
+            number,
+          ])
+        : base.puppetOrder;
+
+    const hydrated: ThanhMinhState = sanitizeStateForSave({
+      ...base,
+      act: meta.act,
+      scene: validScene,
+      realm: rawState.realm === 'yin' ? 'yin' : 'yang',
+      playerX: clampFinite(rawState.playerX, meta.minX, meta.maxX, meta.minX + 120),
+      playerFacing: rawState.playerFacing === -1 ? -1 : 1,
+      walkPhase: clampFinite(rawState.walkPhase, 0, 1000, 0),
+      breathStamina: clampFinite(rawState.breathStamina, 0, 100, 100),
+      runStamina: clampFinite(rawState.runStamina, 0, 100, 100),
+      exhausted: Boolean(rawState.exhausted),
+      sanity: clampFinite(rawState.sanity, 15, 100, 100),
+      sanityBottomCount: Math.round(clampFinite(rawState.sanityBottomCount, 0, 99, 0)),
+      inventory: Array.isArray(rawState.inventory)
+        ? Array.from(
+            new Set(
+              rawState.inventory.filter(
+                (id): id is OfferingItemId => typeof id === 'string' && validItems.has(id)
+              )
+            )
+          )
+        : [],
+      collectedKeepsakeIds: Array.isArray(rawState.collectedKeepsakeIds)
+        ? Array.from(
+            new Set(
+              rawState.collectedKeepsakeIds.filter(
+                (id): id is string => typeof id === 'string' && validKeepsakes.has(id)
+              )
+            )
+          )
+        : [],
+      collectedLoreIds: Array.isArray(rawState.collectedLoreIds)
+        ? Array.from(
+            new Set(
+              rawState.collectedLoreIds.filter(
+                (id): id is string => typeof id === 'string' && validLore.has(id)
+              )
+            )
+          )
+        : [],
+      flags: sanitizedFlags,
+      wuxingSequence: Array.isArray(rawState.wuxingSequence)
+        ? rawState.wuxingSequence.filter((s): s is string => typeof s === 'string').slice(0, 3)
+        : [],
+      clockHour: Math.round(clampFinite(rawState.clockHour, 1, 12, base.clockHour)),
+      clockMinute: Math.round(clampFinite(rawState.clockMinute, 0, 55, base.clockMinute)),
+      clockSolved: Boolean(rawState.clockSolved),
+      cipherDigits,
+      cipherSolved: Boolean(rawState.cipherSolved),
+      radioFrequency: clampFinite(rawState.radioFrequency, 88, 112, base.radioFrequency),
+      radioTunedAct2: Boolean(rawState.radioTunedAct2),
+      radioSecretAct3Solved: Boolean(rawState.radioSecretAct3Solved),
+      bookshelfOrder,
+      bookshelfSolved: Boolean(rawState.bookshelfSolved),
+      puppetOrder,
+      puppetsSolved: Boolean(rawState.puppetsSolved),
+      pianoSequence: Array.isArray(rawState.pianoSequence)
+        ? rawState.pianoSequence.filter((n): n is PianoNoteId => validPiano.has(n as PianoNoteId))
+        : [],
+      pianoSolved: Boolean(rawState.pianoSolved),
+      bellRings: Math.round(clampFinite(rawState.bellRings, 0, 3, 0)),
+      interrogationStep: ([0, 1, 2, 3].includes(rawState.interrogationStep as number)
+        ? rawState.interrogationStep
+        : 0) as 0 | 1 | 2 | 3,
+      confessionAnswers: Array.isArray(rawState.confessionAnswers)
+        ? rawState.confessionAnswers.filter((b): b is boolean => typeof b === 'boolean').slice(0, 4)
+        : [],
+      horrorPulseTimer: clampFinite(rawState.horrorPulseTimer, 3.0, 20, 7.5),
+      dreadCycleCount: Math.round(clampFinite(rawState.dreadCycleCount, 0, 999, 0)),
+      sceneVisitCounts: sanitizedVisits,
+      ghosts: hydratedGhosts,
+      loopCount,
+    });
+
+    hydrated.subtitleText = `Đã tiếp tục hành trình tại ${meta.title}.`;
+    hydrated.subtitleTimer = 3.8;
+
+    return {
+      version: 1,
+      slotId,
+      savedAt:
+        typeof parsed.savedAt === 'number' && Number.isFinite(parsed.savedAt)
+          ? parsed.savedAt
+          : Date.now(),
+      state: hydrated,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function buildThanhMinhSaveSummary(record: ThanhMinhSaveRecord): ThanhMinhSaveSummary {
+  const meta = SCENE_META[record.state.scene] ?? SCENE_META.classroom_12b;
+  return {
+    slotId: record.slotId,
+    savedAt: record.savedAt,
+    act: record.state.act,
+    scene: record.state.scene,
+    sceneTitle: meta.title,
+    realm: record.state.realm,
+    sanity: Math.round(record.state.sanity),
+    keepsakesCount: record.state.collectedKeepsakeIds.length,
+    loreCount: record.state.collectedLoreIds.length,
+    loopCount: record.state.loopCount,
+  };
+}
+
+export function saveThanhMinhToStorage(
+  state: ThanhMinhState,
+  slotId: ThanhMinhSaveSlotId,
+  storage?: SaveStorageLike,
+  savedAt = Date.now()
+): ThanhMinhSaveSummary | null {
+  if (state.ending !== 'none') return null;
+  const target = resolveBrowserStorage(storage);
+  if (!target) return null;
+  try {
+    const payload = serializeThanhMinhSave(state, slotId, savedAt);
+    target.setItem(`${THANH_MINH_SAVE_KEY_PREFIX}${slotId}`, payload);
+    const parsed = deserializeThanhMinhSave(payload);
+    return parsed ? buildThanhMinhSaveSummary(parsed) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function loadThanhMinhFromStorage(
+  slotId: ThanhMinhSaveSlotId,
+  storage?: SaveStorageLike
+): ThanhMinhSaveRecord | null {
+  const target = resolveBrowserStorage(storage);
+  if (!target) return null;
+  try {
+    const raw = target.getItem(`${THANH_MINH_SAVE_KEY_PREFIX}${slotId}`);
+    return deserializeThanhMinhSave(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function listThanhMinhSaveSummaries(
+  storage?: SaveStorageLike
+): Partial<Record<ThanhMinhSaveSlotId, ThanhMinhSaveSummary>> {
+  const result: Partial<Record<ThanhMinhSaveSlotId, ThanhMinhSaveSummary>> = {};
+  for (const slotId of THANH_MINH_SAVE_SLOTS) {
+    const rec = loadThanhMinhFromStorage(slotId, storage);
+    if (rec) {
+      result[slotId] = buildThanhMinhSaveSummary(rec);
+    }
+  }
+  return result;
+}
+
+export function getLatestThanhMinhSaveRecord(
+  storage?: SaveStorageLike
+): ThanhMinhSaveRecord | null {
+  let latest: ThanhMinhSaveRecord | null = null;
+  for (const slotId of THANH_MINH_SAVE_SLOTS) {
+    const rec = loadThanhMinhFromStorage(slotId, storage);
+    if (rec && (!latest || rec.savedAt > latest.savedAt)) {
+      latest = rec;
+    }
+  }
+  return latest;
+}
+
+export function deleteThanhMinhSave(
+  slotId: ThanhMinhSaveSlotId,
+  storage?: SaveStorageLike
+): void {
+  const target = resolveBrowserStorage(storage);
+  if (!target) return;
+  try {
+    target.removeItem(`${THANH_MINH_SAVE_KEY_PREFIX}${slotId}`);
+  } catch {
+    // Ignore storage removal errors
+  }
+}
+

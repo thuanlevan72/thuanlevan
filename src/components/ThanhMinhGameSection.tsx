@@ -7,6 +7,7 @@ import {
   Compass,
   Eye,
   Flame,
+  FolderOpen,
   Ghost,
   Library,
   Lock,
@@ -17,6 +18,8 @@ import {
   Play,
   Radio,
   RotateCcw,
+  Save,
+  Trash2,
   Volume2,
   VolumeX,
   Wind,
@@ -30,13 +33,18 @@ import { ThanhMinhCanvasRenderer } from '../utils/thanhMinhCanvas.ts';
 import {
   answerInterrogationStep,
   createInitialThanhMinhState,
+  deleteThanhMinhSave,
   EndingId,
   findNearbyHotspot,
   getCurrentObjectiveHint,
+  getLatestThanhMinhSaveRecord,
   interactWithHotspot,
   INVENTORY_ITEMS,
+  listThanhMinhSaveSummaries,
+  loadThanhMinhFromStorage,
   type PianoNoteId,
   pressPianoKey,
+  saveThanhMinhToStorage,
   SCENE_META,
   setCipherDigit,
   setInfirmaryClock,
@@ -45,12 +53,33 @@ import {
   submitWuxingElement,
   swapBookshelfSlots,
   swapPuppetSlots,
+  THANH_MINH_SAVE_SLOTS,
+  type ThanhMinhSaveSlotId,
+  type ThanhMinhSaveSummary,
   type ThanhMinhScreenMode,
   type ThanhMinhState,
   tickThanhMinhSimulation,
   toggleRealmShift,
   TRUTH_KEEPSAKES,
 } from '../utils/thanhMinhEngine.ts';
+
+const SAVE_SLOT_LABELS: Record<ThanhMinhSaveSlotId, string> = {
+  auto: 'Tự Động Lưu',
+  slot1: 'Bản Lưu 1',
+  slot2: 'Bản Lưu 2',
+  slot3: 'Bản Lưu 3',
+};
+
+function formatSaveTimestamp(ts: number): string {
+  try {
+    const d = new Date(ts);
+    const time = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    const date = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
+    return `${time} · ${date}`;
+  } catch {
+    return '';
+  }
+}
 
 interface ThanhMinhGameSectionProps {
   theme: ThemeMode;
@@ -223,16 +252,38 @@ export function ThanhMinhGameSection({
     }
     return 'title';
   });
-  const [hudState, setHudState] = useState<ThanhMinhState>(() => createInitialThanhMinhState(1));
+  const [hudState, setHudState] = useState<ThanhMinhState>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('autostart') === '1' && params.get('new') !== '1') {
+        const latest = getLatestThanhMinhSaveRecord();
+        if (latest) return latest.state;
+      }
+    }
+    return createInitialThanhMinhState(1);
+  });
   const [muted, setMuted] = useState(false);
   const [selectedPuppetSlot, setSelectedPuppetSlot] = useState<number | null>(null);
   const [selectedBookSlot, setSelectedBookSlot] = useState<number | null>(null);
   const [showDossier, setShowDossier] = useState(false);
   const [showObjectiveHint, setShowObjectiveHint] = useState(false);
   const [journalTab, setJournalTab] = useState<'keepsakes' | 'lore'>('keepsakes');
+  const [saveSummaries, setSaveSummaries] = useState<
+    Partial<Record<ThanhMinhSaveSlotId, ThanhMinhSaveSummary>>
+  >(() => listThanhMinhSaveSummaries());
+  const [activeSaveSlot, setActiveSaveSlot] = useState<ThanhMinhSaveSlotId>(() => {
+    const latest = getLatestThanhMinhSaveRecord();
+    return latest && latest.slotId !== 'auto' ? latest.slotId : 'slot1';
+  });
+  const [saveToastText, setSaveToastText] = useState<string | null>(null);
+  const [showTitleSaves, setShowTitleSaves] = useState(false);
+  const [showPauseSaves, setShowPauseSaves] = useState(false);
 
   const stateRef = useRef<ThanhMinhState>(hudState);
   const lastHudSyncRef = useRef<number>(0);
+  const screenModeRef = useRef<ThanhMinhScreenMode>(screenMode);
+  const saveToastTimerRef = useRef<number | null>(null);
+  const milestoneAutoSaveReadyRef = useRef<boolean>(false);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioRef = useRef<ThanhMinhAudioEngine | null>(null);
@@ -247,10 +298,99 @@ export function ThanhMinhGameSection({
   if (!audioRef.current) audioRef.current = new ThanhMinhAudioEngine();
   if (!rendererRef.current) rendererRef.current = new ThanhMinhCanvasRenderer();
 
+  const refreshSaveSummaries = useCallback(() => {
+    setSaveSummaries(listThanhMinhSaveSummaries());
+  }, []);
+
+  const showSaveToast = useCallback((message: string) => {
+    setSaveToastText(message);
+    if (typeof window !== 'undefined') {
+      if (saveToastTimerRef.current !== null) {
+        window.clearTimeout(saveToastTimerRef.current);
+      }
+      saveToastTimerRef.current = window.setTimeout(() => {
+        setSaveToastText(null);
+        saveToastTimerRef.current = null;
+      }, 2000);
+    }
+  }, []);
+
   const commitState = useCallback((next: ThanhMinhState) => {
     stateRef.current = next;
     setHudState(next);
   }, []);
+
+  const performSave = useCallback(
+    (slotId: ThanhMinhSaveSlotId, silent = false) => {
+      const cur = stateRef.current;
+      if (cur.ending !== 'none' || cur.deathCutscene?.active) return null;
+      const summary = saveThanhMinhToStorage(cur, slotId);
+      if (!summary) return null;
+      refreshSaveSummaries();
+      if (!silent) {
+        if (slotId !== 'auto') setActiveSaveSlot(slotId);
+        const slotLabel = SAVE_SLOT_LABELS[slotId];
+        showSaveToast(`Đã lưu · ${slotLabel}`);
+        const subtitle =
+          cur.sanity < 50
+            ? `Ký ức run rẩy đã khắc vào ${slotLabel}... Nhưng bóng tối vẫn nhớ tên em.`
+            : `Đã lưu tiến trình tại ${summary.sceneTitle} (${slotLabel}).`;
+        const updated: ThanhMinhState = {
+          ...cur,
+          subtitleText: subtitle,
+          subtitleTimer: 2.8,
+        };
+        stateRef.current = updated;
+        setHudState(updated);
+      }
+      return summary;
+    },
+    [refreshSaveSummaries, showSaveToast]
+  );
+
+  const continueFromSave = useCallback(
+    (slotId?: ThanhMinhSaveSlotId) => {
+      const rec = slotId ? loadThanhMinhFromStorage(slotId) : getLatestThanhMinhSaveRecord();
+      if (!rec) return false;
+      audioRef.current?.unlock();
+      if (typeof document !== 'undefined') {
+        document.body.dataset.state = 'playing';
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+      }
+      keysRef.current = { left: false, right: false, breath: false, sprint: false };
+      setSelectedPuppetSlot(null);
+      setSelectedBookSlot(null);
+      setShowDossier(false);
+      setShowTitleSaves(false);
+      setShowPauseSaves(false);
+      setShowObjectiveHint(false);
+      if (rec.slotId !== 'auto') {
+        setActiveSaveSlot(rec.slotId);
+      }
+      milestoneAutoSaveReadyRef.current = false;
+      commitState(rec.state);
+      setScreenMode('playing');
+      canvasRef.current?.focus();
+      return true;
+    },
+    [commitState]
+  );
+
+  const handleDeleteSave = useCallback(
+    (slotId: ThanhMinhSaveSlotId) => {
+      deleteThanhMinhSave(slotId);
+      refreshSaveSummaries();
+    },
+    [refreshSaveSummaries]
+  );
+
+  const pauseGame = useCallback(() => {
+    performSave('auto', true);
+    setShowPauseSaves(false);
+    setScreenMode('paused');
+  }, [performSave]);
 
   const toggleMute = useCallback(() => {
     setMuted((prev) => {
@@ -274,7 +414,10 @@ export function ThanhMinhGameSection({
       setSelectedPuppetSlot(null);
       setSelectedBookSlot(null);
       setShowDossier(false);
+      setShowTitleSaves(false);
+      setShowPauseSaves(false);
       setShowObjectiveHint(false);
+      milestoneAutoSaveReadyRef.current = false;
       commitState(fresh);
       setScreenMode('playing');
       canvasRef.current?.focus();
@@ -284,6 +427,7 @@ export function ThanhMinhGameSection({
 
   // Sync game state machine to document.body.dataset.state
   useEffect(() => {
+    screenModeRef.current = screenMode;
     if (typeof document === 'undefined') return;
     const mapped =
       screenMode === 'ending_cutscene' || screenMode === 'gameover' ? 'gameover' : screenMode;
@@ -333,17 +477,27 @@ export function ThanhMinhGameSection({
   // Keyboard bindings
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+        return;
+      }
       const code = e.code;
       if (screenMode === 'title') {
-        if (code === 'Enter' || code === 'Space') {
+        if ((code === 'Enter' || code === 'Space') && !showTitleSaves) {
           e.preventDefault();
-          startGame(1);
+          const latest = getLatestThanhMinhSaveRecord();
+          if (latest) {
+            continueFromSave(latest.slotId);
+          } else {
+            startGame(1);
+          }
         }
         return;
       }
       if (screenMode === 'paused') {
         if (code === 'Escape' || code === 'KeyP') {
           e.preventDefault();
+          setShowPauseSaves(false);
           setScreenMode('playing');
         }
         return;
@@ -368,14 +522,17 @@ export function ThanhMinhGameSection({
       } else if (code === 'KeyJ') {
         e.preventDefault();
         toggleJournal();
+      } else if (code === 'KeyS') {
+        e.preventDefault();
+        performSave(activeSaveSlot, false);
       } else if (code === 'KeyP') {
         e.preventDefault();
-        setScreenMode('paused');
+        pauseGame();
       } else if (code === 'Escape') {
         if (stateRef.current.activeModal !== 'none') {
           commitState({ ...stateRef.current, activeModal: 'none', activeHotspotId: null });
         } else {
-          setScreenMode('paused');
+          pauseGame();
         }
       }
     };
@@ -408,7 +565,19 @@ export function ThanhMinhGameSection({
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', clearKeys);
     };
-  }, [screenMode, startGame, triggerInteract, triggerRealmShift, toggleJournal, commitState]);
+  }, [
+    screenMode,
+    showTitleSaves,
+    activeSaveSlot,
+    startGame,
+    continueFromSave,
+    triggerInteract,
+    triggerRealmShift,
+    toggleJournal,
+    performSave,
+    pauseGame,
+    commitState,
+  ]);
 
   // Locked 60fps Canvas Loop with throttled (~12Hz) React HUD sync to eliminate React frame jitter
   useEffect(() => {
@@ -584,10 +753,64 @@ export function ThanhMinhGameSection({
     return () => cancelAnimationFrame(rafId);
   }, [screenMode]);
 
+  // Milestone Auto-Save whenever player changes rooms, finds items/keepsakes/lore, or solves puzzles
   useEffect(() => {
-    const audio = audioRef.current;
+    if (screenMode !== 'playing') {
+      milestoneAutoSaveReadyRef.current = false;
+      return;
+    }
+    if (!milestoneAutoSaveReadyRef.current) {
+      milestoneAutoSaveReadyRef.current = true;
+      return;
+    }
+    performSave('auto', true);
+  }, [
+    screenMode,
+    hudState.scene,
+    hudState.realm,
+    hudState.inventory.length,
+    hudState.collectedKeepsakeIds.length,
+    hudState.collectedLoreIds.length,
+    hudState.clockSolved,
+    hudState.cipherSolved,
+    hudState.bookshelfSolved,
+    hudState.puppetsSolved,
+    hudState.pianoSolved,
+    hudState.radioTunedAct2,
+    hudState.radioSecretAct3Solved,
+    hudState.bellRings,
+    hudState.flags.wuxing_solved,
+    performSave,
+  ]);
+
+  // Periodic 10s Auto-Save while actively playing
+  useEffect(() => {
+    if (screenMode !== 'playing') return;
+    const id = window.setInterval(() => {
+      if (screenModeRef.current === 'playing') {
+        performSave('auto', true);
+      }
+    }, 10000);
+    return () => window.clearInterval(id);
+  }, [screenMode, performSave]);
+
+  // Emergency Auto-Save when leaving page, closing tab, or switching portfolio sections
+  useEffect(() => {
+    const saveOnLeave = () => {
+      if (screenModeRef.current === 'playing' || screenModeRef.current === 'paused') {
+        saveThanhMinhToStorage(stateRef.current, 'auto');
+      }
+    };
+    window.addEventListener('pagehide', saveOnLeave);
+    window.addEventListener('beforeunload', saveOnLeave);
     return () => {
-      audio?.dispose();
+      window.removeEventListener('pagehide', saveOnLeave);
+      window.removeEventListener('beforeunload', saveOnLeave);
+      saveOnLeave();
+      if (saveToastTimerRef.current !== null) {
+        window.clearTimeout(saveToastTimerRef.current);
+      }
+      audioRef.current?.dispose();
     };
   }, []);
 
@@ -597,6 +820,16 @@ export function ThanhMinhGameSection({
     (hudState.collectedKeepsakeIds.length / TRUTH_KEEPSAKES.length) * 100
   );
   const currentObjective = useMemo(() => getCurrentObjectiveHint(hudState), [hudState]);
+  const latestSaveSummary = useMemo(() => {
+    let latest: ThanhMinhSaveSummary | null = null;
+    for (const slotId of THANH_MINH_SAVE_SLOTS) {
+      const s = saveSummaries[slotId];
+      if (s && (!latest || s.savedAt > latest.savedAt)) {
+        latest = s;
+      }
+    }
+    return latest;
+  }, [saveSummaries]);
 
   const handleWuxingPick = (el: 'Kim' | 'Thủy' | 'Hỏa') => {
     audioRef.current?.unlock();
@@ -875,9 +1108,24 @@ export function ThanhMinhGameSection({
 
               <button
                 type="button"
-                onClick={() => setScreenMode('paused')}
+                data-testid="thanh-minh-quick-save-btn"
+                onClick={() => performSave(activeSaveSlot, false)}
+                className={`min-h-[38px] px-2.5 sm:px-3 py-1.5 rounded-lg border text-xs font-medium inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap transition-colors ${
+                  saveToastText
+                    ? 'border-emerald-500/70 bg-emerald-950/60 text-emerald-200'
+                    : 'border-stone-700 bg-stone-900 hover:border-amber-500 text-stone-200'
+                }`}
+                title={`Lưu nhanh vào ${SAVE_SLOT_LABELS[activeSaveSlot]} [S]`}
+              >
+                <Save className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
+                <span className="hidden md:inline">{saveToastText ? 'Đã lưu ✓' : 'Lưu [S]'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={pauseGame}
                 className="min-h-[38px] px-2.5 py-1.5 rounded-lg border border-stone-700 bg-stone-900 hover:border-stone-500 text-xs inline-flex items-center cursor-pointer"
-                title="Tạm dừng"
+                title="Tạm dừng & Quản lý bản lưu [P]"
                 aria-label="Tạm dừng trò chơi"
               >
                 <Pause className="w-3.5 h-3.5" aria-hidden="true" />
@@ -946,6 +1194,17 @@ export function ThanhMinhGameSection({
             >
               <X className="w-3.5 h-3.5" />
             </button>
+          </div>
+        )}
+
+        {/* Save Confirmation Toast */}
+        {screenMode === 'playing' && saveToastText && (
+          <div
+            data-testid="thanh-minh-save-toast"
+            className="pointer-events-none absolute top-3 left-3 z-20 rounded-md border border-emerald-600/60 bg-[#0d1611]/95 px-3 py-1.5 text-xs font-mono text-emerald-200 shadow-lg flex items-center gap-1.5"
+          >
+            <Save className="w-3.5 h-3.5 text-emerald-400" aria-hidden="true" />
+            <span>{saveToastText} ✓</span>
           </div>
         )}
 
@@ -1045,25 +1304,128 @@ export function ThanhMinhGameSection({
                   Giữa cơn lũ đỏ cô lập đỉnh Cô Sơn năm 1967, nữ sinh Lâm Tĩnh tỉnh dậy trong Lớp 12B trống rỗng để đối diện tội lỗi và nỗi oan năm xưa.
                 </p>
 
-                <div className="flex flex-wrap items-center gap-3 pt-1">
-                  <button
-                    type="button"
-                    data-start="true"
-                    onClick={() => startGame(1)}
-                    className="min-h-[44px] px-6 py-2.5 rounded-md border border-[#d6b88d]/45 bg-[#7f1d1d] hover:bg-[#991b1b] text-[#f7efe4] font-semibold text-sm inline-flex items-center gap-2 shadow-xl cursor-pointer transition-colors"
-                  >
-                    <Play className="w-4 h-4" aria-hidden="true" />
-                    <span>Bắt Đầu Đêm Mưa Cô Sơn</span>
-                  </button>
+                <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                  {latestSaveSummary ? (
+                    <>
+                      <button
+                        type="button"
+                        data-testid="thanh-minh-continue-btn"
+                        onClick={() => continueFromSave(latestSaveSummary.slotId)}
+                        className="min-h-[44px] px-5 py-2 rounded-md border border-[#d6b88d]/55 bg-[#7f1d1d] hover:bg-[#991b1b] text-[#f7efe4] font-semibold text-sm inline-flex items-center gap-2 shadow-xl cursor-pointer transition-colors"
+                      >
+                        <Play className="w-4 h-4 shrink-0" aria-hidden="true" />
+                        <span className="text-left leading-tight">
+                          <span className="block">Tiếp Tục Hành Trình</span>
+                          <span className="block text-[10px] font-mono text-amber-200/90 font-normal">
+                            Hồi {latestSaveSummary.act}/4 · {latestSaveSummary.sceneTitle} · Kỷ vật{' '}
+                            {latestSaveSummary.keepsakesCount}/{TRUTH_KEEPSAKES.length}
+                          </span>
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        data-start="true"
+                        onClick={() => startGame(1)}
+                        className="min-h-[44px] px-4 py-2.5 rounded-md border border-[#6a5644] bg-[#16120f]/95 hover:border-[#d6b88d] text-stone-200 text-xs font-semibold cursor-pointer transition-colors"
+                      >
+                        Chơi Mới
+                      </button>
+
+                      <button
+                        type="button"
+                        data-testid="thanh-minh-title-saves-btn"
+                        onClick={() => {
+                          refreshSaveSummaries();
+                          setShowDossier(false);
+                          setShowTitleSaves((v) => !v);
+                        }}
+                        className={`min-h-[44px] px-3.5 py-2.5 rounded-md border text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer transition-colors ${
+                          showTitleSaves
+                            ? 'border-amber-500/70 bg-amber-950/50 text-amber-200'
+                            : 'border-[#6a5644] bg-[#16120f]/95 hover:border-[#d6b88d] text-stone-200'
+                        }`}
+                      >
+                        <FolderOpen className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
+                        <span>Bản Lưu</span>
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      data-start="true"
+                      onClick={() => startGame(1)}
+                      className="min-h-[44px] px-6 py-2.5 rounded-md border border-[#d6b88d]/45 bg-[#7f1d1d] hover:bg-[#991b1b] text-[#f7efe4] font-semibold text-sm inline-flex items-center gap-2 shadow-xl cursor-pointer transition-colors"
+                    >
+                      <Play className="w-4 h-4" aria-hidden="true" />
+                      <span>Bắt Đầu Đêm Mưa Cô Sơn</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
-                    onClick={() => setShowDossier((v) => !v)}
+                    onClick={() => {
+                      setShowTitleSaves(false);
+                      setShowDossier((v) => !v);
+                    }}
                     className="min-h-[44px] px-4 py-2.5 rounded-md border border-[#6a5644] bg-[#16120f]/95 hover:border-[#d6b88d] text-stone-200 text-xs font-semibold cursor-pointer transition-colors"
                   >
                     {showDossier ? 'Đóng Hồ Sơ' : 'Hồ Sơ Nhân Vật'}
                   </button>
                 </div>
+
+                {showTitleSaves && latestSaveSummary && (
+                  <div
+                    data-testid="thanh-minh-title-saves-panel"
+                    className="rounded-md border border-[#5c4838] bg-[#130f0d]/96 p-3 space-y-2 max-h-[220px] overflow-y-auto shadow-2xl"
+                  >
+                    {THANH_MINH_SAVE_SLOTS.map((slotId) => {
+                      const s = saveSummaries[slotId];
+                      return (
+                        <div
+                          key={slotId}
+                          className="flex items-center justify-between gap-2 border-b border-stone-800/80 last:border-b-0 pb-2 last:pb-0"
+                        >
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-semibold text-amber-200">
+                              {SAVE_SLOT_LABELS[slotId]}
+                            </div>
+                            {s ? (
+                              <div className="text-[10px] font-mono text-stone-300 truncate">
+                                Hồi {s.act} · {s.sceneTitle} · Kỷ vật {s.keepsakesCount}/
+                                {TRUTH_KEEPSAKES.length} · {formatSaveTimestamp(s.savedAt)}
+                              </div>
+                            ) : (
+                              <div className="text-[10px] font-mono text-stone-500">Trống</div>
+                            )}
+                          </div>
+                          {s && (
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                data-testid={`thanh-minh-load-slot-${slotId}`}
+                                onClick={() => continueFromSave(slotId)}
+                                className="min-h-[30px] px-2.5 rounded border border-amber-700/60 bg-amber-950/60 hover:bg-amber-900 text-[11px] font-semibold text-amber-200 cursor-pointer"
+                              >
+                                Tải
+                              </button>
+                              <button
+                                type="button"
+                                data-testid={`thanh-minh-delete-slot-${slotId}`}
+                                onClick={() => handleDeleteSave(slotId)}
+                                className="min-h-[30px] px-2 rounded border border-stone-700 bg-stone-900 hover:border-rose-500 text-stone-400 hover:text-rose-300 cursor-pointer"
+                                title={`Xóa ${SAVE_SLOT_LABELS[slotId]}`}
+                                aria-label={`Xóa ${SAVE_SLOT_LABELS[slotId]}`}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
                 {showDossier && (
                   <div className="rounded-md border border-[#5c4838] bg-[#130f0d]/96 p-3 space-y-2 max-h-[210px] overflow-y-auto shadow-2xl">
@@ -1082,14 +1444,14 @@ export function ThanhMinhGameSection({
             </div>
 
             <div className="relative z-10 px-5 py-2.5 bg-[#090706]/90 border-t border-[#2a211b] text-center text-[11px] text-stone-400 tracking-wide">
-              A / D Đi bộ · Giữ Shift Chạy · Giữ Space Nín thở · E Kiểm tra · Q Âm/Dương · J Nhật ký · P Tạm dừng
+              A / D Đi bộ · Giữ Shift Chạy · Giữ Space Nín thở · E Kiểm tra · Q Âm/Dương · J Nhật ký · S Lưu · P Tạm dừng
             </div>
           </div>
         )}
 
-        {/* PAUSE OVERLAY — Subtle Safe-Zone Intrusion at low sanity or panic */}
+        {/* PAUSE OVERLAY — Subtle Safe-Zone Intrusion + Multi-Slot Save/Load Manager */}
         {screenMode === 'paused' && (
-          <div className="absolute inset-0 bg-[#080605]/88 flex items-center justify-center p-4 overflow-hidden">
+          <div className="absolute inset-0 bg-[#080605]/88 flex items-center justify-center p-4 overflow-y-auto z-20">
             {(hudState.sanity < 78 || hudState.panicTimer > 0) && (
               <div
                 aria-hidden="true"
@@ -1106,19 +1468,124 @@ export function ThanhMinhGameSection({
                 </svg>
               </div>
             )}
-            <div className="relative z-10 max-w-sm w-full rounded-lg border border-[#5c4632] bg-[#14100d] p-6 space-y-4 text-center shadow-2xl">
-              <h3 className="text-xl font-editorial font-bold text-amber-200">Tạm Dừng</h3>
-              <p className="text-xs text-stone-400">
-                {sceneMeta.subtitle} · Kỷ vật {hudState.collectedKeepsakeIds.length}/{TRUTH_KEEPSAKES.length}
-              </p>
-              <div className="flex flex-col gap-2.5">
+            <div className="relative z-10 max-w-md w-full my-auto rounded-lg border border-[#5c4632] bg-[#14100d] p-5 sm:p-6 space-y-4 text-center shadow-2xl">
+              <div className="space-y-1">
+                <h3 className="text-xl font-editorial font-bold text-amber-200">Tạm Dừng</h3>
+                <p className="text-xs text-stone-400">
+                  {sceneMeta.title} · Kỷ vật {hudState.collectedKeepsakeIds.length}/
+                  {TRUTH_KEEPSAKES.length}
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2">
                 <button
                   type="button"
-                  onClick={() => setScreenMode('playing')}
+                  onClick={() => {
+                    setShowPauseSaves(false);
+                    setScreenMode('playing');
+                  }}
                   className="min-h-[42px] rounded-md bg-amber-800 hover:bg-amber-700 text-white text-xs font-semibold cursor-pointer transition-colors"
                 >
                   Tiếp Tục
                 </button>
+
+                <button
+                  type="button"
+                  data-testid="thanh-minh-pause-quick-save"
+                  onClick={() => performSave(activeSaveSlot, false)}
+                  className="min-h-[40px] rounded-md border border-amber-700/60 bg-amber-950/45 hover:bg-amber-950/75 text-amber-200 text-xs font-semibold inline-flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                >
+                  <Save className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>
+                    {saveToastText
+                      ? `${saveToastText} ✓`
+                      : `Lưu Nhanh (${SAVE_SLOT_LABELS[activeSaveSlot]})`}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  data-testid="thanh-minh-pause-saves-toggle"
+                  onClick={() => {
+                    refreshSaveSummaries();
+                    setShowPauseSaves((v) => !v);
+                  }}
+                  className="min-h-[40px] rounded-md border border-[#5c4632] bg-[#1b1511] hover:border-amber-600 text-stone-200 text-xs font-semibold inline-flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                >
+                  <FolderOpen className="w-3.5 h-3.5 text-amber-400" aria-hidden="true" />
+                  <span>{showPauseSaves ? 'Ẩn Danh Sách Bản Lưu' : 'Quản Lý Ô Lưu & Tải (4 Ô)'}</span>
+                </button>
+
+                {showPauseSaves && (
+                  <div
+                    data-testid="thanh-minh-pause-saves-panel"
+                    className="rounded-md border border-[#4a3929] bg-[#0e0b09] p-2.5 space-y-2 text-left max-h-[210px] overflow-y-auto"
+                  >
+                    {THANH_MINH_SAVE_SLOTS.map((slotId) => {
+                      const s = saveSummaries[slotId];
+                      return (
+                        <div
+                          key={slotId}
+                          className="flex items-center justify-between gap-2 border-b border-stone-800/80 last:border-b-0 pb-2 last:pb-0"
+                        >
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-semibold text-amber-200 flex items-center gap-1.5">
+                              <span>{SAVE_SLOT_LABELS[slotId]}</span>
+                              {activeSaveSlot === slotId && (
+                                <span className="text-[9px] font-mono text-emerald-300">
+                                  (Đang chọn)
+                                </span>
+                              )}
+                            </div>
+                            {s ? (
+                              <div className="text-[10px] font-mono text-stone-300 truncate">
+                                Hồi {s.act} · {s.sceneTitle} · {s.keepsakesCount}/
+                                {TRUTH_KEEPSAKES.length} · {formatSaveTimestamp(s.savedAt)}
+                              </div>
+                            ) : (
+                              <div className="text-[10px] font-mono text-stone-500">Ô trống</div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            {slotId !== 'auto' && (
+                              <button
+                                type="button"
+                                data-testid={`thanh-minh-save-slot-${slotId}`}
+                                onClick={() => performSave(slotId, false)}
+                                className="min-h-[28px] px-2 rounded border border-emerald-700/60 bg-emerald-950/60 hover:bg-emerald-900 text-[10px] font-semibold text-emerald-200 cursor-pointer"
+                              >
+                                Lưu
+                              </button>
+                            )}
+                            {s && (
+                              <>
+                                <button
+                                  type="button"
+                                  data-testid={`thanh-minh-pause-load-${slotId}`}
+                                  onClick={() => continueFromSave(slotId)}
+                                  className="min-h-[28px] px-2 rounded border border-amber-700/60 bg-amber-950/60 hover:bg-amber-900 text-[10px] font-semibold text-amber-200 cursor-pointer"
+                                >
+                                  Tải
+                                </button>
+                                <button
+                                  type="button"
+                                  data-testid={`thanh-minh-pause-delete-${slotId}`}
+                                  onClick={() => handleDeleteSave(slotId)}
+                                  className="min-h-[28px] px-1.5 rounded border border-stone-700 bg-stone-900 hover:border-rose-500 text-stone-400 hover:text-rose-300 cursor-pointer"
+                                  aria-label={`Xóa ${SAVE_SLOT_LABELS[slotId]}`}
+                                >
+                                  <Trash2 className="w-3 h-3" aria-hidden="true" />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <button
                   type="button"
                   onClick={() => startGame(1)}

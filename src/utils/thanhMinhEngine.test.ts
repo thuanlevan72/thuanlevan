@@ -3,12 +3,20 @@ import assert from 'node:assert/strict';
 import {
   answerInterrogationStep,
   createInitialThanhMinhState,
+  deleteThanhMinhSave,
+  deserializeThanhMinhSave,
   evaluateFinalEnding,
+  getLatestThanhMinhSaveRecord,
   interactWithHotspot,
   LEGACY_MOVEMENT_SPEEDS,
+  listThanhMinhSaveSummaries,
+  loadThanhMinhFromStorage,
   MOVEMENT_SPEEDS,
   pressPianoKey,
+  type SaveStorageLike,
+  saveThanhMinhToStorage,
   SCENE_META,
+  serializeThanhMinhSave,
   setCipherDigit,
   setInfirmaryClock,
   setRadioFrequency,
@@ -578,4 +586,115 @@ test('thanhMinh: fake-out distraction arms delayed ambush & reading journal trig
   assert.ok(modalState.uiIntrusionTimer > 0);
   assert.ok(modalState.postFakeoutAmbushTimer > 0);
 });
+
+function createMockStorage(): SaveStorageLike {
+  const map = new Map<string, string>();
+  return {
+    getItem: (k) => map.get(k) ?? null,
+    setItem: (k, v) => {
+      map.set(k, v);
+    },
+    removeItem: (k) => {
+      map.delete(k);
+    },
+  };
+}
+
+test('thanhMinh: save/load preserves progress across rooms, keepsakes & puzzles while resetting transient horror/modal state', () => {
+  const storage = createMockStorage();
+  const dirtyState: ThanhMinhState = {
+    ...createInitialThanhMinhState(1),
+    act: 2,
+    scene: 'library_archive',
+    realm: 'yin',
+    playerX: 940,
+    playerFacing: -1,
+    sanity: 62,
+    inventory: ['incense_bundle', 'lantern_oil', 'teachers_key'],
+    collectedKeepsakeIds: ['ks-1-linjing-badge', 'ks-2-newspaper', 'ks-10-reading-club-seal'],
+    collectedLoreIds: ['lore-1-blackboard', 'lore-6-forbidden-list'],
+    flags: { wuxing_solved: true, library_books_solved: true },
+    bookshelfOrder: [0, 1, 2],
+    bookshelfSolved: true,
+    radioTunedAct2: true,
+    activeModal: 'journal',
+    audioVacuumTimer: 1.2,
+    panicTimer: 3.1,
+    doorJamTimer: 2.5,
+    uiIntrusionTimer: 1.4,
+    fakeoutKind: 'black_cat',
+    sceneVisitCounts: { classroom_12b: 1, corridor_act1: 2, library_archive: 3 },
+  };
+
+  const summary = saveThanhMinhToStorage(dirtyState, 'slot1', storage, 1000);
+  assert.ok(summary);
+  assert.equal(summary.act, 2);
+  assert.equal(summary.scene, 'library_archive');
+  assert.equal(summary.keepsakesCount, 3);
+
+  const loaded = loadThanhMinhFromStorage('slot1', storage);
+  assert.ok(loaded);
+  assert.equal(loaded.state.scene, 'library_archive');
+  assert.equal(loaded.state.realm, 'yin');
+  assert.equal(loaded.state.playerX, 940);
+  assert.equal(loaded.state.sanity, 62);
+  assert.equal(loaded.state.bookshelfSolved, true);
+  assert.equal(loaded.state.flags.library_books_solved, true);
+  assert.deepEqual(loaded.state.collectedKeepsakeIds, [
+    'ks-1-linjing-badge',
+    'ks-2-newspaper',
+    'ks-10-reading-club-seal',
+  ]);
+  // Transient horror/modal fields must be cleared cleanly upon load
+  assert.equal(loaded.state.activeModal, 'none');
+  assert.equal(loaded.state.audioVacuumTimer, 0);
+  assert.equal(loaded.state.panicTimer, 0);
+  assert.equal(loaded.state.doorJamTimer, 0);
+  assert.equal(loaded.state.uiIntrusionTimer, 0);
+  assert.equal(loaded.state.fakeoutKind, null);
+});
+
+test('thanhMinh: multi-slot save manager picks latest save, ignores ending states & corrupted JSON, and deletes cleanly', () => {
+  const storage = createMockStorage();
+  const s1 = { ...createInitialThanhMinhState(1), scene: 'corridor_act1' as const, playerX: 700 };
+  const s2 = {
+    ...createInitialThanhMinhState(1),
+    scene: 'auditorium' as const,
+    act: 3 as const,
+    playerX: 1120,
+    collectedKeepsakeIds: ['ks-1-linjing-badge', 'ks-3-burned-poetry'],
+  };
+
+  saveThanhMinhToStorage(s1, 'auto', storage, 1000);
+  saveThanhMinhToStorage(s2, 'slot2', storage, 2500);
+
+  // Finished ending states must not overwrite playable saves
+  const endedState = { ...s2, ending: 'ending_4_dawn_coson' as const };
+  assert.equal(saveThanhMinhToStorage(endedState, 'auto', storage, 3000), null);
+
+  const list = listThanhMinhSaveSummaries(storage);
+  assert.ok(list.auto);
+  assert.ok(list.slot2);
+  assert.equal(list.slot1, undefined);
+
+  const latest = getLatestThanhMinhSaveRecord(storage);
+  assert.ok(latest);
+  assert.equal(latest.slotId, 'slot2');
+  assert.equal(latest.state.scene, 'auditorium');
+
+  // Corrupted or wrong-version JSON safely returns null
+  assert.equal(deserializeThanhMinhSave('{bad json'), null);
+  assert.equal(deserializeThanhMinhSave(JSON.stringify({ version: 99, state: {} })), null);
+
+  // Valid serialization roundtrip
+  const raw = serializeThanhMinhSave(s1, 'slot3', 5000);
+  const parsed = deserializeThanhMinhSave(raw);
+  assert.ok(parsed);
+  assert.equal(parsed.slotId, 'slot3');
+
+  deleteThanhMinhSave('slot2', storage);
+  assert.equal(loadThanhMinhFromStorage('slot2', storage), null);
+  assert.equal(getLatestThanhMinhSaveRecord(storage)?.slotId, 'auto');
+});
+
 
