@@ -37,116 +37,22 @@ import {
   XiangqiSide,
 } from '../utils/xiangqiEngine.ts';
 import { ThemeMode } from '../utils/portfolioLogic.ts';
+import {
+  renderXiangqiBoardCanvas,
+  XIANGQI_BOARD_THEMES,
+  XiangqiBoardMetrics,
+  XiangqiBoardThemeId,
+  XiangqiDragRenderState,
+  XiangqiParticle,
+  XiangqiShockwave,
+  XiangqiSlideAnim,
+} from '../utils/xiangqiCanvasRenderer.ts';
 
 type GameState = 'title' | 'playing' | 'paused' | 'gameover';
-type BoardThemeId = 'wood' | 'ink' | 'jade';
 
 interface XiangqiGameSectionProps {
   theme: ThemeMode;
   onToggleTheme: () => void;
-}
-
-interface BoardThemePalette {
-  id: BoardThemeId;
-  label: string;
-  outerFrame: string;
-  boardSurface: string;
-  gridLine: string;
-  riverBg: string;
-  riverText: string;
-  redDiscBg: string;
-  redDiscRing: string;
-  redText: string;
-  blackDiscBg: string;
-  blackDiscRing: string;
-  blackText: string;
-  highlightSelected: string;
-  highlightLastMove: string;
-  highlightHint: string;
-  legalDot: string;
-  captureRing: string;
-}
-
-const BOARD_THEMES: Record<BoardThemeId, BoardThemePalette> = {
-  wood: {
-    id: 'wood',
-    label: 'Gỗ Hương',
-    outerFrame: '#4A2B16',
-    boardSurface: '#E5C493',
-    gridLine: '#5A361C',
-    riverBg: 'rgba(130, 82, 42, 0.08)',
-    riverText: '#5A361C',
-    redDiscBg: '#FFF8EC',
-    redDiscRing: '#B91C1C',
-    redText: '#B91C1C',
-    blackDiscBg: '#F4F1EA',
-    blackDiscRing: '#1E293B',
-    blackText: '#0F172A',
-    highlightSelected: '#D97706',
-    highlightLastMove: 'rgba(217, 119, 6, 0.35)',
-    highlightHint: '#0284C7',
-    legalDot: 'rgba(22, 163, 74, 0.85)',
-    captureRing: '#DC2626',
-  },
-  ink: {
-    id: 'ink',
-    label: 'Thủy Mặc',
-    outerFrame: '#1C1917',
-    boardSurface: '#F5EFE3',
-    gridLine: '#3F3A36',
-    riverBg: 'rgba(41, 37, 36, 0.05)',
-    riverText: '#44403C',
-    redDiscBg: '#FBF7EE',
-    redDiscRing: '#9E2A2B',
-    redText: '#9E2A2B',
-    blackDiscBg: '#F4F2EE',
-    blackDiscRing: '#1C1917',
-    blackText: '#1C1917',
-    highlightSelected: '#B48332',
-    highlightLastMove: 'rgba(180, 131, 50, 0.3)',
-    highlightHint: '#0369A1',
-    legalDot: 'rgba(21, 128, 61, 0.85)',
-    captureRing: '#9E2A2B',
-  },
-  jade: {
-    id: 'jade',
-    label: 'Ngọc Bích',
-    outerFrame: '#0D2E23',
-    boardSurface: '#18543F',
-    gridLine: '#D4B46A',
-    riverBg: 'rgba(13, 46, 35, 0.38)',
-    riverText: '#E7CB83',
-    redDiscBg: '#FEF7E7',
-    redDiscRing: '#C81E1E',
-    redText: '#B91C1C',
-    blackDiscBg: '#EBF2EE',
-    blackDiscRing: '#0F172A',
-    blackText: '#0B1320',
-    highlightSelected: '#FBBF24',
-    highlightLastMove: 'rgba(251, 191, 36, 0.32)',
-    highlightHint: '#38BDF8',
-    legalDot: '#34D399',
-    captureRing: '#F87171',
-  },
-};
-
-interface Particle {
-  active: boolean;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-  size: number;
-  color: string;
-}
-
-interface SlideAnimState {
-  piece: XiangqiPiece;
-  from: BoardCoord;
-  to: BoardCoord;
-  progress: number;
 }
 
 interface SnapshotHistoryItem {
@@ -233,7 +139,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
 
   const [difficulty, setDifficulty] = useState<XiangqiDifficulty>(5);
   const [playerSide, setPlayerSide] = useState<XiangqiSide>('red');
-  const [boardTheme, setBoardTheme] = useState<BoardThemeId>('wood');
+  const [boardTheme, setBoardTheme] = useState<XiangqiBoardThemeId>('wood');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
   const [board, setBoard] = useState<XiangqiBoard>(() => createInitialBoard());
@@ -257,7 +163,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const metricsRef = useRef<{ width: number; height: number; padX: number; padY: number; cellSize: number }>({
+  const metricsRef = useRef<XiangqiBoardMetrics>({
     width: 540,
     height: 600,
     padX: 34,
@@ -269,17 +175,10 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
   const matchTokenRef = useRef<number>(1);
   const aiTimerRef = useRef<number | null>(null);
 
-  const slideAnimRef = useRef<SlideAnimState | null>(null);
-  const dragStateRef = useRef<{
-    active: boolean;
-    hasMoved: boolean;
-    from: BoardCoord | null;
-    piece: XiangqiPiece | null;
-    startClientX: number;
-    startClientY: number;
-    canvasX: number;
-    canvasY: number;
-  }>({
+  const slideAnimRef = useRef<XiangqiSlideAnim | null>(null);
+  const dragStateRef = useRef<
+    XiangqiDragRenderState & { startClientX: number; startClientY: number }
+  >({
     active: false,
     hasMoved: false,
     from: null,
@@ -290,7 +189,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
     canvasY: 0,
   });
 
-  const particlesRef = useRef<Particle[]>(
+  const particlesRef = useRef<XiangqiParticle[]>(
     Array.from({ length: PARTICLE_POOL_SIZE }, () => ({
       active: false,
       x: 0,
@@ -303,12 +202,14 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
       color: '#D97706',
     }))
   );
+  const shockwavesRef = useRef<XiangqiShockwave[]>([]);
+  const animTimeRef = useRef<number>(0);
   const rafRef = useRef<number | null>(null);
   const lastFrameTimeRef = useRef<number>(0);
 
   const aiSide: XiangqiSide = getOppositeSide(playerSide);
   const isFlipped = playerSide === 'black';
-  const palette = BOARD_THEMES[boardTheme];
+  const palette = XIANGQI_BOARD_THEMES[boardTheme];
   const activeLevelInfo = getXiangqiLevelConfig(difficulty);
 
   const inCheckSide: XiangqiSide | null = useMemo(() => {
@@ -437,367 +338,43 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
     [boardToCanvasPoint]
   );
 
-  const drawPieceOnCanvas = useCallback(
-    (
-      ctx: CanvasRenderingContext2D,
-      piece: XiangqiPiece,
-      x: number,
-      y: number,
-      radius: number,
-      options?: { isSelected?: boolean; isCheckTarget?: boolean; isLifted?: boolean }
-    ) => {
-      const isRed = piece.side === 'red';
-      const discBg = isRed ? palette.redDiscBg : palette.blackDiscBg;
-      const discRing = isRed ? palette.redDiscRing : palette.blackDiscRing;
-      const textCol = isRed ? palette.redText : palette.blackText;
-      const info = PIECE_DISPLAY_INFO[piece.side][piece.type];
-
-      ctx.save();
-      if (options?.isLifted) {
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.42)';
-        ctx.shadowBlur = 14;
-        ctx.shadowOffsetY = 8;
-      } else {
-        ctx.shadowColor = 'rgba(15, 10, 5, 0.34)';
-        ctx.shadowBlur = 5;
-        ctx.shadowOffsetY = 2.5;
-      }
-
-      // Base rim thickness
-      ctx.beginPath();
-      ctx.arc(x, y + 1.5, radius, 0, Math.PI * 2);
-      ctx.fillStyle = isRed ? '#8C4D3E' : '#334155';
-      ctx.fill();
-
-      ctx.shadowColor = 'transparent';
-
-      // Main piece disc
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
-      ctx.fillStyle = discBg;
-      ctx.fill();
-      ctx.lineWidth = Math.max(1.5, radius * 0.08);
-      ctx.strokeStyle = options?.isSelected
-        ? palette.highlightSelected
-        : options?.isCheckTarget
-        ? '#EF4444'
-        : discRing;
-      ctx.stroke();
-
-      // Inner engraved ring
-      ctx.beginPath();
-      ctx.arc(x, y, radius * 0.81, 0, Math.PI * 2);
-      ctx.lineWidth = Math.max(1, radius * 0.045);
-      ctx.strokeStyle = discRing;
-      ctx.globalAlpha = 0.72;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-
-      if (options?.isSelected) {
-        ctx.beginPath();
-        ctx.arc(x, y, radius + 3.5, 0, Math.PI * 2);
-        ctx.lineWidth = 2.5;
-        ctx.strokeStyle = palette.highlightSelected;
-        ctx.stroke();
-      } else if (options?.isCheckTarget) {
-        ctx.beginPath();
-        ctx.arc(x, y, radius + 4, 0, Math.PI * 2);
-        ctx.lineWidth = 2.8;
-        ctx.strokeStyle = '#EF4444';
-        ctx.stroke();
-      }
-
-      // Hanzi calligraphy character + subtle small Vietnamese helper label for accessibility
-      ctx.fillStyle = textCol;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = `700 ${Math.round(radius * 0.96)}px "Noto Serif Display", "Noto Serif", "Plus Jakarta Sans", serif`;
-      ctx.fillText(info.hanzi, x, y - radius * 0.08);
-
-      ctx.font = `600 ${Math.max(8, Math.round(radius * 0.3))}px "Plus Jakarta Sans", sans-serif`;
-      ctx.globalAlpha = 0.78;
-      ctx.fillText(info.shortVi.toUpperCase(), x, y + radius * 0.56);
-      ctx.globalAlpha = 1;
-
-      ctx.restore();
+  const spawnShockwave = useCallback(
+    (coord: BoardCoord, color: string) => {
+      const pt = boardToCanvasPoint(coord);
+      shockwavesRef.current.push({
+        x: pt.x,
+        y: pt.y,
+        life: 0,
+        maxLife: 0.36,
+        maxRadius: metricsRef.current.cellSize * 0.72,
+        color,
+      });
     },
-    [palette]
+    [boardToCanvasPoint]
   );
 
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const { width, height, padX, padY, cellSize } = metricsRef.current;
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const targetW = Math.round(width * dpr);
-    const targetH = Math.round(height * dpr);
-    if (canvas.width !== targetW || canvas.height !== targetH) {
-      canvas.width = targetW;
-      canvas.height = targetH;
-    }
-
-    ctx.save();
-    ctx.scale(dpr, dpr);
-
-    // 1. Outer frame + inner board surface
-    ctx.fillStyle = palette.outerFrame;
-    ctx.fillRect(0, 0, width, height);
-
-    const inset = Math.max(6, Math.round(cellSize * 0.16));
-    ctx.fillStyle = palette.boardSurface;
-    ctx.fillRect(inset, inset, width - inset * 2, height - inset * 2);
-
-    const gridLeft = padX;
-    const gridTop = padY;
-    const gridRight = padX + (BOARD_COLS - 1) * cellSize;
-    const gridBottom = padY + (BOARD_ROWS - 1) * cellSize;
-
-    // Subtle river band highlight
-    const riverY1 = gridTop + 4 * cellSize;
-    ctx.fillStyle = palette.riverBg;
-    ctx.fillRect(gridLeft, riverY1, gridRight - gridLeft, cellSize);
-
-    // Outer double border
-    ctx.strokeStyle = palette.gridLine;
-    ctx.lineWidth = 2.2;
-    ctx.strokeRect(gridLeft - 4, gridTop - 4, gridRight - gridLeft + 8, gridBottom - gridTop + 8);
-
-    // Grid horizontal lines (10)
-    ctx.lineWidth = 1.25;
-    for (let r = 0; r < BOARD_ROWS; r++) {
-      const y = gridTop + r * cellSize;
-      ctx.beginPath();
-      ctx.moveTo(gridLeft, y);
-      ctx.lineTo(gridRight, y);
-      ctx.stroke();
-    }
-
-    // Grid vertical lines (9) — split cleanly across the river (except edge files 0 and 8)
-    for (let c = 0; c < BOARD_COLS; c++) {
-      const x = gridLeft + c * cellSize;
-      if (c === 0 || c === BOARD_COLS - 1) {
-        ctx.beginPath();
-        ctx.moveTo(x, gridTop);
-        ctx.lineTo(x, gridBottom);
-        ctx.stroke();
-      } else {
-        ctx.beginPath();
-        ctx.moveTo(x, gridTop);
-        ctx.lineTo(x, gridTop + 4 * cellSize);
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(x, gridTop + 5 * cellSize);
-        ctx.lineTo(x, gridBottom);
-        ctx.stroke();
-      }
-    }
-
-    // Palace diagonal lines (top & bottom)
-    const drawPalaceCross = (topRow: number) => {
-      const x1 = gridLeft + 3 * cellSize;
-      const x2 = gridLeft + 5 * cellSize;
-      const y1 = gridTop + topRow * cellSize;
-      const y2 = gridTop + (topRow + 2) * cellSize;
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.moveTo(x2, y1);
-      ctx.lineTo(x1, y2);
-      ctx.stroke();
-    };
-    drawPalaceCross(0);
-    drawPalaceCross(7);
-
-    // Cannon & Pawn traditional corner crosshairs
-    const drawMarker = (r: number, c: number, drawLeft: boolean, drawRight: boolean) => {
-      const cx = gridLeft + c * cellSize;
-      const cy = gridTop + r * cellSize;
-      const gap = Math.max(3, cellSize * 0.08);
-      const len = Math.max(5, cellSize * 0.14);
-      ctx.lineWidth = 1.15;
-      const corners = [
-        drawLeft ? [-1, -1] : null,
-        drawRight ? [1, -1] : null,
-        drawLeft ? [-1, 1] : null,
-        drawRight ? [1, 1] : null,
-      ];
-      for (const pair of corners) {
-        if (!pair) continue;
-        const [sx, sy] = pair;
-        ctx.beginPath();
-        ctx.moveTo(cx + sx * gap, cy + sy * (gap + len));
-        ctx.lineTo(cx + sx * gap, cy + sy * gap);
-        ctx.lineTo(cx + sx * (gap + len), cy + sy * gap);
-        ctx.stroke();
-      }
-    };
-
-    const markerCoords: [number, number][] = [
-      [2, 1],
-      [2, 7],
-      [7, 1],
-      [7, 7],
-      [3, 0],
-      [3, 2],
-      [3, 4],
-      [3, 6],
-      [3, 8],
-      [6, 0],
-      [6, 2],
-      [6, 4],
-      [6, 6],
-      [6, 8],
-    ];
-    for (const [r, c] of markerCoords) {
-      drawMarker(r, c, c > 0, c < 8);
-    }
-
-    // River inscription ("SỞ HÀ" · "HÁN GIỚI")
-    ctx.fillStyle = palette.riverText;
-    ctx.globalAlpha = 0.85;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const riverFontSize = Math.max(12, Math.round(cellSize * 0.34));
-    ctx.font = `600 ${riverFontSize}px "Noto Serif", "Plus Jakarta Sans", serif`;
-    const riverCenterY = riverY1 + cellSize * 0.5;
-    ctx.fillText(isFlipped ? '漢 界 · HÁN GIỚI' : '楚 河 · SỞ HÀ', gridLeft + cellSize * 2, riverCenterY);
-    ctx.fillText(isFlipped ? '楚 河 · SỞ HÀ' : '漢 界 · HÁN GIỚI', gridLeft + cellSize * 6, riverCenterY);
-    ctx.globalAlpha = 1;
-
-    // 2. Last move squares highlight
-    if (lastMove) {
-      const fromPt = boardToCanvasPoint(lastMove.from);
-      const toPt = boardToCanvasPoint(lastMove.to);
-      const box = cellSize * 0.78;
-      ctx.strokeStyle = palette.highlightSelected;
-      ctx.fillStyle = palette.highlightLastMove;
-      ctx.lineWidth = 1.6;
-      ctx.fillRect(fromPt.x - box / 2, fromPt.y - box / 2, box, box);
-      ctx.fillRect(toPt.x - box / 2, toPt.y - box / 2, box, box);
-      ctx.strokeRect(toPt.x - box / 2, toPt.y - box / 2, box, box);
-    }
-
-    // 3. Hint arrow highlight
-    if (hintMove) {
-      const fromPt = boardToCanvasPoint(hintMove.from);
-      const toPt = boardToCanvasPoint(hintMove.to);
-      ctx.save();
-      ctx.strokeStyle = palette.highlightHint;
-      ctx.fillStyle = palette.highlightHint;
-      ctx.lineWidth = 3.5;
-      ctx.setLineDash([6, 4]);
-      ctx.beginPath();
-      ctx.moveTo(fromPt.x, fromPt.y);
-      ctx.lineTo(toPt.x, toPt.y);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      ctx.arc(toPt.x, toPt.y, cellSize * 0.24, 0, Math.PI * 2);
-      ctx.globalAlpha = 0.28;
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // 4. Legal move indicators
-    const pieceRadius = Math.max(15, cellSize * 0.425);
-    for (const target of legalTargets) {
-      const pt = boardToCanvasPoint(target);
-      const hasEnemy = board[target.row][target.col] !== null;
-      ctx.save();
-      if (hasEnemy) {
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, pieceRadius + 3.5, 0, Math.PI * 2);
-        ctx.lineWidth = 2.6;
-        ctx.strokeStyle = palette.captureRing;
-        ctx.stroke();
-      } else {
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, Math.max(5, cellSize * 0.14), 0, Math.PI * 2);
-        ctx.fillStyle = palette.legalDot;
-        ctx.fill();
-      }
-      ctx.restore();
-    }
-
-    // 5. Render static board pieces (skip currently dragged or sliding piece)
-    const activeSlide = slideAnimRef.current;
-    const activeDrag = dragStateRef.current;
-    const checkedKingPos = inCheckSide ? findKingPosition(board, inCheckSide) : null;
-
-    for (let r = 0; r < BOARD_ROWS; r++) {
-      for (let c = 0; c < BOARD_COLS; c++) {
-        const piece = board[r][c];
-        if (!piece) continue;
-        if (activeSlide && activeSlide.to.row === r && activeSlide.to.col === c) {
-          continue;
-        }
-        if (
-          activeDrag.active &&
-          activeDrag.hasMoved &&
-          activeDrag.from?.row === r &&
-          activeDrag.from?.col === c
-        ) {
-          continue;
-        }
-        const pt = boardToCanvasPoint({ row: r, col: c });
-        const isSel = selectedSquare?.row === r && selectedSquare?.col === c;
-        const isCheckTarget =
-          checkedKingPos !== null && checkedKingPos.row === r && checkedKingPos.col === c;
-        drawPieceOnCanvas(ctx, piece, pt.x, pt.y, pieceRadius, {
-          isSelected: isSel,
-          isCheckTarget,
-        });
-      }
-    }
-
-    // 6. Sliding animated piece
-    if (activeSlide) {
-      const fromPt = boardToCanvasPoint(activeSlide.from);
-      const toPt = boardToCanvasPoint(activeSlide.to);
-      const t = 1 - Math.pow(1 - Math.min(1, activeSlide.progress), 3);
-      const ix = fromPt.x + (toPt.x - fromPt.x) * t;
-      const iy = fromPt.y + (toPt.y - fromPt.y) * t;
-      drawPieceOnCanvas(ctx, activeSlide.piece, ix, iy, pieceRadius * 1.04, {
-        isLifted: true,
-      });
-    }
-
-    // 7. Dragged piece under finger/cursor
-    if (activeDrag.active && activeDrag.hasMoved && activeDrag.piece) {
-      drawPieceOnCanvas(
-        ctx,
-        activeDrag.piece,
-        activeDrag.canvasX,
-        activeDrag.canvasY,
-        pieceRadius * 1.1,
-        { isSelected: true, isLifted: true }
-      );
-    }
-
-    // 8. Pooled particles
-    const pool = particlesRef.current;
-    for (let i = 0; i < pool.length; i++) {
-      const p = pool[i];
-      if (!p.active) continue;
-      const alpha = Math.max(0, 1 - p.life / p.maxLife);
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = p.color;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size * alpha + 0.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
-    ctx.restore();
+    renderXiangqiBoardCanvas({
+      canvas,
+      board,
+      metrics: metricsRef.current,
+      palette,
+      isFlipped,
+      selectedSquare,
+      legalTargets,
+      lastMove,
+      hintMove,
+      inCheckSide,
+      slideAnim: slideAnimRef.current,
+      dragState: dragStateRef.current,
+      particles: particlesRef.current,
+      shockwaves: shockwavesRef.current,
+      animTime: animTimeRef.current,
+    });
   }, [
     board,
-    boardToCanvasPoint,
-    drawPieceOnCanvas,
     hintMove,
     inCheckSide,
     isFlipped,
@@ -818,6 +395,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
       const rawDt = (now - lastFrameTimeRef.current) / 1000;
       lastFrameTimeRef.current = now;
       const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
+      animTimeRef.current += dt;
 
       let keepRunning = false;
 
@@ -844,6 +422,18 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
           p.vy *= 0.92;
           keepRunning = true;
         }
+      }
+
+      if (shockwavesRef.current.length > 0) {
+        const alive: XiangqiShockwave[] = [];
+        for (const sw of shockwavesRef.current) {
+          sw.life += dt;
+          if (sw.life < sw.maxLife) {
+            alive.push(sw);
+            keepRunning = true;
+          }
+        }
+        shockwavesRef.current = alive;
       }
 
       if (dragStateRef.current.active && dragStateRef.current.hasMoved) {
@@ -944,12 +534,15 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
       }
 
       if (move.captured) {
-        spawnBurstParticles(to, move.captured.side === 'red' ? '#EF4444' : '#F59E0B', 20);
+        const burstColor = move.captured.side === 'red' ? '#EF4444' : '#F59E0B';
+        spawnBurstParticles(to, burstColor, 20);
+        spawnShockwave(to, burstColor);
       }
       if (move.isCheck) {
         const kingCoord = findKingPosition(nextBoard, nextSide);
         if (kingCoord) {
           spawnBurstParticles(kingCoord, '#DC2626', 24);
+          spawnShockwave(kingCoord, '#EF4444');
         }
       }
 
@@ -994,7 +587,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
       scheduleAnimationLoop();
       return true;
     },
-    [playerSide, scheduleAnimationLoop, soundEnabled, spawnBurstParticles]
+    [playerSide, scheduleAnimationLoop, soundEnabled, spawnBurstParticles, spawnShockwave]
   );
 
   // Start / Restart fresh match
@@ -1298,7 +891,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
             aria-label="Chọn chất liệu bàn cờ"
             className="inline-flex items-center p-1 rounded-xl border border-[#DCE6F2] dark:border-[#1E2E4A] bg-white dark:bg-[#0B1222]"
           >
-            {(Object.keys(BOARD_THEMES) as BoardThemeId[]).map((tid) => (
+            {(Object.keys(XIANGQI_BOARD_THEMES) as XiangqiBoardThemeId[]).map((tid) => (
               <button
                 key={tid}
                 type="button"
@@ -1309,7 +902,7 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                     : 'text-[#475569] dark:text-[#94A3B8] hover:text-[#070B14] dark:hover:text-white'
                 }`}
               >
-                {BOARD_THEMES[tid].label}
+                {XIANGQI_BOARD_THEMES[tid].label}
               </button>
             ))}
           </div>
@@ -1402,33 +995,51 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                 style={{ backgroundColor: 'rgba(10, 15, 28, 0.85)' }}
               >
                 <div className="w-full max-w-md space-y-2.5 sm:space-y-4 mobile-ls:space-y-1.5 text-white">
-                  {/* Custom SVG Title Emblem */}
+                  {/* Sculpted Lacquer Token Emblem */}
                   <div className="flex flex-col items-center gap-1.5 sm:gap-2 mobile-ls:gap-0">
                     <svg
-                      viewBox="0 0 120 56"
-                      className="w-20 h-10 sm:w-28 sm:h-13 mobile-ls:hidden"
+                      viewBox="0 0 144 66"
+                      className="w-24 h-11 sm:w-32 sm:h-14 mobile-ls:hidden"
                       aria-hidden="true"
                     >
-                      <circle cx="40" cy="28" r="22" fill="#FFF8EC" stroke="#B91C1C" strokeWidth="3" />
-                      <circle cx="40" cy="28" r="17" fill="none" stroke="#B91C1C" strokeWidth="1" opacity="0.7" />
+                      <defs>
+                        <radialGradient id="xqRedToken" cx="35%" cy="30%" r="70%">
+                          <stop offset="0%" stopColor="#FFFDF7" />
+                          <stop offset="75%" stopColor="#FFF4DC" />
+                          <stop offset="100%" stopColor="#DFC69E" />
+                        </radialGradient>
+                        <radialGradient id="xqBlackToken" cx="35%" cy="30%" r="70%">
+                          <stop offset="0%" stopColor="#FAFAF7" />
+                          <stop offset="75%" stopColor="#EFECE3" />
+                          <stop offset="100%" stopColor="#CEC7B7" />
+                        </radialGradient>
+                      </defs>
+                      {/* Red General */}
+                      <circle cx="48" cy="36" r="24" fill="#8C4B38" />
+                      <circle cx="48" cy="32" r="24" fill="url(#xqRedToken)" stroke="#B91C1C" strokeWidth="2.6" />
+                      <circle cx="48" cy="32" r="19" fill="none" stroke="#B91C1C" strokeWidth="1.2" opacity="0.72" />
+                      <circle cx="48" cy="32" r="16.5" fill="none" stroke="#B91C1C" strokeWidth="0.6" opacity="0.35" />
                       <text
-                        x="40"
-                        y="34"
+                        x="48"
+                        y="39"
                         textAnchor="middle"
-                        fontSize="20"
+                        fontSize="22"
                         fontWeight="700"
                         fill="#B91C1C"
                         fontFamily='"Noto Serif", "Plus Jakarta Sans", serif'
                       >
                         帥
                       </text>
-                      <circle cx="80" cy="28" r="22" fill="#F4F2EE" stroke="#0F172A" strokeWidth="3" />
-                      <circle cx="80" cy="28" r="17" fill="none" stroke="#334155" strokeWidth="1" opacity="0.7" />
+                      {/* Black General */}
+                      <circle cx="96" cy="36" r="24" fill="#334155" />
+                      <circle cx="96" cy="32" r="24" fill="url(#xqBlackToken)" stroke="#0F172A" strokeWidth="2.6" />
+                      <circle cx="96" cy="32" r="19" fill="none" stroke="#1E293B" strokeWidth="1.2" opacity="0.72" />
+                      <circle cx="96" cy="32" r="16.5" fill="none" stroke="#1E293B" strokeWidth="0.6" opacity="0.35" />
                       <text
-                        x="80"
-                        y="34"
+                        x="96"
+                        y="39"
                         textAnchor="middle"
-                        fontSize="20"
+                        fontSize="22"
                         fontWeight="700"
                         fill="#0F172A"
                         fontFamily='"Noto Serif", "Plus Jakarta Sans", serif'
@@ -1830,23 +1441,24 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
               </span>
             </div>
 
-            {/* Captured Badges */}
+            {/* Captured Tactile Mini Tokens */}
             {(capturedStats.byPlayer.length > 0 || capturedStats.byAi.length > 0) && (
               <div className="grid grid-cols-2 gap-2 text-xs p-2.5 rounded-xl bg-[#F8FAFC] dark:bg-[#111C33]">
                 <div>
-                  <div className="text-[11px] font-semibold text-[#475569] dark:text-[#94A3B8] mb-1">
+                  <div className="text-[11px] font-semibold text-[#475569] dark:text-[#94A3B8] mb-1.5">
                     Bạn đã ăn ({capturedStats.byPlayer.length}):
                   </div>
-                  <div className="flex flex-wrap gap-1 font-display font-bold text-sm">
+                  <div className="flex flex-wrap gap-1.5 font-display font-bold text-xs">
                     {capturedStats.byPlayer.length > 0 ? (
                       capturedStats.byPlayer.map((p, idx) => (
                         <span
                           key={`${p.id}-${idx}`}
-                          className={
+                          title={PIECE_DISPLAY_INFO[p.side][p.type].viName}
+                          className={`w-6 h-6 rounded-full inline-flex items-center justify-center border shadow-xs ${
                             p.side === 'red'
-                              ? 'text-[#B91C1C]'
-                              : 'text-[#0F172A] dark:text-slate-200'
-                          }
+                              ? 'bg-[#FFF8EC] text-[#B91C1C] border-[#B91C1C]/80'
+                              : 'bg-[#F4F1EA] text-[#0F172A] border-[#1E293B]/80'
+                          }`}
                         >
                           {PIECE_DISPLAY_INFO[p.side][p.type].hanzi}
                         </span>
@@ -1857,19 +1469,20 @@ export function XiangqiGameSection({ theme, onToggleTheme }: XiangqiGameSectionP
                   </div>
                 </div>
                 <div>
-                  <div className="text-[11px] font-semibold text-[#475569] dark:text-[#94A3B8] mb-1">
+                  <div className="text-[11px] font-semibold text-[#475569] dark:text-[#94A3B8] mb-1.5">
                     Máy đã ăn ({capturedStats.byAi.length}):
                   </div>
-                  <div className="flex flex-wrap gap-1 font-display font-bold text-sm">
+                  <div className="flex flex-wrap gap-1.5 font-display font-bold text-xs">
                     {capturedStats.byAi.length > 0 ? (
                       capturedStats.byAi.map((p, idx) => (
                         <span
                           key={`${p.id}-${idx}`}
-                          className={
+                          title={PIECE_DISPLAY_INFO[p.side][p.type].viName}
+                          className={`w-6 h-6 rounded-full inline-flex items-center justify-center border shadow-xs ${
                             p.side === 'red'
-                              ? 'text-[#B91C1C]'
-                              : 'text-[#0F172A] dark:text-slate-200'
-                          }
+                              ? 'bg-[#FFF8EC] text-[#B91C1C] border-[#B91C1C]/80'
+                              : 'bg-[#F4F1EA] text-[#0F172A] border-[#1E293B]/80'
+                          }`}
                         >
                           {PIECE_DISPLAY_INFO[p.side][p.type].hanzi}
                         </span>

@@ -48,6 +48,7 @@ import {
   ChessBoardThemeId,
   ChessDragRenderState,
   ChessParticle,
+  ChessShockwave,
   ChessSlideAnim,
   renderChessBoardCanvas,
 } from '../utils/chessCanvasRenderer.ts';
@@ -74,6 +75,84 @@ const PROMOTION_OPTIONS: readonly { type: ChessPromotionType; label: string; sym
   { type: 'B', label: 'Tượng', symbolWhite: '♗', symbolBlack: '♝' },
   { type: 'N', label: 'Mã', symbolWhite: '♘', symbolBlack: '♞' },
 ];
+
+function StauntonMiniIcon({ type, side, className = 'w-5 h-5' }: { type: 'K' | 'Q' | 'R' | 'B' | 'N' | 'P'; side: ChessSide; className?: string }) {
+  const isWhite = side === 'white';
+  const fill = isWhite ? '#FCF8EE' : '#1E2532';
+  const stroke = isWhite ? '#1E293B' : '#CBD5E1';
+  return (
+    <svg viewBox="0 0 36 36" className={className} aria-hidden="true">
+      {type === 'P' && (
+        <path
+          d="M11 29h14c0-3-3-4-4-5l-1-6 2-1.5-2-1.5a4 4 0 1 0-4 0l-2 1.5 2 1.5-1 6c-1 1-4 2-4 5z"
+          fill={fill}
+          stroke={stroke}
+          strokeWidth="1.7"
+          strokeLinejoin="round"
+        />
+      )}
+      {type === 'R' && (
+        <path
+          d="M9 29h18l-1-3-2-1.5-.5-9.5L26 13V8h-3.2v2.8h-2.8V8h-4v2.8h-2.8V8H10v5l2.5 2-.5 9.5L10 26l-1 3z"
+          fill={fill}
+          stroke={stroke}
+          strokeWidth="1.7"
+          strokeLinejoin="round"
+        />
+      )}
+      {type === 'N' && (
+        <path
+          d="M9 29h18c0-3-2-4-4-5 1-6-1-12-4-15l-1.5-3-2.2 2-2-1.8-.8 3C10 11 8 15 7.5 18.5c-.3 1.8 1.5 2.5 3.5 1.8 1.5-.6 3-1.8 4-2.8.5 2.5-1 4.8-3.5 6.5C9.5 25.2 9 26.8 9 29z"
+          fill={fill}
+          stroke={stroke}
+          strokeWidth="1.7"
+          strokeLinejoin="round"
+        />
+      )}
+      {type === 'B' && (
+        <>
+          <circle cx="18" cy="7" r="2" fill={fill} stroke={stroke} strokeWidth="1.5" />
+          <path
+            d="M10 29h16c0-3-2.5-4-4-5l-1.2-2.5c2.5-3.5 2-8.5-2.8-12-4.8 3.5-5.3 8.5-2.8 12L14 24c-1.5 1-4 2-4 5z"
+            fill={fill}
+            stroke={stroke}
+            strokeWidth="1.7"
+            strokeLinejoin="round"
+          />
+          <path d="M16 14h4M18 12v4" stroke={stroke} strokeWidth="1.4" strokeLinecap="round" />
+        </>
+      )}
+      {type === 'Q' && (
+        <>
+          <path
+            d="M9 29h18l-1.8-4.5L28 13l-5 4.5L22 10l-4 5.5L14 10l-1 7.5L8 13l2.8 11.5L9 29z"
+            fill={fill}
+            stroke={stroke}
+            strokeWidth="1.7"
+            strokeLinejoin="round"
+          />
+          <circle cx="8" cy="11.5" r="1.4" fill={fill} stroke={stroke} strokeWidth="1.2" />
+          <circle cx="14" cy="8.5" r="1.4" fill={fill} stroke={stroke} strokeWidth="1.2" />
+          <circle cx="18" cy="7" r="1.5" fill={fill} stroke={stroke} strokeWidth="1.2" />
+          <circle cx="22" cy="8.5" r="1.4" fill={fill} stroke={stroke} strokeWidth="1.2" />
+          <circle cx="28" cy="11.5" r="1.4" fill={fill} stroke={stroke} strokeWidth="1.2" />
+        </>
+      )}
+      {type === 'K' && (
+        <>
+          <path d="M18 4v6.5M15 7h6" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" />
+          <path
+            d="M9 29h18l-1.8-5c3-5.2 1.2-10-3.2-11.2-1.8-.5-3.2.8-4 2-.8-1.2-2.2-2.5-4-2-4.4 1.2-6.2 6-3.2 11.2L9 29z"
+            fill={fill}
+            stroke={stroke}
+            strokeWidth="1.7"
+            strokeLinejoin="round"
+          />
+        </>
+      )}
+    </svg>
+  );
+}
 
 function playChessSound(
   type: 'move' | 'capture' | 'castle' | 'check' | 'win' | 'lose',
@@ -220,6 +299,7 @@ export function ChessGameSection({ theme, onToggleTheme }: ChessGameSectionProps
       color: '#D97706',
     }))
   );
+  const shockwavesRef = useRef<ChessShockwave[]>([]);
   const rafRef = useRef<number | null>(null);
   const lastFrameTimeRef = useRef<number>(0);
 
@@ -355,6 +435,21 @@ export function ChessGameSection({ theme, onToggleTheme }: ChessGameSectionProps
     [boardToCanvasPoint]
   );
 
+  const spawnShockwave = useCallback(
+    (coord: BoardCoord, color: string) => {
+      const pt = boardToCanvasPoint(coord);
+      shockwavesRef.current.push({
+        x: pt.x,
+        y: pt.y,
+        life: 0,
+        maxLife: 0.36,
+        maxRadius: metricsRef.current.cellSize * 0.72,
+        color,
+      });
+    },
+    [boardToCanvasPoint]
+  );
+
   const renderCanvas = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -373,6 +468,7 @@ export function ChessGameSection({ theme, onToggleTheme }: ChessGameSectionProps
       slideAnim: slideAnimRef.current,
       dragState: dragStateRef.current,
       particles: particlesRef.current,
+      shockwaves: shockwavesRef.current,
     });
   }, [board, hintMove, inCheckSide, isFlipped, lastMove, legalTargets, palette, selectedSquare]);
 
@@ -413,6 +509,18 @@ export function ChessGameSection({ theme, onToggleTheme }: ChessGameSectionProps
           p.vy *= 0.92;
           keepRunning = true;
         }
+      }
+
+      if (shockwavesRef.current.length > 0) {
+        const alive: ChessShockwave[] = [];
+        for (const sw of shockwavesRef.current) {
+          sw.life += dt;
+          if (sw.life < sw.maxLife) {
+            alive.push(sw);
+            keepRunning = true;
+          }
+        }
+        shockwavesRef.current = alive;
       }
 
       if (dragStateRef.current.active && dragStateRef.current.hasMoved) {
@@ -515,12 +623,15 @@ export function ChessGameSection({ theme, onToggleTheme }: ChessGameSectionProps
       }
 
       if (move.captured) {
-        spawnBurstParticles(to, move.captured.side === 'white' ? '#F8FAFC' : '#F59E0B', 20);
+        const burstColor = move.captured.side === 'white' ? '#F8FAFC' : '#F59E0B';
+        spawnBurstParticles(to, burstColor, 20);
+        spawnShockwave(to, burstColor);
       }
       if (move.isCheck) {
         const kingCoord = findKingPosition(nextPosition.board, nextPosition.sideToMove);
         if (kingCoord) {
           spawnBurstParticles(kingCoord, '#DC2626', 24);
+          spawnShockwave(kingCoord, '#EF4444');
         }
       }
 
@@ -563,7 +674,7 @@ export function ChessGameSection({ theme, onToggleTheme }: ChessGameSectionProps
       scheduleAnimationLoop();
       return true;
     },
-    [gameMode, playerSide, scheduleAnimationLoop, soundEnabled, spawnBurstParticles]
+    [gameMode, playerSide, scheduleAnimationLoop, soundEnabled, spawnBurstParticles, spawnShockwave]
   );
 
   const startNewGame = useCallback(
@@ -986,13 +1097,13 @@ export function ChessGameSection({ theme, onToggleTheme }: ChessGameSectionProps
             <div className="flex items-center gap-2.5 min-w-0">
               <div
                 aria-hidden="true"
-                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-display font-bold text-base sm:text-lg border-2 shrink-0 ${
+                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border-2 shrink-0 ${
                   topSide === 'black'
-                    ? 'bg-[#1E2430] text-white border-[#334155]'
-                    : 'bg-[#FCF9F2] text-[#0F172A] border-[#94A3B8]'
+                    ? 'bg-[#1E2430] border-[#475569]'
+                    : 'bg-[#FCF9F2] border-[#C9A86B]'
                 }`}
               >
-                {topSide === 'black' ? '♚' : '♔'}
+                <StauntonMiniIcon type="K" side={topSide} className="w-5 h-5" />
               </div>
               <div className="min-w-0">
                 <p className="text-xs sm:text-sm font-semibold text-[#070B14] dark:text-[#F1F5F9] truncate">
@@ -1048,21 +1159,39 @@ export function ChessGameSection({ theme, onToggleTheme }: ChessGameSectionProps
                 style={{ backgroundColor: 'rgba(10, 15, 28, 0.88)' }}
               >
                 <div className="w-full max-w-md space-y-2 sm:space-y-2.5 mobile-ls:space-y-1.5 text-white">
-                  {/* Custom SVG Title Emblem */}
+                  {/* Sculpted Staunton King & Queen Crest */}
                   <div className="flex flex-col items-center gap-0.5 sm:gap-1 mobile-ls:gap-0">
                     <svg
-                      viewBox="0 0 120 52"
-                      className="hidden sm:block w-24 h-10 mobile-ls:hidden"
+                      viewBox="0 0 132 58"
+                      className="hidden sm:block w-28 h-12 mobile-ls:hidden"
                       aria-hidden="true"
                     >
-                      <circle cx="42" cy="26" r="20" fill="#FCF9F2" stroke="#D97706" strokeWidth="2.5" />
-                      <text x="42" y="33" textAnchor="middle" fontSize="22" fill="#0F172A">
-                        ♔
-                      </text>
-                      <circle cx="78" cy="26" r="20" fill="#1E2430" stroke="#94A3B8" strokeWidth="2.5" />
-                      <text x="78" y="33" textAnchor="middle" fontSize="22" fill="#F8FAFC">
-                        ♛
-                      </text>
+                      <defs>
+                        <linearGradient id="chessIvoryCrest" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#FFFDF7" />
+                          <stop offset="100%" stopColor="#DFCAA6" />
+                        </linearGradient>
+                        <linearGradient id="chessObsidianCrest" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor="#434E61" />
+                          <stop offset="100%" stopColor="#0D121B" />
+                        </linearGradient>
+                      </defs>
+                      {/* White King medallion */}
+                      <circle cx="44" cy="29" r="23" fill="url(#chessIvoryCrest)" stroke="#D97706" strokeWidth="2.4" />
+                      <g transform="translate(26,11)">
+                        <path d="M18 4v6M15.2 6.8h5.6" stroke="#1E293B" strokeWidth="1.9" strokeLinecap="round" />
+                        <path d="M9 29h18l-1.8-5c3-5.2 1.2-10-3.2-11.2-1.8-.5-3.2.8-4 2-.8-1.2-2.2-2.5-4-2-4.4 1.2-6.2 6-3.2 11.2L9 29z" fill="#FCF9F2" stroke="#1E293B" strokeWidth="1.7" strokeLinejoin="round" />
+                      </g>
+                      {/* Black Queen medallion */}
+                      <circle cx="88" cy="29" r="23" fill="url(#chessObsidianCrest)" stroke="#94A3B8" strokeWidth="2.4" />
+                      <g transform="translate(70,11)">
+                        <path d="M9 29h18l-1.8-4.5L28 13l-5 4.5L22 10l-4 5.5L14 10l-1 7.5L8 13l2.8 11.5L9 29z" fill="#1E2532" stroke="#E2E8F0" strokeWidth="1.5" strokeLinejoin="round" />
+                        <circle cx="8" cy="11.5" r="1.2" fill="#E2E8F0" />
+                        <circle cx="14" cy="8.5" r="1.2" fill="#E2E8F0" />
+                        <circle cx="18" cy="7" r="1.3" fill="#E2E8F0" />
+                        <circle cx="22" cy="8.5" r="1.2" fill="#E2E8F0" />
+                        <circle cx="28" cy="11.5" r="1.2" fill="#E2E8F0" />
+                      </g>
                     </svg>
                     <h2 className="font-display text-xl sm:text-3xl mobile-ls:text-base font-bold tracking-tight text-white">
                       Kỳ Đài Cờ Vua
@@ -1225,9 +1354,11 @@ export function ChessGameSection({ theme, onToggleTheme }: ChessGameSectionProps
                         }
                         className="py-3 px-3 rounded-xl bg-slate-800 hover:bg-amber-500 hover:text-slate-950 border border-slate-700 font-semibold text-sm flex flex-col items-center gap-1 transition-colors cursor-pointer"
                       >
-                        <span className="text-2xl leading-none">
-                          {sideToMove === 'white' ? opt.symbolWhite : opt.symbolBlack}
-                        </span>
+                        <StauntonMiniIcon
+                          type={opt.type}
+                          side={sideToMove}
+                          className="w-8 h-8"
+                        />
                         <span>{opt.label}</span>
                       </button>
                     ))}
@@ -1369,13 +1500,13 @@ export function ChessGameSection({ theme, onToggleTheme }: ChessGameSectionProps
             <div className="flex items-center gap-2.5 min-w-0">
               <div
                 aria-hidden="true"
-                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-display font-bold text-base sm:text-lg border-2 shrink-0 ${
+                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center border-2 shrink-0 ${
                   bottomSide === 'white'
-                    ? 'bg-[#FCF9F2] text-[#0F172A] border-[#94A3B8]'
-                    : 'bg-[#1E2430] text-white border-[#334155]'
+                    ? 'bg-[#FCF9F2] border-[#C9A86B]'
+                    : 'bg-[#1E2430] border-[#475569]'
                 }`}
               >
-                {bottomSide === 'white' ? '♔' : '♚'}
+                <StauntonMiniIcon type="K" side={bottomSide} className="w-5 h-5" />
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-[#070B14] dark:text-[#F1F5F9] truncate">
@@ -1601,14 +1732,18 @@ export function ChessGameSection({ theme, onToggleTheme }: ChessGameSectionProps
             {(capturedStats.whiteCaptured.length > 0 || capturedStats.blackCaptured.length > 0) && (
               <div className="grid grid-cols-2 gap-2 text-xs p-2.5 rounded-xl bg-[#F8FAFC] dark:bg-[#111C33]">
                 <div>
-                  <div className="text-[11px] font-semibold text-[#475569] dark:text-[#94A3B8] mb-1">
+                  <div className="text-[11px] font-semibold text-[#475569] dark:text-[#94A3B8] mb-1.5">
                     Trắng đã ăn ({capturedStats.whiteCaptured.length}):
                   </div>
-                  <div className="flex flex-wrap gap-0.5 text-base leading-tight">
+                  <div className="flex flex-wrap gap-1 items-center">
                     {capturedStats.whiteCaptured.length > 0 ? (
                       capturedStats.whiteCaptured.map((p, idx) => (
-                        <span key={`${p.id}-${idx}`} className="text-[#0F172A] dark:text-slate-200">
-                          {PIECE_DISPLAY_INFO[p.side][p.type].unicode}
+                        <span
+                          key={`${p.id}-${idx}`}
+                          title={PIECE_DISPLAY_INFO[p.side][p.type].viName}
+                          className="w-6 h-6 rounded-md bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 inline-flex items-center justify-center"
+                        >
+                          <StauntonMiniIcon type={p.type} side={p.side} className="w-4 h-4" />
                         </span>
                       ))
                     ) : (
@@ -1617,14 +1752,18 @@ export function ChessGameSection({ theme, onToggleTheme }: ChessGameSectionProps
                   </div>
                 </div>
                 <div>
-                  <div className="text-[11px] font-semibold text-[#475569] dark:text-[#94A3B8] mb-1">
+                  <div className="text-[11px] font-semibold text-[#475569] dark:text-[#94A3B8] mb-1.5">
                     Đen đã ăn ({capturedStats.blackCaptured.length}):
                   </div>
-                  <div className="flex flex-wrap gap-0.5 text-base leading-tight">
+                  <div className="flex flex-wrap gap-1 items-center">
                     {capturedStats.blackCaptured.length > 0 ? (
                       capturedStats.blackCaptured.map((p, idx) => (
-                        <span key={`${p.id}-${idx}`} className="text-[#334155] dark:text-slate-100">
-                          {PIECE_DISPLAY_INFO[p.side][p.type].unicode}
+                        <span
+                          key={`${p.id}-${idx}`}
+                          title={PIECE_DISPLAY_INFO[p.side][p.type].viName}
+                          className="w-6 h-6 rounded-md bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 inline-flex items-center justify-center"
+                        >
+                          <StauntonMiniIcon type={p.type} side={p.side} className="w-4 h-4" />
                         </span>
                       ))
                     ) : (

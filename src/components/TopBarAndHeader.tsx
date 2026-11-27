@@ -48,15 +48,15 @@ export function TopBarAndHeader({
         >
           <BrandLogo
             size={30}
-            className="w-5 h-5 sm:w-[30px] sm:h-[30px] shadow-[0_6px_16px_-6px_rgba(2,132,199,0.45)] rounded-md sm:rounded-lg transition-transform duration-200 group-hover:scale-105"
+            className="w-6 h-6 sm:w-[30px] sm:h-[30px] shadow-[0_6px_16px_-6px_rgba(2,132,199,0.45)] rounded-md sm:rounded-lg transition-transform duration-200 group-hover:scale-105"
           />
-          <span>{PORTFOLIO_PROFILE.fullName}</span>
+          <span className="hidden min-[460px]:inline">{PORTFOLIO_PROFILE.fullName}</span>
         </a>
 
         {/* Zone 2: Clean 6-link single-line navigation */}
         <nav
           aria-label="Điều hướng chính"
-          className="flex items-center gap-2 sm:gap-5 lg:gap-7 text-[11px] sm:text-sm font-medium"
+          className="flex items-center gap-2 sm:gap-5 lg:gap-7 text-[11px] sm:text-sm font-medium min-w-0 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <a
             href="/"
