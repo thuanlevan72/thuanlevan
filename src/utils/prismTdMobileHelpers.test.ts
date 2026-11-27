@@ -73,15 +73,15 @@ test('filterArsenalGuns cleanly partitions all, attack, electric, and support gu
   const electric = filterArsenalGuns(guns, 'electric');
   const support = filterArsenalGuns(guns, 'support');
 
-  assert.equal(all.length, 23);
-  assert.equal(guns.length, 23);
+  assert.equal(all.length, 24);
+  assert.equal(guns.length, 24);
   assert.equal(attack.length, 16);
-  assert.equal(electric.length, 3);
+  assert.equal(electric.length, 4);
   assert.equal(support.length, 4);
   assert.equal(attack.length + electric.length + support.length, all.length);
 
   for (const mapId of ['sector-17', 'sector-18', 'sector-19'] as const) {
-    assert.equal(getAvailableGunsForMap(mapId).length, 24);
+    assert.equal(getAvailableGunsForMap(mapId).length, 25);
   }
 });
 
@@ -100,8 +100,8 @@ test('computeMobileLandscapeSidebarPx preserves 70%–75%+ map width across iPho
   }
 });
 
-test('getGunMobileShortName provides concise unclipped names for all 26 guns', () => {
-  assert.equal(GUN_CATALOG.length, 26);
+test('getGunMobileShortName provides concise unclipped names for all 27 guns', () => {
+  assert.equal(GUN_CATALOG.length, 27);
   for (const gun of GUN_CATALOG) {
     const short = getGunMobileShortName(gun.type);
     assert.ok(short.length >= 4 && short.length <= 12, `${gun.type} short name "${short}" should stay concise`);

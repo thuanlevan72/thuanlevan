@@ -6,6 +6,7 @@ import {
   GunType,
   GunVariant,
   LightningArc,
+  LightningTetherWire,
   MAX_GUN_LEVEL,
   OrbitalBeamFx,
   OrbitalRadiationZone,
@@ -60,6 +61,7 @@ export interface OverheatFx {
     | 'nebula_swarm'
     | 'aegis_nova'
     | 'phase2_surge'
+    | 'thunder_matrix'
     | 'overdrive_apex';
   x: number;
   y: number;
@@ -649,6 +651,36 @@ export function drawOverheatSpecialFx(
       ctx.lineWidth = 2.4;
       drawPolygon(ctx, 0, 0, 5, curR * 0.84, animTime * 2);
       ctx.stroke();
+    } else if (fx.kind === 'thunder_matrix') {
+      ctx.translate(fx.x, fx.y);
+      const expand = 0.22 + (1 - t) * 0.8;
+      const curR = Math.max(10, fxR * expand);
+      ctx.globalAlpha = t * 0.94;
+      const tg = ctx.createRadialGradient(0, 0, 5, 0, 0, curR);
+      tg.addColorStop(0, '#FFFFFF');
+      tg.addColorStop(0.28, '#93C5FD');
+      tg.addColorStop(0.62, 'rgba(96, 165, 250, 0.34)');
+      tg.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      ctx.fillStyle = tg;
+      ctx.beginPath();
+      ctx.arc(0, 0, curR, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#60A5FA';
+      ctx.lineWidth = 2.6;
+      drawPolygon(ctx, 0, 0, 8, curR * 0.94, animTime * 2.1);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#FDE047';
+      ctx.lineWidth = 1.8;
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI) / 4 + animTime * 2.1;
+        const b = a + (Math.PI * 3) / 4;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * curR * 0.9, Math.sin(a) * curR * 0.9);
+        ctx.lineTo(Math.cos(b) * curR * 0.9, Math.sin(b) * curR * 0.9);
+        ctx.stroke();
+      }
     }
 
     ctx.restore();
@@ -1139,7 +1171,7 @@ export function drawGunTurretSprite(
   }
 
   const baseGrad = ctx.createLinearGradient(-baseRadius, -baseRadius, baseRadius, baseRadius);
-  if (type === 'tesla' || type === 'tempest' || type === 'aurora_spire') {
+  if (type === 'tesla' || type === 'tempest' || type === 'aurora_spire' || type === 'thunder_loom') {
     baseGrad.addColorStop(0, '#0C4A6E');
     baseGrad.addColorStop(1, '#090D16');
   } else if (type === 'beacon' || type === 'cryo' || type === 'radar' || type === 'quantum_prism') {
@@ -1871,6 +1903,58 @@ export function drawGunTurretSprite(
     ctx.beginPath();
     ctx.arc(0, 0, nCore * 0.48, 0, Math.PI * 2);
     ctx.fill();
+  } else if (type === 'thunder_loom') {
+    // 1000-Energy Thiên Lôi Polarity Capacitor Loom: counter-rotating +/- nodes & twin arcing Tesla prongs
+    ctx.save();
+    ctx.rotate(animTime * 2.2);
+    ctx.strokeStyle = isOmega ? '#FDE047' : '#60A5FA';
+    ctx.lineWidth = 2.3;
+    ctx.beginPath();
+    ctx.arc(0, 0, 17 + tier * 0.9, 0, Math.PI * 2);
+    ctx.stroke();
+    for (let n = 0; n < 4; n++) {
+      const na = (n * Math.PI) / 2;
+      const nx = Math.cos(na) * (17 + tier * 0.9);
+      const ny = Math.sin(na) * (17 + tier * 0.9);
+      ctx.fillStyle = n % 2 === 0 ? '#FDE047' : '#C084FC';
+      ctx.beginPath();
+      ctx.arc(nx, ny, 3.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.rotate(aimAngle);
+    const kick = recoil * 4.5;
+    const len = 21 + tier * 2;
+    ctx.fillStyle = isOmega ? '#F59E0B' : '#38BDF8';
+    ctx.fillRect(3 - kick, -8.2, len, 3.2);
+    ctx.fillRect(3 - kick, 5.0, len, 3.2);
+    // Live crackle bridging twin Tesla prongs
+    ctx.strokeStyle = '#E0F2FE';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(len - kick, -6.5);
+    ctx.lineTo(len + 3 - kick + Math.sin(animTime * 36) * 1.5, 0);
+    ctx.lineTo(len - kick, 6.5);
+    ctx.stroke();
+    ctx.fillStyle = '#0B162C';
+    ctx.strokeStyle = isOmega ? '#FDE047' : '#93C5FD';
+    ctx.lineWidth = 2.1;
+    drawPolygon(ctx, 0, 0, 6, 12 + tier * 0.6, 0);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+
+    const loomCore = 5.4 + tier * 0.55 + Math.sin(animTime * 12) * 1;
+    ctx.fillStyle = isOmega ? '#FDE047' : '#60A5FA';
+    ctx.beginPath();
+    ctx.arc(0, 0, loomCore, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(0, 0, loomCore * 0.5, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   // Variant Tag + Level Badge Pill
@@ -2083,6 +2167,43 @@ export function drawEnemySprite(
       ctx.stroke();
     }
     ctx.restore();
+  }
+
+  // Thiên Lôi Polarity Tag (+/-) & Static Charge stack dots (1..4)
+  if (!isKo && ((en.polarityTimer ?? 0) > 0 || (en.electroCharge ?? 0) > 0)) {
+    const stacks = Math.max(0, Math.min(4, en.electroCharge ?? 0));
+    if (stacks > 0) {
+      for (let st = 0; st < stacks; st++) {
+        const sa = animTime * 4.5 + (st * Math.PI * 2) / Math.max(1, stacks);
+        const sx = Math.cos(sa) * (en.radius + 6.5);
+        const sy = Math.sin(sa) * (en.radius + 6.5);
+        ctx.fillStyle = '#FDE047';
+        ctx.strokeStyle = '#070B14';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+    }
+    if ((en.polarityTimer ?? 0) > 0 && en.polarityTag) {
+      const isPos = en.polarityTag === '+';
+      ctx.save();
+      ctx.translate(en.radius + 6, -en.radius - 4);
+      ctx.fillStyle = isPos ? '#FACC15' : '#A855F7';
+      ctx.strokeStyle = '#070B14';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = isPos ? '#070B14' : '#FFFFFF';
+      ctx.font = 'bold 8.5px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(en.polarityTag, 0, 0.3);
+      ctx.restore();
+    }
   }
 
   // Radar Target-Lock Crosshair
@@ -3136,6 +3257,91 @@ export function drawAuroraPylons(
         ctx.restore();
       }
     }
+  }
+}
+
+/**
+ * Renders Thiên Lôi 1000⚡ live high-voltage Lightning Tether Wires stretched directly between living enemies.
+ */
+export function drawLightningTetherWires(
+  ctx: CanvasRenderingContext2D,
+  wires: readonly LightningTetherWire[],
+  animTime: number,
+  alphaScale = 1
+) {
+  const safeScale = Math.max(0.42, Math.min(1, alphaScale));
+  for (const w of wires) {
+    const fadeIn = Math.min(1, (w.maxLife - w.life) * 6 + 0.35);
+    const fadeOut = Math.min(1, w.life * 2.5);
+    const visAlpha = Math.max(0, Math.min(fadeIn, fadeOut) * safeScale);
+    if (visAlpha <= 0.02) continue;
+
+    const dx = w.bx - w.ax;
+    const dy = w.by - w.ay;
+    const dist = Math.hypot(dx, dy);
+    if (dist < 4) continue;
+    const nx = -dy / dist;
+    const ny = dx / dist;
+    const segs = Math.max(4, Math.min(9, Math.round(dist / 30)));
+    const isOmega = w.variant === 'omega';
+
+    const pts: { x: number; y: number }[] = [];
+    for (let sIdx = 0; sIdx <= segs; sIdx++) {
+      const t = sIdx / segs;
+      const jitterAmt =
+        sIdx === 0 || sIdx === segs
+          ? 0
+          : Math.sin(animTime * 28 + w.id * 1.7 + sIdx * 2.9) * (w.isOverdrive ? 7.5 : 5);
+      pts.push({
+        x: w.ax + dx * t + nx * jitterAmt,
+        y: w.ay + dy * t + ny * jitterAmt,
+      });
+    }
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // Outer plasma glow
+    ctx.globalAlpha = visAlpha * (w.isOverdrive ? 0.54 : 0.38);
+    ctx.strokeStyle = isOmega ? '#FDE047' : '#38BDF8';
+    ctx.lineWidth = w.isOverdrive ? 8 : 6.2;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y);
+    ctx.stroke();
+
+    // Inner bright voltage filament
+    ctx.globalAlpha = visAlpha * 0.92;
+    ctx.strokeStyle = isOmega ? '#FEF08A' : '#60A5FA';
+    ctx.lineWidth = w.isOverdrive ? 3.2 : 2.5;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y);
+    ctx.stroke();
+
+    // White razor core
+    ctx.globalAlpha = visAlpha;
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k].x, pts[k].y);
+    ctx.stroke();
+
+    // Endpoint magnetic anchor caps
+    for (const endPt of [
+      { x: w.ax, y: w.ay, col: '#FDE047' },
+      { x: w.bx, y: w.by, col: '#C084FC' },
+    ]) {
+      ctx.fillStyle = endPt.col;
+      ctx.globalAlpha = visAlpha * 0.9;
+      ctx.beginPath();
+      ctx.arc(endPt.x, endPt.y, 3.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
   }
 }
 

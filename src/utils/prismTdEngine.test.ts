@@ -4,6 +4,8 @@ import {
   advanceEnemyAlongPath,
   applyCoreDamageWithShield,
   applyDamageToEnemy,
+  applyStaticChargeStack,
+  areOppositePolarities,
   BIOME_PALETTES,
   boostEnemyKillReward,
   buildWaveSpawns,
@@ -16,6 +18,7 @@ import {
   computeElectricWetSynergy,
   computeOverdriveChargeGain,
   computeOverdriveTimeChargeGain,
+  computePointToSegmentDistance,
   computeQuantumEchoTargets,
   computeSingularitySwallowGrowth,
   computeTeamSupportBuffAtTile,
@@ -41,6 +44,7 @@ import {
   getMapPathTileSet,
   getMapScalingCurve,
   getMothershipMaxDrones,
+  getThunderLoomMaxWires,
   getTileKind,
   getWavePhaseDifficultyBoost,
   GRID_COLS,
@@ -65,7 +69,7 @@ import {
 } from './prismTdEngine.ts';
 import { playOverheatSkillSfx, playPrismSfx } from './prismTdSound.ts';
 
-test('PRISM_MAPS define 19 valid maps with unique bosses, 26 guns (19 Attack, 3 Electric, 4 Support), 6 difficulties, and 9 modes', () => {
+test('PRISM_MAPS define 19 valid maps with unique bosses, 27 guns (19 Attack, 4 Electric, 4 Support), 6 difficulties, and 9 modes', () => {
   assert.equal(PRISM_MAPS.length, 19);
   assert.equal(GRID_COLS, 16);
   assert.equal(GRID_ROWS, 10);
@@ -73,17 +77,18 @@ test('PRISM_MAPS define 19 valid maps with unique bosses, 26 guns (19 Attack, 3 
   assert.equal(CANVAS_WIDTH, 896);
   assert.equal(CANVAS_HEIGHT, 560);
 
-  assert.equal(GUN_CATALOG.length, 26);
+  assert.equal(GUN_CATALOG.length, 27);
   const attackGuns = GUN_CATALOG.filter((g) => g.category === 'attack');
   const electricGuns = GUN_CATALOG.filter((g) => g.category === 'electric');
   const supportGuns = GUN_CATALOG.filter((g) => g.category === 'support');
   assert.equal(attackGuns.length, 19);
-  assert.equal(electricGuns.length, 3);
+  assert.equal(electricGuns.length, 4);
   assert.equal(supportGuns.length, 4);
 
   assert.equal(isElectricGunType('tesla'), true);
   assert.equal(isElectricGunType('tempest'), true);
   assert.equal(isElectricGunType('aurora_spire'), true);
+  assert.equal(isElectricGunType('thunder_loom'), true);
   assert.equal(isElectricGunType('gatling'), false);
 
   assert.equal(isSupportGunType('beacon'), true);
@@ -176,11 +181,11 @@ test('PRISM_MAPS define 19 valid maps with unique bosses, 26 guns (19 Attack, 3 
     const exclusive = getExclusiveGunForMap(map.id);
     if (map.id === 'sector-17' || map.id === 'sector-18' || map.id === 'sector-19') {
       assert.ok(exclusive, `${map.id} must have an exclusive weapon`);
-      assert.equal(available.length, 24, `${map.id} should expose 23 base + 1 map-exclusive gun`);
+      assert.equal(available.length, 25, `${map.id} should expose 24 base + 1 map-exclusive gun`);
       assert.ok(available.some((g) => g.type === exclusive.type));
     } else {
       assert.equal(exclusive, null);
-      assert.equal(available.length, 23, `${map.id} should expose 23 standard guns`);
+      assert.equal(available.length, 24, `${map.id} should expose 24 standard guns`);
     }
   }
   assert.equal(bossIds.size, 19);
@@ -279,7 +284,7 @@ test('Super Hell & Nightmare (2x Super Hell), Boss Apocalypse, and 24x14 Sector-
   assert.equal(p2Step2.outcome.phase2Events.length, 0);
 });
 
-test('26-gun Lv1..Lv7 progression, 1x-first-then-2x upgrade cost, ×1.9 power scaling, pure 0-damage support, and Quantum Prism mechanics', () => {
+test('27-gun Lv1..Lv7 progression, 1x-first-then-2x upgrade cost, ×1.9 power scaling, pure 0-damage support, and Quantum Prism mechanics', () => {
   const overheatKeys = new Set<string>();
   const hotkeys = new Set<string>();
 
@@ -366,8 +371,8 @@ test('26-gun Lv1..Lv7 progression, 1x-first-then-2x upgrade cost, ×1.9 power sc
       }
     }
   }
-  assert.equal(overheatKeys.size, 26);
-  assert.equal(hotkeys.size, 26);
+  assert.equal(overheatKeys.size, 27);
+  assert.equal(hotkeys.size, 27);
 
   // Explicit check for a 500-energy gun (orbital): Lv1->Lv2 = 500, Lv2->Lv3 = 1000, Lv3->Lv4 = 2000, ×1.9 power
   const orbitalMeta = getGunCatalogItem('orbital');
@@ -571,6 +576,9 @@ test('1200-energy Astral Ark, Chronos 700, Orbital 300, Singularity 330, Mothers
   assert.equal(getGunCatalogItem('prism_refract').cost, 300);
   assert.equal(getGunCatalogItem('hyperion').cost, 500);
   assert.equal(getGunCatalogItem('aurora_spire').cost, 500);
+  assert.equal(getGunCatalogItem('thunder_loom').cost, 1000);
+  assert.equal(getGunCatalogItem('thunder_loom').hotkey, 'l');
+  assert.equal(getGunCatalogItem('thunder_loom').category, 'electric');
   assert.equal(getGunCatalogItem('aurelia_cannon').cost, 450);
   assert.equal(getGunCatalogItem('paradox_scythe').cost, 600);
   assert.equal(getGunCatalogItem('nebula_core').cost, 850);
@@ -654,13 +662,35 @@ test('1200-energy Astral Ark, Chronos 700, Orbital 300, Singularity 330, Mothers
   assert.equal(ENEMY_KILL_COIN_BOOST, 1.1);
   assert.equal(boostEnemyKillReward(10), 11);
 
+  // Verify thunder_loom (1000⚡ Electric) unique polarity, wire distance, short-circuit 5-stack & wire cap
+  const thunderMeta = getGunCatalogItem('thunder_loom');
+  assert.equal(thunderMeta.overheatSkill.key, 'thunder_loom_heaven_judgement');
+  const thunderLv1 = getGunCombatProfile('thunder_loom', 1, 'alpha');
+  const thunderLv7Omega = getGunCombatProfile('thunder_loom', 7, 'omega');
+  assert.ok(thunderLv1.dpsEstimate >= 950, '1000⚡ Thunder Loom Lv1 DPS must reflect apex electric tier');
+  assert.ok(thunderLv7Omega.damage > thunderLv1.damage);
+  assert.equal(areOppositePolarities('+', '-'), true);
+  assert.equal(areOppositePolarities('-', '+'), true);
+  assert.equal(areOppositePolarities('+', '+'), false);
+  assert.equal(areOppositePolarities(undefined, '-'), false);
+  assert.equal(computePointToSegmentDistance(50, 30, 0, 0, 100, 0), 30);
+  assert.equal(computePointToSegmentDistance(150, 0, 0, 0, 100, 0), 50);
+  assert.equal(getThunderLoomMaxWires(1, 'alpha'), 4);
+  assert.equal(getThunderLoomMaxWires(7, 'alpha'), 10);
+  assert.equal(getThunderLoomMaxWires(7, 'omega'), 8);
+  const chargeTarget: { electroCharge?: number } = { electroCharge: 2 };
+  assert.deepEqual(applyStaticChargeStack(chargeTarget, 2), { currentStacks: 4, triggeredShortCircuit: false });
+  assert.equal(chargeTarget.electroCharge, 4);
+  assert.deepEqual(applyStaticChargeStack(chargeTarget, 1), { currentStacks: 0, triggeredShortCircuit: true });
+  assert.equal(chargeTarget.electroCharge, 0);
+
   // Verify applyDamageToEnemy armor pierce + shield
   const boss = createEnemyForWave(2, 'boss', 4, map, false, 'hard', 'campaign');
   const hit = applyDamageToEnemy(boss, 500, { armorPierce: 1, shieldMult: 2 });
   assert.ok(hit.actualDamage >= 500);
 });
 
-test('prismTdSound synthesizes compressor+shaper bus, guards suspended state, and covers all 25 guns + Overheat + interrupt', () => {
+test('prismTdSound synthesizes compressor+shaper bus, guards suspended state, and covers all 27 guns + Overheat + interrupt', () => {
   let oscCount = 0;
   let noiseSrcCount = 0;
   let filterCount = 0;

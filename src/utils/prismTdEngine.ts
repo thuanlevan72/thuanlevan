@@ -21,6 +21,7 @@ export type GunType =
   | 'tesla'
   | 'tempest'
   | 'aurora_spire'
+  | 'thunder_loom'
   | 'beacon'
   | 'cryo'
   | 'radar'
@@ -370,7 +371,7 @@ export const GAME_MODE_CONFIGS: Record<GameModeId, GameModeConfig> = {
     label: 'Chiến Dịch',
     shortLabel: 'CHIẾN DỊCH',
     badgeColor: '#38BDF8',
-    description: '16–48 đợt chuẩn chiến thuật · Phối hợp 26 súng & khắc chế Siêu Boss cuối trận',
+    description: '16–48 đợt chuẩn chiến thuật · Phối hợp 27 súng & khắc chế Siêu Boss cuối trận',
     waveCountMult: 1.0,
     spawnRateMult: 0.94,
     speedMult: 0.95,
@@ -721,6 +722,9 @@ export interface TdEnemy {
   silencedTimer: number; // suppresses enemy & boss special abilities
   quantumLinkTimer?: number; // links enemy to Quantum Prism Damage Echo web
   quantumEchoRatio?: number; // fraction of damage echoed to linked targets
+  polarityTag?: '+' | '-'; // Thiên Lôi magnetic polarity tag
+  polarityTimer?: number; // countdown for active magnetic polarity tag
+  electroCharge?: number; // 0..5 Static Charge stacks triggering Short-Circuit detonation at 5
   abilityCooldown: number;
   windupKind?: BossWindupKind | null;
   windupTimer: number;
@@ -980,6 +984,27 @@ export interface AuroraPylonFx {
   pulseTimer: number;
   visualTier: 1 | 2 | 3 | 4;
   variant: GunVariant;
+}
+
+export interface LightningTetherWire {
+  id: number;
+  sourceGunId: string;
+  enemyAId: number;
+  enemyBId: number;
+  ax: number;
+  ay: number;
+  bx: number;
+  by: number;
+  dps: number;
+  pullForce: number;
+  armorPierce: number;
+  shieldMult: number;
+  life: number;
+  maxLife: number;
+  level: number;
+  variant: GunVariant;
+  isOverdrive: boolean;
+  arcTickTimer: number;
 }
 
 export const GRID_COLS = 16;
@@ -2092,7 +2117,7 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
     },
   },
 
-  // === NHÓM HỆ ĐIỆN / LIGHTNING (3 SÚNG CHUYÊN BIỆT) ===
+  // === NHÓM HỆ ĐIỆN / LIGHTNING (4 SÚNG CHUYÊN BIỆT) ===
   {
     type: 'tesla',
     category: 'electric',
@@ -2262,6 +2287,75 @@ export const GUN_CATALOG: readonly GunCatalogItem[] = [
       color: '#2DD4BF',
       summary: 'Triệu hồi thêm Cột Bão Từ cực đại, giật sét nối mọi mục tiêu & cắt chiêu Boss',
       heatPerShot: 16,
+    },
+  },
+  {
+    type: 'thunder_loom',
+    category: 'electric',
+    hotkey: 'l',
+    name: 'Pháo Lưới Điện Thiên Lôi ⚡',
+    shortName: 'Thiên Lôi ⚡',
+    roleClue: '1000⚡ Dây Sét Âm-Dương kéo va chạm & Tụ Sét nổ %HP',
+    accentColor: '#60A5FA',
+    cost: 1000,
+    baseDamage: 480,
+    baseCooldown: 1.05,
+    rangeTiles: 5.4,
+    milestones: [
+      {
+        level: 3,
+        name: 'Cực Từ Âm-Dương & Cáp Sét Sống',
+        summary: 'Gắn cực (+)/(-) kéo quái trái dấu va vào nhau, căng 4 Dây Sét cắt đường & ngắt chiêu Boss',
+      },
+      {
+        level: 5,
+        name: 'Tụ Sét Quá Áp · Nổ Ngắn Mạch',
+        summary: 'Đủ 5 tầng Tĩnh Điện kích nổ Ngắn Mạch xé 5.5% Máu tối đa Boss, bào 18% giáp & +25% cho Hệ Điện',
+      },
+      {
+        level: 7,
+        name: 'Thiên La Địa Võng Cửu Lôi',
+        summary: 'Căng 8 Dây Sét cao áp đồng thời, xuyên 100% giáp, 2.75× Khiên & kích nổ chuỗi Sét khi hạ mục tiêu!',
+      },
+    ],
+    variants: {
+      alpha: {
+        id: 'alpha',
+        name: 'Alpha · Thiên Võng Đa Cực',
+        shortTag: 'α +2 Dây & Kéo',
+        summary: '+2 Dây Sét tối đa, +0.45ô tầm bắn, nổ lan +24px & nhịp phóng +15%',
+        accentColor: '#60A5FA',
+        damageMult: 0.96,
+        rofMult: 1.15,
+        rangeBonus: 0.45,
+        splashBonus: 24,
+        armorPierceBonus: 0.05,
+        shieldMultBonus: 0.25,
+        extraProjectiles: 1,
+        extraChain: 2,
+      },
+      omega: {
+        id: 'omega',
+        name: 'Omega · Tụ Điện Xé Boss',
+        shortTag: 'ω +44% Ngắn Mạch',
+        summary: '+44% sát thương tia, tích 2 tầng Tĩnh Điện/nhịp, xuyên 100% giáp & +65% phá Khiên Boss',
+        accentColor: '#FDE047',
+        damageMult: 1.44,
+        rofMult: 0.94,
+        rangeBonus: 0.2,
+        splashBonus: 14,
+        armorPierceBonus: 0.14,
+        shieldMultBonus: 0.65,
+        extraProjectiles: 0,
+        extraChain: 0,
+      },
+    },
+    overheatSkill: {
+      key: 'thunder_loom_heaven_judgement',
+      name: 'Thiên La Địa Võng 1000⚡',
+      color: '#60A5FA',
+      summary: 'Đan Lưới Sét Bát Quái trói toàn tuyến quái, kéo dồn cực từ & giáng 5 tầng Ngắn Mạch hủy diệt Boss!',
+      heatPerShot: 18,
     },
   },
 
@@ -3711,6 +3805,15 @@ export function getGunCombatProfile(
     splashRadius = level >= 7 ? 116 : level >= 3 ? 96 : 82;
     shieldMult = level >= 7 ? 2.5 : level >= 3 ? 2.2 : 1.8;
     slowPct = level >= 7 ? 0.36 : level >= 3 ? 0.28 : 0.22;
+  } else if (type === 'thunder_loom') {
+    armorPierce = level >= 7 ? 1 : level >= 5 ? 0.92 : level >= 3 ? 0.84 : 0.74;
+    projectilesPerShot = level >= 7 ? 4 : level >= 5 ? 3 : 2; // Polarity arcs fired per volley
+    chainCount = level >= 7 ? 8 : level >= 5 ? 6 : level >= 3 ? 4 : 2; // Max live Lightning Tether Wires
+    splashRadius = level >= 7 ? 118 : level >= 5 ? 98 : 82; // Short-Circuit burst radius
+    pullForce = level >= 5 ? 72 : level >= 3 ? 52 : 36; // Opposite-polarity magnetic snap force
+    shieldMult = level >= 7 ? 2.75 : level >= 5 ? 2.4 : level >= 3 ? 2.1 : 1.85;
+    slowPct = level >= 5 ? 0.36 : 0.28;
+    brittleBonus = (level >= 7 ? 0.08 : level >= 5 ? 0.055 : 0.035) + (variant === 'omega' ? 0.025 : 0); // % Max HP Short-Circuit rupture on Boss
   } else if (type === 'beacon') {
     armorPierce = 0;
     splashRadius = rangePx;
@@ -3792,6 +3895,8 @@ export function getGunCombatProfile(
     effectiveShots = (projectilesPerShot >= 2 ? 1.62 : 1.15) + (level >= 5 ? 0.18 : 0);
   } else if (type === 'aurora_spire') {
     effectiveShots = 1.15 + projectilesPerShot * 0.42;
+  } else if (type === 'thunder_loom') {
+    effectiveShots = 1.65 + chainCount * 0.18 + projectilesPerShot * 0.16;
   } else if (type === 'aurelia_cannon') {
     effectiveShots = projectilesPerShot * (1 + chainCount * 0.16);
   } else if (type === 'paradox_scythe') {
@@ -4210,6 +4315,57 @@ export function interruptEnemyWindup(enemy: TdEnemy): boolean {
   enemy.abilityCooldown = Math.max(enemy.abilityCooldown, enemy.kind === 'super_boss' ? 4.8 : 4.0);
   enemy.stunTimer = Math.max(enemy.stunTimer, 0.38);
   return true;
+}
+
+/**
+ * Pure geometric distance from point (px, py) to segment (x1, y1)-(x2, y2).
+ * Used by Thiên Lôi live high-voltage tripwires to electrocute crossing enemies.
+ */
+export function computePointToSegmentDistance(
+  px: number,
+  py: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+): number {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq <= 0.0001) return Math.hypot(px - x1, py - y1);
+  const t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / lenSq));
+  return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+/**
+ * Adds Static Charge stacks (0..5) onto an enemy; hitting 5 triggers Short-Circuit detonation and resets to 0.
+ */
+export function applyStaticChargeStack(
+  enemy: Pick<TdEnemy, 'electroCharge'>,
+  stacksToAdd = 1
+): { currentStacks: number; triggeredShortCircuit: boolean } {
+  const next = Math.max(0, (enemy.electroCharge ?? 0) + Math.max(1, Math.round(stacksToAdd)));
+  if (next >= 5) {
+    enemy.electroCharge = 0;
+    return { currentStacks: 0, triggeredShortCircuit: true };
+  }
+  enemy.electroCharge = next;
+  return { currentStacks: next, triggeredShortCircuit: false };
+}
+
+/**
+ * Checks whether two enemies carry opposite Thiên Lôi magnetic polarities ('+' vs '-').
+ */
+export function areOppositePolarities(a?: '+' | '-', b?: '+' | '-'): boolean {
+  return Boolean(a && b && a !== b);
+}
+
+/**
+ * Maximum concurrent live Lightning Tether Wires maintained by a Thiên Lôi turret.
+ */
+export function getThunderLoomMaxWires(level: number, variant: GunVariant = 'alpha'): number {
+  const base = level >= 7 ? 8 : level >= 5 ? 6 : level >= 3 ? 4 : 2;
+  return base + (variant === 'alpha' ? 2 : 0);
 }
 
 export interface WaveSpawnItem {
@@ -5033,6 +5189,13 @@ export function stepEnemies(
     if ((enemy.quantumLinkTimer ?? 0) > 0) {
       enemy.quantumLinkTimer = Math.max(0, (enemy.quantumLinkTimer ?? 0) - dt);
       if (enemy.quantumLinkTimer <= 0) enemy.quantumEchoRatio = 0;
+    }
+    if ((enemy.polarityTimer ?? 0) > 0) {
+      enemy.polarityTimer = Math.max(0, (enemy.polarityTimer ?? 0) - dt);
+      if (enemy.polarityTimer <= 0) {
+        enemy.polarityTag = undefined;
+        enemy.electroCharge = 0;
+      }
     }
 
     // Environmental puddle soak when traversing map wetZones

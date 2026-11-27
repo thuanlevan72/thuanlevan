@@ -545,6 +545,7 @@ const SFX_MIN_GAP_MS: Partial<Record<PrismSfxKind, number>> = {
   tesla: 110,
   tempest: 125,
   aurora_spire: 185,
+  thunder_loom: 195,
   beacon: 220,
   cryo: 150,
   radar: 190,
@@ -953,7 +954,7 @@ export function playPrismSfx(
         playSubKick(ctx, bus, 90, 22, 0.4, 0.32 * mix);
         break;
 
-      // ---- ELECTRIC / LIGHTNING WEAPONS (3) ----
+      // ---- ELECTRIC / LIGHTNING WEAPONS (4) ----
       case 'tesla':
         playElectricArc(ctx, bus, 0.24 * mix, 0.095, 0);
         break;
@@ -974,6 +975,15 @@ export function playPrismSfx(
         playElectricArc(ctx, bus, 0.26 * mix, 0.12, 0);
         playStableTone(ctx, bus, 587.33, 0.15, 0.075 * mix, 'sine', 0.01, 0.004);
         playSubKick(ctx, bus, 94, 34, 0.18, 0.18 * mix);
+        break;
+
+      case 'thunder_loom':
+        // High-voltage 1000⚡ Thiên Lôi Faraday discharge + harmonic polarity hum + deep magnetic snap kick
+        playElectricArc(ctx, bus, 0.28 * mix, 0.12, 0);
+        playElectricArc(ctx, bus, 0.22 * mix, 0.11, 0.045);
+        playStableTone(ctx, bus, 493.88, 0.18, 0.08 * mix, 'triangle', 0.01, 0.004);
+        playStableTone(ctx, bus, 739.99, 0.2, 0.07 * mix, 'sine', 0.035, 0.004);
+        playSubKick(ctx, bus, 96, 26, 0.26, 0.26 * mix);
         break;
 
       // ---- PURE SUPPORT TOWERS (3) ----
@@ -1365,6 +1375,23 @@ export function playOverheatSkillSfx(
           delay: 0.03,
         });
         playSubKick(ctx, bus, 96, 20, 0.5, 0.35 * mix, 0.02);
+        break;
+
+      case 'thunder_loom_heaven_judgement':
+        playElectricArc(ctx, bus, 0.3 * mix, 0.14, 0);
+        playElectricArc(ctx, bus, 0.28 * mix, 0.13, 0.055);
+        playElectricArc(ctx, bus, 0.24 * mix, 0.12, 0.11);
+        playStableTone(ctx, bus, 587.33, 0.24, 0.095 * mix, 'triangle', 0.02, 0.004);
+        playStableTone(ctx, bus, 880, 0.28, 0.095 * mix, 'sine', 0.07, 0.004);
+        playFoleyBuffer(ctx, bus, bus.buffers.explosion, {
+          filterType: 'lowpass',
+          cutoffHz: 1750,
+          rate: 0.84,
+          dur: 0.38,
+          vol: 0.32 * mix,
+          delay: 0.04,
+        });
+        playSubKick(ctx, bus, 96, 22, 0.44, 0.34 * mix, 0.02);
         break;
 
       default:

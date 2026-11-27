@@ -27,6 +27,8 @@ import {
 import {
   applyCoreDamageWithShield,
   applyDamageToEnemy,
+  applyStaticChargeStack,
+  areOppositePolarities,
   AuroraPylonFx,
   BIOME_PALETTES,
   buildWaveSpawns,
@@ -38,6 +40,7 @@ import {
   computeChronoFieldRecord,
   computeElectricWetSynergy,
   computeOverdriveTimeChargeGain,
+  computePointToSegmentDistance,
   computeQuantumEchoTargets,
   computeSingularitySwallowGrowth,
   computeTeamSupportBuffAtTile,
@@ -62,6 +65,7 @@ import {
   getGunSellRefund,
   getGunUpgradeCost,
   getMothershipMaxDrones,
+  getThunderLoomMaxWires,
   getTileKind,
   gridToWorldCenter,
   GUN_CATALOG,
@@ -72,6 +76,7 @@ import {
   isSupportGunType,
   isWetZoneTile,
   LightningArc,
+  LightningTetherWire,
   MAX_GUN_LEVEL,
   OrbitalBeamFx,
   OrbitalRadiationZone,
@@ -115,6 +120,7 @@ import {
   drawGroundCraters,
   drawGunTurretSprite,
   drawLightningArcEnhanced,
+  drawLightningTetherWires,
   drawOrbitalBeamsAndZones,
   drawOverheatSpecialFx,
   drawProjectileEnhanced,
@@ -467,6 +473,7 @@ export function PrismTdGameSection({
     projectiles: ProjectileItem[];
     lightningArcs: LightningArc[];
     railBeams: RailBeamFx[];
+    lightningWires: LightningTetherWire[];
     flameCones: FlameConeFx[];
     healBeams: { fromX: number; fromY: number; toX: number; toY: number; alpha: number }[];
     muzzleFlashes: MuzzleFlashFx[];
@@ -530,6 +537,7 @@ export function PrismTdGameSection({
     projectiles: [],
     lightningArcs: [],
     railBeams: [],
+    lightningWires: [],
     flameCones: [],
     healBeams: [],
     muzzleFlashes: [],
@@ -788,6 +796,7 @@ export function PrismTdGameSection({
       s.voidRifts = [];
       s.quantumArcs = [];
       s.auroraPylons = [];
+      s.lightningWires = [];
       s.floatingTexts = [];
       s.spawnQueue = [];
       s.waveElapsed = 0;
@@ -1138,6 +1147,7 @@ export function PrismTdGameSection({
     s.guns.splice(idx, 1);
     s.carrierDrones = s.carrierDrones.filter((d) => d.sourceGunId !== target.id);
     s.auroraPylons = s.auroraPylons.filter((p) => p.sourceGunId !== target.id);
+    s.lightningWires = s.lightningWires.filter((w) => w.sourceGunId !== target.id);
     s.energy += refund;
     s.selectedGunId = null;
     s.selectedGunVersion += 1;
@@ -2179,6 +2189,61 @@ export function PrismTdGameSection({
           }
         };
 
+        const triggerThunderShortCircuit = (
+          centerEn: TdEnemy,
+          baseDmg: number,
+          bossPct: number,
+          burstRadius: number,
+          gunId: string | undefined,
+          armorPierce: number,
+          shieldMult: number
+        ) => {
+          s.impactFlashes.push({
+            x: centerEn.x,
+            y: centerEn.y,
+            radius: Math.min(72, Math.max(36, burstRadius * 0.65)),
+            alpha: 1,
+            color: '#FDE047',
+            spikes: 8,
+            rot: s.animTime * 2,
+          });
+          s.shockwaves.push({
+            x: centerEn.x,
+            y: centerEn.y,
+            radius: 10,
+            maxRadius: burstRadius,
+            alpha: 0.95,
+            color: '#60A5FA',
+            lineWidth: 3.2,
+          });
+          emitParticles(centerEn.x, centerEn.y, '#FDE047', 16, 175, 1.25);
+          pushCombatText(centerEn.x, centerEn.y - 18, '⚡ NGẮN MẠCH THIÊN LÔI!', '#FDE047', 1.16);
+          let interruptedBoss = false;
+          for (const aoeEn of s.enemies) {
+            if (aoeEn.hp <= 0 || aoeEn.koTimer > 0) continue;
+            if (Math.hypot(aoeEn.x - centerEn.x, aoeEn.y - centerEn.y) <= burstRadius + aoeEn.radius) {
+              if (interruptEnemyWindup(aoeEn)) interruptedBoss = true;
+              aoeEn.stunTimer = Math.max(aoeEn.stunTimer, 0.45);
+              aoeEn.shockTimer = Math.max(aoeEn.shockTimer, 1.0);
+              aoeEn.armorShred = Math.max(aoeEn.armorShred, 0.18);
+              const isBossTier = aoeEn.kind === 'boss' || aoeEn.kind === 'super_boss';
+              const bossPctDmg = isBossTier
+                ? Math.min(Math.round(baseDmg * 2.2), Math.round(aoeEn.maxHp * bossPct))
+                : 0;
+              const distMult = aoeEn.id === centerEn.id ? 1.25 : 0.78;
+              const burstDmg = Math.round(baseDmg * distMult) + bossPctDmg;
+              const scRes = applyDamageToEnemy(aoeEn, burstDmg, {
+                armorPierce: Math.max(0.92, armorPierce),
+                shieldMult: Math.max(2.2, shieldMult),
+              });
+              recordDamageTelemetry(aoeEn, scRes.actualDamage, gunId, 0);
+              if (scRes.killed) recordKill(aoeEn, gunId);
+            }
+          }
+          if (interruptedBoss) playSynthFx('interrupt', soundEnabled, audioCtxRef);
+          playSynthFx('explosion', soundEnabled, audioCtxRef);
+        };
+
         const spawnCasing = (ox: number, oy: number, angle: number, color = '#FBBF24') => {
           if (s.shellCasings.length >= 64) s.shellCasings.shift();
           const ejectA = angle + Math.PI * 0.58 + (Math.random() - 0.5) * 0.45;
@@ -3116,6 +3181,71 @@ export function PrismTdGameSection({
             }
             if (interruptedAny) playSynthFx('interrupt', soundEnabled, audioCtxRef);
             pushCombatText(centerPt.x, centerPt.y - 24, '⚡ BÃO TỪ CỰC QUANG!', '#2DD4BF', 1.14);
+          } else if (gun.type === 'thunder_loom') {
+            const centerPt = target ? { x: target.x, y: target.y } : origin;
+            s.overheatEffects.push({
+              kind: 'thunder_matrix',
+              x: origin.x,
+              y: origin.y,
+              radius: Math.round(profile.rangePx * 1.15 * odSkillRadius),
+              angle: gun.aimAngle,
+              life: 0.92,
+              maxLife: 0.92,
+              color: '#60A5FA',
+            });
+            const matrixTargets = [...liveEnemies]
+              .filter((e) => Math.hypot(e.x - origin.x, e.y - origin.y) <= profile.rangePx * 1.45)
+              .sort((a, b) => b.hp + b.shield - (a.hp + a.shield))
+              .slice(0, 8);
+            let interruptedAny = false;
+            for (let mIdx = 0; mIdx < matrixTargets.length; mIdx++) {
+              const mEn = matrixTargets[mIdx];
+              mEn.polarityTag = mIdx % 2 === 0 ? '+' : '-';
+              mEn.polarityTimer = 7.5 * odSkillDur;
+              mEn.shockTimer = Math.max(mEn.shockTimer, 1.3);
+              mEn.stunTimer = Math.max(mEn.stunTimer, 0.55);
+              if (interruptEnemyWindup(mEn)) interruptedAny = true;
+              const nextEn = matrixTargets[(mIdx + 1) % matrixTargets.length];
+              if (nextEn && nextEn.id !== mEn.id) {
+                const midX = (mEn.x + nextEn.x) * 0.5;
+                const midY = (mEn.y + nextEn.y) * 0.5;
+                pullEnemyAlongTrack(mEn, s.map, midX, midY, 18);
+                pullEnemyAlongTrack(nextEn, s.map, midX, midY, 18);
+                s.lightningWires.push({
+                  id: s.nextProjId++,
+                  sourceGunId: gun.id,
+                  enemyAId: mEn.id,
+                  enemyBId: nextEn.id,
+                  ax: mEn.x,
+                  ay: mEn.y,
+                  bx: nextEn.x,
+                  by: nextEn.y,
+                  dps: Math.round(shotDmg * 0.92 * odSkillDmg),
+                  pullForce: profile.pullForce,
+                  armorPierce: 1,
+                  shieldMult: profile.shieldMult + 0.45,
+                  life: 6.5 * odSkillDur,
+                  maxLife: 6.5 * odSkillDur,
+                  level: gun.level,
+                  variant: gun.variant ?? 'alpha',
+                  isOverdrive: s.overdriveTimer > 0,
+                  arcTickTimer: 0.08,
+                });
+              }
+              if (mIdx < 3) {
+                triggerThunderShortCircuit(
+                  mEn,
+                  Math.round(shotDmg * 1.35 * odSkillDmg),
+                  Math.max(0.06, profile.brittleBonus * 1.15),
+                  Math.round(profile.splashRadius * 1.2 * odSkillRadius),
+                  gun.id,
+                  1,
+                  profile.shieldMult + 0.5
+                );
+              }
+            }
+            if (interruptedAny) playSynthFx('interrupt', soundEnabled, audioCtxRef);
+            pushCombatText(centerPt.x, centerPt.y - 26, '⚡ THIÊN LA ĐỊA VÕNG 1000⚡!', '#FDE047', 1.2);
           } else if (gun.type === 'aurelia_cannon') {
             s.overheatEffects.push({
               kind: 'solar_bounty',
@@ -3716,7 +3846,8 @@ export function PrismTdGameSection({
               }
 
               const falloff = Math.max(0.54, 1 - j * 0.075);
-              const zapDmg = Math.round(shotDmg * falloff * syn.damageMult);
+              const thunderResMult = (cur.electroCharge ?? 0) > 0 || (cur.polarityTimer ?? 0) > 0 ? 1.25 : 1;
+              const zapDmg = Math.round(shotDmg * falloff * syn.damageMult * thunderResMult);
               cur.slowTimer = Math.max(cur.slowTimer, 1.4 + gun.level * 0.1);
               cur.slowFactor = Math.min(cur.slowFactor || 1, 1 - profile.slowPct);
               cur.shockTimer = Math.max(cur.shockTimer, Math.max(0.45, syn.shockSec));
@@ -3751,7 +3882,7 @@ export function PrismTdGameSection({
                   spikes: 6,
                   rot: Math.random() * Math.PI,
                 });
-                const thunderDmg = Math.round(shotDmg * 0.45 * syn.damageMult);
+                const thunderDmg = Math.round(shotDmg * 0.45 * syn.damageMult * thunderResMult);
                 for (const aoeEn of liveEnemies) {
                   if (aoeEn.id === cur.id || aoeEn.hp <= 0 || aoeEn.koTimer > 0) continue;
                   if (Math.hypot(aoeEn.x - cur.x, aoeEn.y - cur.y) <= thunderSplash + aoeEn.radius) {
@@ -4771,6 +4902,150 @@ export function PrismTdGameSection({
               color: '#2DD4BF',
             });
             playSynthFx('aurora_spire', soundEnabled, audioCtxRef);
+          } else if (gun.type === 'thunder_loom') {
+            const boltCount = profile.projectilesPerShot + teamBuff.bonusMultishot;
+            const inRangeTargets = [...liveEnemies]
+              .filter((e) => (e.x - origin.x) ** 2 + (e.y - origin.y) ** 2 <= rangeSq)
+              .sort((a, b) => {
+                // Prioritize targets without polarity tag yet so opposite polarities pair across the wave
+                const aPol = (a.polarityTimer ?? 0) > 0 ? 1 : 0;
+                const bPol = (b.polarityTimer ?? 0) > 0 ? 1 : 0;
+                if (aPol !== bPol) return aPol - bPol;
+                return b.hp + b.shield - (a.hp + a.shield);
+              });
+            const struckEnemies: TdEnemy[] = [];
+            const baseSeedPolarity = Math.floor(s.animTime * 2) % 2 === 0;
+            const perBoltDmg = boltCount >= 4 ? Math.round(shotDmg * 0.68) : boltCount === 3 ? Math.round(shotDmg * 0.78) : shotDmg;
+            const maxWiresForGun = getThunderLoomMaxWires(gun.level, gun.variant ?? 'alpha') + (s.overdriveTimer > 0 ? 2 : 0);
+
+            for (let bIdx = 0; bIdx < boltCount; bIdx++) {
+              const en = inRangeTargets[bIdx % Math.max(1, inRangeTargets.length)] ?? target;
+              if (!en || en.hp <= 0 || en.koTimer > 0) continue;
+              const pol: '+' | '-' = (bIdx % 2 === 0) === baseSeedPolarity ? '+' : '-';
+              en.polarityTag = pol;
+              en.polarityTimer = 6.5;
+              en.shockTimer = Math.max(en.shockTimer, 0.95);
+              en.slowTimer = Math.max(en.slowTimer, 1.35);
+              en.slowFactor = Math.min(en.slowFactor || 1, 1 - profile.slowPct);
+
+              const syn = computeElectricWetSynergy(en, gun.level);
+              if (gun.level >= 3 && interruptEnemyWindup(en)) {
+                pushCombatText(en.x, en.y - 16, '⚡ THIÊN LÔI NGẮT CHIÊU!', '#60A5FA', 1.1);
+                playSynthFx('interrupt', soundEnabled, audioCtxRef);
+              }
+
+              const midX = (origin.x + en.x) * 0.5 + (Math.random() * 18 - 9);
+              const midY = (origin.y + en.y) * 0.5 + (Math.random() * 18 - 9);
+              s.lightningArcs.push({
+                points: [{ x: origin.x, y: origin.y }, { x: midX, y: midY }, { x: en.x, y: en.y }],
+                alpha: 1,
+                color: pol === '+' ? '#FDE047' : '#60A5FA',
+                width: 3.1 + profile.visualTier * 0.35,
+                isWetOverdrive: syn.isWetSynergy,
+                branches: [{ x1: midX, y1: midY, x2: midX + (Math.random() * 24 - 12), y2: midY + (Math.random() * 24 - 12) }],
+              });
+              emitParticles(en.x, en.y, pol === '+' ? '#FDE047' : '#60A5FA', 8, 125, 1.05);
+
+              // Snap opposite-polarity neighbor toward this target along track
+              const oppositeNeighbor = liveEnemies.find(
+                (other) =>
+                  other.id !== en.id &&
+                  other.hp > 0 &&
+                  other.koTimer <= 0 &&
+                  areOppositePolarities(en.polarityTag, other.polarityTag) &&
+                  Math.hypot(other.x - en.x, other.y - en.y) <= 220
+              );
+              if (oppositeNeighbor) {
+                pullEnemyAlongTrack(oppositeNeighbor, s.map, en.x, en.y, Math.min(18, profile.pullForce * 0.28));
+              }
+
+              const boltRes = applyDamageToEnemy(en, Math.round(perBoltDmg * syn.damageMult), {
+                armorPierce: profile.armorPierce,
+                shieldMult: profile.shieldMult + syn.shieldMultBonus,
+              });
+              recordDamageTelemetry(en, boltRes.actualDamage, gun.id, 0.045);
+              if (didCrit && bIdx === 0 && boltRes.actualDamage > 0) {
+                pushCombatText(en.x, en.y - 12, `CHÍ MẠNG! -${Math.round(boltRes.actualDamage)}`, '#FDE047', 1.08);
+              }
+              if (boltRes.killed) {
+                recordKill(en, gun.id);
+              } else {
+                const stackAdd = (gun.variant === 'omega' ? 2 : 1) + (syn.isWetSynergy ? 1 : 0);
+                const stackRes = applyStaticChargeStack(en, stackAdd);
+                if (stackRes.triggeredShortCircuit) {
+                  triggerThunderShortCircuit(
+                    en,
+                    Math.round(shotDmg * 1.45),
+                    profile.brittleBonus,
+                    profile.splashRadius,
+                    gun.id,
+                    profile.armorPierce,
+                    profile.shieldMult
+                  );
+                }
+                struckEnemies.push(en);
+              }
+            }
+
+            // Weave live Lightning Tether Wires between struck enemies and opposite-polarity/nearby partners
+            for (const anchorEn of struckEnemies) {
+              if (anchorEn.hp <= 0 || anchorEn.koTimer > 0) continue;
+              let partner: TdEnemy | null = null;
+              let bestScore = Infinity;
+              for (const cand of liveEnemies) {
+                if (cand.id === anchorEn.id || cand.hp <= 0 || cand.koTimer > 0) continue;
+                const d = Math.hypot(cand.x - anchorEn.x, cand.y - anchorEn.y);
+                if (d > 260) continue;
+                const alreadyLinked = s.lightningWires.some(
+                  (w) =>
+                    (w.enemyAId === anchorEn.id && w.enemyBId === cand.id) ||
+                    (w.enemyAId === cand.id && w.enemyBId === anchorEn.id)
+                );
+                if (alreadyLinked) continue;
+                const oppBonus = areOppositePolarities(anchorEn.polarityTag, cand.polarityTag) ? 0.35 : 1;
+                const score = d * oppBonus;
+                if (score < bestScore) {
+                  bestScore = score;
+                  partner = cand;
+                }
+              }
+              if (partner) {
+                const gunWires = s.lightningWires.filter((w) => w.sourceGunId === gun.id);
+                if (gunWires.length >= maxWiresForGun) {
+                  const oldestIdx = s.lightningWires.findIndex((w) => w.sourceGunId === gun.id);
+                  if (oldestIdx >= 0) s.lightningWires.splice(oldestIdx, 1);
+                }
+                s.lightningWires.push({
+                  id: s.nextProjId++,
+                  sourceGunId: gun.id,
+                  enemyAId: anchorEn.id,
+                  enemyBId: partner.id,
+                  ax: anchorEn.x,
+                  ay: anchorEn.y,
+                  bx: partner.x,
+                  by: partner.y,
+                  dps: Math.round(shotDmg * 0.72),
+                  pullForce: profile.pullForce,
+                  armorPierce: profile.armorPierce,
+                  shieldMult: profile.shieldMult,
+                  life: 5.5,
+                  maxLife: 5.5,
+                  level: gun.level,
+                  variant: gun.variant ?? 'alpha',
+                  isOverdrive: s.overdriveTimer > 0,
+                  arcTickTimer: 0.18,
+                });
+              }
+            }
+            s.muzzleFlashes.push({
+              x: origin.x,
+              y: origin.y,
+              angle: gun.aimAngle,
+              radius: 23 + profile.visualTier * 2.5,
+              alpha: 0.96,
+              color: '#60A5FA',
+            });
+            playSynthFx('thunder_loom', soundEnabled, audioCtxRef);
           } else if (gun.type === 'aurelia_cannon') {
             const count = profile.projectilesPerShot + teamBuff.bonusMultishot;
             const perLanceDmg = count >= 3 ? Math.round(shotDmg * 0.56) : count === 2 ? Math.round(shotDmg * 0.72) : shotDmg;
@@ -5556,6 +5831,7 @@ export function PrismTdGameSection({
                 const dist = Math.hypot(en.x - pr.x, en.y - pr.y);
                 if (dist <= effSplash + en.radius) {
                   const enSyn = computeElectricWetSynergy(en, sourceLevel);
+                  const enResMult = (en.electroCharge ?? 0) > 0 || (en.polarityTimer ?? 0) > 0 ? 1.25 : 1;
                   en.slowTimer = Math.max(en.slowTimer, 1.6);
                   en.slowFactor = Math.min(en.slowFactor || 1, 1 - Math.min(0.38, pr.slowAmount));
                   en.shockTimer = Math.max(en.shockTimer, Math.max(0.55, enSyn.shockSec));
@@ -5566,7 +5842,7 @@ export function PrismTdGameSection({
                     pushCombatText(en.x, en.y - 16, '⚡ NGẮT CHIÊU!', '#38BDF8', 1.06);
                     playSynthFx('interrupt', soundEnabled, audioCtxRef);
                   }
-                  const orbHitDmg = Math.round(pr.damage * (dist < 28 ? 1 : 0.72) * enSyn.damageMult);
+                  const orbHitDmg = Math.round(pr.damage * (dist < 28 ? 1 : 0.72) * enSyn.damageMult * enResMult);
                   const res = applyDamageToEnemy(en, orbHitDmg, {
                     armorPierce: pr.armorPierce,
                     shieldMult: pr.shieldMult + enSyn.shieldMultBonus,
@@ -5597,7 +5873,8 @@ export function PrismTdGameSection({
                       ? [{ x1: midX, y1: midY, x2: midX + (Math.random() * 26 - 13), y2: midY + (Math.random() * 26 - 13) }]
                       : undefined,
                   });
-                  const arcRes = applyDamageToEnemy(arcTarget, Math.round(pr.damage * 0.58 * hitSyn.damageMult), {
+                  const arcResMult = (arcTarget.electroCharge ?? 0) > 0 || (arcTarget.polarityTimer ?? 0) > 0 ? 1.25 : 1;
+                  const arcRes = applyDamageToEnemy(arcTarget, Math.round(pr.damage * 0.58 * hitSyn.damageMult * arcResMult), {
                     armorPierce: pr.armorPierce,
                     shieldMult: pr.shieldMult + hitSyn.shieldMultBonus,
                   });
@@ -6357,7 +6634,8 @@ export function PrismTdGameSection({
                   width: 2.5,
                   isWetOverdrive: syn.isWetSynergy,
                 });
-                const res = applyDamageToEnemy(tEn, Math.round(pulseDmg * syn.damageMult), {
+                const tEnResMult = (tEn.electroCharge ?? 0) > 0 || (tEn.polarityTimer ?? 0) > 0 ? 1.25 : 1;
+                const res = applyDamageToEnemy(tEn, Math.round(pulseDmg * syn.damageMult * tEnResMult), {
                   armorPierce: pylon.armorPierce,
                   shieldMult: pylon.shieldMult + syn.shieldMultBonus,
                 });
@@ -6368,6 +6646,110 @@ export function PrismTdGameSection({
             survivingPylons.push(pylon);
           }
           s.auroraPylons = survivingPylons;
+        }
+
+        // 4h. Step Thiên Lôi 1000⚡ Live Lightning Tether Wires (opposite-polarity pull + crossing shear DPS + death discharge + Short-Circuit)
+        if (s.lightningWires.length > 0) {
+          const survivingWires: LightningTetherWire[] = [];
+          const enemyMap = new Map<number, TdEnemy>();
+          for (const e of s.enemies) {
+            if (e.hp > 0 && e.koTimer <= 0) enemyMap.set(e.id, e);
+          }
+          for (const wire of s.lightningWires) {
+            wire.life -= simDt;
+            if (wire.life <= 0) continue;
+            if (s.overdriveTimer > 0) wire.isOverdrive = true;
+
+            const enA = enemyMap.get(wire.enemyAId);
+            const enB = enemyMap.get(wire.enemyBId);
+            if (!enA || !enB) {
+              // Endpoint died: discharge final stored arc across remaining cable
+              const survivor = enA ?? enB;
+              if (survivor) {
+                const dRes = applyDamageToEnemy(survivor, Math.round(wire.dps * 0.85 * overdriveSkillMult), {
+                  armorPierce: wire.armorPierce,
+                  shieldMult: wire.shieldMult,
+                });
+                recordDamageTelemetry(survivor, dRes.actualDamage, wire.sourceGunId, 0);
+                if (dRes.killed) recordKill(survivor, wire.sourceGunId);
+              }
+              s.lightningArcs.push({
+                points: [
+                  { x: wire.ax, y: wire.ay },
+                  { x: (wire.ax + wire.bx) * 0.5 + (Math.random() * 18 - 9), y: (wire.ay + wire.by) * 0.5 + (Math.random() * 18 - 9) },
+                  { x: wire.bx, y: wire.by },
+                ],
+                alpha: 0.95,
+                color: '#FDE047',
+                width: 3.4,
+                isWetOverdrive: true,
+              });
+              continue;
+            }
+
+            wire.ax = enA.x;
+            wire.ay = enA.y;
+            wire.bx = enB.x;
+            wire.by = enB.y;
+            const spanDist = Math.hypot(wire.bx - wire.ax, wire.by - wire.ay);
+            if (spanDist > 340) continue;
+
+            // Opposite polarity endpoints pull toward each other along track
+            if (areOppositePolarities(enA.polarityTag, enB.polarityTag)) {
+              const midX = (wire.ax + wire.bx) * 0.5;
+              const midY = (wire.ay + wire.by) * 0.5;
+              const stepPull = Math.min(8, wire.pullForce * simDt * 0.45);
+              pullEnemyAlongTrack(enA, s.map, midX, midY, stepPull);
+              pullEnemyAlongTrack(enB, s.map, midX, midY, stepPull);
+            }
+
+            wire.arcTickTimer -= simDt;
+            if (wire.arcTickTimer <= 0) {
+              wire.arcTickTimer = 0.35;
+              const wireTickDmg = Math.round(wire.dps * 0.35 * overdriveSkillMult);
+              const hitByWireIds = new Set<number>();
+              for (const en of s.enemies) {
+                if (en.hp <= 0 || en.koTimer > 0) continue;
+                const isEndpoint = en.id === enA.id || en.id === enB.id;
+                const distToWire = isEndpoint
+                  ? 0
+                  : computePointToSegmentDistance(en.x, en.y, wire.ax, wire.ay, wire.bx, wire.by);
+                if (isEndpoint || distToWire <= 20 + en.radius) {
+                  if (hitByWireIds.has(en.id)) continue;
+                  hitByWireIds.add(en.id);
+                  en.shockTimer = Math.max(en.shockTimer, 0.5);
+                  if (wire.level >= 3 && interruptEnemyWindup(en)) {
+                    pushCombatText(en.x, en.y - 16, '⚡ CÁP SÉT NGẮT CHIÊU!', '#60A5FA', 1.06);
+                    playSynthFx('interrupt', soundEnabled, audioCtxRef);
+                  }
+                  const syn = computeElectricWetSynergy(en, wire.level);
+                  const wRes = applyDamageToEnemy(en, Math.round(wireTickDmg * syn.damageMult * (isEndpoint ? 1 : 1.15)), {
+                    armorPierce: wire.armorPierce,
+                    shieldMult: wire.shieldMult + syn.shieldMultBonus,
+                  });
+                  recordDamageTelemetry(en, wRes.actualDamage, wire.sourceGunId, 0.03);
+                  if (wRes.killed) {
+                    recordKill(en, wire.sourceGunId);
+                  } else {
+                    const stackRes = applyStaticChargeStack(en, 1);
+                    if (stackRes.triggeredShortCircuit) {
+                      triggerThunderShortCircuit(
+                        en,
+                        Math.round(wire.dps * 1.65),
+                        wire.level >= 7 ? 0.08 : 0.055,
+                        wire.level >= 7 ? 115 : 95,
+                        wire.sourceGunId,
+                        wire.armorPierce,
+                        wire.shieldMult
+                      );
+                    }
+                  }
+                }
+              }
+            }
+            survivingWires.push(wire);
+          }
+          s.lightningWires = survivingWires;
         }
 
         // 5. Update transient FX (speed-scaled so 1x/2x/3x weapon FX stay crisp without stacking)
@@ -6701,6 +7083,7 @@ export function PrismTdGameSection({
             areaAlpha
           );
           drawAuroraPylons(ctx, s.auroraPylons, s.animTime, areaAlpha);
+          drawLightningTetherWires(ctx, s.lightningWires, s.animTime, vfxDamp.beamAlphaScale);
           drawOverheatSpecialFx(
             ctx,
             s.overheatEffects.slice(-clutterBudget.maxOverheatEffects),
@@ -7465,14 +7848,14 @@ export function PrismTdGameSection({
                   className="w-full h-auto rounded-lg block border border-slate-800"
                 />
                 <p className="text-xs mobile-ls:text-[10px] text-slate-400 text-center">
-                  Kho <strong className="text-amber-300">{GUN_CATALOG.length} súng</strong> (19 Công · 3 Điện · 4 Hỗ Trợ · 3 Độc Quyền Màn) · <strong className="text-rose-300">Siêu Boss 2 Pha</strong>
+                  Kho <strong className="text-amber-300">{GUN_CATALOG.length} súng</strong> (19 Công · 4 Điện · 4 Hỗ Trợ · 3 Độc Quyền Màn) · <strong className="text-rose-300">Siêu Boss 2 Pha</strong>
                 </p>
               </div>
             </div>
           </div>
 
           <p className="text-[11px] font-mono text-slate-400 border-t border-slate-800/80 pt-3 mobile-ls:pt-2 mobile-ls:text-[10px] text-center">
-            1-7, A Khúc Xạ, S Hyperion, K Khiên Aegis, Z/X/C/V/B/N Công · F/G/H Độc Quyền · 8/9/D Điện · 0/Q/E/W Hỗ Trợ · U nâng ×1.9 · Space Hỏa Lực
+            1-7, A Khúc Xạ, S Hyperion, K Khiên Aegis, Z/X/C/V/B/N Công · F/G/H Độc Quyền · 8/9/D/L Điện · 0/Q/E/W Hỗ Trợ · U nâng ×1.9 · Space Hỏa Lực
           </p>
         </div>
       )}
@@ -8773,11 +9156,12 @@ export function PrismTdGameSection({
                           const canAfford = hud.energy >= item.cost;
                           const isElectric = isElectricGunType(item.type);
                           const isSupport = isSupportGunType(item.type);
-                          const isApexAttack = !isSupport && item.cost >= 1200;
-                          const isTranscendent = !isSupport && item.cost >= 700 && item.cost < 1200;
+                          const isApexAttack = !isSupport && !isElectric && item.cost >= 1200;
+                          const isSupremeElectric = isElectric && item.cost >= 1000;
+                          const isTranscendent = !isSupport && !isElectric && item.cost >= 700 && item.cost < 1200;
                           const isSupremeSupport = isSupport && item.cost >= 500;
-                          const isSupreme = !isSupport && item.cost >= 500 && item.cost < 700;
-                          const spanClass = isApexAttack || isTranscendent
+                          const isSupreme = !isSupport && !isElectric && item.cost >= 500 && item.cost < 700;
+                          const spanClass = isApexAttack || isSupremeElectric || isTranscendent
                             ? useSidebarTheater
                               ? 'lg:col-span-3'
                               : 'md:col-span-4'
@@ -8789,11 +9173,13 @@ export function PrismTdGameSection({
                           const costClass = canAfford
                             ? isApexAttack
                               ? 'text-fuchsia-300'
-                              : isTranscendent
-                                ? 'text-cyan-300'
-                                : isSupremeSupport
-                                  ? 'text-emerald-300'
-                                  : 'text-amber-300'
+                              : isSupremeElectric
+                                ? 'text-blue-200'
+                                : isTranscendent
+                                  ? 'text-cyan-300'
+                                  : isSupremeSupport
+                                    ? 'text-emerald-300'
+                                    : 'text-amber-300'
                             : 'text-rose-400';
                           return (
                             <button
@@ -8823,17 +9209,19 @@ export function PrismTdGameSection({
                                   ? 'bg-amber-950/65 border-amber-400 text-white shadow-[0_0_0_1px_rgba(251,191,36,0.45)]'
                                   : isApexAttack
                                     ? 'bg-gradient-to-r from-fuchsia-950/50 via-[#150826] to-rose-950/40 border-fuchsia-400/75 text-fuchsia-50 hover:border-fuchsia-300'
-                                    : isTranscendent
-                                      ? 'bg-gradient-to-r from-cyan-950/45 via-[#0B172B] to-violet-950/40 border-cyan-400/70 text-cyan-50 hover:border-cyan-300'
-                                      : isSupremeSupport
-                                        ? 'bg-gradient-to-r from-emerald-950/50 via-[#071C1B] to-teal-950/45 border-emerald-400/75 text-emerald-50 hover:border-emerald-300'
-                                        : isSupreme
-                                          ? 'bg-amber-950/30 border-amber-400/65 text-amber-50 hover:border-amber-300'
-                                          : isElectric
-                                            ? 'bg-sky-950/30 border-sky-500/50 text-sky-100 hover:border-sky-400'
-                                            : isSupport
-                                              ? 'bg-emerald-950/25 border-emerald-500/45 text-emerald-100 hover:border-emerald-400'
-                                              : 'bg-slate-900/90 border-slate-700/80 text-slate-200 hover:border-slate-500'
+                                    : isSupremeElectric
+                                      ? 'bg-gradient-to-r from-blue-950/60 via-[#07152B] to-amber-950/35 border-blue-400/80 text-blue-50 hover:border-blue-300'
+                                      : isTranscendent
+                                        ? 'bg-gradient-to-r from-cyan-950/45 via-[#0B172B] to-violet-950/40 border-cyan-400/70 text-cyan-50 hover:border-cyan-300'
+                                        : isSupremeSupport
+                                          ? 'bg-gradient-to-r from-emerald-950/50 via-[#071C1B] to-teal-950/45 border-emerald-400/75 text-emerald-50 hover:border-emerald-300'
+                                          : isSupreme
+                                            ? 'bg-amber-950/30 border-amber-400/65 text-amber-50 hover:border-amber-300'
+                                            : isElectric
+                                              ? 'bg-sky-950/30 border-sky-500/50 text-sky-100 hover:border-sky-400'
+                                              : isSupport
+                                                ? 'bg-emerald-950/25 border-emerald-500/45 text-emerald-100 hover:border-emerald-400'
+                                                : 'bg-slate-900/90 border-slate-700/80 text-slate-200 hover:border-slate-500'
                               }`}
                             >
                               <div className="flex items-center gap-1.5">
@@ -8848,7 +9236,7 @@ export function PrismTdGameSection({
                                       <span className="hidden lg:inline">[{item.hotkey.toUpperCase()}] </span>
                                       {isCompactTheater || isPortraitMobile
                                         ? getGunMobileShortName(item.type)
-                                        : isApexAttack || isTranscendent || isSupremeSupport
+                                        : isApexAttack || isSupremeElectric || isTranscendent || isSupremeSupport
                                           ? item.name
                                           : item.shortName}
                                     </span>
@@ -8869,30 +9257,34 @@ export function PrismTdGameSection({
                                 className={`mobile-ls:hidden ${isPortraitMobile ? 'hidden' : ''} text-[9px] truncate mt-0.5 ${
                                   isApexAttack
                                     ? 'text-fuchsia-200/90 font-semibold'
-                                    : isTranscendent
-                                      ? 'text-cyan-200/90 font-semibold'
-                                      : isSupremeSupport
-                                        ? 'text-emerald-300 font-semibold'
-                                        : isElectric
-                                          ? 'text-sky-300/90 font-semibold'
-                                          : isSupport
-                                            ? 'text-emerald-300/90'
-                                            : 'text-slate-400'
+                                    : isSupremeElectric
+                                      ? 'text-blue-200/95 font-semibold'
+                                      : isTranscendent
+                                        ? 'text-cyan-200/90 font-semibold'
+                                        : isSupremeSupport
+                                          ? 'text-emerald-300 font-semibold'
+                                          : isElectric
+                                            ? 'text-sky-300/90 font-semibold'
+                                            : isSupport
+                                              ? 'text-emerald-300/90'
+                                              : 'text-slate-400'
                                 }`}
                               >
                                 {item.exclusiveMapId
                                   ? `★ ĐỘC QUYỀN · ${item.roleClue}`
-                                  : isElectric
-                                    ? '⚡ Hệ Điện'
-                                    : isSupremeSupport
-                                      ? `✦ Thuần Hỗ Trợ 500⚡ · ${item.roleClue}`
-                                      : isSupport
-                                        ? '✦ Thuần Hỗ Trợ'
-                                        : isApexAttack
-                                          ? `✦ Tối Thượng 1200⚡ · ${item.roleClue}`
-                                          : isTranscendent
-                                            ? `✦ Siêu Phẩm 700⚡ · ${item.roleClue}`
-                                            : item.roleClue}
+                                  : isSupremeElectric
+                                    ? `⚡ Siêu Phẩm Điện · ${item.roleClue}`
+                                    : isElectric
+                                      ? '⚡ Hệ Điện'
+                                      : isSupremeSupport
+                                        ? `✦ Thuần Hỗ Trợ 500⚡ · ${item.roleClue}`
+                                        : isSupport
+                                          ? '✦ Thuần Hỗ Trợ'
+                                          : isApexAttack
+                                            ? `✦ Tối Thượng 1200⚡ · ${item.roleClue}`
+                                            : isTranscendent
+                                              ? `✦ Siêu Phẩm 700⚡ · ${item.roleClue}`
+                                              : item.roleClue}
                               </p>
                             </button>
                           );

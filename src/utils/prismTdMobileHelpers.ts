@@ -111,6 +111,7 @@ export const GUN_MOBILE_SHORT_NAMES: Record<GunType, string> = {
   tesla: 'Tesla',
   tempest: 'Bão Từ',
   aurora_spire: 'Cực Quang ⚡',
+  thunder_loom: 'Thiên Lôi ⚡',
   beacon: 'Ánh Sáng',
   cryo: 'Đóng Băng',
   radar: 'Rađa',

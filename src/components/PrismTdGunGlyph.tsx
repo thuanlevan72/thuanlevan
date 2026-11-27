@@ -252,5 +252,16 @@ export const PrismTdGunGlyph = memo(function PrismTdGunGlyph({
           <circle cx="14" cy="15" r="2.2" fill="#FFFFFF" />
         </svg>
       );
+    case 'thunder_loom':
+      return (
+        <svg viewBox="0 0 28 28" className={className} aria-hidden="true">
+          <circle cx="14" cy="14" r="10.5" fill="#061229" stroke={color} strokeWidth="1.6" />
+          <circle cx="14" cy="14" r="6.8" fill="none" stroke="#FDE047" strokeWidth="1.15" strokeDasharray="3 2" />
+          <path d="M9 9.5 L19 18.5 M19 9.5 L9 18.5" stroke="#38BDF8" strokeWidth="1.35" strokeLinecap="round" />
+          <circle cx="7.5" cy="9.5" r="2.2" fill="#FDE047" />
+          <circle cx="20.5" cy="18.5" r="2.2" fill="#C084FC" />
+          <polygon points="15,6.5 11.2,14.5 14.5,14.5 13,21.5 16.8,13.5 13.5,13.5" fill="#FFFFFF" stroke={color} strokeWidth="0.6" />
+        </svg>
+      );
   }
 });
