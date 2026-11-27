@@ -4317,10 +4317,13 @@ export function buildWaveSpawns(
       }
     }
 
-    const eliteModulo = Math.max(
+    const eliteBaseModulo = Math.max(
       2,
       Math.round(6 - diffCfg.eliteChanceBoost * 12 - Math.min(2.5, Math.max(0, waveNumber - 2) * 0.35))
     );
+    const latePhaseCutoff = Math.floor(Math.max(4, totalWaves) * 0.7) + 1;
+    const isLateSurgeRound = waveNumber >= latePhaseCutoff;
+    const eliteModulo = isLateSurgeRound ? Math.max(2, eliteBaseModulo - 1) : eliteBaseModulo;
     const isElite =
       kind !== 'boss' &&
       kind !== 'super_boss' &&
@@ -4345,7 +4348,8 @@ export function buildWaveSpawns(
                 ? 0.032
                 : 0)
     );
-    const baseGap = Math.max(0.24, (baseGapRaw * swarmCompression) / modeCfg.spawnRateMult);
+    const latePhaseGapMult = isLateSurgeRound ? 0.94 : 1;
+    const baseGap = Math.max(0.24, (baseGapRaw * swarmCompression * latePhaseGapMult) / modeCfg.spawnRateMult);
     const squadRhythm = mode === 'boss_apocalypse' ? 1.55 : i % 6 === 5 ? 1.48 : 0.92;
     const roleSpacing =
       kind === 'splitter' || kind === 'berserker'
@@ -4368,6 +4372,47 @@ export function boostEnemyKillReward(baseReward: number): number {
   return Math.max(baseReward + 1, Math.round(baseReward * ENEMY_KILL_COIN_BOOST));
 }
 
+export interface WavePhaseDifficultyBoost {
+  readonly isLateSurgePhase: boolean;
+  readonly latePhaseStartWave: number;
+  readonly hpMult: number;
+  readonly shieldMult: number;
+  readonly speedMult: number;
+  readonly difficultyBonusPct: number;
+}
+
+/**
+ * Escalates Thủ Thành Pháo Đài Lv7 difficulty across wave progression:
+ * - Early rounds (first 70%): +10% enemy HP & shield durability (+3% tempo)
+ * - Final 30% rounds (waveNumber > floor(totalWaves * 0.7)): +30% enemy HP & shield durability (+8% tempo)
+ */
+export function getWavePhaseDifficultyBoost(
+  waveNumber: number,
+  totalWaves = 18
+): WavePhaseDifficultyBoost {
+  const safeTotal = Math.max(4, Math.round(totalWaves));
+  const latePhaseStartWave = Math.floor(safeTotal * 0.7) + 1;
+  const isLateSurgePhase = waveNumber >= latePhaseStartWave;
+  if (isLateSurgePhase) {
+    return {
+      isLateSurgePhase: true,
+      latePhaseStartWave,
+      hpMult: 1.3,
+      shieldMult: 1.3,
+      speedMult: 1.08,
+      difficultyBonusPct: 30,
+    };
+  }
+  return {
+    isLateSurgePhase: false,
+    latePhaseStartWave,
+    hpMult: 1.1,
+    shieldMult: 1.1,
+    speedMult: 1.03,
+    difficultyBonusPct: 10,
+  };
+}
+
 export function createEnemyForWave(
   id: number,
   kind: EnemyKind,
@@ -4375,10 +4420,14 @@ export function createEnemyForWave(
   map: TdMapDef,
   isElite = false,
   difficulty: DifficultyId = 'normal',
-  mode: GameModeId = 'campaign'
+  mode: GameModeId = 'campaign',
+  totalWaves?: number
 ): TdEnemy {
   const diffCfg = DIFFICULTY_CONFIGS[difficulty];
   const modeCfg = GAME_MODE_CONFIGS[mode];
+  const effectiveTotalWaves =
+    totalWaves ?? getEffectiveMapSetup(map, difficulty, mode).totalWaves;
+  const phaseBoost = getWavePhaseDifficultyBoost(waveNumber, effectiveTotalWaves);
   const spawnPt = gridToWorldCenter(map.path[0].col, map.path[0].row);
   const nextPt = gridToWorldCenter(map.path[1].col, map.path[1].row);
   const initialHeading = Math.atan2(nextPt.y - spawnPt.y, nextPt.x - spawnPt.x);
@@ -4427,7 +4476,8 @@ export function createEnemyForWave(
     (modeCfg.hpMult ?? 1) *
     mapScale.hpMult *
     openingGrace *
-    bossRushEarlyDamper;
+    bossRushEarlyDamper *
+    phaseBoost.hpMult;
   const shieldWaveSurge = 1 + Math.max(0, waveNumber - 2) * 0.08;
   const shieldScale =
     baseScale *
@@ -4438,9 +4488,11 @@ export function createEnemyForWave(
     (modeCfg.shieldMult ?? 1) *
     mapScale.shieldMult *
     openingGrace *
-    bossRushEarlyDamper;
+    bossRushEarlyDamper *
+    phaseBoost.shieldMult;
   const speedBonus = Math.min(78, effectiveWave * 2.2 + Math.max(0, waveNumber - 3) * 2.4);
-  const totalSpeedMult = diffCfg.speedMult * modeCfg.speedMult * mapScale.speedMult;
+  const totalSpeedMult =
+    diffCfg.speedMult * modeCfg.speedMult * mapScale.speedMult * phaseBoost.speedMult;
   const swarmEconomyDamp = 1 / (1 + Math.max(0, waveNumber - 3) * 0.055);
   const rewardScale =
     diffCfg.rewardMult * modeCfg.rewardMult * mapScale.rewardMult * (isElite ? 1.35 : 1) * 0.56 * swarmEconomyDamp;

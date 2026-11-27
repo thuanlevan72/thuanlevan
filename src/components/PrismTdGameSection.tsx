@@ -82,6 +82,7 @@ import {
   pullEnemyAlongTrack,
   QuantumEchoArcFx,
   RailBeamFx,
+  getWavePhaseDifficultyBoost,
   ShockwaveRing,
   shouldDroneEvadeBossPulse,
   SingularityHole,
@@ -126,6 +127,11 @@ import {
   OverheatFx,
   ShellCasingFx,
 } from '../utils/prismTdRenderer.ts';
+import {
+  bakePrismTdStaticTerrain,
+  drawPrismTdDynamicPathAndLandmarks,
+  drawPrismTdTitleShowcaseBackdrop,
+} from '../utils/prismTdTerrainRenderer.ts';
 import {
   playOverheatSkillSfx,
   playPrismSfx,
@@ -893,10 +899,14 @@ export function PrismTdGameSection({
     s.nextWaveTimer = 0;
     s.spawnQueue = buildWaveSpawns(nextWave, s.totalWaves, s.difficulty, s.gameMode);
     const waveLabel = s.gameMode === 'endless' ? `${nextWave}/∞` : `${nextWave}/${s.totalWaves}`;
+    const phaseBoost = getWavePhaseDifficultyBoost(nextWave, s.totalWaves);
+    const surgeSuffix = phaseBoost.isLateSurgePhase
+      ? ' · ⚠️ 30% ĐỢT CUỐI: Quái +30% sức mạnh!'
+      : ' · +10% độ khó đợt đầu';
     setStatusNotice(
       earlyBonus > 0
-        ? `Gọi sớm Đợt ${waveLabel} (+${earlyBonus}⚡)! Nâng súng lên Lv3 / Lv5 / Lv7 (tối đa Lv7)!`
-        : `Đợt ${waveLabel} (${GAME_MODE_CONFIGS[s.gameMode].label} · ${DIFFICULTY_CONFIGS[s.difficulty].label}) tiến công!`
+        ? `Gọi sớm Đợt ${waveLabel} (+${earlyBonus}⚡)${surgeSuffix}`
+        : `Đợt ${waveLabel} (${GAME_MODE_CONFIGS[s.gameMode].label} · ${DIFFICULTY_CONFIGS[s.difficulty].label})${surgeSuffix}`
     );
     playSynthFx('wave', soundEnabled, audioCtxRef);
     syncHudFromSim();
@@ -1687,34 +1697,7 @@ export function PrismTdGameSection({
           }
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-          ctx.fillStyle = '#060A15';
-          ctx.fillRect(0, 0, w, h);
-
-          // Tactical grid
-          ctx.strokeStyle = 'rgba(56, 189, 248, 0.09)';
-          ctx.lineWidth = 1;
-          for (let gx = 24; gx < w; gx += 32) {
-            ctx.beginPath();
-            ctx.moveTo(gx, 0);
-            ctx.lineTo(gx, h);
-            ctx.stroke();
-          }
-          for (let gy = 24; gy < h; gy += 32) {
-            ctx.beginPath();
-            ctx.moveTo(0, gy);
-            ctx.lineTo(w, gy);
-            ctx.stroke();
-          }
-
-          // Road track at top/right
-          ctx.strokeStyle = 'rgba(244, 63, 94, 0.25)';
-          ctx.lineWidth = 28;
-          ctx.lineCap = 'round';
-          ctx.beginPath();
-          ctx.moveTo(30, 86);
-          ctx.lineTo(350, 86);
-          ctx.lineTo(350, 212);
-          ctx.stroke();
+          drawPrismTdTitleShowcaseBackdrop(ctx, w, h, t);
 
           // Mock Showcase Enemies moving smoothly along lane (Super Boss + Shieldbearer)
           const bossX = 210 + Math.sin(t * 0.9) * 75;
@@ -2100,8 +2083,11 @@ export function PrismTdGameSection({
             s.waveActive = true;
             s.waveElapsed = 0;
             s.spawnQueue = buildWaveSpawns(autoWave, s.totalWaves, s.difficulty, s.gameMode);
+            const phaseBoost = getWavePhaseDifficultyBoost(autoWave, s.totalWaves);
             setStatusNotice(
-              `Tự động gọi Đợt ${autoWave}/${s.gameMode === 'endless' ? '∞' : s.totalWaves}! Nâng cấp súng để bùng nổ hỏa lực!`
+              phaseBoost.isLateSurgePhase
+                ? `Đợt ${autoWave}/${s.gameMode === 'endless' ? '∞' : s.totalWaves} — ⚠️ GIAI ĐOẠN 30% ĐỢT CUỐI (+30% độ khó)!`
+                : `Tự động gọi Đợt ${autoWave}/${s.gameMode === 'endless' ? '∞' : s.totalWaves} (+10% độ khó)! Nâng cấp súng để bùng nổ hỏa lực!`
             );
             playSynthFx('wave', soundEnabled, audioCtxRef);
             syncHudFromSim();
@@ -2114,7 +2100,16 @@ export function PrismTdGameSection({
           while (s.spawnQueue.length > 0 && s.spawnQueue[0].delaySec <= s.waveElapsed) {
             const item = s.spawnQueue.shift()!;
             s.enemies.push(
-              createEnemyForWave(s.nextEnemyId++, item.kind, s.wave, s.map, item.isElite, s.difficulty, s.gameMode)
+              createEnemyForWave(
+                s.nextEnemyId++,
+                item.kind,
+                s.wave,
+                s.map,
+                item.isElite,
+                s.difficulty,
+                s.gameMode,
+                s.totalWaves
+              )
             );
           }
         }
@@ -5820,7 +5815,8 @@ export function PrismTdGameSection({
                 s.map,
                 false,
                 s.difficulty,
-                s.gameMode
+                s.gameMode,
+                s.totalWaves
               );
               summoned.x = req.x;
               summoned.y = req.y;
@@ -6544,7 +6540,7 @@ export function PrismTdGameSection({
           }
 
           const palette = BIOME_PALETTES[s.map.biome];
-          const staticKey = `${s.map.id}:${s.map.cols}x${s.map.rows}:${dpr}`;
+          const staticKey = `v2:${s.map.id}:${s.map.cols}x${s.map.rows}:${dpr}`;
           if (!cachedStaticBg || cachedStaticKey !== staticKey) {
             const off = document.createElement('canvas');
             off.width = targetW;
@@ -6552,195 +6548,27 @@ export function PrismTdGameSection({
             const octx = off.getContext('2d');
             if (octx) {
               octx.setTransform(dpr, 0, 0, dpr, 0, 0);
-              octx.fillStyle = palette.bg;
-              octx.fillRect(0, 0, mapW, mapH);
-              for (let r = 0; r < s.map.rows; r++) {
-                for (let c = 0; c < s.map.cols; c++) {
-                  const x = c * TILE_SIZE;
-                  const y = r * TILE_SIZE;
-                  const kind = getTileKind(s.map, c, r);
-                  if (kind === 'path' || kind === 'spawn' || kind === 'core') {
-                    octx.fillStyle = palette.pathFill;
-                    octx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
-                    octx.strokeStyle = palette.pathBorder;
-                    octx.lineWidth = 1;
-                    octx.strokeRect(x + 0.5, y + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
-                  } else if (kind === 'wall') {
-                    octx.fillStyle = palette.wallFill;
-                    octx.fillRect(x + 3, y + 3, TILE_SIZE - 6, TILE_SIZE - 6);
-                    octx.strokeStyle = palette.wallStroke;
-                    octx.lineWidth = 2;
-                    octx.strokeRect(x + 3, y + 3, TILE_SIZE - 6, TILE_SIZE - 6);
-                    octx.strokeStyle = 'rgba(244, 63, 94, 0.35)';
-                    octx.beginPath();
-                    octx.moveTo(x + 12, y + 12);
-                    octx.lineTo(x + TILE_SIZE - 12, y + TILE_SIZE - 12);
-                    octx.moveTo(x + TILE_SIZE - 12, y + 12);
-                    octx.lineTo(x + 12, y + TILE_SIZE - 12);
-                    octx.stroke();
-                  } else {
-                    octx.strokeStyle = palette.gridLine;
-                    octx.lineWidth = 1;
-                    octx.strokeRect(x + 0.5, y + 0.5, TILE_SIZE - 1, TILE_SIZE - 1);
-                    if (
-                      s.map.biome === 'prismatic_nexus' ||
-                      s.map.biome === 'chrono_sanctum' ||
-                      s.map.biome === 'astral_abyss'
-                    ) {
-                      octx.fillStyle =
-                        s.map.biome === 'astral_abyss'
-                          ? 'rgba(232, 121, 249, 0.22)'
-                          : s.map.biome === 'chrono_sanctum'
-                            ? 'rgba(34, 211, 238, 0.22)'
-                            : 'rgba(250, 204, 21, 0.22)';
-                      octx.beginPath();
-                      octx.moveTo(x + TILE_SIZE / 2, y + TILE_SIZE / 2 - 4);
-                      octx.lineTo(x + TILE_SIZE / 2 + 4, y + TILE_SIZE / 2);
-                      octx.lineTo(x + TILE_SIZE / 2, y + TILE_SIZE / 2 + 4);
-                      octx.lineTo(x + TILE_SIZE / 2 - 4, y + TILE_SIZE / 2);
-                      octx.closePath();
-                      octx.fill();
-                    } else {
-                      octx.fillStyle = palette.gridLine;
-                      octx.beginPath();
-                      octx.arc(x + TILE_SIZE / 2, y + TILE_SIZE / 2, 3, 0, Math.PI * 2);
-                      octx.fill();
-                    }
-                  }
-                }
-              }
-              // Pre-bake static conductive water pool glow onto cached static canvas
-              for (const wz of s.map.wetZones) {
-                const wPt = gridToWorldCenter(wz.col, wz.row);
-                const poolGrad = octx.createRadialGradient(wPt.x, wPt.y, 4, wPt.x, wPt.y, TILE_SIZE * 0.44);
-                poolGrad.addColorStop(0, 'rgba(56, 189, 248, 0.42)');
-                poolGrad.addColorStop(0.65, 'rgba(6, 182, 212, 0.24)');
-                poolGrad.addColorStop(1, 'rgba(6, 182, 212, 0)');
-                octx.fillStyle = poolGrad;
-                octx.beginPath();
-                octx.arc(wPt.x, wPt.y, TILE_SIZE * 0.44, 0, Math.PI * 2);
-                octx.fill();
-              }
-              if (
-                s.map.biome === 'prismatic_nexus' ||
-                s.map.biome === 'chrono_sanctum' ||
-                s.map.biome === 'astral_abyss'
-              ) {
-                octx.strokeStyle =
-                  s.map.biome === 'astral_abyss'
-                    ? 'rgba(232, 121, 249, 0.36)'
-                    : s.map.biome === 'chrono_sanctum'
-                      ? 'rgba(34, 211, 238, 0.34)'
-                      : 'rgba(250, 204, 21, 0.28)';
-                octx.lineWidth = 3;
-                octx.strokeRect(2, 2, mapW - 4, mapH - 4);
-              }
+              bakePrismTdStaticTerrain(octx, s.map, palette);
             }
             cachedStaticBg = off;
             cachedStaticKey = staticKey;
           }
 
-          // 1-2. Blit Cached Tactical Floor, Grid, Walls, Track & Wet Zone Pools in 1 drawImage call
+          // 1-2. Blit Cached High-Craft Tactical Floor, Beveled Pads, Seamless Trench Road & Pools
           if (cachedStaticBg) {
             ctx.drawImage(cachedStaticBg, 0, 0, mapW, mapH);
           }
 
-          // 3. Animated Path Track Glow + Conductive Wet Zone Ripples
-          ctx.save();
-          ctx.strokeStyle = palette.trackGlow;
-          ctx.lineWidth = 4;
-          ctx.setLineDash([10, 8]);
-          ctx.lineDashOffset = -s.visualTime * 34;
-          ctx.beginPath();
-          s.map.path.forEach((wp, i) => {
-            const pt = gridToWorldCenter(wp.col, wp.row);
-            if (i === 0) ctx.moveTo(pt.x, pt.y);
-            else ctx.lineTo(pt.x, pt.y);
-          });
-          ctx.stroke();
-          ctx.restore();
-
-          // 3b. Lightweight dynamic ripple rings on conductive water puddles (pools pre-baked above)
-          ctx.save();
-          ctx.strokeStyle = '#67E8F9';
-          ctx.lineWidth = 1.4;
-          for (const wz of s.map.wetZones) {
-            const wPt = gridToWorldCenter(wz.col, wz.row);
-            const ripple = (((s.visualTime * 0.65 + (wz.col + wz.row) * 0.23) % 1) + 1) % 1;
-            ctx.globalAlpha = Math.max(0, (1 - ripple) * 0.45);
-            ctx.beginPath();
-            ctx.arc(wPt.x, wPt.y, Math.max(1, 6 + ripple * (TILE_SIZE * 0.34)), 0, Math.PI * 2);
-            ctx.stroke();
-          }
-          ctx.restore();
-
-          // 4. Spawn Portal & Armored Core Reactor
-          const spawnPt = gridToWorldCenter(s.map.path[0].col, s.map.path[0].row);
-          const corePt = gridToWorldCenter(
-            s.map.path[s.map.path.length - 1].col,
-            s.map.path[s.map.path.length - 1].row
+          // 3-4. Dual-Layer Animated Track Conduit, Pool Ripples, Warp Spawn Portal ("CỔNG") & Fusion Core ("LÕI")
+          drawPrismTdDynamicPathAndLandmarks(
+            ctx,
+            s.map,
+            palette,
+            s.visualTime,
+            s.coreHp / Math.max(1, s.maxCoreHp),
+            s.coreShield,
+            s.speedMult
           );
-
-          ctx.save();
-          ctx.translate(spawnPt.x, spawnPt.y);
-          ctx.rotate(s.visualTime * 2);
-          ctx.strokeStyle = '#FB7185';
-          ctx.fillStyle = 'rgba(244, 63, 94, 0.24)';
-          ctx.lineWidth = 2.5;
-          ctx.setLineDash([8, 5]);
-          ctx.beginPath();
-          ctx.arc(0, 0, 22, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.stroke();
-          ctx.restore();
-          ctx.fillStyle = '#FECDD3';
-          ctx.font = 'bold 10px "JetBrains Mono", "Plus Jakarta Sans", monospace';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('CỔNG', spawnPt.x, spawnPt.y);
-
-          const corePulse = s.speedMult > 1 ? 1 : 1 + Math.sin(s.visualTime * 4) * 0.05;
-          ctx.save();
-          ctx.translate(corePt.x, corePt.y);
-          ctx.rotate(-s.visualTime * 1.4);
-          ctx.strokeStyle = '#10B981';
-          ctx.fillStyle = 'rgba(16, 185, 129, 0.24)';
-          ctx.lineWidth = 2.5;
-          ctx.beginPath();
-          for (let i = 0; i < 6; i++) {
-            const a = (i * Math.PI) / 3;
-            const px = Math.cos(a) * 22 * corePulse;
-            const py = Math.sin(a) * 22 * corePulse;
-            if (i === 0) ctx.moveTo(px, py);
-            else ctx.lineTo(px, py);
-          }
-          ctx.closePath();
-          ctx.fill();
-          ctx.stroke();
-          ctx.restore();
-          ctx.fillStyle = '#A7F3D0';
-          ctx.fillText('LÕI', corePt.x, corePt.y);
-
-          if (s.coreShield > 0) {
-            ctx.save();
-            ctx.translate(corePt.x, corePt.y);
-            ctx.rotate(s.visualTime * 1.1);
-            ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)';
-            ctx.fillStyle = 'rgba(56, 189, 248, 0.14)';
-            ctx.lineWidth = 2.4;
-            ctx.beginPath();
-            for (let i = 0; i < 6; i++) {
-              const a = (i * Math.PI) / 3;
-              const px = Math.cos(a) * 28 * corePulse;
-              const py = Math.sin(a) * 28 * corePulse;
-              if (i === 0) ctx.moveTo(px, py);
-              else ctx.lineTo(px, py);
-            }
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-            ctx.restore();
-          }
 
           // 5. Hover / Touch Preview Ghost Turret & Range Ring (Playing & Paused Tactical Build)
           const previewTile = pendingBuildTileRef.current ?? dragGhostTileRef.current ?? s.hoverTile;
@@ -7427,7 +7255,8 @@ export function PrismTdGameSection({
                   <span style={{ color: DIFFICULTY_CONFIGS[difficulty].badgeColor }} className="font-bold">
                     {DIFFICULTY_CONFIGS[difficulty].label}:
                   </span>{' '}
-                  {DIFFICULTY_CONFIGS[difficulty].description} · Thông số trận:{' '}
+                  {DIFFICULTY_CONFIGS[difficulty].description} · Độ khó đợt:{' '}
+                  <strong className="text-amber-300">+10% đợt đầu · +30% ở 30% đợt cuối</strong> · Thông số trận:{' '}
                   <strong className="text-cyan-300">
                     {gameMode === 'endless' ? '∞ Đợt' : `${effectiveSetup.totalWaves} Đợt`}
                   </strong>{' '}

@@ -42,6 +42,7 @@ import {
   getMapScalingCurve,
   getMothershipMaxDrones,
   getTileKind,
+  getWavePhaseDifficultyBoost,
   GRID_COLS,
   GRID_ROWS,
   gridToWorldCenter,
@@ -226,7 +227,28 @@ test('Super Hell & Nightmare (2x Super Hell), Boss Apocalypse, and 24x14 Sector-
       sum + createEnemyForWave(idx + 1, item.kind, 1, map, item.isElite, 'hell', 'campaign').maxHp,
     0
   );
-  assert.ok(w1TotalHp > 9000 && w1TotalHp < 19000, `Hell W1 total HP=${w1TotalHp} should reflect +15-20% buff`);
+  assert.ok(w1TotalHp > 9000 && w1TotalHp < 19000, `Hell W1 total HP=${w1TotalHp} should reflect +10% early buff`);
+
+  // Wave phase difficulty scaling: +10% early rounds (first 70%) & +30% last 30% rounds
+  const boostEarly = getWavePhaseDifficultyBoost(14, 20);
+  const boostLate = getWavePhaseDifficultyBoost(15, 20);
+  assert.equal(boostEarly.isLateSurgePhase, false);
+  assert.equal(boostEarly.difficultyBonusPct, 10);
+  assert.equal(boostEarly.hpMult, 1.1);
+  assert.equal(boostEarly.shieldMult, 1.1);
+  assert.equal(boostLate.isLateSurgePhase, true);
+  assert.equal(boostLate.latePhaseStartWave, 15);
+  assert.equal(boostLate.difficultyBonusPct, 30);
+  assert.equal(boostLate.hpMult, 1.3);
+  assert.equal(boostLate.shieldMult, 1.3);
+
+  const sameWaveEarlyRef = createEnemyForWave(1, 'boss', 12, map, false, 'normal', 'campaign', 30);
+  const sameWaveLateRef = createEnemyForWave(2, 'boss', 12, map, false, 'normal', 'campaign', 16);
+  assert.ok(
+    sameWaveLateRef.maxHp >= Math.round(sameWaveEarlyRef.maxHp * (1.3 / 1.1) - 2),
+    `Late-phase wave enemy HP (${sameWaveLateRef.maxHp}) must scale +30% vs early-phase +10% (${sameWaveEarlyRef.maxHp})`
+  );
+  assert.ok(sameWaveLateRef.speed > sameWaveEarlyRef.speed);
 
   // Sector 17, 18, and 19 (24x14 super-wide)
   const map17 = PRISM_MAPS[16];

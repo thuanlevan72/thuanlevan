@@ -1063,6 +1063,23 @@ export function drawGunTurretSprite(
   const isOmega = variant === 'omega';
   const baseRadius = 19.5 + (tier - 1) * 1.4;
 
+  // Grounded elliptical ambient shadow + Mythic Lv7 golden aura beneath pedestal
+  ctx.save();
+  ctx.fillStyle = 'rgba(2, 6, 20, 0.62)';
+  ctx.beginPath();
+  ctx.ellipse(1.5, 4.5, baseRadius + 2.5, (baseRadius + 2.2) * 0.9, 0, 0, Math.PI * 2);
+  ctx.fill();
+  if (tier === 4) {
+    const auraGrad = ctx.createRadialGradient(0, 0, baseRadius * 0.4, 0, 0, baseRadius + 12);
+    auraGrad.addColorStop(0, isOmega ? 'rgba(251, 146, 60, 0.34)' : 'rgba(250, 204, 21, 0.32)');
+    auraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = auraGrad;
+    ctx.beginPath();
+    ctx.arc(0, 0, baseRadius + 12, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
   if (overheatActive) {
     ctx.save();
     ctx.rotate(animTime * 6);
@@ -1166,11 +1183,26 @@ export function drawGunTurretSprite(
   ctx.fill();
   ctx.stroke();
 
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.24)';
+  ctx.lineWidth = 1.2;
   ctx.beginPath();
-  ctx.arc(0, 0, baseRadius - 3.5, Math.PI * 0.9, Math.PI * 1.9);
+  ctx.arc(0, 0, baseRadius - 3.2, Math.PI * 0.92, Math.PI * 1.88);
   ctx.stroke();
+
+  if (level >= 2) {
+    const pipCount = Math.min(7, level);
+    const arcSpan = Math.min(1.5, (pipCount - 1) * 0.23);
+    const startA = Math.PI * 0.5 - arcSpan * 0.5;
+    for (let p = 0; p < pipCount; p++) {
+      const pa = pipCount === 1 ? Math.PI * 0.5 : startA + (arcSpan * p) / (pipCount - 1);
+      const px = Math.cos(pa) * (baseRadius - 3.6);
+      const py = Math.sin(pa) * (baseRadius - 3.6);
+      ctx.fillStyle = tier === 4 ? '#FEF08A' : isOmega ? '#FDA4AF' : '#BAE6FD';
+      ctx.beginPath();
+      ctx.arc(px, py, 1.35, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 
   if (heatPct > 4) {
     const ratio = Math.min(1, heatPct / 100);
@@ -2543,10 +2575,16 @@ export function drawEnemySprite(
   if (!isKo) {
     if (en.kind === 'super_boss') {
       const labelTitle = en.bossTitle ? en.bossTitle.toUpperCase() : 'SIÊU BOSS COLOSSUS';
-      const bw = Math.max(78, Math.min(130, labelTitle.length * 5.2));
+      const bw = Math.max(82, Math.min(134, labelTitle.length * 5.2));
       const by = -en.radius - 23;
-      ctx.fillStyle = 'rgba(7, 11, 20, 0.94)';
-      ctx.fillRect(-bw / 2 - 2, by - 13, bw + 4, 22);
+      ctx.fillStyle = 'rgba(7, 11, 20, 0.95)';
+      ctx.strokeStyle = isPhase2 ? 'rgba(244, 63, 94, 0.72)' : 'rgba(253, 224, 71, 0.45)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(-bw / 2 - 3, by - 14, bw + 6, 23, 4);
+      ctx.fill();
+      ctx.stroke();
+
       ctx.fillStyle = (en.silencedTimer ?? 0) > 0 ? '#34D399' : en.windupTimer > 0 ? '#38BDF8' : isPhase2 ? '#F43F5E' : bossPrimary;
       ctx.font = 'bold 8.5px "JetBrains Mono", "Plus Jakarta Sans", monospace';
       ctx.textAlign = 'center';
@@ -2567,6 +2605,8 @@ export function drawEnemySprite(
       ctx.fillRect(-bw / 2, by, bw, 5.5);
       ctx.fillStyle = isPhase2 ? '#EF4444' : '#F59E0B';
       ctx.fillRect(-bw / 2, by, bw * hpRatio, 5.5);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.fillRect(-bw / 2, by, bw * hpRatio, 1.4);
       ctx.fillStyle = '#070B14';
       for (let t = 1; t < 6; t++) {
         ctx.fillRect(-bw / 2 + (bw * t) / 6, by, 1, 5.5);
@@ -2578,10 +2618,16 @@ export function drawEnemySprite(
       }
     } else if (en.kind === 'boss') {
       const labelTitle = en.bossTitle ? en.bossTitle.toUpperCase() : 'BOSS DREADNOUGHT';
-      const bw = Math.max(64, Math.min(116, labelTitle.length * 5));
+      const bw = Math.max(66, Math.min(120, labelTitle.length * 5));
       const by = -en.radius - 20;
-      ctx.fillStyle = 'rgba(7, 11, 20, 0.92)';
-      ctx.fillRect(-bw / 2 - 2, by - 12, bw + 4, 20);
+      ctx.fillStyle = 'rgba(7, 11, 20, 0.94)';
+      ctx.strokeStyle = 'rgba(251, 113, 133, 0.42)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(-bw / 2 - 3, by - 13, bw + 6, 21, 4);
+      ctx.fill();
+      ctx.stroke();
+
       ctx.fillStyle = (en.silencedTimer ?? 0) > 0 ? '#34D399' : en.windupTimer > 0 ? '#38BDF8' : bossPrimary;
       ctx.font = 'bold 8px "JetBrains Mono", "Plus Jakarta Sans", monospace';
       ctx.textAlign = 'center';
@@ -2600,6 +2646,8 @@ export function drawEnemySprite(
       ctx.fillRect(-bw / 2, by, bw, 5);
       ctx.fillStyle = '#FB7185';
       ctx.fillRect(-bw / 2, by, bw * hpRatio, 5);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+      ctx.fillRect(-bw / 2, by, bw * hpRatio, 1.3);
       ctx.fillStyle = '#070B14';
       for (let t = 1; t < 4; t++) {
         ctx.fillRect(-bw / 2 + (bw * t) / 4, by, 1, 5);
@@ -2612,8 +2660,10 @@ export function drawEnemySprite(
     } else if (en.hp < en.maxHp || en.shield > 0 || en.isElite) {
       const bw = Math.max(24, en.radius * 1.7);
       const by = -en.radius - 9;
-      ctx.fillStyle = 'rgba(7, 11, 20, 0.86)';
-      ctx.fillRect(-bw / 2 - 1, by - 1, bw + 2, 5);
+      ctx.fillStyle = 'rgba(7, 11, 20, 0.88)';
+      ctx.beginPath();
+      ctx.roundRect(-bw / 2 - 1.5, by - 1.5, bw + 3, 6, 2);
+      ctx.fill();
       const hpRatio = Math.max(0, Math.min(1, en.hp / Math.max(1, en.maxHp)));
       ctx.fillStyle = en.isElite ? '#FBBF24' : '#34D399';
       ctx.fillRect(-bw / 2, by, bw * hpRatio, 3);
