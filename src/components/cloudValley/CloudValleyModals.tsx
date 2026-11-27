@@ -17,11 +17,14 @@ import {
   ARTISAN_RECIPES,
   AUTOMATION_BLUEPRINTS,
   CROPS,
+  FARMER_HATS,
+  FARMER_SHIRTS,
   HYBRID_RECIPES,
   ITEMS,
   MACHINES,
   TERRACES,
   TOOL_UPGRADE_COSTS,
+  type FarmerHatId,
   type SpriteTask,
 } from '../../utils/cloudValleyData.ts';
 import {
@@ -48,17 +51,19 @@ interface CloudValleyModalsProps {
   onTradeFair: (qty: number) => void;
   onSellItem: (itemId: string, qty: number) => void;
   onBuyItem: (itemId: string, qty: number) => void;
+  onBuySeedPack: (seedId: string, qty: number) => void;
   onStartRecipe: (recipeId: string) => void;
   onCollectArtisan: (uid: string) => void;
   onCollectAllArtisan: () => void;
   onUnlockTerrace: (terraceId: number) => void;
   onUpgradeTools: () => void;
-  onBuyLivestock: (type: 'cow' | 'sheep') => void;
+  onBuyLivestock: (type: 'cow' | 'sheep' | 'chicken') => void;
   onTendLivestock: (animalId: string) => void;
   onSummonSprite: (task: SpriteTask) => void;
   onChangeSpriteTask: (spriteId: string, task: SpriteTask) => void;
   onFeedSprite: (spriteId: string, mealId: string) => void;
   onSelectBuildStructure: (structId: keyof typeof AUTOMATION_BLUEPRINTS) => void;
+  onUpdateProfile: (patch: { name?: string; hat?: FarmerHatId; shirtColor?: string }) => void;
   onExportJson: () => void;
   onImportJson: (file: File) => void;
   onResetSave: () => void;
@@ -73,6 +78,7 @@ export function CloudValleyModals({
   onTradeFair,
   onSellItem,
   onBuyItem,
+  onBuySeedPack,
   onStartRecipe,
   onCollectArtisan,
   onCollectAllArtisan,
@@ -84,12 +90,13 @@ export function CloudValleyModals({
   onChangeSpriteTask,
   onFeedSprite,
   onSelectBuildStructure,
+  onUpdateProfile,
   onExportJson,
   onImportJson,
   onResetSave,
 }: CloudValleyModalsProps) {
   const [workshopTierFilter, setWorkshopTierFilter] = useState<'all' | 1 | 2 | 3>('all');
-  const [ordersTab, setOrdersTab] = useState<'orders' | 'market'>('orders');
+  const [ordersTab, setOrdersTab] = useState<'orders' | 'seeds' | 'market'>('orders');
   const [confirmReset, setConfirmReset] = useState(false);
 
   if (!modal) return null;
@@ -147,7 +154,7 @@ export function CloudValleyModals({
           {/* 1. ORDERS & MARKET */}
           {modal === 'orders' && (
             <>
-              <div className="flex items-center gap-2 border-b border-[#DFCAA5] pb-2">
+              <div className="flex flex-wrap items-center gap-2 border-b border-[#DFCAA5] pb-2">
                 <button
                   type="button"
                   onClick={() => setOrdersTab('orders')}
@@ -161,6 +168,17 @@ export function CloudValleyModals({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setOrdersTab('seeds')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${
+                    ordersTab === 'seeds'
+                      ? 'bg-[#2E7D32] text-white'
+                      : 'bg-[#F3E6CE] text-[#5C3A21] hover:bg-[#E7D4B2]'
+                  }`}
+                >
+                  Cửa Hàng Hạt Giống
+                </button>
+                <button
+                  type="button"
                   onClick={() => setOrdersTab('market')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${
                     ordersTab === 'market'
@@ -168,11 +186,62 @@ export function CloudValleyModals({
                       : 'bg-[#F3E6CE] text-[#5C3A21] hover:bg-[#E7D4B2]'
                   }`}
                 >
-                  Kho & Giao Thương
+                  Kho & Bán Nông Sản
                 </button>
               </div>
 
-              {ordersTab === 'orders' ? (
+              {ordersTab === 'seeds' ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-[#5C3A21]">
+                    Mua hạt giống bỏ vào <strong>Túi Hạt</strong> để gieo miễn phí ngoài ruộng (hoặc gieo trực tiếp trừ Vàng khi hết túi).
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {Object.values(CROPS)
+                      .filter((c) => c.seedPrice > 0)
+                      .map((crop) => {
+                        const locked = state.level < crop.unlockLevel;
+                        const inBag = state.seedBags?.[crop.id] ?? 0;
+                        return (
+                          <div
+                            key={crop.id}
+                            className="p-2.5 rounded-xl border border-[#D6BE96] bg-[#FFFDF8] flex items-center justify-between gap-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-[#2D1E12] flex items-center gap-1.5">
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full inline-block shrink-0"
+                                  style={{ backgroundColor: crop.colorPrimary }}
+                                />
+                                <span className="truncate">{crop.name}</span>
+                              </p>
+                              <p className="text-[11px] text-[#7C5230] tabular-nums">
+                                {locked ? `Mở ở Cấp ${crop.unlockLevel}` : `${crop.seedPrice}g/hạt · Túi: ${inBag}`}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                disabled={locked || state.gold < crop.seedPrice}
+                                onClick={() => onBuySeedPack(crop.id, 1)}
+                                className="px-2 py-1 rounded bg-[#2E7D32] hover:bg-[#1B5E20] disabled:opacity-40 text-white text-[11px] font-bold cursor-pointer"
+                              >
+                                +1
+                              </button>
+                              <button
+                                type="button"
+                                disabled={locked || state.gold < crop.seedPrice * 5}
+                                onClick={() => onBuySeedPack(crop.id, 5)}
+                                className="px-2 py-1 rounded bg-[#166534] hover:bg-[#14532D] disabled:opacity-40 text-white text-[11px] font-bold cursor-pointer"
+                              >
+                                +5
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+              ) : ordersTab === 'orders' ? (
                 <div className="space-y-3">
                   {/* Weekend Fair Banner */}
                   {state.weekendFair ? (
@@ -663,7 +732,14 @@ export function CloudValleyModals({
                   <h3 className="text-xs font-bold uppercase tracking-wider text-[#6E4726]">
                     Chuồng Trại ({state.livestock.length}/6) {state.autoFeederOwned ? '· Có Máng Ăn Tự Động' : ''}
                   </h3>
-                  <div className="flex gap-1.5">
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => onBuyLivestock('chicken')}
+                      className="px-2.5 py-1 rounded bg-[#D97706] text-white text-[11px] font-bold cursor-pointer"
+                    >
+                      + Gà Mái (140g)
+                    </button>
                     <button
                       type="button"
                       onClick={() => onBuyLivestock('cow')}
@@ -752,9 +828,70 @@ export function CloudValleyModals({
             </div>
           )}
 
-          {/* 6. SETTINGS, SAVE JSON & GUIDE */}
+          {/* 6. SETTINGS, AVATAR PROFILE, SAVE JSON & GUIDE */}
           {modal === 'settings' && (
             <div className="space-y-4">
+              {/* Farmer Avatar Customization */}
+              <div className="p-3.5 rounded-xl border border-[#D6BE96] bg-[#FFFDF8] space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#6E4726]">
+                  Tùy Chỉnh Nhân Vật Nông Dân Avatar
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="cv-farmer-name" className="block text-[11px] font-bold text-[#5C3A21] mb-1">
+                      Tên Nhân Vật
+                    </label>
+                    <input
+                      id="cv-farmer-name"
+                      type="text"
+                      maxLength={18}
+                      value={state.farmerProfile?.name ?? 'Nông Dân Mây'}
+                      onChange={(e) => onUpdateProfile({ name: e.target.value })}
+                      className="w-full px-3 py-1.5 rounded-lg border border-[#C7AC82] bg-white text-xs font-bold text-[#2D1E12]"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-[11px] font-bold text-[#5C3A21] mb-1">Kiểu Mũ</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {FARMER_HATS.map((h) => (
+                        <button
+                          key={h.id}
+                          type="button"
+                          onClick={() => onUpdateProfile({ hat: h.id })}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer ${
+                            state.farmerProfile?.hat === h.id
+                              ? 'bg-[#6E4726] text-white'
+                              : 'bg-[#F3E6CE] text-[#5C3A21]'
+                          }`}
+                        >
+                          {h.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <span className="block text-[11px] font-bold text-[#5C3A21] mb-1">Màu Áo Nông Trại</span>
+                  <div className="flex flex-wrap gap-2">
+                    {FARMER_SHIRTS.map((sh) => (
+                      <button
+                        key={sh.id}
+                        type="button"
+                        onClick={() => onUpdateProfile({ shirtColor: sh.color })}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer ${
+                          state.farmerProfile?.shirtColor === sh.color
+                            ? 'border-[#2D1E12] bg-[#EFE2CB]'
+                            : 'border-[#D6BE96] bg-white'
+                        }`}
+                      >
+                        <span className="w-3 h-3 rounded-full" style={{ backgroundColor: sh.color }} />
+                        {sh.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <div className="p-3.5 rounded-xl border border-[#D6BE96] bg-[#FFFDF8] space-y-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-[#6E4726]">
                   Lưu Trữ Cục Bộ (IndexedDB) & Xuất/Nhập File .JSON
@@ -799,12 +936,12 @@ export function CloudValleyModals({
 
               <div className="p-3.5 rounded-xl border border-[#D6BE96] bg-[#F5E8D0] space-y-1.5 text-xs text-[#4A311D]">
                 <p className="font-bold text-sm flex items-center gap-1.5">
-                  <Award className="w-4 h-4 text-[#B45309]" /> Mẹo Canh Tác Thung Lũng Mây
+                  <Award className="w-4 h-4 text-[#B45309]" /> Hướng Dẫn Chơi Nông Trại Avatar
                 </p>
-                <p>• <strong>Độ ẩm 60%–90%:</strong> Cây lớn nhanh thêm +20%. Dưới 20% cây ngừng lớn.</p>
-                <p>• <strong>Độ màu mỡ:</strong> Trồng xen Đậu Hà Lan hoặc bón Phân Hữu Cơ để tránh đất bạc màu giảm 50% sản lượng.</p>
+                <p>• <strong>Di chuyển & Thao tác:</strong> Dùng <strong>WASD / Phím Mũi Tên</strong> (hoặc D-Pad) đi quanh vườn, bấm <strong>Space</strong> hoặc nút <strong>Tác Vụ</strong> để tự cuốc, tưới, gieo hạt, thu hoạch hay nói chuyện với Bác Lái Buôn.</p>
+                <p>• <strong>Click / Chạm trực tiếp:</strong> Chạm vào ô đất, giếng nước, chuồng gà bò hay nhà kho để nhân vật chạy tới làm việc tự động!</p>
                 <p>• <strong>Lai tạo giống hiếm:</strong> Đặt 2 cây trưởng thành khác loại cạnh ô đất cày trống (VD: Cà Chua + Ớt → Cà Chua Lửa).</p>
-                <p>• <strong>Chuỗi 3 tầng:</strong> Gặt Lúa Mì → Cối Xay Gió (Bột) → Lò Nướng cùng Bơ (Bánh Mì Bơ Tỏi) bán lãi gấp bội!</p>
+                <p>• <strong>Độ ẩm 60%–90%:</strong> Cây lớn nhanh +20%. Ghé <strong>Giếng Nước</strong> múc nước tưới mát toàn vườn bất cứ lúc nào.</p>
               </div>
             </div>
           )}

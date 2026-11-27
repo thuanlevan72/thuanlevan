@@ -36,9 +36,26 @@ export type MachineId =
   | 'composter'
   | 'kitchen';
 
-export type LivestockType = 'cow' | 'sheep';
+export type LivestockType = 'cow' | 'sheep' | 'chicken';
 
 export type SpriteTask = 'sow' | 'harvest' | 'feed_machines';
+
+export type AvatarActionMode = 'auto' | ToolId;
+
+export type FarmerHatId = 'straw' | 'bandana' | 'bunny';
+
+export const FARMER_HATS: readonly { id: FarmerHatId; name: string }[] = [
+  { id: 'straw', name: 'Mũ Rơm Quê' },
+  { id: 'bandana', name: 'Khăn Rằn Đỏ' },
+  { id: 'bunny', name: 'Bờm Tai Thỏ' },
+];
+
+export const FARMER_SHIRTS: readonly { id: string; name: string; color: string }[] = [
+  { id: 'emerald', name: 'Xanh Đồng Cỏ', color: '#2E7D32' },
+  { id: 'sky', name: 'Xanh Trời Mây', color: '#0284C7' },
+  { id: 'berry', name: 'Đỏ Dâu Tây', color: '#DC2626' },
+  { id: 'amber', name: 'Vàng Nắng Ấm', color: '#D97706' },
+];
 
 export interface CropDef {
   id: string;
@@ -427,6 +444,39 @@ export const CROPS: Record<string, CropDef> = {
     colorAccent: '#D8CFC2',
     unlockLevel: 4,
   },
+  khe_ngot: {
+    id: 'khe_ngot',
+    name: 'Khế Ngọt',
+    category: 'fruit',
+    seasons: ['spring', 'summer', 'autumn'],
+    seedPrice: 24,
+    sellPrice: 46,
+    growthSeconds: 110,
+    harvestYield: 2,
+    xp: 20,
+    fertilityDelta: -12,
+    regrows: true,
+    description: 'Cây ăn quả quen thuộc nông trại Avatar, tự ra trái tiếp sau khi thu hoạch!',
+    colorPrimary: '#EAB308',
+    colorAccent: '#FEF08A',
+    unlockLevel: 1,
+  },
+  hoa_hong: {
+    id: 'hoa_hong',
+    name: 'Hoa Hồng Đỏ',
+    category: 'standard',
+    seasons: ['spring', 'summer', 'autumn'],
+    seedPrice: 32,
+    sellPrice: 74,
+    growthSeconds: 130,
+    harvestYield: 2,
+    xp: 26,
+    fertilityDelta: -15,
+    description: 'Hoa biểu tượng trang trí & giao thương cực kỳ được ưa chuộng trong làng.',
+    colorPrimary: '#E11D48',
+    colorAccent: '#FDA4AF',
+    unlockLevel: 2,
+  },
 
   // --- HYBRIDS (Lai tạo & đột biến gen) ---
   ca_chua_lua: {
@@ -630,6 +680,15 @@ export const ITEMS: Record<string, ProductDef> = {
   },
 
   // Animal raw products
+  trung_ga: {
+    id: 'trung_ga',
+    name: 'Trứng Gà Tươi',
+    tier: 1,
+    sellPrice: 34,
+    category: 'animal',
+    description: 'Nhặt từ Gà Mái Mơ mỗi sáng. Dùng nướng Bánh Trứng Mây hoặc bán trực tiếp.',
+    color: '#FDE68A',
+  },
   sua_bo: {
     id: 'sua_bo',
     name: 'Sữa Bò Tươi',
@@ -706,6 +765,16 @@ export const ITEMS: Record<string, ProductDef> = {
   },
 
   // Artisan Tier 3 (High-value crafted goods + Sprite Energy Meals)
+  banh_trung_may: {
+    id: 'banh_trung_may',
+    name: 'Bánh Trứng Mây',
+    tier: 3,
+    sellPrice: 215,
+    category: 'food',
+    description: 'Bánh nướng thơm béo từ Bột Mì & Trứng Gà. Nạp +45 Năng Lượng Tinh Linh.',
+    color: '#FBBF24',
+    spriteEnergyValue: 45,
+  },
   banh_mi_bo_toi: {
     id: 'banh_mi_bo_toi',
     name: 'Bánh Mì Bơ Tỏi',
@@ -880,6 +949,21 @@ export const ARTISAN_RECIPES: readonly ArtisanRecipeDef[] = [
     durationSeconds: 50,
     xp: 26,
     unlockLevel: 3,
+  },
+  {
+    id: 'rec_banh_trung_may',
+    machineId: 'bakery',
+    tier: 3,
+    name: 'Nướng Bánh Trứng Mây',
+    inputs: [
+      { itemId: 'bot_mi', qty: 1 },
+      { itemId: 'trung_ga', qty: 2 },
+    ],
+    outputItemId: 'banh_trung_may',
+    outputQty: 1,
+    durationSeconds: 50,
+    xp: 38,
+    unlockLevel: 1,
   },
   {
     id: 'rec_banh_mi_bo_toi',

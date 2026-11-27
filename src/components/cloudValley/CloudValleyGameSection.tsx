@@ -8,6 +8,10 @@ import {
   type WheelEvent as ReactWheelEvent,
 } from 'react';
 import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
   Award,
   BookOpen,
   Coins,
@@ -21,6 +25,7 @@ import {
   Play,
   Settings,
   ShoppingBag,
+  Sparkles,
   Upload,
   Volume2,
   VolumeX,
@@ -36,6 +41,7 @@ import {
   SEASON_META,
   WEATHER_LABELS,
   type AutomationId,
+  type AvatarActionMode,
   type ToolId,
 } from '../../utils/cloudValleyData.ts';
 import {
@@ -48,8 +54,10 @@ import {
   applyToolAction,
   buyItemFromMarket,
   buyLivestock,
+  buySeedPack,
   collectArtisanSlot,
   createInitialCloudValleyState,
+  drawWellWater,
   feedSprite,
   fulfillVillagerOrder,
   getSeasonId,
@@ -71,6 +79,17 @@ import {
   type CloudValleyGameState,
   type OfflineCatchupReport,
 } from '../../utils/cloudValleyEngine.ts';
+import {
+  createInitialAvatarState,
+  detectInteractTarget,
+  FARM_BUILDINGS,
+  getAnimalWorldPos,
+  resolveSmartToolForTile,
+  stepAvatarMovement,
+  tileToWorldBounds,
+  type BuildingId,
+  type FarmerAvatarState,
+} from '../../utils/cloudValleyWorld.ts';
 import { CloudValleyTitleLockup, ToolSvgIcon } from './CloudValleyIcons.tsx';
 import { CloudValleyModals, type CloudValleyModalId } from './CloudValleyModals.tsx';
 
@@ -88,7 +107,7 @@ const TOOL_BUTTONS: readonly { id: ToolId; label: string; keyHint: string }[] = 
   { id: 'seed', label: 'Gieo Hạt', keyHint: '3' },
   { id: 'harvest', label: 'Thu Hoạch', keyHint: '4' },
   { id: 'compost', label: 'Phân Hữu Cơ', keyHint: '5' },
-  { id: 'mutagen', label: 'Phân Đột Biến', keyHint: '6' },
+  { id: 'mutagen', label: 'Đột Biến', keyHint: '6' },
   { id: 'build', label: 'Lắp Máy', keyHint: '7' },
   { id: 'inspect', label: 'Soi Đất', keyHint: '8' },
 ];
@@ -106,7 +125,7 @@ export function CloudValleyGameSection({
     return 'title';
   });
   const [hasExistingSave, setHasExistingSave] = useState(false);
-  const [activeTool, setActiveTool] = useState<ToolId>('harvest');
+  const [activeMode, setActiveMode] = useState<AvatarActionMode>('auto');
   const [selectedSeedId, setSelectedSeedId] = useState<string>('lua_mi');
   const [selectedStructureId, setSelectedStructureId] = useState<AutomationId>('sprinkler');
   const [speedMultiplier, setSpeedMultiplier] = useState<1 | 2>(1);
@@ -117,6 +136,7 @@ export function CloudValleyGameSection({
   const [hoveredTileCoords, setHoveredTileCoords] = useState<{ row: number; col: number } | null>(null);
 
   const simRef = useRef<CloudValleyGameState>(createInitialCloudValleyState());
+  const avatarRef = useRef<FarmerAvatarState>(createInitialAvatarState());
   const [, setHudTick] = useState(0);
 
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -126,19 +146,24 @@ export function CloudValleyGameSection({
     rendererRef.current = new CloudValleyCanvasController();
   }
 
-  const cameraRef = useRef({ zoom: 1, panX: 0, panY: 0 });
+  const cameraRef = useRef({ zoom: 1 });
   const viewportSizeRef = useRef({ width: 1024, height: 640, dpr: 1 });
   const hoverTileRef = useRef<{ row: number; col: number } | null>(null);
   const isPaintingRef = useRef(false);
   const lastPaintedKeyRef = useRef<string | null>(null);
   const toastTimerRef = useRef<number | null>(null);
 
+  const keysPressedRef = useRef<Set<string>>(new Set());
+  const dpadVecRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const walkGoalRef = useRef<{ wx: number; wy: number; onArrive?: () => void } | null>(null);
+  const stepSoundCooldownRef = useRef(0);
+
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   const speedRef = useRef(speedMultiplier);
   speedRef.current = speedMultiplier;
-  const activeToolRef = useRef(activeTool);
-  activeToolRef.current = activeTool;
+  const activeModeRef = useRef(activeMode);
+  activeModeRef.current = activeMode;
   const selectedSeedRef = useRef(selectedSeedId);
   selectedSeedRef.current = selectedSeedId;
   const selectedStructRef = useRef(selectedStructureId);
@@ -146,15 +171,19 @@ export function CloudValleyGameSection({
   const activeModalRef = useRef(activeModal);
   activeModalRef.current = activeModal;
 
-  const showToast = useCallback((msg: string) => {
+  const showToast = useCallback((msg: string, speechBubble?: string) => {
     setToastText(msg);
+    if (speechBubble) {
+      avatarRef.current.speechText = speechBubble;
+      avatarRef.current.speechTimer = 2.1;
+    }
     if (toastTimerRef.current !== null) {
       window.clearTimeout(toastTimerRef.current);
     }
     toastTimerRef.current = window.setTimeout(() => {
       setToastText(null);
       toastTimerRef.current = null;
-    }, 3200);
+    }, 3000);
   }, []);
 
   const syncHudNow = useCallback(() => {
@@ -170,7 +199,13 @@ export function CloudValleyGameSection({
         const report = processOfflineCatchUp(state, Date.now());
         simRef.current = state;
         setHasExistingSave(true);
-        if (report && (report.daysAdvanced > 0 || report.cropsMatured > 0 || report.artisanCompleted > 0 || report.spriteHarvests > 0)) {
+        if (
+          report &&
+          (report.daysAdvanced > 0 ||
+            report.cropsMatured > 0 ||
+            report.artisanCompleted > 0 ||
+            report.spriteHarvests > 0)
+        ) {
           setOfflineReport(report);
           if (phaseRef.current === 'playing') {
             setActiveModal('offline');
@@ -232,6 +267,190 @@ export function CloudValleyGameSection({
     });
   }, []);
 
+  const executeTileTool = useCallback(
+    (row: number, col: number, tool: ToolId, silentToast = false) => {
+      const sim = simRef.current;
+      const renderer = rendererRef.current!;
+      const avatar = avatarRef.current;
+      const tile = sim.tiles[getTileIndex(row, col)];
+      if (!tile) return;
+
+      if (!isTileUnlocked(sim, tile)) {
+        if (!silentToast) {
+          if (tool === 'inspect') {
+            setActiveModal('automation');
+          } else {
+            showToast(
+              `Khu ${tile.terraceId} chưa khai phá — Mở trong "Chuồng & Tự Động"!`,
+              `Khu ${tile.terraceId} đang khóa!`
+            );
+          }
+        }
+        return;
+      }
+
+      const wb = tileToWorldBounds(row, col);
+      // Face toward the acted tile
+      const dx = wb.cx - avatar.x;
+      const dy = wb.cy - avatar.y;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        avatar.facing = dx < 0 ? 'left' : 'right';
+      } else if (Math.abs(dy) > 0.05) {
+        avatar.facing = dy < 0 ? 'up' : 'down';
+      }
+
+      if (tool === 'inspect') {
+        if (!silentToast) {
+          const cropInfo = tile.crop ? ` · ${CROPS[tile.crop.cropId]?.name}` : '';
+          showToast(
+            `Ô (${row + 1},${col + 1}): Ẩm ${Math.round(tile.moisture)}% · Màu mỡ ${Math.round(tile.fertility)}%${cropInfo}`
+          );
+        }
+        return;
+      }
+
+      avatar.actionTimer = 0.28;
+      avatar.actionTool = tool;
+
+      const feedback = applyToolAction(sim, tool, row, col, {
+        seedId: selectedSeedRef.current,
+        structureId: selectedStructRef.current,
+      });
+
+      if (feedback.changed) {
+        const burstColor =
+          tool === 'water'
+            ? '#38BDF8'
+            : tool === 'harvest'
+            ? '#FDE047'
+            : tool === 'mutagen'
+            ? '#C084FC'
+            : '#86EFAC';
+        for (const pos of feedback.affectedTiles) {
+          const posWb = tileToWorldBounds(pos.row, pos.col);
+          renderer.spawnBurstWorld(posWb.cx, posWb.cy, burstColor, 7);
+        }
+        if (feedback.hybridUnlocked) {
+          renderer.spawnPopupWorld(wb.cx, wb.cy, `Thu: ${feedback.hybridUnlocked}!`, '#E9D5FF');
+          avatar.speechText = `Tuyệt vời! ${feedback.hybridUnlocked}!`;
+          avatar.speechTimer = 2.2;
+          cloudValleyAudio.play('hybrid');
+        } else if (tool === 'harvest') {
+          renderer.spawnPopupWorld(wb.cx, wb.cy, `+${feedback.affectedTiles.length} Thu hoạch!`, '#FEF08A');
+          avatar.speechText = 'Thu hoạch đầy giỏ!';
+          avatar.speechTimer = 1.6;
+          cloudValleyAudio.play('harvest');
+        } else {
+          if (tool === 'hoe') {
+            renderer.spawnPopupWorld(wb.cx, wb.cy, 'Xới đất!', '#FDE68A');
+          } else if (tool === 'water') {
+            renderer.spawnPopupWorld(wb.cx, wb.cy, 'Tưới mát!', '#BAE6FD');
+          } else if (tool === 'seed') {
+            renderer.spawnPopupWorld(wb.cx, wb.cy, 'Gieo hạt!', '#BBF7D0');
+          }
+          if (feedback.sound) cloudValleyAudio.play(feedback.sound);
+        }
+        void saveCloudValleyState(sim);
+        syncHudNow();
+      } else if (feedback.message && !silentToast) {
+        showToast(feedback.message);
+        cloudValleyAudio.play('error');
+      }
+    },
+    [showToast, syncHudNow]
+  );
+
+  const interactWithBuilding = useCallback(
+    (buildingId: BuildingId) => {
+      const sim = simRef.current;
+      const avatar = avatarRef.current;
+      const renderer = rendererRef.current!;
+
+      if (buildingId === 'barn') {
+        setActiveModal('workshop');
+      } else if (buildingId === 'merchant') {
+        setActiveModal('orders');
+      } else if (buildingId === 'board') {
+        setActiveModal('almanac');
+      } else if (buildingId === 'pen') {
+        setActiveModal('automation');
+      } else if (buildingId === 'well') {
+        avatar.actionTimer = 0.28;
+        avatar.actionTool = 'well';
+        const res = drawWellWater(sim);
+        renderer.spawnBurstWorld(7.8, 3.0, '#38BDF8', 10);
+        renderer.spawnPopupWorld(7.8, 2.7, 'Nước Suối Mây!', '#BAE6FD');
+        cloudValleyAudio.play('well');
+        showToast(res.message, 'Nước giếng mát quá!');
+        void saveCloudValleyState(sim);
+        syncHudNow();
+      }
+    },
+    [showToast, syncHudNow]
+  );
+
+  const interactWithAnimal = useCallback(
+    (animalId: string, worldX?: number, worldY?: number) => {
+      const sim = simRef.current;
+      const avatar = avatarRef.current;
+      const renderer = rendererRef.current!;
+      avatar.actionTimer = 0.26;
+      avatar.actionTool = 'animal';
+      const res = tendLivestock(sim, animalId);
+      if (worldX !== undefined && worldY !== undefined) {
+        renderer.spawnBurstWorld(worldX, worldY, res.ok ? '#FDE047' : '#FCA5A5', 6);
+        if (res.ok) {
+          renderer.spawnPopupWorld(worldX, worldY, res.message, '#FEF08A');
+        }
+      }
+      cloudValleyAudio.play(res.ok ? 'animal' : 'error');
+      showToast(res.message, res.ok ? 'Dễ thương quá!' : undefined);
+      void saveCloudValleyState(sim);
+      syncHudNow();
+    },
+    [showToast, syncHudNow]
+  );
+
+  const triggerAvatarContextAction = useCallback(() => {
+    const sim = simRef.current;
+    const avatar = avatarRef.current;
+    const nowSec = performance.now() / 1000;
+    const target = detectInteractTarget(sim, avatar, selectedSeedRef.current, nowSec);
+    const mode = activeModeRef.current;
+
+    if (!target) {
+      showToast('Hãy bước lại gần luống đất, vật nuôi hoặc công trình để thao tác!', 'Bước tới gần thêm chút nữa!');
+      return;
+    }
+
+    if (target.kind === 'building') {
+      interactWithBuilding(target.buildingId);
+      return;
+    }
+
+    if (target.kind === 'animal') {
+      interactWithAnimal(target.animalId, target.worldX, target.worldY);
+      return;
+    }
+
+    if (target.kind === 'locked_terrace') {
+      const res = unlockTerrace(sim, target.terraceId);
+      if (res.ok) {
+        cloudValleyAudio.play('levelup');
+        showToast(res.message, `Mở Khu ${target.terraceId} rồi!`);
+        void saveCloudValleyState(sim);
+        syncHudNow();
+      } else {
+        setActiveModal('automation');
+        showToast(res.message);
+      }
+      return;
+    }
+
+    const toolToUse: ToolId = mode === 'auto' ? target.smartTool : mode;
+    executeTileTool(target.row, target.col, toolToUse, false);
+  }, [executeTileTool, interactWithAnimal, interactWithBuilding, showToast, syncHudNow]);
+
   // ResizeObserver for crisp DPR Canvas scaling
   useEffect(() => {
     const mount = mountRef.current;
@@ -242,12 +461,31 @@ export function CloudValleyGameSection({
       const rect = mount.getBoundingClientRect();
       const width = Math.max(320, Math.round(rect.width));
       const height = Math.max(320, Math.round(rect.height));
-      const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+      const dpr = Math.min(1.25, window.devicePixelRatio || 1);
       viewportSizeRef.current = { width, height, dpr };
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
+      if (phaseRef.current === 'playing' && rendererRef.current) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          const nowSec = performance.now() / 1000;
+          const metrics = rendererRef.current.computeMetrics(width, height, avatarRef.current, cameraRef.current.zoom);
+          const target = detectInteractTarget(simRef.current, avatarRef.current, selectedSeedRef.current, nowSec);
+          rendererRef.current.render(
+            ctx,
+            simRef.current,
+            avatarRef.current,
+            metrics,
+            nowSec,
+            hoverTileRef.current,
+            activeModeRef.current,
+            target
+          );
+        }
+      }
     };
 
     updateSize();
@@ -256,11 +494,12 @@ export function CloudValleyGameSection({
     return () => ro.disconnect();
   }, [phase]);
 
-  // Main Canvas Loop decoupled from React state
+  // Main Canvas & Avatar Kinematics Loop decoupled from React state
   useEffect(() => {
     let rafId = 0;
     let lastTs = performance.now();
     let lastPaintTs = 0;
+    let nextPaintGapMs = 33;
     let hudAccum = 0;
 
     const frame = (now: number) => {
@@ -273,36 +512,83 @@ export function CloudValleyGameSection({
 
       const renderer = rendererRef.current!;
       const sim = simRef.current;
+      const avatar = avatarRef.current;
 
       if (phaseRef.current === 'playing' && activeModalRef.current === null) {
+        // 1. Resolve directional input (Keyboard + D-Pad OR Click-to-Walk)
+        const keys = keysPressedRef.current;
+        let ix = dpadVecRef.current.x;
+        let iy = dpadVecRef.current.y;
+        if (keys.has('KeyA') || keys.has('ArrowLeft')) ix -= 1;
+        if (keys.has('KeyD') || keys.has('ArrowRight')) ix += 1;
+        if (keys.has('KeyW') || keys.has('ArrowUp')) iy -= 1;
+        if (keys.has('KeyS') || keys.has('ArrowDown')) iy += 1;
+
+        if (Math.hypot(ix, iy) > 0.05) {
+          walkGoalRef.current = null;
+        } else if (walkGoalRef.current) {
+          const g = walkGoalRef.current;
+          const dx = g.wx - avatar.x;
+          const dy = g.wy - avatar.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist <= 0.28) {
+            const cb = g.onArrive;
+            walkGoalRef.current = null;
+            if (cb) cb();
+          } else {
+            ix = dx;
+            iy = dy;
+          }
+        }
+
+        const moved = stepAvatarMovement(avatar, ix, iy, dt);
+        stepSoundCooldownRef.current = Math.max(0, stepSoundCooldownRef.current - dt);
+        if (moved && stepSoundCooldownRef.current <= 0) {
+          cloudValleyAudio.play('step');
+          stepSoundCooldownRef.current = 0.24;
+        }
+
+        // 2. Farm World Simulation Tick
         const simDt = dt * speedRef.current;
         const tickRes = tickCloudValleySimulation(sim, simDt);
         renderer.stepEffects(dt, sim);
         if (tickRes.hybridsDiscovered.length > 0) {
           cloudValleyAudio.play('hybrid');
           const names = tickRes.hybridsDiscovered.map((id) => CROPS[id]?.name ?? id).join(', ');
-          showToast(`Đột biến giống mới: ${names}!`);
+          showToast(`Đột biến giống mới: ${names}!`, `Có Mầm Lai ${names}!`);
         }
       }
 
-      // Pace full-canvas rasterization cleanly (~40fps) so software compositors & laptops stay cool
-      if (now - lastPaintTs >= 24) {
+      // Adaptive canvas rasterization (~30fps max, backs off if software raster takes >15ms)
+      if (now - lastPaintTs >= nextPaintGapMs) {
         lastPaintTs = now;
         const canvas = canvasRef.current;
         if (canvas) {
           const ctx = canvas.getContext('2d');
           if (ctx) {
+            const t0 = performance.now();
             const { width, height, dpr } = viewportSizeRef.current;
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            const cam = cameraRef.current;
-            const metrics = renderer.computeMetrics(width, height, cam.zoom, cam.panX, cam.panY);
-            renderer.render(ctx, sim, metrics, now / 1000, hoverTileRef.current, activeToolRef.current);
+            const metrics = renderer.computeMetrics(width, height, avatar, cameraRef.current.zoom);
+            const target = detectInteractTarget(sim, avatar, selectedSeedRef.current, now / 1000);
+            renderer.render(
+              ctx,
+              sim,
+              avatar,
+              metrics,
+              now / 1000,
+              hoverTileRef.current,
+              activeModeRef.current,
+              target
+            );
+            const renderCost = performance.now() - t0;
+            nextPaintGapMs = Math.max(33, Math.min(90, renderCost * 2.5));
           }
         }
       }
 
       hudAccum += dt;
-      if (hudAccum >= 0.22) {
+      if (hudAccum >= 0.16) {
         hudAccum = 0;
         if (phaseRef.current === 'playing') {
           setHudTick((v) => v + 1);
@@ -314,7 +600,7 @@ export function CloudValleyGameSection({
     return () => window.cancelAnimationFrame(rafId);
   }, [showToast]);
 
-  // Unified Keyboard Shortcuts
+  // Unified Keyboard Shortcuts & Movement Keys
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
@@ -343,28 +629,55 @@ export function CloudValleyGameSection({
         return;
       }
 
-      if (phaseRef.current !== 'playing') return;
+      if (phaseRef.current !== 'playing' || activeModalRef.current !== null) return;
+
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
+        e.preventDefault();
+        keysPressedRef.current.add(e.code);
+        return;
+      }
+
+      if ((e.code === 'Space' || e.code === 'Enter') && !e.repeat) {
+        e.preventDefault();
+        triggerAvatarContextAction();
+        return;
+      }
+
+      if (e.key === '0' || e.key === 'q' || e.key === 'Q') {
+        setActiveMode('auto');
+        return;
+      }
 
       const idx = Number(e.key) - 1;
       if (idx >= 0 && idx < TOOL_BUTTONS.length) {
-        setActiveTool(TOOL_BUTTONS[idx].id);
+        setActiveMode(TOOL_BUTTONS[idx].id);
       }
     };
 
-    const onBlur = () => {
+    const onKeyUp = (e: KeyboardEvent) => {
+      keysPressedRef.current.delete(e.code);
+    };
+
+    const clearHeld = () => {
+      keysPressedRef.current.clear();
+      dpadVecRef.current = { x: 0, y: 0 };
       isPaintingRef.current = false;
       lastPaintedKeyRef.current = null;
     };
 
     window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('blur', onBlur);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', clearHeld);
+    document.addEventListener('visibilitychange', clearHeld);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', clearHeld);
+      document.removeEventListener('visibilitychange', clearHeld);
     };
-  }, [handleStartGame, handleToggleMute]);
+  }, [handleStartGame, handleToggleMute, triggerAvatarContextAction]);
 
-  const applyAtScreenPoint = useCallback(
+  const handleCanvasClickOrDrag = useCallback(
     (clientX: number, clientY: number, isDrag = false) => {
       const canvas = canvasRef.current;
       const renderer = rendererRef.current;
@@ -372,80 +685,85 @@ export function CloudValleyGameSection({
       const rect = canvas.getBoundingClientRect();
       const px = clientX - rect.left;
       const py = clientY - rect.top;
-      const cam = cameraRef.current;
-      const metrics = renderer.computeMetrics(rect.width, rect.height, cam.zoom, cam.panX, cam.panY);
+      const avatar = avatarRef.current;
+      const sim = simRef.current;
+      const metrics = renderer.computeMetrics(rect.width, rect.height, avatar, cameraRef.current.zoom);
+      const { wx, wy } = renderer.screenToWorld(px, py, metrics);
+
+      // 1. Check click on Buildings or Animals (non-drag only)
+      if (!isDrag) {
+        const nowSec = performance.now() / 1000;
+        for (let i = 0; i < sim.livestock.length; i++) {
+          const an = sim.livestock[i];
+          const apos = getAnimalWorldPos(i, nowSec);
+          if (Math.hypot(wx - apos.x, wy - apos.y) <= 0.85) {
+            if (Math.hypot(avatar.x - apos.x, avatar.y - apos.y) <= 1.65) {
+              interactWithAnimal(an.id, apos.x, apos.y);
+            } else {
+              walkGoalRef.current = {
+                wx: Math.max(16.2, apos.x - 0.5),
+                wy: apos.y,
+                onArrive: () => interactWithAnimal(an.id, apos.x, apos.y),
+              };
+            }
+            return;
+          }
+        }
+
+        for (const b of FARM_BUILDINGS) {
+          if (wx >= b.x1 - 0.2 && wx <= b.x2 + 0.2 && wy >= b.y1 - 0.2 && wy <= b.y2 + 0.2) {
+            if (Math.hypot(avatar.x - b.interactX, avatar.y - b.interactY) <= 1.45) {
+              interactWithBuilding(b.id);
+            } else {
+              walkGoalRef.current = {
+                wx: b.interactX,
+                wy: b.interactY,
+                onArrive: () => interactWithBuilding(b.id),
+              };
+            }
+            return;
+          }
+        }
+      }
+
+      // 2. Check click/drag on a soil plot
       const hit = renderer.screenToTile(px, py, metrics);
       hoverTileRef.current = hit;
       setHoveredTileCoords(hit);
 
-      if (!hit) return;
+      if (!hit) {
+        if (!isDrag) {
+          walkGoalRef.current = { wx, wy };
+        }
+        return;
+      }
+
       const key = `${hit.row},${hit.col}`;
       if (isDrag && lastPaintedKeyRef.current === key) return;
       lastPaintedKeyRef.current = key;
 
-      const sim = simRef.current;
       const tile = sim.tiles[getTileIndex(hit.row, hit.col)];
       if (!tile) return;
+      const wb = tileToWorldBounds(hit.row, hit.col);
+      const mode = activeModeRef.current;
+      const chosenTool: ToolId = mode === 'auto' ? resolveSmartToolForTile(tile) : mode;
 
-      // Clicking a locked terrace tile shows non-blocking hint (or opens expansion panel with Inspect tool)
-      if (!isTileUnlocked(sim, tile)) {
-        if (!isDrag) {
-          if (activeToolRef.current === 'inspect') {
-            setActiveModal('automation');
-          } else {
-            showToast(`Ô này thuộc Tầng ${tile.terraceId} (chưa mở) — Nhấn "Chuồng & Tự Động" để khai phá!`);
-          }
+      // If within reach (~2.1 tiles), act right away; otherwise walk Avatar over and act on arrival!
+      const distToTile = Math.hypot(avatar.x - wb.cx, avatar.y - wb.cy);
+      if (distToTile <= 2.15 || isDrag) {
+        executeTileTool(hit.row, hit.col, chosenTool, isDrag);
+        if (distToTile > 2.15 && isDrag) {
+          walkGoalRef.current = { wx: wb.cx, wy: wb.cy };
         }
-        return;
-      }
-
-      const tool = activeToolRef.current;
-      if (tool === 'inspect') {
-        if (!isDrag) {
-          const cropInfo = tile.crop ? ` · ${CROPS[tile.crop.cropId]?.name}` : '';
-          showToast(
-            `Ô (${hit.row + 1},${hit.col + 1}): Độ ẩm ${Math.round(tile.moisture)}% · Màu mỡ ${Math.round(tile.fertility)}%${cropInfo}`
-          );
-        }
-        return;
-      }
-
-      const feedback = applyToolAction(sim, tool, hit.row, hit.col, {
-        seedId: selectedSeedRef.current,
-        structureId: selectedStructRef.current,
-      });
-
-      if (feedback.changed) {
-        const burstColor =
-          tool === 'water'
-            ? '#38BDF8'
-            : tool === 'harvest'
-            ? '#FDE047'
-            : tool === 'mutagen'
-            ? '#C084FC'
-            : '#86EFAC';
-        for (const pos of feedback.affectedTiles) {
-          const sp = renderer.tileToScreen(pos.row, pos.col, metrics);
-          renderer.spawnBurst(sp.x, sp.y, burstColor, 7);
-        }
-        const centerSp = renderer.tileToScreen(hit.row, hit.col, metrics);
-        if (feedback.hybridUnlocked) {
-          renderer.spawnPopup(centerSp.x, centerSp.y, `Thu: ${feedback.hybridUnlocked}!`, '#E9D5FF');
-          cloudValleyAudio.play('hybrid');
-        } else if (tool === 'harvest') {
-          renderer.spawnPopup(centerSp.x, centerSp.y, `+${feedback.affectedTiles.length} Thu hoạch!`, '#FEF08A');
-          cloudValleyAudio.play('harvest');
-        } else if (feedback.sound) {
-          cloudValleyAudio.play(feedback.sound);
-        }
-        void saveCloudValleyState(sim);
-        syncHudNow();
-      } else if (feedback.message && !isDrag) {
-        showToast(feedback.message);
-        cloudValleyAudio.play('error');
+      } else {
+        walkGoalRef.current = {
+          wx: wb.cx,
+          wy: wb.cy,
+          onArrive: () => executeTileTool(hit.row, hit.col, chosenTool, false),
+        };
       }
     },
-    [showToast, syncHudNow]
+    [executeTileTool, interactWithAnimal, interactWithBuilding]
   );
 
   const handlePointerDown = (e: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -453,7 +771,7 @@ export function CloudValleyGameSection({
     isPaintingRef.current = true;
     lastPaintedKeyRef.current = null;
     e.currentTarget.setPointerCapture(e.pointerId);
-    applyAtScreenPoint(e.clientX, e.clientY, false);
+    handleCanvasClickOrDrag(e.clientX, e.clientY, false);
   };
 
   const handlePointerMove = (e: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -462,15 +780,12 @@ export function CloudValleyGameSection({
     const renderer = rendererRef.current;
     if (!canvas || !renderer) return;
     const rect = canvas.getBoundingClientRect();
-    const cam = cameraRef.current;
-    const metrics = renderer.computeMetrics(rect.width, rect.height, cam.zoom, cam.panX, cam.panY);
+    const metrics = renderer.computeMetrics(rect.width, rect.height, avatarRef.current, cameraRef.current.zoom);
     const hit = renderer.screenToTile(e.clientX - rect.left, e.clientY - rect.top, metrics);
     hoverTileRef.current = hit;
-    setHoveredTileCoords((prev) =>
-      prev?.row === hit?.row && prev?.col === hit?.col ? prev : hit
-    );
+    setHoveredTileCoords((prev) => (prev?.row === hit?.row && prev?.col === hit?.col ? prev : hit));
     if (isPaintingRef.current && activeModal === null) {
-      applyAtScreenPoint(e.clientX, e.clientY, true);
+      handleCanvasClickOrDrag(e.clientX, e.clientY, true);
     }
   };
 
@@ -481,7 +796,7 @@ export function CloudValleyGameSection({
 
   const handleWheel = (e: ReactWheelEvent<HTMLCanvasElement>) => {
     const delta = e.deltaY > 0 ? -0.08 : 0.08;
-    cameraRef.current.zoom = Math.max(0.78, Math.min(1.42, cameraRef.current.zoom + delta));
+    cameraRef.current.zoom = Math.max(0.82, Math.min(1.4, cameraRef.current.zoom + delta));
   };
 
   const handleSleepNextDay = () => {
@@ -490,7 +805,8 @@ export function CloudValleyGameSection({
     void saveCloudValleyState(simRef.current);
     syncHudNow();
     showToast(
-      `Bình minh Ngày ${simRef.current.day}/7 · ${SEASON_META[res.season].name} (${WEATHER_LABELS[simRef.current.weather]})`
+      `Bình minh Ngày ${simRef.current.day}/7 · ${SEASON_META[res.season].name} (${WEATHER_LABELS[simRef.current.weather]})`,
+      'Chào ngày mới!'
     );
   };
 
@@ -534,12 +850,23 @@ export function CloudValleyGameSection({
     e.target.value = '';
   };
 
+  const setDpadDir = (x: number, y: number) => {
+    dpadVecRef.current = { x, y };
+  };
+
   const sim = simRef.current;
+  const avatar = avatarRef.current;
   const seasonId = getSeasonId(sim);
   const seasonMeta = SEASON_META[seasonId];
   const xpNeeded = getXpForNextLevel(sim.level);
   const readyArtisanCount = sim.artisanQueue.filter((s) => s.ready).length;
   const readyOrderCount = sim.orders.filter((o) => (sim.inventory[o.itemId] ?? 0) >= o.qty).length;
+
+  const liveTarget = detectInteractTarget(sim, avatar, selectedSeedId, performance.now() / 1000);
+  const actionButtonLabel =
+    activeMode !== 'auto'
+      ? TOOL_BUTTONS.find((t) => t.id === activeMode)?.label ?? 'Thao Tác'
+      : liveTarget?.label ?? 'Thao Tác';
 
   const hoveredTile = hoveredTileCoords
     ? sim.tiles[getTileIndex(hoveredTileCoords.row, hoveredTileCoords.col)]
@@ -553,12 +880,14 @@ export function CloudValleyGameSection({
 
   return (
     <section
-      aria-label="Thung Lũng Mây — Cloud Valley Homestead"
+      aria-label="Thung Lũng Mây — Nông Trại Avatar"
       data-testid="cloud-valley-root"
       data-day={sim.day}
       data-season={seasonId}
       data-gold={sim.gold}
       data-level={sim.level}
+      data-avatar-x={avatar.x.toFixed(2)}
+      data-avatar-y={avatar.y.toFixed(2)}
       data-state={phase}
       className={containerHeightClass}
     >
@@ -573,7 +902,7 @@ export function CloudValleyGameSection({
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
           onWheel={handleWheel}
-          className="block w-full h-full touch-none cursor-crosshair outline-none"
+          className="block w-full h-full touch-none cursor-pointer outline-none"
         />
       </div>
 
@@ -590,8 +919,8 @@ export function CloudValleyGameSection({
           <div className="relative z-10 max-w-md pt-4 sm:pt-8 space-y-5">
             <CloudValleyTitleLockup />
 
-            <p className="text-sm sm:text-base font-medium text-[#4A311D] leading-relaxed max-w-[36ch]">
-              Canh tác ruộng bậc thang trên tầng mây, lai tạo thực vật hiếm, vận hành xưởng thủ công 3 tầng và triệu hồi Tinh Linh Đất.
+            <p className="text-sm sm:text-base font-medium text-[#4A311D] leading-relaxed max-w-[38ch]">
+              Nhập vai nông dân dạo bước quanh nông trại, cuốc đất gieo hạt, chăm Gà Bò Cừu, gặp Bác Lái Buôn và lai tạo cây hiếm ngay trên tầng mây.
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-1">
@@ -603,7 +932,7 @@ export function CloudValleyGameSection({
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-[#2E7D32] hover:bg-[#1B5E20] text-white font-bold text-base shadow-[0_6px_18px_rgba(27,94,32,0.32)] transition-transform active:scale-95 cursor-pointer"
               >
                 <Play className="w-4 h-4 fill-current" />
-                <span>{hasExistingSave ? 'Tiếp Tục Canh Tác' : 'Bắt Đầu Canh Tác'}</span>
+                <span>{hasExistingSave ? 'Vào Nông Trại' : 'Bắt Đầu Nông Trại'}</span>
               </button>
 
               <label className="inline-flex items-center gap-1.5 px-4 py-3 rounded-xl border border-[#8C6239]/50 bg-[#FFFDF8]/95 hover:bg-[#F5E8D0] text-[#4A311D] text-xs font-bold cursor-pointer shadow-sm">
@@ -615,7 +944,7 @@ export function CloudValleyGameSection({
           </div>
 
           <p className="relative z-10 text-xs font-semibold text-[#5C3A21] tracking-wide">
-            Nhấp / Kéo Chuột Lên Ô Đất · Phím 1–8 Đổi Công Cụ · Enter / Space Bắt Đầu
+            WASD / Mũi Tên Di Chuyển · Space Tác Vụ · Click Ô Đất Chạy Tới Làm Việc · Enter Bắt Đầu
           </p>
         </div>
       )}
@@ -623,9 +952,9 @@ export function CloudValleyGameSection({
       {/* PLAYING HUD OVERLAY */}
       {phase !== 'title' && (
         <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between p-2.5 sm:p-3.5">
-          {/* TOP BAR: Left Homestead Status + Right Utility Icons */}
+          {/* TOP BAR: Left Farmer Stats + Right Menu Buttons */}
           <div className="flex flex-wrap items-start justify-between gap-2">
-            {/* Top-Left Homestead Readouts */}
+            {/* Top-Left Farmer Status */}
             <div className="pointer-events-auto w-full sm:w-auto flex flex-wrap items-center justify-between sm:justify-start gap-x-2.5 gap-y-1.5 px-3 py-2 rounded-xl border-2 border-[#7C5230] bg-[#FDF7EC]/95 shadow-md text-[#2D1E12]">
               <div className="flex items-center gap-1.5 pr-2 border-r border-[#D6BE96]">
                 <Coins className="w-4 h-4 text-[#D97706]" />
@@ -695,7 +1024,7 @@ export function CloudValleyGameSection({
               </div>
             </div>
 
-            {/* Top-Right Action Menus & Utility Controls */}
+            {/* Top-Right Menu & Utility Controls */}
             <div className="pointer-events-auto flex flex-wrap items-center gap-1.5">
               <button
                 type="button"
@@ -704,7 +1033,7 @@ export function CloudValleyGameSection({
                 className="relative inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl border-2 border-[#7C5230] bg-[#FDF7EC]/95 hover:bg-[#F3E6CE] text-[#2D1E12] text-xs font-bold shadow-md cursor-pointer"
               >
                 <ShoppingBag className="w-4 h-4 text-[#B45309]" />
-                <span className="hidden md:inline">Đơn Hàng</span>
+                <span className="hidden md:inline">Lái Buôn & Hạt</span>
                 {readyOrderCount > 0 && (
                   <span className="px-1.5 py-0.2 rounded-full bg-[#2E7D32] text-white text-[10px] font-bold tabular-nums">
                     {readyOrderCount}
@@ -750,7 +1079,7 @@ export function CloudValleyGameSection({
               <button
                 type="button"
                 data-testid="cv-open-settings"
-                title="Lưu File JSON & Hướng Dẫn"
+                title="Nhân Vật, Lưu File JSON & Hướng Dẫn"
                 onClick={() => setActiveModal('settings')}
                 className="w-9 h-9 rounded-xl border-2 border-[#7C5230] bg-[#FDF7EC]/95 hover:bg-[#F3E6CE] text-[#2D1E12] flex items-center justify-center shadow-md cursor-pointer"
               >
@@ -800,116 +1129,208 @@ export function CloudValleyGameSection({
             </div>
           </div>
 
-          {/* CENTER TOAST (Non-blocking) */}
+          {/* CENTER TOAST */}
           {toastText && (
             <div className="self-center px-4 py-1.5 rounded-xl bg-[#2D1E12]/90 text-[#FEF3C7] text-xs font-bold shadow-lg border border-[#F6D38C]/50">
               {toastText}
             </div>
           )}
 
-          {/* BOTTOM TOOL & CONTEXTUAL SEED/BLUEPRINT DOCK */}
-          <div className="flex flex-col items-center gap-1.5">
-            {/* Tile Inspector Readout OR Contextual Seed / Structure Picker */}
-            {activeTool === 'seed' && (
-              <div className="pointer-events-auto max-w-full overflow-x-auto no-scrollbar flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-[#7C5230] bg-[#FDF7EC]/95 shadow-md">
-                {Object.values(CROPS)
-                  .filter((c) => c.seedPrice > 0)
-                  .map((crop) => {
-                    const locked = sim.level < crop.unlockLevel;
-                    const selected = selectedSeedId === crop.id;
-                    const seasonOk = crop.seasons.includes(seasonId);
+          {/* BOTTOM CONTROLS: D-PAD (Left) + TOOL BAR (Center) + AVATAR ACTION OK BUTTON (Right) */}
+          <div className="flex flex-col gap-1.5">
+            {/* Contextual Seed / Blueprint Picker OR Tile Hover Info */}
+            <div className="flex justify-center">
+              {(activeMode === 'seed' || activeMode === 'auto') && (
+                <div className="pointer-events-auto max-w-[95vw] overflow-x-auto no-scrollbar flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-[#7C5230] bg-[#FDF7EC]/94 shadow-md">
+                  <span className="text-[10px] font-bold text-[#7C5230] uppercase whitespace-nowrap shrink-0">Hạt:</span>
+                  {Object.values(CROPS)
+                    .filter(
+                      (c) =>
+                        c.seedPrice > 0 &&
+                        (sim.level >= c.unlockLevel ||
+                          (sim.seedBags?.[c.id] ?? 0) > 0 ||
+                          c.unlockLevel <= sim.level + 1)
+                    )
+                    .map((crop) => {
+                      const locked = sim.level < crop.unlockLevel;
+                      const selected = selectedSeedId === crop.id;
+                      const inBag = sim.seedBags?.[crop.id] ?? 0;
+                      return (
+                        <button
+                          key={crop.id}
+                          type="button"
+                          disabled={locked}
+                          onClick={() => setSelectedSeedId(crop.id)}
+                          className={`px-2 py-0.5 rounded-lg border text-[11px] font-bold whitespace-nowrap cursor-pointer ${
+                            selected
+                              ? 'bg-[#2E7D32] text-white border-[#14532D]'
+                              : locked
+                              ? 'bg-[#E5DCCB] text-[#78716C] border-[#D6BE96] opacity-55'
+                              : 'bg-[#FFFDF8] text-[#2D1E12] border-[#D6BE96] hover:bg-[#F3E6CE]'
+                          }`}
+                        >
+                          {crop.name} {inBag > 0 ? `(Túi ${inBag})` : locked ? `(Cấp ${crop.unlockLevel})` : `(${crop.seedPrice}g)`}
+                        </button>
+                      );
+                    })}
+                </div>
+              )}
+
+              {activeMode === 'build' && (
+                <div className="pointer-events-auto max-w-full overflow-x-auto no-scrollbar flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-[#7C5230] bg-[#FDF7EC]/92 shadow-md">
+                  {Object.values(AUTOMATION_BLUEPRINTS).map((bp) => {
+                    const selected = selectedStructureId === bp.id;
                     return (
                       <button
-                        key={crop.id}
+                        key={bp.id}
                         type="button"
-                        disabled={locked}
-                        onClick={() => setSelectedSeedId(crop.id)}
-                        className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold whitespace-nowrap cursor-pointer ${
+                        onClick={() => setSelectedStructureId(bp.id)}
+                        className={`px-2.5 py-0.5 rounded-lg border text-[11px] font-bold whitespace-nowrap cursor-pointer ${
                           selected
-                            ? 'bg-[#2E7D32] text-white border-[#14532D]'
-                            : locked
-                            ? 'bg-[#E5DCCB] text-[#78716C] border-[#D6BE96] opacity-60'
-                            : 'bg-[#FFFDF8] text-[#2D1E12] border-[#D6BE96] hover:bg-[#F3E6CE]'
+                            ? 'bg-[#0284C7] text-white border-[#0369A1]'
+                            : 'bg-[#FFFDF8] text-[#2D1E12] border-[#D6BE96]'
                         }`}
                       >
-                        {crop.name} · {locked ? `Cấp ${crop.unlockLevel}` : `${crop.seedPrice}g`}
-                        {!seasonOk && !locked ? ' (Nhà Kính)' : ''}
+                        {bp.name} ({bp.goldCost}g · {bp.badgeCost}HH)
                       </button>
                     );
                   })}
-              </div>
-            )}
+                </div>
+              )}
+            </div>
 
-            {activeTool === 'build' && (
-              <div className="pointer-events-auto max-w-full overflow-x-auto no-scrollbar flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-[#7C5230] bg-[#FDF7EC]/95 shadow-md">
-                {Object.values(AUTOMATION_BLUEPRINTS).map((bp) => {
-                  const selected = selectedStructureId === bp.id;
-                  return (
-                    <button
-                      key={bp.id}
-                      type="button"
-                      onClick={() => setSelectedStructureId(bp.id)}
-                      className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold whitespace-nowrap cursor-pointer ${
-                        selected
-                          ? 'bg-[#0284C7] text-white border-[#0369A1]'
-                          : 'bg-[#FFFDF8] text-[#2D1E12] border-[#D6BE96]'
-                      }`}
-                    >
-                      {bp.name} ({bp.goldCost}g · {bp.badgeCost}HH)
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {hoveredTile && isTileUnlocked(sim, hoveredTile) && activeTool !== 'seed' && activeTool !== 'build' && (
-              <div className="px-3 py-1 rounded-lg bg-[#2D1E12]/88 text-[#FFFDF8] text-[11px] font-semibold tabular-nums shadow">
+            {hoveredTile && isTileUnlocked(sim, hoveredTile) && activeMode !== 'build' && (
+              <div className="self-center px-3 py-0.5 rounded-lg bg-[#2D1E12]/85 text-[#FFFDF8] text-[11px] font-semibold tabular-nums shadow">
                 Ô ({hoveredTile.row + 1},{hoveredTile.col + 1}) · Ẩm {Math.round(hoveredTile.moisture)}% · Màu mỡ{' '}
                 {Math.round(hoveredTile.fertility)}%
                 {isTileInGreenhouse(sim, hoveredTile.row, hoveredTile.col) ? ' · Nhà Kính' : ''}
                 {hoveredTile.crop
                   ? ` · ${CROPS[hoveredTile.crop.cropId]?.name} (${
                       isCropMature(hoveredTile.crop)
-                        ? 'Sẵn sàng thu hoạch!'
+                        ? 'Chín!'
                         : `${Math.round(
                             (hoveredTile.crop.progressSeconds / CROPS[hoveredTile.crop.cropId].growthSeconds) * 100
                           )}%`
                     })`
                   : hoveredTile.hasWeed
-                  ? ' · Có Cỏ Dại'
+                  ? ' · Cỏ Dại'
                   : hoveredTile.wildMushroom
-                  ? ' · Nấm Rừng Quý'
+                  ? ' · Nấm Rừng'
                   : ''}
               </div>
             )}
 
-            {/* Main Tool Hotbar */}
-            <div className="pointer-events-auto max-w-full overflow-x-auto no-scrollbar flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 sm:py-2 rounded-2xl border-2 border-[#7C5230] bg-[#FDF7EC]/95 shadow-xl">
-              {TOOL_BUTTONS.map((tb) => {
-                const active = activeTool === tb.id;
-                return (
-                  <button
-                    key={tb.id}
-                    type="button"
-                    data-testid={`cv-tool-${tb.id}`}
-                    title={`${tb.label} [${tb.keyHint}]`}
-                    onClick={() => setActiveTool(tb.id)}
-                    className={`relative flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl border text-[11px] sm:text-xs font-bold whitespace-nowrap transition-transform cursor-pointer ${
-                      active
-                        ? 'bg-[#6E4726] text-white border-[#451A03] -translate-y-0.5 shadow-md'
-                        : 'bg-[#FFFDF8] text-[#2D1E12] border-[#D6BE96] hover:bg-[#F3E6CE]'
-                    }`}
-                  >
-                    <ToolSvgIcon tool={tb.id} className="w-4 h-4 shrink-0" />
-                    <span className="hidden sm:inline">{tb.label}</span>
-                    <span className="hidden lg:inline text-[10px] opacity-70 font-mono">[{tb.keyHint}]</span>
-                  </button>
-                );
-              })}
-
-              <div className="pl-1.5 sm:pl-2 border-l border-[#D6BE96] text-[10px] font-bold text-[#7C5230] whitespace-nowrap">
-                {sim.toolTier === 'iron' ? 'Cọ 3×3' : sim.toolTier === 'copper' ? 'Cọ 1×3' : 'Cọ 1×1'}
+            {/* Bottom Play Dock Row */}
+            <div className="flex items-end justify-between gap-1.5 sm:gap-2">
+              {/* Classic TeaMobi Virtual D-Pad (Bottom-Left) */}
+              <div
+                aria-label="Phím điều hướng"
+                className="pointer-events-auto grid grid-cols-3 gap-0.5 p-0.5 sm:p-1 rounded-2xl border-2 border-[#7C5230] bg-[#FDF7EC]/92 shadow-lg shrink-0"
+              >
+                <div />
+                <button
+                  type="button"
+                  aria-label="Đi lên"
+                  onPointerDown={() => setDpadDir(0, -1)}
+                  onPointerUp={() => setDpadDir(0, 0)}
+                  onPointerLeave={() => setDpadDir(0, 0)}
+                  onPointerCancel={() => setDpadDir(0, 0)}
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#EFE2CB] active:bg-[#D97706] active:text-white flex items-center justify-center text-[#4A311D] cursor-pointer"
+                >
+                  <ArrowUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
+                <div />
+                <button
+                  type="button"
+                  aria-label="Sang trái"
+                  onPointerDown={() => setDpadDir(-1, 0)}
+                  onPointerUp={() => setDpadDir(0, 0)}
+                  onPointerLeave={() => setDpadDir(0, 0)}
+                  onPointerCancel={() => setDpadDir(0, 0)}
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#EFE2CB] active:bg-[#D97706] active:text-white flex items-center justify-center text-[#4A311D] cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#E4D1B1]/60" />
+                <button
+                  type="button"
+                  aria-label="Sang phải"
+                  onPointerDown={() => setDpadDir(1, 0)}
+                  onPointerUp={() => setDpadDir(0, 0)}
+                  onPointerLeave={() => setDpadDir(0, 0)}
+                  onPointerCancel={() => setDpadDir(0, 0)}
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#EFE2CB] active:bg-[#D97706] active:text-white flex items-center justify-center text-[#4A311D] cursor-pointer"
+                >
+                  <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
+                <div />
+                <button
+                  type="button"
+                  aria-label="Đi xuống"
+                  onPointerDown={() => setDpadDir(0, 1)}
+                  onPointerUp={() => setDpadDir(0, 0)}
+                  onPointerLeave={() => setDpadDir(0, 0)}
+                  onPointerCancel={() => setDpadDir(0, 0)}
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#EFE2CB] active:bg-[#D97706] active:text-white flex items-center justify-center text-[#4A311D] cursor-pointer"
+                >
+                  <ArrowDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                </button>
+                <div />
               </div>
+
+              {/* Center Tool & Smart Mode Bar */}
+              <div className="pointer-events-auto flex-1 sm:flex-initial min-w-0 max-w-full overflow-x-auto no-scrollbar flex items-center gap-1 px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-2xl border-2 border-[#7C5230] bg-[#FDF7EC]/95 shadow-xl">
+                <button
+                  type="button"
+                  data-testid="cv-tool-auto"
+                  title="Chế độ Thông Minh tự chọn công cụ [Q / 0]"
+                  onClick={() => setActiveMode('auto')}
+                  className={`flex items-center gap-1 px-2 py-1.5 rounded-xl border text-[11px] font-bold whitespace-nowrap cursor-pointer shrink-0 ${
+                    activeMode === 'auto'
+                      ? 'bg-[#2E7D32] text-white border-[#14532D] shadow-sm'
+                      : 'bg-[#FFFDF8] text-[#2D1E12] border-[#D6BE96] hover:bg-[#F3E6CE]'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <span className="hidden md:inline">Thông Minh</span>
+                </button>
+
+                {TOOL_BUTTONS.map((tb) => {
+                  const active = activeMode === tb.id;
+                  return (
+                    <button
+                      key={tb.id}
+                      type="button"
+                      data-testid={`cv-tool-${tb.id}`}
+                      title={`${tb.label} [${tb.keyHint}]`}
+                      onClick={() => setActiveMode(tb.id)}
+                      className={`flex items-center gap-1 px-2 py-1.5 rounded-xl border text-[11px] font-bold whitespace-nowrap cursor-pointer shrink-0 ${
+                        active
+                          ? 'bg-[#6E4726] text-white border-[#451A03] shadow-sm'
+                          : 'bg-[#FFFDF8] text-[#2D1E12] border-[#D6BE96] hover:bg-[#F3E6CE]'
+                      }`}
+                    >
+                      <ToolSvgIcon tool={tb.id} className="w-4 h-4 shrink-0" />
+                      <span className="hidden lg:inline">{tb.label}</span>
+                    </button>
+                  );
+                })}
+
+                <div className="hidden sm:block pl-1.5 border-l border-[#D6BE96] text-[10px] font-bold text-[#7C5230] whitespace-nowrap">
+                  {sim.toolTier === 'iron' ? 'Cọ 3×3' : sim.toolTier === 'copper' ? 'Cọ 1×3' : 'Cọ 1×1'}
+                </div>
+              </div>
+
+              {/* TeaMobi Avatar Action OK Button (Bottom-Right) */}
+              <button
+                type="button"
+                data-testid="cv-action-btn"
+                onClick={triggerAvatarContextAction}
+                className="pointer-events-auto shrink-0 flex flex-col items-center justify-center min-w-[68px] sm:min-w-[116px] px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-2xl border-2 border-[#14532D] bg-[#2E7D32] hover:bg-[#1B5E20] active:scale-95 text-white shadow-xl cursor-pointer transition-transform"
+              >
+                <span className="text-[11px] sm:text-xs font-extrabold leading-tight truncate max-w-[80px] sm:max-w-[110px]">{actionButtonLabel}</span>
+                <span className="hidden sm:inline text-[10px] font-semibold text-emerald-100 mt-0.5">[Space]</span>
+              </button>
             </div>
           </div>
         </div>
@@ -950,7 +1371,7 @@ export function CloudValleyGameSection({
                 }}
                 className="w-full py-2 rounded-xl border border-[#C7AC82] bg-[#FFFDF8] hover:bg-[#F3E6CE] text-[#2D1E12] font-bold text-sm cursor-pointer"
               >
-                Lưu / Xuất File .JSON
+                Tùy Chỉnh Nhân Vật / Lưu JSON
               </button>
               <button
                 type="button"
@@ -1003,6 +1424,14 @@ export function CloudValleyGameSection({
           void saveCloudValleyState(simRef.current);
           syncHudNow();
         }}
+        onBuySeedPack={(seedId, qty) => {
+          const res = buySeedPack(simRef.current, seedId, qty);
+          cloudValleyAudio.play(res.ok ? 'coin' : 'error');
+          if (res.ok) setSelectedSeedId(seedId);
+          showToast(res.message);
+          void saveCloudValleyState(simRef.current);
+          syncHudNow();
+        }}
         onStartRecipe={(recipeId) => {
           const res = startArtisanRecipe(simRef.current, recipeId);
           cloudValleyAudio.play(res.ok ? 'build' : 'error');
@@ -1050,7 +1479,7 @@ export function CloudValleyGameSection({
         }}
         onTendLivestock={(animalId) => {
           const res = tendLivestock(simRef.current, animalId);
-          cloudValleyAudio.play(res.ok ? 'harvest' : 'error');
+          cloudValleyAudio.play(res.ok ? 'animal' : 'error');
           showToast(res.message);
           void saveCloudValleyState(simRef.current);
           syncHudNow();
@@ -1079,8 +1508,16 @@ export function CloudValleyGameSection({
         }}
         onSelectBuildStructure={(structId) => {
           setSelectedStructureId(structId);
-          setActiveTool('build');
+          setActiveMode('build');
           showToast(`Chọn ô đất để đặt ${AUTOMATION_BLUEPRINTS[structId].name}`);
+        }}
+        onUpdateProfile={(patch) => {
+          simRef.current.farmerProfile = {
+            ...simRef.current.farmerProfile,
+            ...patch,
+          };
+          void saveCloudValleyState(simRef.current);
+          syncHudNow();
         }}
         onExportJson={handleExportJson}
         onImportJson={(f) => {
@@ -1089,9 +1526,10 @@ export function CloudValleyGameSection({
         onResetSave={() => {
           void clearCloudValleySave().then(() => {
             simRef.current = createInitialCloudValleyState();
+            avatarRef.current = createInitialAvatarState();
             setHasExistingSave(false);
             setActiveModal(null);
-            showToast('Đã khởi tạo Thung Lũng Mây mới!');
+            showToast('Đã khởi tạo Nông Trại mới!');
             syncHudNow();
           });
         }}

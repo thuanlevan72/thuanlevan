@@ -8,7 +8,10 @@ export type CloudValleySfx =
   | 'coin'
   | 'levelup'
   | 'hybrid'
-  | 'error';
+  | 'error'
+  | 'step'
+  | 'well'
+  | 'animal';
 
 class CloudValleyAudioController {
   private ctx: AudioContext | null = null;
@@ -171,6 +174,50 @@ class CloudValleyAudioController {
       osc.connect(gain).connect(ctx.destination);
       osc.start(now);
       osc.stop(now + 0.13);
+      return;
+    }
+
+    if (kind === 'step') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(125 * jitter, now);
+      osc.frequency.exponentialRampToValueAtTime(80, now + 0.035);
+      gain.gain.setValueAtTime(0.025, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.045);
+      return;
+    }
+
+    if (kind === 'well') {
+      [523.25, 659.25, 783.99].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq * jitter, now + i * 0.045);
+        gain.gain.setValueAtTime(0.06, now + i * 0.045);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.045 + 0.12);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now + i * 0.045);
+        osc.stop(now + i * 0.045 + 0.13);
+      });
+      return;
+    }
+
+    if (kind === 'animal') {
+      [440, 580].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq * jitter, now + i * 0.07);
+        gain.gain.setValueAtTime(0.06, now + i * 0.07);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.07 + 0.1);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(now + i * 0.07);
+        osc.stop(now + i * 0.07 + 0.11);
+      });
     }
   }
 }

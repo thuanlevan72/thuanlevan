@@ -17,6 +17,7 @@ import {
   TOOL_UPGRADE_COSTS,
   type AutomationId,
   type CropQuality,
+  type FarmerHatId,
   type LivestockType,
   type MachineId,
   type SeasonId,
@@ -129,6 +130,12 @@ export interface CloudValleyGameState {
   unlockedTerraces: number[];
   tiles: TileState[];
   inventory: Record<string, number>;
+  seedBags: Record<string, number>;
+  farmerProfile: {
+    name: string;
+    hat: FarmerHatId;
+    shirtColor: string;
+  };
   wineAgedDays: number; // extra days of cellar aging on wine stock
   almanacUnlocked: string[];
   artisanQueue: ArtisanSlot[];
@@ -356,7 +363,17 @@ export function createInitialCloudValleyState(nowMs = Date.now(), rng: () => num
       co_dai: 3,
       phan_huu_co: 2,
       phan_dot_bien: 1,
-      co_kho: 4,
+      co_kho: 6,
+    },
+    seedBags: {
+      lua_mi: 4,
+      ca_chua: 2,
+      dau_ha_lan: 2,
+    },
+    farmerProfile: {
+      name: 'Nông Dân Mây',
+      hat: 'straw',
+      shirtColor: '#2E7D32',
     },
     wineAgedDays: 0,
     almanacUnlocked: ['lua_mi', 'ca_chua', 'dau_ha_lan'],
@@ -364,6 +381,14 @@ export function createInitialCloudValleyState(nowMs = Date.now(), rng: () => num
     orders: generateOrders(1, 'spring', 0, rng),
     weekendFair: null,
     livestock: [
+      {
+        id: 'chicken_1',
+        type: 'chicken',
+        name: 'Gà Mái Mơ',
+        fedToday: true,
+        productReady: true,
+        happiness: 95,
+      },
       {
         id: 'cow_1',
         type: 'cow',
@@ -384,7 +409,7 @@ export function createInitialCloudValleyState(nowMs = Date.now(), rng: () => num
     events: [
       {
         id: 'welcome',
-        text: 'Chào mừng tới Thung Lũng Mây! Mưa Xuân đang tự tưới ẩm 100% các luống đất.',
+        text: 'Chào mừng tới Nông Trại Thung Lũng Mây! Dùng WASD / Phím Mũi Tên đi quanh vườn & Space để thao tác.',
         tone: 'good',
       },
     ],
@@ -584,12 +609,17 @@ export function applyToolAction(
         continue;
       }
       if (!tile.tilled || tile.crop || tile.structure) continue;
-      if (state.gold < def.seedPrice) {
-        message = `Không đủ Vàng (cần ${def.seedPrice} Vàng/hạt).`;
-        lastSound = 'error';
-        break;
+      const inBag = state.seedBags?.[def.id] ?? 0;
+      if (inBag > 0) {
+        state.seedBags[def.id] = inBag - 1;
+      } else {
+        if (state.gold < def.seedPrice) {
+          message = `Không đủ Vàng (cần ${def.seedPrice} Vàng/hạt).`;
+          lastSound = 'error';
+          break;
+        }
+        state.gold -= def.seedPrice;
       }
-      state.gold -= def.seedPrice;
       tile.crop = {
         cropId: def.id,
         progressSeconds: 0,
@@ -1362,22 +1392,58 @@ export function tradeWeekendFair(state: CloudValleyGameState, qty = 1): { ok: bo
   return { ok: true, message: `Bán Chợ Phiên ×2.5 thu về ${earned} Vàng!`, earned };
 }
 
+export function buySeedPack(state: CloudValleyGameState, seedId: string, qty = 1): { ok: boolean; message: string } {
+  const def = CROPS[seedId];
+  if (!def || def.seedPrice <= 0) return { ok: false, message: 'Loại hạt giống này không bán.' };
+  if (state.level < def.unlockLevel) {
+    return { ok: false, message: `Cần đạt Cấp ${def.unlockLevel} để mua hạt ${def.name}.` };
+  }
+  const cost = def.seedPrice * qty;
+  if (state.gold < cost) {
+    return { ok: false, message: `Cần ${cost} Vàng để mua ${qty} hạt ${def.name}.` };
+  }
+  state.gold -= cost;
+  if (!state.seedBags) state.seedBags = {};
+  state.seedBags[seedId] = (state.seedBags[seedId] ?? 0) + qty;
+  return { ok: true, message: `Đã mua ${qty} hạt ${def.name} vào túi!` };
+}
+
+export function drawWellWater(state: CloudValleyGameState): { wateredCount: number; message: string } {
+  let wateredCount = 0;
+  for (const tile of state.tiles) {
+    if (!isTileUnlocked(state, tile)) continue;
+    if ((tile.tilled || tile.crop) && tile.moisture < 100) {
+      tile.moisture = Math.min(100, tile.moisture + 30);
+      wateredCount += 1;
+    }
+  }
+  grantXpAndGold(state, 3, 0);
+  return {
+    wateredCount,
+    message:
+      wateredCount > 0
+        ? `Múc nước Giếng Mây tưới mát ${wateredCount} luống đất (+30% ẩm)!`
+        : 'Nước giếng trong vắt mát lành! Toàn bộ luống đang đủ ẩm.',
+  };
+}
+
 export function buyLivestock(state: CloudValleyGameState, type: LivestockType): { ok: boolean; message: string } {
   if (state.livestock.length >= 6) return { ok: false, message: 'Chuồng trại đã đủ 6 vật nuôi.' };
-  const cost = type === 'cow' ? 220 : 260;
-  const minLevel = type === 'cow' ? 1 : 3;
+  const cost = type === 'chicken' ? 140 : type === 'cow' ? 220 : 260;
+  const minLevel = type === 'sheep' ? 3 : 1;
   if (state.level < minLevel) return { ok: false, message: `Cần Cấp ${minLevel} để nuôi Cừu.` };
   if (state.gold < cost) return { ok: false, message: `Cần ${cost} Vàng.` };
   state.gold -= cost;
+  const label = type === 'chicken' ? 'Gà Mái' : type === 'cow' ? 'Bò Sữa' : 'Cừu Mây';
   state.livestock.push({
     id: `${type}_${Date.now().toString(36)}`,
     type,
-    name: type === 'cow' ? `Bò Sữa #${state.livestock.length + 1}` : `Cừu Mây #${state.livestock.length + 1}`,
+    name: `${label} #${state.livestock.length + 1}`,
     fedToday: false,
     productReady: false,
     happiness: 85,
   });
-  return { ok: true, message: `Đã đón ${type === 'cow' ? 'Bò Sữa' : 'Cừu Mây'} về chuồng!` };
+  return { ok: true, message: `Đã đón ${label} về chuồng!` };
 }
 
 export function tendLivestock(state: CloudValleyGameState, animalId: string): { ok: boolean; message: string } {
@@ -1385,14 +1451,14 @@ export function tendLivestock(state: CloudValleyGameState, animalId: string): { 
   if (!animal) return { ok: false, message: 'Không tìm thấy vật nuôi.' };
   if (animal.productReady) {
     animal.productReady = false;
-    const prodId = animal.type === 'cow' ? 'sua_bo' : 'long_cuu';
+    const prodId = animal.type === 'chicken' ? 'trung_ga' : animal.type === 'cow' ? 'sua_bo' : 'long_cuu';
     addInventory(state, prodId, 1);
     grantXpAndGold(state, 16, 0);
     return { ok: true, message: `Thu hoạch 1 ${ITEMS[prodId].name}!` };
   }
   if (!animal.fedToday) {
     if (!consumeInventory(state, 'co_kho', 1)) {
-      return { ok: false, message: 'Hết Cỏ Khô! Hãy mua ở Cửa Hàng.' };
+      return { ok: false, message: 'Hết Cỏ Khô! Hãy mua ở Quầy Lái Buôn.' };
     }
     animal.fedToday = true;
     animal.happiness = Math.min(100, animal.happiness + 10);
@@ -1459,6 +1525,11 @@ export function parseSaveState(rawJson: string): CloudValleyGameState | null {
         ...t,
       })),
       inventory: { ...parsed.inventory },
+      seedBags: parsed.seedBags && typeof parsed.seedBags === 'object' ? { ...parsed.seedBags } : { ...base.seedBags },
+      farmerProfile:
+        parsed.farmerProfile && typeof parsed.farmerProfile === 'object'
+          ? { ...base.farmerProfile, ...parsed.farmerProfile }
+          : { ...base.farmerProfile },
       almanacUnlocked: Array.isArray(parsed.almanacUnlocked) ? parsed.almanacUnlocked : base.almanacUnlocked,
       artisanQueue: Array.isArray(parsed.artisanQueue) ? parsed.artisanQueue : [],
       orders: Array.isArray(parsed.orders) ? parsed.orders : [],

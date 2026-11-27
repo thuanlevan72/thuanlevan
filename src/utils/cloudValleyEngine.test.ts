@@ -4,7 +4,10 @@ import { CROPS, DAY_DURATION_SECONDS, MAX_OFFLINE_SECONDS } from './cloudValleyD
 import {
   advanceToNextDay,
   applyToolAction,
+  buyLivestock,
+  buySeedPack,
   createInitialCloudValleyState,
+  drawWellWater,
   fulfillVillagerOrder,
   getSellPrice,
   getTileIndex,
@@ -14,12 +17,21 @@ import {
   serializeSaveState,
   startArtisanRecipe,
   summonEarthSprite,
+  tendLivestock,
   tickCloudValleySimulation,
   tradeWeekendFair,
   tryCrossBreedTick,
   unlockTerrace,
   upgradeToolTier,
 } from './cloudValleyEngine.ts';
+import {
+  createInitialAvatarState,
+  detectInteractTarget,
+  getAnimalWorldPos,
+  resolveSmartToolForTile,
+  stepAvatarMovement,
+  tileToWorldBounds,
+} from './cloudValleyWorld.ts';
 
 test('Soil moisture <20% halts growth and 60-90% grants +20% speed', () => {
   const s = createInitialCloudValleyState(1000, () => 0.5);
@@ -231,3 +243,100 @@ test('Offline catch-up simulation caps at 12h, advances days/crops/sprites, and 
   assert.equal(restored!.tiles.length, s.tiles.length);
   assert.deepEqual(restored!.unlockedTerraces, s.unlockedTerraces);
 });
+
+test('Avatar movement collides with buildings, slides cleanly, and detects nearby targets', () => {
+  const s = createInitialCloudValleyState(1000, () => 0.5);
+  const avatar = createInitialAvatarState();
+  const startY = avatar.y;
+
+  // Spawn is unobstructed and moves down smoothly
+  const movedDown = stepAvatarMovement(avatar, 0, 1, 0.25);
+  assert.equal(movedDown, true);
+  assert.equal(avatar.facing, 'down');
+  assert.ok(avatar.y > startY);
+
+  // Move right into the well wall (x: 7.0..8.6, y: 2.1..3.55)
+  avatar.x = 7.8;
+  avatar.y = 3.9;
+  for (let i = 0; i < 10; i++) {
+    stepAvatarMovement(avatar, 0, -1, 0.1);
+  }
+  assert.ok(avatar.y >= 3.55, `Avatar must stop outside solid well bounds, got y=${avatar.y}`);
+
+  // Detect merchant building when standing in front of merchant stall
+  avatar.x = 11.6;
+  avatar.y = 4.1;
+  const merchantTarget = detectInteractTarget(s, avatar, 'lua_mi', 0);
+  assert.equal(merchantTarget?.kind, 'building');
+  if (merchantTarget?.kind === 'building') {
+    assert.equal(merchantTarget.buildingId, 'merchant');
+  }
+
+  // Detect smart tile action when standing above mature crop at (1,1)
+  const t11 = s.tiles[getTileIndex(1, 1)];
+  t11.crop = { cropId: 'lua_mi', progressSeconds: CROPS.lua_mi.growthSeconds, quality: 'gold' };
+  const b11 = tileToWorldBounds(1, 1);
+  avatar.x = b11.cx;
+  avatar.y = b11.cy - 0.65;
+  avatar.facing = 'down';
+  const cropTarget = detectInteractTarget(s, avatar, 'lua_mi', 0);
+  assert.equal(cropTarget?.kind, 'tile');
+  if (cropTarget?.kind === 'tile') {
+    assert.equal(cropTarget.smartTool, 'harvest');
+  }
+
+  // Detect smart tool resolution for untilled soil -> hoe
+  assert.equal(resolveSmartToolForTile(s.tiles[getTileIndex(0, 3)]), 'hoe');
+
+  // Detect livestock when standing next to starter animal
+  const animalPos = getAnimalWorldPos(0, 0);
+  avatar.x = animalPos.x - 0.4;
+  avatar.y = animalPos.y;
+  const animalTarget = detectInteractTarget(s, avatar, 'lua_mi', 0);
+  assert.equal(animalTarget?.kind, 'animal');
+});
+
+test('Seed bags, chicken egg production, and well water splash behave accurately', () => {
+  const s = createInitialCloudValleyState(1000, () => 0.5);
+  s.gold = 500;
+  const bagBefore = s.seedBags.lua_mi ?? 0;
+
+  // Buy +5 lua_mi seeds into bag
+  const buyPack = buySeedPack(s, 'lua_mi', 5);
+  assert.equal(buyPack.ok, true);
+  assert.equal(s.seedBags.lua_mi, bagBefore + 5);
+  assert.equal(s.gold, 500 - CROPS.lua_mi.seedPrice * 5);
+
+  // Planting consumes from seedBag before spending gold
+  const goldAfterBuy = s.gold;
+  const emptyTile = s.tiles[getTileIndex(1, 3)];
+  emptyTile.tilled = true;
+  const sowRes = applyToolAction(s, 'seed', 1, 3, { seedId: 'lua_mi' });
+  assert.equal(sowRes.changed, true);
+  assert.equal(s.seedBags.lua_mi, bagBefore + 4);
+  assert.equal(s.gold, goldAfterBuy);
+
+  // Chicken purchase & egg harvest after advancing a day
+  const livestockCountBefore = s.livestock.length;
+  const chickenRes = buyLivestock(s, 'chicken');
+  assert.equal(chickenRes.ok, true);
+  assert.equal(s.livestock.length, livestockCountBefore + 1);
+  const newChicken = s.livestock[s.livestock.length - 1];
+  assert.equal(newChicken.type, 'chicken');
+
+  s.inventory.co_kho = 5;
+  assert.equal(tendLivestock(s, newChicken.id).ok, true); // feed today
+  advanceToNextDay(s, () => 0.5);
+  assert.equal(newChicken.productReady, true);
+  const eggsBefore = s.inventory.trung_ga ?? 0;
+  assert.equal(tendLivestock(s, newChicken.id).ok, true);
+  assert.equal((s.inventory.trung_ga ?? 0) - eggsBefore, 1);
+
+  // Well water adds +30% moisture to unlocked tilled plots
+  const dryTilled = s.tiles[getTileIndex(1, 3)];
+  dryTilled.moisture = 20;
+  const wellRes = drawWellWater(s);
+  assert.ok(wellRes.wateredCount >= 1);
+  assert.equal(dryTilled.moisture, 50);
+});
+
