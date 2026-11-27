@@ -143,6 +143,7 @@ export interface CloudValleyGameState {
   weekendFair: WeekendFairDeal | null;
   livestock: LivestockAnimal[];
   sprites: EarthSprite[];
+  orchardCooldowns?: Record<string, number>;
   autoFeederOwned: boolean;
   lastActiveTimestamp: number;
   mutationTickAccumulator: number;
@@ -346,7 +347,7 @@ export function createInitialCloudValleyState(nowMs = Date.now(), rng: () => num
   }
 
   return {
-    version: 1,
+    version: 2,
     gold: 160,
     xp: 0,
     level: 1,
@@ -371,7 +372,10 @@ export function createInitialCloudValleyState(nowMs = Date.now(), rng: () => num
       lua_mi: 4,
       ca_chua: 2,
       dau_ha_lan: 2,
+      tao_do: 2,
+      khe_ngot: 2,
     },
+    orchardCooldowns: {},
     farmerProfile: {
       name: 'Nông Dân Mây',
       hat: 'straw',
@@ -398,6 +402,14 @@ export function createInitialCloudValleyState(nowMs = Date.now(), rng: () => num
         fedToday: true,
         productReady: true,
         happiness: 90,
+      },
+      {
+        id: 'pig_1',
+        type: 'pig',
+        name: 'Heo Hồng Ỉn',
+        fedToday: true,
+        productReady: true,
+        happiness: 92,
       },
     ],
     sprites: [],
@@ -1095,6 +1107,7 @@ export function advanceToNextDay(
       animal.fedToday = false;
     }
   }
+  state.orchardCooldowns = {};
 
   // Countdown Villager Orders and top up
   state.orders = state.orders
@@ -1220,6 +1233,16 @@ export function tickCloudValleySimulation(
     const work = runSpritesAndConveyors(state);
     spriteHarvests += work.spriteHarvests;
     conveyorGold += work.conveyorGold;
+  }
+
+  // 5b. Tick perimeter orchard tree regrow timers
+  if (state.orchardCooldowns) {
+    for (const tid of Object.keys(state.orchardCooldowns)) {
+      const rem = state.orchardCooldowns[tid];
+      if (rem > 0) {
+        state.orchardCooldowns[tid] = Math.max(0, rem - dt);
+      }
+    }
   }
 
   // 6. Day/Night cycle (240s per day)
@@ -1446,12 +1469,12 @@ export function drawWellWater(state: CloudValleyGameState): { wateredCount: numb
 
 export function buyLivestock(state: CloudValleyGameState, type: LivestockType): { ok: boolean; message: string } {
   if (state.livestock.length >= 6) return { ok: false, message: 'Chuồng trại đã đủ 6 vật nuôi.' };
-  const cost = type === 'chicken' ? 140 : type === 'cow' ? 220 : 260;
+  const cost = type === 'chicken' ? 140 : type === 'pig' ? 180 : type === 'cow' ? 220 : 260;
   const minLevel = type === 'sheep' ? 3 : 1;
   if (state.level < minLevel) return { ok: false, message: `Cần Cấp ${minLevel} để nuôi Cừu.` };
   if (state.gold < cost) return { ok: false, message: `Cần ${cost} Vàng.` };
   state.gold -= cost;
-  const label = type === 'chicken' ? 'Gà Mái' : type === 'cow' ? 'Bò Sữa' : 'Cừu Mây';
+  const label = type === 'chicken' ? 'Gà Mái' : type === 'pig' ? 'Heo Hồng' : type === 'cow' ? 'Bò Sữa' : 'Cừu Mây';
   state.livestock.push({
     id: `${type}_${Date.now().toString(36)}`,
     type,
@@ -1471,9 +1494,16 @@ export function tendLivestock(
   if (!animal) return { ok: false, message: 'Không tìm thấy vật nuôi.' };
   if (animal.productReady) {
     animal.productReady = false;
-    const prodId = animal.type === 'chicken' ? 'trung_ga' : animal.type === 'cow' ? 'sua_bo' : 'long_cuu';
+    const prodId =
+      animal.type === 'chicken'
+        ? 'trung_ga'
+        : animal.type === 'cow'
+        ? 'sua_bo'
+        : animal.type === 'pig'
+        ? 'nam_truffle'
+        : 'long_cuu';
     addInventory(state, prodId, 1);
-    const goldBonus = animal.type === 'cow' ? 30 : animal.type === 'sheep' ? 35 : 20;
+    const goldBonus = animal.type === 'cow' ? 30 : animal.type === 'sheep' ? 35 : animal.type === 'pig' ? 28 : 20;
     grantXpAndGold(state, 16, goldBonus);
     return {
       ok: true,
@@ -1493,6 +1523,122 @@ export function tendLivestock(
     return { ok: true, message: `Đã cho ${animal.name} ăn no!`, xpDelta: 6 };
   }
   return { ok: false, message: `${animal.name} đã ăn no hôm nay, ngày mai sẽ có sản phẩm.` };
+}
+
+export interface OrchardTreeDef {
+  id: string;
+  kind: 'starfruit' | 'apple' | 'peach';
+  wx: number;
+  wy: number;
+  label: string;
+  fruitItemId: string | null;
+}
+
+export const ORCHARD_TREES: readonly OrchardTreeDef[] = [
+  { id: 'tree_khe_1', kind: 'starfruit', wx: 1.3, wy: 2.5, label: 'Cây Khế', fruitItemId: 'khe_ngot' },
+  { id: 'tree_tao_1', kind: 'apple', wx: 1.2, wy: 7.6, label: 'Cây Táo', fruitItemId: 'tao_do' },
+  { id: 'tree_dao_1', kind: 'peach', wx: 1.3, wy: 12.8, label: 'Cây Đào', fruitItemId: null },
+  { id: 'tree_khe_2', kind: 'starfruit', wx: 3.5, wy: 16.05, label: 'Cây Khế', fruitItemId: 'khe_ngot' },
+  { id: 'tree_dao_2', kind: 'peach', wx: 16.9, wy: 2.7, label: 'Cây Đào', fruitItemId: null },
+  { id: 'tree_tao_2', kind: 'apple', wx: 19.9, wy: 4.1, label: 'Cây Táo', fruitItemId: 'tao_do' },
+  { id: 'tree_khe_3', kind: 'starfruit', wx: 20.85, wy: 6.9, label: 'Cây Khế', fruitItemId: 'khe_ngot' },
+  { id: 'tree_tao_3', kind: 'apple', wx: 9.4, wy: 16.05, label: 'Cây Táo', fruitItemId: 'tao_do' },
+];
+
+export function harvestOrchardTree(
+  state: CloudValleyGameState,
+  treeId: string
+): { ok: boolean; message: string; itemId?: string; qty?: number; xpDelta?: number; goldDelta?: number } {
+  const tree = ORCHARD_TREES.find((t) => t.id === treeId);
+  if (!tree || !tree.fruitItemId) {
+    return { ok: false, message: 'Cây đào nở hoa rực rỡ trang trí khu vườn!' };
+  }
+  if (!state.orchardCooldowns) state.orchardCooldowns = {};
+  const rem = state.orchardCooldowns[treeId] ?? 0;
+  if (rem > 0) {
+    return {
+      ok: false,
+      message: `${tree.label} đang ra trái non (còn ${Math.ceil(rem)}s hoặc qua ngày mới).`,
+    };
+  }
+  const qty = getSeasonId(state) === 'spring' ? 3 : 2;
+  const itemDef = ITEMS[tree.fruitItemId];
+  addInventory(state, tree.fruitItemId, qty);
+  unlockAlmanacEntry(state, tree.fruitItemId);
+  state.orchardCooldowns[treeId] = 90;
+  const xpDelta = 15;
+  const goldDelta = 18;
+  grantXpAndGold(state, xpDelta, goldDelta);
+  state.totalHarvested += qty;
+  return {
+    ok: true,
+    message: `Hái ${qty} Quả ${itemDef?.name ?? tree.fruitItemId} từ ${tree.label}!`,
+    itemId: tree.fruitItemId,
+    qty,
+    xpDelta,
+    goldDelta,
+  };
+}
+
+export function collectLivestockByType(
+  state: CloudValleyGameState,
+  type: 'chicken' | 'cow'
+): { ok: boolean; count: number; message: string; xpDelta: number; goldDelta: number; itemId: string } {
+  const prodId = type === 'chicken' ? 'trung_ga' : 'sua_bo';
+  const readyOnes = state.livestock.filter((a) => a.type === type && a.productReady);
+  if (readyOnes.length > 0) {
+    let xpDelta = 0;
+    let goldDelta = 0;
+    for (const a of readyOnes) {
+      a.productReady = false;
+      addInventory(state, prodId, 1);
+      const bonus = type === 'cow' ? 30 : 20;
+      grantXpAndGold(state, 16, bonus);
+      xpDelta += 16;
+      goldDelta += bonus;
+    }
+    return {
+      ok: true,
+      count: readyOnes.length,
+      message:
+        type === 'chicken'
+          ? `Nhặt ${readyOnes.length} Trứng Gà Tươi từ Chuồng Gà!`
+          : `Vắt ${readyOnes.length} bình Sữa Bò Tươi từ Chuồng Bò!`,
+      xpDelta,
+      goldDelta,
+      itemId: prodId,
+    };
+  }
+  const hungryOnes = state.livestock.filter((a) => a.type === type && !a.fedToday);
+  let fedCount = 0;
+  for (const a of hungryOnes) {
+    if (!consumeInventory(state, 'co_kho', 1)) break;
+    a.fedToday = true;
+    a.happiness = Math.min(100, a.happiness + 10);
+    grantXpAndGold(state, 6, 0);
+    fedCount += 1;
+  }
+  if (fedCount > 0) {
+    return {
+      ok: true,
+      count: fedCount,
+      message: `Đã cho ${fedCount} ${type === 'chicken' ? 'Gà Mái' : 'Bò Sữa'} ăn no!`,
+      xpDelta: fedCount * 6,
+      goldDelta: 0,
+      itemId: prodId,
+    };
+  }
+  return {
+    ok: false,
+    count: 0,
+    message:
+      type === 'chicken'
+        ? 'Chuồng Gà chưa có trứng mới. Hãy cho gà ăn hoặc sang ngày mới!'
+        : 'Chuồng Bò chưa có sữa mới. Hãy cho bò ăn hoặc sang ngày mới!',
+    xpDelta: 0,
+    goldDelta: 0,
+    itemId: prodId,
+  };
 }
 
 export function summonEarthSprite(state: CloudValleyGameState, task: SpriteTask = 'harvest'): { ok: boolean; message: string } {
@@ -1545,9 +1691,21 @@ export function parseSaveState(rawJson: string): CloudValleyGameState | null {
       return null;
     }
     const base = createInitialCloudValleyState();
+    const loadedLivestock = Array.isArray(parsed.livestock) ? [...parsed.livestock] : [];
+    if ((parsed.version ?? 1) < 2 && !loadedLivestock.some((a) => a.type === 'pig') && loadedLivestock.length < 6) {
+      loadedLivestock.push({
+        id: 'pig_1',
+        type: 'pig',
+        name: 'Heo Hồng Ỉn',
+        fedToday: true,
+        productReady: true,
+        happiness: 92,
+      });
+    }
     return {
       ...base,
       ...parsed,
+      version: 2,
       tiles: parsed.tiles.map((t, idx) => ({
         ...base.tiles[idx],
         ...t,
@@ -1561,7 +1719,7 @@ export function parseSaveState(rawJson: string): CloudValleyGameState | null {
       almanacUnlocked: Array.isArray(parsed.almanacUnlocked) ? parsed.almanacUnlocked : base.almanacUnlocked,
       artisanQueue: Array.isArray(parsed.artisanQueue) ? parsed.artisanQueue : [],
       orders: Array.isArray(parsed.orders) ? parsed.orders : [],
-      livestock: Array.isArray(parsed.livestock) ? parsed.livestock : [],
+      livestock: loadedLivestock,
       sprites: Array.isArray(parsed.sprites) ? parsed.sprites : [],
       unlockedTerraces: Array.isArray(parsed.unlockedTerraces) ? parsed.unlockedTerraces : [1],
       events: Array.isArray(parsed.events) ? parsed.events : base.events,

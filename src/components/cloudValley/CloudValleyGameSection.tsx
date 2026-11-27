@@ -39,6 +39,7 @@ import {
   DAY_DURATION_SECONDS,
   getXpForNextLevel,
   SEASON_META,
+  TERRACES,
   WEATHER_LABELS,
   type AutomationId,
   type AvatarActionMode,
@@ -56,15 +57,18 @@ import {
   buyLivestock,
   buySeedPack,
   collectArtisanSlot,
+  collectLivestockByType,
   createInitialCloudValleyState,
   drawWellWater,
   feedSprite,
   fulfillVillagerOrder,
   getSeasonId,
   getTileIndex,
+  harvestOrchardTree,
   isCropMature,
   isTileInGreenhouse,
   isTileUnlocked,
+  ORCHARD_TREES,
   parseSaveState,
   processOfflineCatchUp,
   sellInventoryItem,
@@ -83,14 +87,14 @@ import {
   createInitialAvatarState,
   detectInteractTarget,
   FARM_BUILDINGS,
-  getAnimalWorldPos,
+  getLivestockWorldPos,
   resolveSmartToolForTile,
   stepAvatarMovement,
   tileToWorldBounds,
   type BuildingId,
   type FarmerAvatarState,
 } from '../../utils/cloudValleyWorld.ts';
-import { CloudValleyTitleLockup, FarmerPortraitSvg, ToolSvgIcon } from './CloudValleyIcons.tsx';
+import { CloudValleyTitleLockup, CropSeedSvgIcon, FarmerPortraitSvg, ToolSvgIcon } from './CloudValleyIcons.tsx';
 import { CloudValleyModals, type CloudValleyModalId } from './CloudValleyModals.tsx';
 
 type GamePhase = 'title' | 'playing' | 'paused';
@@ -134,6 +138,7 @@ export function CloudValleyGameSection({
   const [offlineReport, setOfflineReport] = useState<OfflineCatchupReport | null>(null);
   const [toastText, setToastText] = useState<string | null>(null);
   const [hoveredTileCoords, setHoveredTileCoords] = useState<{ row: number; col: number } | null>(null);
+  const [hoveredSeedId, setHoveredSeedId] = useState<string | null>(null);
 
   const simRef = useRef<CloudValleyGameState>(createInitialCloudValleyState());
   const avatarRef = useRef<FarmerAvatarState>(createInitialAvatarState());
@@ -388,8 +393,44 @@ export function CloudValleyGameSection({
         setActiveModal('orders');
       } else if (buildingId === 'board') {
         setActiveModal('almanac');
+      } else if (buildingId === 'coop') {
+        avatar.actionTimer = 0.26;
+        avatar.actionTool = 'animal';
+        const res = collectLivestockByType(sim, 'chicken');
+        if (res.ok) {
+          renderer.spawnBurstWorld(17.8, 6.5, '#FDE047', 8);
+          const popLabel =
+            res.goldDelta > 0
+              ? `+${res.xpDelta} EXP, +${res.goldDelta} Xu`
+              : `+${res.xpDelta} EXP · Cho gà ăn!`;
+          renderer.spawnPopupWorld(avatar.x, avatar.y - 0.85, popLabel, '#FEF08A', 'egg');
+          cloudValleyAudio.play(res.goldDelta > 0 ? 'coin' : 'animal');
+          showToast(res.message, res.goldDelta > 0 ? 'Nhặt trứng tươi!' : 'Cục tác!');
+          void saveCloudValleyState(sim);
+          syncHudNow();
+        } else {
+          setActiveModal('automation');
+          showToast(res.message);
+        }
       } else if (buildingId === 'pen') {
-        setActiveModal('automation');
+        avatar.actionTimer = 0.26;
+        avatar.actionTool = 'animal';
+        const res = collectLivestockByType(sim, 'cow');
+        if (res.ok) {
+          renderer.spawnBurstWorld(18.0, 8.8, '#BAE6FD', 8);
+          const popLabel =
+            res.goldDelta > 0
+              ? `+${res.xpDelta} EXP, +${res.goldDelta} Xu`
+              : `+${res.xpDelta} EXP · Cho bò ăn!`;
+          renderer.spawnPopupWorld(avatar.x, avatar.y - 0.85, popLabel, '#FEF08A', 'milk');
+          cloudValleyAudio.play(res.goldDelta > 0 ? 'coin' : 'animal');
+          showToast(res.message, res.goldDelta > 0 ? 'Sữa bò thơm ngon!' : 'Ùm bò!');
+          void saveCloudValleyState(sim);
+          syncHudNow();
+        } else {
+          setActiveModal('automation');
+          showToast(res.message);
+        }
       } else if (buildingId === 'well') {
         avatar.actionTimer = 0.28;
         avatar.actionTool = 'well';
@@ -424,6 +465,8 @@ export function CloudValleyGameSection({
             ? 'egg'
             : res.itemId === 'long_cuu'
             ? 'wool'
+            : res.itemId === 'nam_truffle'
+            ? 'crop'
             : 'xp';
         const popLabel = res.goldDelta
           ? `+${res.xpDelta ?? 16} EXP, +${res.goldDelta} Xu`
@@ -724,18 +767,18 @@ export function CloudValleyGameSection({
       const metrics = renderer.computeMetrics(rect.width, rect.height, avatar, cameraRef.current.zoom);
       const { wx, wy } = renderer.screenToWorld(px, py, metrics);
 
-      // 1. Check click on Buildings or Animals (non-drag only)
+      // 1. Check click on Buildings, Animals, Orchard Trees, Pond, or Locked Signposts (non-drag only)
       if (!isDrag) {
         const nowSec = performance.now() / 1000;
         for (let i = 0; i < sim.livestock.length; i++) {
           const an = sim.livestock[i];
-          const apos = getAnimalWorldPos(i, nowSec);
+          const apos = getLivestockWorldPos(an, i, nowSec);
           if (Math.hypot(wx - apos.x, wy - apos.y) <= 0.85) {
             if (Math.hypot(avatar.x - apos.x, avatar.y - apos.y) <= 1.65) {
               interactWithAnimal(an.id, apos.x, apos.y);
             } else {
               walkGoalRef.current = {
-                wx: Math.max(16.2, apos.x - 0.5),
+                wx: Math.max(15.35, apos.x - 0.55),
                 wy: apos.y,
                 onArrive: () => interactWithAnimal(an.id, apos.x, apos.y),
               };
@@ -758,13 +801,55 @@ export function CloudValleyGameSection({
             return;
           }
         }
-        // Check click on Oval Fish Pond (wx=17.4, wy=13.0)
-        if (Math.hypot(wx - 17.4, wy - 13.0) <= 1.7) {
+
+        // Check click on Interactive Orchard Trees (Cây Táo / Cây Khế / Cây Đào)
+        for (const tree of ORCHARD_TREES) {
+          if (Math.hypot(wx - tree.wx, wy - (tree.wy - 0.35)) <= 1.15) {
+            const standX = Math.max(1.85, Math.min(19.65, tree.wx));
+            const standY = Math.max(4.05, Math.min(15.55, tree.wy));
+            const pickTree = () => {
+              avatar.actionTimer = 0.28;
+              avatar.actionTool = 'harvest';
+              const res = harvestOrchardTree(sim, tree.id);
+              if (res.ok) {
+                renderer.spawnBurstWorld(
+                  tree.wx,
+                  tree.wy - 0.45,
+                  tree.kind === 'apple' ? '#EF4444' : '#FACC15',
+                  9
+                );
+                renderer.spawnPopupWorld(
+                  avatar.x,
+                  avatar.y - 0.85,
+                  `+${res.xpDelta ?? 15} EXP, +${res.goldDelta ?? 18} Xu`,
+                  '#FEF08A',
+                  'crop'
+                );
+                cloudValleyAudio.play('harvest');
+                cloudValleyAudio.play('coin');
+                showToast(res.message, tree.kind === 'apple' ? 'Hái Táo Đỏ!' : 'Hái Khế Ngọt!');
+                void saveCloudValleyState(sim);
+                syncHudNow();
+              } else {
+                showToast(res.message);
+              }
+            };
+            if (Math.hypot(avatar.x - standX, avatar.y - standY) <= 1.8) {
+              pickTree();
+            } else {
+              walkGoalRef.current = { wx: standX, wy: standY, onArrive: pickTree };
+            }
+            return;
+          }
+        }
+
+        // Check click on Oval Fish Pond (wx=17.0, wy=12.6)
+        if (Math.hypot(wx - 17.0, wy - 12.6) <= 1.7) {
           walkGoalRef.current = {
-            wx: 15.6,
-            wy: 13.0,
+            wx: 15.2,
+            wy: 12.6,
             onArrive: () => {
-              renderer.spawnBurstWorld(17.4, 13.0, '#38BDF8', 8);
+              renderer.spawnBurstWorld(17.0, 12.6, '#38BDF8', 8);
               renderer.spawnPopupWorld(avatar.x, avatar.y - 0.8, 'Ao cá Koi trong xanh!', '#BAE6FD', 'water');
               cloudValleyAudio.play('well');
               avatar.speechText = 'Cá bơi tung tăng quá!';
@@ -772,6 +857,35 @@ export function CloudValleyGameSection({
             },
           };
           return;
+        }
+
+        // Check click on Locked Zone Wooden Signposts (Khu 2 - 380 Xu, Khu 3 - 850 Xu, Khu 4 - 1600 Xu)
+        for (const t of TERRACES) {
+          if (sim.unlockedTerraces.includes(t.id)) continue;
+          const wb = tileToWorldBounds((t.rowStart + t.rowEnd) * 0.5, (t.colStart + t.colEnd) * 0.5);
+          if (Math.hypot(wx - wb.cx, wy - wb.cy) <= 1.35) {
+            const tryBuyTerrace = () => {
+              const res = unlockTerrace(sim, t.id);
+              if (res.ok) {
+                renderer.spawnBurstWorld(wb.cx, wb.cy, '#FACC15', 12);
+                renderer.spawnPopupWorld(wb.cx, wb.cy - 0.6, `Mở Khu ${t.id}!`, '#FDE047', 'xp');
+                cloudValleyAudio.play('levelup');
+                showToast(res.message, `Mở Khu ${t.id} rồi!`);
+                void saveCloudValleyState(sim);
+                syncHudNow();
+              } else {
+                cloudValleyAudio.play('error');
+                showToast(res.message);
+                setActiveModal('automation');
+              }
+            };
+            if (Math.hypot(avatar.x - wb.cx, avatar.y - wb.cy) <= 2.15) {
+              tryBuyTerrace();
+            } else {
+              walkGoalRef.current = { wx: wb.cx, wy: wb.cy, onArrive: tryBuyTerrace };
+            }
+            return;
+          }
         }
       }
 
@@ -794,6 +908,32 @@ export function CloudValleyGameSection({
       const tile = sim.tiles[getTileIndex(hit.row, hit.col)];
       if (!tile) return;
       const wb = tileToWorldBounds(hit.row, hit.col);
+
+      // If clicking directly on a locked zone tile, walk over and attempt unlock!
+      if (!isTileUnlocked(sim, tile)) {
+        if (!isDrag) {
+          const tryUnlock = () => {
+            const res = unlockTerrace(sim, tile.terraceId);
+            if (res.ok) {
+              renderer.spawnBurstWorld(wb.cx, wb.cy, '#FACC15', 12);
+              cloudValleyAudio.play('levelup');
+              showToast(res.message, `Mở Khu ${tile.terraceId} rồi!`);
+              void saveCloudValleyState(sim);
+              syncHudNow();
+            } else {
+              showToast(res.message);
+              setActiveModal('automation');
+            }
+          };
+          if (Math.hypot(avatar.x - wb.cx, avatar.y - wb.cy) <= 2.15) {
+            tryUnlock();
+          } else {
+            walkGoalRef.current = { wx: wb.cx, wy: wb.cy, onArrive: tryUnlock };
+          }
+        }
+        return;
+      }
+
       const mode = activeModeRef.current;
       const chosenTool: ToolId = mode === 'auto' ? resolveSmartToolForTile(tile) : mode;
 
@@ -812,7 +952,7 @@ export function CloudValleyGameSection({
         };
       }
     },
-    [executeTileTool, interactWithAnimal, interactWithBuilding]
+    [executeTileTool, interactWithAnimal, interactWithBuilding, showToast, syncHudNow]
   );
 
   const handlePointerDown = (e: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -1208,11 +1348,32 @@ export function CloudValleyGameSection({
 
           {/* BOTTOM WOODEN GAME DOCK: PARCHMENT SEED STRIP + WOODEN TOOL BAR (No D-pad on PC!) */}
           <div className="flex flex-col gap-1.5">
-            {/* Contextual Seed / Blueprint Parchment Bar */}
-            <div className="flex justify-center">
+            {/* Contextual Seed Square Inventory Slots + Hover Tooltip Popup */}
+            <div className="relative flex flex-col items-center">
+              {(activeMode === 'seed' || activeMode === 'auto') && hoveredSeedId && CROPS[hoveredSeedId] && (
+                <div
+                  data-testid="cv-seed-tooltip"
+                  className="mb-1.5 px-3 py-1.5 rounded-xl border-2 border-[#F6D38C] bg-[#3E2009]/95 text-[#FEF3C7] text-xs font-extrabold shadow-xl flex items-center gap-2.5 whitespace-nowrap pointer-events-none"
+                >
+                  <CropSeedSvgIcon cropId={hoveredSeedId} className="w-5 h-5 shrink-0" />
+                  <span>{CROPS[hoveredSeedId].name}</span>
+                  <span className="text-[#FDE047]">· Lớn {CROPS[hoveredSeedId].growthSeconds}s</span>
+                  <span className="text-[#86EFAC]">· Bán {CROPS[hoveredSeedId].sellPrice} Xu</span>
+                  {(sim.seedBags?.[hoveredSeedId] ?? 0) > 0 ? (
+                    <span className="text-[#BAE6FD]">· Túi ×{sim.seedBags[hoveredSeedId]}</span>
+                  ) : sim.level < CROPS[hoveredSeedId].unlockLevel ? (
+                    <span className="text-rose-300">· Mở khóa Cấp {CROPS[hoveredSeedId].unlockLevel}</span>
+                  ) : (
+                    <span className="text-[#FDBA74]">· Giá {CROPS[hoveredSeedId].seedPrice} Xu</span>
+                  )}
+                </div>
+              )}
+
               {(activeMode === 'seed' || activeMode === 'auto') && (
-                <div className="pointer-events-auto max-w-[96vw] overflow-x-auto no-scrollbar flex items-center gap-1.5 px-2.5 py-1 rounded-xl border-2 border-[#3E2009] bg-gradient-to-b from-[#F6E3B8] to-[#DFBF85] shadow-[inset_0_1px_0_#FFF8EB,0_3px_0_#1E120A]">
-                  <span className="text-[10px] font-black text-[#5C3414] uppercase whitespace-nowrap shrink-0">Hạt:</span>
+                <div
+                  data-testid="cv-seed-slots"
+                  className="pointer-events-auto max-w-[96vw] overflow-x-auto no-scrollbar flex items-center gap-1.5 px-2 py-1.5 rounded-xl border-2 border-[#3E2009] bg-gradient-to-b from-[#9C6230] via-[#7E4B1E] to-[#5E3511] shadow-[inset_0_1px_0_rgba(253,230,138,0.45),0_3px_0_#1E120A]"
+                >
                   {Object.values(CROPS)
                     .filter(
                       (c) =>
@@ -1229,17 +1390,34 @@ export function CloudValleyGameSection({
                         <button
                           key={crop.id}
                           type="button"
+                          data-testid={`cv-seed-${crop.id}`}
+                          aria-label={`${crop.name} (${inBag > 0 ? `Túi ${inBag}` : `${crop.seedPrice} Xu`})`}
                           disabled={locked}
                           onClick={() => setSelectedSeedId(crop.id)}
-                          className={`px-2 py-0.5 rounded-lg border-2 text-[11px] font-extrabold whitespace-nowrap cursor-pointer ${
+                          onMouseEnter={() => setHoveredSeedId(crop.id)}
+                          onMouseLeave={() => setHoveredSeedId((prev) => (prev === crop.id ? null : prev))}
+                          onFocus={() => setHoveredSeedId(crop.id)}
+                          onBlur={() => setHoveredSeedId((prev) => (prev === crop.id ? null : prev))}
+                          className={`relative w-11 h-11 sm:w-12 sm:h-12 shrink-0 rounded-lg border-2 flex items-center justify-center cursor-pointer transition-transform active:scale-95 ${
                             selected
-                              ? 'bg-[#2E7D32] text-white border-[#1E120A] shadow-[0_2px_0_#14532D]'
+                              ? 'bg-gradient-to-b from-[#4ADE80] to-[#16A34A] border-[#FEF08A] ring-2 ring-[#FACC15] shadow-[0_2px_0_#14532D]'
                               : locked
-                              ? 'bg-[#D6BE96] text-[#78716C] border-[#8C6239] opacity-60'
-                              : 'bg-[#FFF5DD] text-[#291506] border-[#6E421F] hover:bg-[#FDE68A]'
+                              ? 'bg-[#6E421F]/60 border-[#3E2009] opacity-55 grayscale'
+                              : 'bg-gradient-to-b from-[#FDF2D6] to-[#DFBF85] border-[#3E2009] hover:brightness-105 shadow-[inset_0_1px_0_#FFFBEB]'
                           }`}
                         >
-                          {crop.name} {inBag > 0 ? `(Túi ${inBag})` : locked ? `(Cấp ${crop.unlockLevel})` : `(${crop.seedPrice} Xu)`}
+                          <CropSeedSvgIcon cropId={crop.id} className="w-7 h-7 sm:w-8 sm:h-8" />
+                          <span
+                            className={`absolute -bottom-0.5 -right-0.5 px-1 rounded text-[9px] font-black leading-tight border border-[#1E120A] tabular-nums shadow ${
+                              inBag > 0
+                                ? 'bg-[#16A34A] text-white'
+                                : locked
+                                ? 'bg-[#3E2009] text-[#CBD5E1]'
+                                : 'bg-[#FACC15] text-[#1E120A]'
+                            }`}
+                          >
+                            {inBag > 0 ? `×${inBag}` : locked ? `C${crop.unlockLevel}` : crop.seedPrice}
+                          </span>
                         </button>
                       );
                     })}

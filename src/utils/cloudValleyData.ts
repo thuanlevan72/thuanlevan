@@ -36,7 +36,7 @@ export type MachineId =
   | 'composter'
   | 'kitchen';
 
-export type LivestockType = 'cow' | 'sheep' | 'chicken';
+export type LivestockType = 'cow' | 'sheep' | 'chicken' | 'pig';
 
 export type SpriteTask = 'sow' | 'harvest' | 'feed_machines';
 
@@ -456,9 +456,26 @@ export const CROPS: Record<string, CropDef> = {
     xp: 20,
     fertilityDelta: -12,
     regrows: true,
-    description: 'Cây ăn quả quen thuộc nông trại Avatar, tự ra trái tiếp sau khi thu hoạch!',
+    description: 'Cây khế ngọt sai quả, hái xong tự ra quả khế vàng ươm tiếp!',
     colorPrimary: '#EAB308',
     colorAccent: '#FEF08A',
+    unlockLevel: 1,
+  },
+  tao_do: {
+    id: 'tao_do',
+    name: 'Táo Đỏ',
+    category: 'fruit',
+    seasons: ['spring', 'summer', 'autumn'],
+    seedPrice: 28,
+    sellPrice: 54,
+    growthSeconds: 120,
+    harvestYield: 2,
+    xp: 22,
+    fertilityDelta: -12,
+    regrows: true,
+    description: 'Cây táo giòn ngọt trĩu quả táo đỏ mọng, tự ra trái tiếp sau khi thu hoạch!',
+    colorPrimary: '#EF4444',
+    colorAccent: '#FCA5A5',
     unlockLevel: 1,
   },
   hoa_hong: {
@@ -707,6 +724,15 @@ export const ITEMS: Record<string, ProductDef> = {
     description: 'Xén từ Cừu Trắng. Dệt thành Vải Thô và Áo Len Cao Cấp.',
     color: '#F3EDE2',
   },
+  nam_truffle: {
+    id: 'nam_truffle',
+    name: 'Nấm Truffle Đất',
+    tier: 1,
+    sellPrice: 62,
+    category: 'animal',
+    description: 'Nấm thơm quý do Heo Hồng ủn đất tìm được mỗi sáng. Bán rất được giá!',
+    color: '#78350F',
+  },
   co_kho: {
     id: 'co_kho',
     name: 'Cỏ Khô Thức Ăn',
@@ -937,6 +963,21 @@ export const ARTISAN_RECIPES: readonly ArtisanRecipeDef[] = [
     durationSeconds: 45,
     xp: 40,
     unlockLevel: 3,
+  },
+  {
+    id: 'rec_nuoc_ep_tao_khe',
+    machineId: 'press',
+    tier: 1,
+    name: 'Ép Nước Táo Khế',
+    inputs: [
+      { itemId: 'tao_do', qty: 1 },
+      { itemId: 'khe_ngot', qty: 1 },
+    ],
+    outputItemId: 'nuoc_ep_nho',
+    outputQty: 2,
+    durationSeconds: 35,
+    xp: 24,
+    unlockLevel: 1,
   },
   {
     id: 'rec_vai_tho',

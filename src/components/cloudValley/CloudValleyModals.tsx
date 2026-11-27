@@ -57,7 +57,7 @@ interface CloudValleyModalsProps {
   onCollectAllArtisan: () => void;
   onUnlockTerrace: (terraceId: number) => void;
   onUpgradeTools: () => void;
-  onBuyLivestock: (type: 'cow' | 'sheep' | 'chicken') => void;
+  onBuyLivestock: (type: 'cow' | 'sheep' | 'chicken' | 'pig') => void;
   onTendLivestock: (animalId: string) => void;
   onSummonSprite: (task: SpriteTask) => void;
   onChangeSpriteTask: (spriteId: string, task: SpriteTask) => void;
@@ -739,6 +739,13 @@ export function CloudValleyModals({
                       className="px-2.5 py-1 rounded bg-[#D97706] text-white text-[11px] font-bold cursor-pointer"
                     >
                       + Gà Mái (140g)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onBuyLivestock('pig')}
+                      className="px-2.5 py-1 rounded bg-[#DB2777] text-white text-[11px] font-bold cursor-pointer"
+                    >
+                      + Heo Hồng (180g)
                     </button>
                     <button
                       type="button"

@@ -6,11 +6,13 @@ import {
   applyToolAction,
   buyLivestock,
   buySeedPack,
+  collectLivestockByType,
   createInitialCloudValleyState,
   drawWellWater,
   fulfillVillagerOrder,
   getSellPrice,
   getTileIndex,
+  harvestOrchardTree,
   isCropMature,
   parseSaveState,
   processOfflineCatchUp,
@@ -27,7 +29,7 @@ import {
 import {
   createInitialAvatarState,
   detectInteractTarget,
-  getAnimalWorldPos,
+  getLivestockWorldPos,
   resolveSmartToolForTile,
   stepAvatarMovement,
   tileToWorldBounds,
@@ -289,7 +291,7 @@ test('Avatar movement collides with buildings, slides cleanly, and detects nearb
   assert.equal(resolveSmartToolForTile(s.tiles[getTileIndex(0, 3)]), 'hoe');
 
   // Detect livestock when standing next to starter animal
-  const animalPos = getAnimalWorldPos(0, 0);
+  const animalPos = getLivestockWorldPos(s.livestock[0], 0, 0);
   avatar.x = animalPos.x - 0.4;
   avatar.y = animalPos.y;
   const animalTarget = detectInteractTarget(s, avatar, 'lua_mi', 0);
@@ -339,4 +341,72 @@ test('Seed bags, chicken egg production, and well water splash behave accurately
   assert.ok(wellRes.wateredCount >= 1);
   assert.equal(dryTilled.moisture, 50);
 });
+
+test('Orchard Apple & Starfruit picking, tao_do crop cycle, and direct Coop/Cow Shed collection', () => {
+  const s = createInitialCloudValleyState(1000, () => 0.5);
+  s.seasonIndex = 0; // spring -> yields 3 fruits per orchard pick
+
+  // 1. Orchard Tree picking (Cây Táo & Cây Khế)
+  const goldBefore = s.gold;
+  const applePick = harvestOrchardTree(s, 'tree_tao_1');
+  assert.equal(applePick.ok, true);
+  assert.equal(s.inventory.tao_do, 3);
+  assert.ok(s.gold > goldBefore);
+
+  // Cooldown prevents immediate double pick
+  const secondPick = harvestOrchardTree(s, 'tree_tao_1');
+  assert.equal(secondPick.ok, false);
+
+  const starPick = harvestOrchardTree(s, 'tree_khe_1');
+  assert.equal(starPick.ok, true);
+  assert.equal(s.inventory.khe_ngot, 3);
+
+  // 2. Planting tao_do from starter seedBags & harvesting Apple
+  const bagBefore = s.seedBags.tao_do ?? 0;
+  assert.ok(bagBefore >= 1);
+  const t = s.tiles[getTileIndex(1, 3)];
+  t.tilled = true;
+  const plantApple = applyToolAction(s, 'seed', 1, 3, { seedId: 'tao_do' });
+  assert.equal(plantApple.changed, true);
+  assert.equal(s.seedBags.tao_do, bagBefore - 1);
+  t.crop!.progressSeconds = CROPS.tao_do.growthSeconds;
+  const harvestApple = applyToolAction(s, 'harvest', 1, 3);
+  assert.equal(harvestApple.changed, true);
+  assert.ok((s.inventory.tao_do ?? 0) > 3);
+
+  // 3. Direct Chuồng Gà egg collection & Chuồng Bò milk collection
+  s.inventory.co_kho = 10;
+  s.livestock.forEach((a) => {
+    a.fedToday = true;
+  });
+  advanceToNextDay(s, () => 0.5);
+
+  // Dawn resets orchard cooldowns as well
+  assert.equal(harvestOrchardTree(s, 'tree_tao_1').ok, true);
+
+  const eggsBefore = s.inventory.trung_ga ?? 0;
+  const coopRes = collectLivestockByType(s, 'chicken');
+  assert.equal(coopRes.ok, true);
+  assert.ok((s.inventory.trung_ga ?? 0) > eggsBefore);
+
+  const milkBefore = s.inventory.sua_bo ?? 0;
+  const barnRes = collectLivestockByType(s, 'cow');
+  assert.equal(barnRes.ok, true);
+  assert.ok((s.inventory.sua_bo ?? 0) > milkBefore);
+
+  // 4. Pig foraging Nấm Truffle Đất & buying another pig
+  const starterPig = s.livestock.find((a) => a.type === 'pig');
+  assert.ok(starterPig !== undefined, 'Starter farm must include a Pig');
+  starterPig!.productReady = true;
+  const truffleBefore = s.inventory.nam_truffle ?? 0;
+  const tendPigRes = tendLivestock(s, starterPig!.id);
+  assert.equal(tendPigRes.ok, true);
+  assert.equal(tendPigRes.itemId, 'nam_truffle');
+  assert.equal((s.inventory.nam_truffle ?? 0) - truffleBefore, 1);
+
+  s.gold = 500;
+  const buyPig = buyLivestock(s, 'pig');
+  assert.equal(buyPig.ok, true);
+});
+
 

@@ -67,6 +67,8 @@ export class CloudValleySpriteAtlas {
   private stallSprite: OffscreenSurface | null = null;
   private boardSprite: OffscreenSurface | null = null;
   private doghouseSprite: OffscreenSurface | null = null;
+  private chickenCoopSprite: OffscreenSurface | null = null;
+  private cowShedSprite: OffscreenSurface | null = null;
 
   public getGrassPattern(ctx: CanvasRenderingContext2D, season: SeasonId): CanvasPattern | null {
     if (this.grassPatterns.has(season)) return this.grassPatterns.get(season)!;
@@ -429,29 +431,42 @@ export class CloudValleySpriteAtlas {
     ];
     for (const [fx, fy] of fruitPositions) {
       if (kind === 'starfruit') {
+        // Classic 5-pointed golden Starfruit (Quả Khế)
         g.fillStyle = '#FACC15';
         g.strokeStyle = '#422006';
         g.lineWidth = 1.6;
         g.beginPath();
-        g.moveTo(fx, fy - 6);
-        g.lineTo(fx + 5, fy);
-        g.lineTo(fx + 3, fy + 6);
-        g.lineTo(fx - 3, fy + 6);
-        g.lineTo(fx - 5, fy);
+        for (let k = 0; k < 10; k++) {
+          const r = k % 2 === 0 ? 7.2 : 3.4;
+          const ang = -Math.PI * 0.5 + (k * Math.PI) / 5;
+          const sx = fx + Math.cos(ang) * r;
+          const sy = fy + Math.sin(ang) * r;
+          if (k === 0) g.moveTo(sx, sy);
+          else g.lineTo(sx, sy);
+        }
         g.closePath();
         g.fill();
         g.stroke();
+        g.fillStyle = '#FEF9C3';
+        g.beginPath();
+        g.arc(fx - 1, fy - 1, 1.5, 0, Math.PI * 2);
+        g.fill();
       } else if (kind === 'apple') {
+        // Glossy Red Apple (Quả Táo Đỏ) + green leaf
         g.fillStyle = '#EF4444';
         g.strokeStyle = '#450A0A';
         g.lineWidth = 1.6;
         g.beginPath();
-        g.arc(fx, fy, 5.2, 0, Math.PI * 2);
+        g.arc(fx, fy, 5.8, 0, Math.PI * 2);
         g.fill();
         g.stroke();
+        g.fillStyle = '#4ADE80';
+        g.beginPath();
+        g.ellipse(fx + 2.4, fy - 5.5, 3, 1.6, -0.5, 0, Math.PI * 2);
+        g.fill();
         g.fillStyle = '#FFFFFF';
         g.beginPath();
-        g.arc(fx - 1.6, fy - 1.6, 1.5, 0, Math.PI * 2);
+        g.arc(fx - 1.8, fy - 1.8, 1.6, 0, Math.PI * 2);
         g.fill();
       } else {
         g.fillStyle = '#FB7185';
@@ -927,6 +942,168 @@ export class CloudValleySpriteAtlas {
     g.stroke();
 
     this.doghouseSprite = c;
+    return c;
+  }
+
+  /**
+   * Cozy Wooden Chicken Coop (Chuồng Gà) with straw nest box & fresh eggs
+   */
+  public getChickenCoopSprite(): OffscreenSurface | null {
+    if (this.chickenCoopSprite) return this.chickenCoopSprite;
+    const c = makeCanvas(128, 114);
+    if (!c) return null;
+    const g = c.getContext('2d');
+    if (!g) return null;
+
+    // Ground drop shadow
+    g.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    g.beginPath();
+    g.ellipse(64, 98, 52, 13, 0, 0, Math.PI * 2);
+    g.fill();
+
+    // Wooden legs & stilts
+    g.fillStyle = '#6B3B1A';
+    g.strokeStyle = '#1E120A';
+    g.lineWidth = 2;
+    g.fillRect(24, 78, 8, 18);
+    g.strokeRect(24, 78, 8, 18);
+    g.fillRect(88, 78, 8, 18);
+    g.strokeRect(88, 78, 8, 18);
+
+    // Timber coop body
+    g.fillStyle = '#E09F5A';
+    rrect(g, 18, 40, 84, 44, 6);
+    g.fill();
+    g.strokeStyle = '#1E120A';
+    g.lineWidth = 2.2;
+    g.stroke();
+
+    // Straw nest box on right side with white eggs
+    g.fillStyle = '#B45309';
+    rrect(g, 82, 54, 34, 28, 4);
+    g.fill();
+    g.stroke();
+    g.fillStyle = '#FACC15';
+    rrect(g, 85, 56, 28, 10, 3);
+    g.fill();
+    for (const [ex, ey] of [
+      [92, 57],
+      [99, 55],
+      [106, 58],
+    ]) {
+      g.fillStyle = '#FFFDF7';
+      g.beginPath();
+      g.ellipse(ex, ey, 4.2, 5.2, 0, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = '#1E120A';
+      g.lineWidth = 1.3;
+      g.stroke();
+    }
+
+    // Little coop doorway + ramp
+    g.fillStyle = '#29170B';
+    rrect(g, 34, 52, 22, 30, 4);
+    g.fill();
+    g.fillStyle = '#C4824E';
+    g.beginPath();
+    g.moveTo(34, 82);
+    g.lineTo(54, 82);
+    g.lineTo(44, 100);
+    g.lineTo(22, 100);
+    g.closePath();
+    g.fill();
+    g.strokeStyle = '#1E120A';
+    g.lineWidth = 1.8;
+    g.stroke();
+
+    // Golden-red pitched roof
+    g.fillStyle = '#EA580C';
+    g.beginPath();
+    g.moveTo(8, 44);
+    g.lineTo(60, 12);
+    g.lineTo(114, 44);
+    g.closePath();
+    g.fill();
+    g.strokeStyle = '#1E120A';
+    g.lineWidth = 2.4;
+    g.stroke();
+    g.strokeStyle = '#FDE047';
+    g.lineWidth = 3.5;
+    g.beginPath();
+    g.moveTo(10, 43);
+    g.lineTo(60, 13);
+    g.lineTo(112, 43);
+    g.stroke();
+
+    this.chickenCoopSprite = c;
+    return c;
+  }
+
+  /**
+   * Rustic Cow Barn Shelter & Shiny Milk Cans (Chuồng Bò)
+   */
+  public getCowShedSprite(): OffscreenSurface | null {
+    if (this.cowShedSprite) return this.cowShedSprite;
+    const c = makeCanvas(136, 114);
+    if (!c) return null;
+    const g = c.getContext('2d');
+    if (!g) return null;
+
+    g.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    g.beginPath();
+    g.ellipse(68, 98, 56, 14, 0, 0, Math.PI * 2);
+    g.fill();
+
+    // Open-front timber cow shelter
+    g.fillStyle = '#9C5E2E';
+    rrect(g, 18, 42, 86, 50, 5);
+    g.fill();
+    g.strokeStyle = '#1E120A';
+    g.lineWidth = 2.2;
+    g.stroke();
+
+    // Dark interior + golden hay stack
+    g.fillStyle = '#3E2009';
+    rrect(g, 28, 52, 66, 38, 4);
+    g.fill();
+    g.fillStyle = '#FACC15';
+    rrect(g, 34, 68, 36, 20, 4);
+    g.fill();
+    g.strokeStyle = '#1E120A';
+    g.lineWidth = 1.6;
+    g.stroke();
+
+    // Brick-red roof
+    g.fillStyle = '#D93829';
+    g.beginPath();
+    g.moveTo(8, 46);
+    g.lineTo(61, 14);
+    g.lineTo(114, 46);
+    g.closePath();
+    g.fill();
+    g.strokeStyle = '#1E120A';
+    g.lineWidth = 2.4;
+    g.stroke();
+
+    // Pair of shiny silver Milk Cans (Bình Sữa Bò) right beside shelter
+    for (const [mx, my] of [
+      [106, 70],
+      [118, 76],
+    ]) {
+      g.fillStyle = '#E2E8F0';
+      rrect(g, mx - 7, my, 14, 20, 3);
+      g.fill();
+      g.strokeStyle = '#1E120A';
+      g.lineWidth = 1.8;
+      g.stroke();
+      g.fillStyle = '#38BDF8';
+      g.fillRect(mx - 6, my + 7, 12, 5);
+      g.fillStyle = '#CBD5E1';
+      g.fillRect(mx - 4, my - 4, 8, 4);
+      g.strokeRect(mx - 4, my - 4, 8, 4);
+    }
+
+    this.cowShedSprite = c;
     return c;
   }
 }

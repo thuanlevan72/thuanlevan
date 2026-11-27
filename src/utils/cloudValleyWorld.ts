@@ -20,7 +20,7 @@ export const AVATAR_RADIUS = 0.28;
 export const AVATAR_SPEED = 4.6; // tiles per second
 
 export type AvatarFacing = 'down' | 'up' | 'left' | 'right';
-export type BuildingId = 'barn' | 'well' | 'merchant' | 'board' | 'pen';
+export type BuildingId = 'barn' | 'well' | 'merchant' | 'board' | 'pen' | 'coop';
 
 export interface BuildingZone {
   id: BuildingId;
@@ -99,14 +99,25 @@ export const FARM_BUILDINGS: readonly BuildingZone[] = [
     solid: true,
   },
   {
-    id: 'pen',
-    name: 'Chuồng Trại & Tự Động',
+    id: 'coop',
+    name: 'Chuồng Gà',
     x1: 16.0,
-    y1: 5.7,
+    y1: 5.4,
     x2: 20.5,
-    y2: 10.3,
-    interactX: 15.3,
-    interactY: 8.0,
+    y2: 7.35,
+    interactX: 15.35,
+    interactY: 6.45,
+    solid: false,
+  },
+  {
+    id: 'pen',
+    name: 'Chuồng Bò & Heo',
+    x1: 16.0,
+    y1: 7.55,
+    x2: 20.5,
+    y2: 10.45,
+    interactX: 15.35,
+    interactY: 9.0,
     solid: false,
   },
 ];
@@ -181,6 +192,33 @@ export function getAnimalWorldPos(idx: number, nowSec: number): { x: number; y: 
   const by = 6.8 + baseRow * 1.7;
   const swayX = Math.sin(nowSec * 0.9 + idx * 1.7) * 0.35;
   const swayY = Math.cos(nowSec * 0.7 + idx * 2.3) * 0.28;
+  return { x: bx + swayX, y: by + swayY };
+}
+
+export function getLivestockWorldPos(
+  animal: Pick<CloudValleyGameState['livestock'][number], 'type'>,
+  idx: number,
+  nowSec: number
+): { x: number; y: number } {
+  const swayX = Math.sin(nowSec * 0.85 + idx * 1.7) * 0.34;
+  const swayY = Math.cos(nowSec * 0.65 + idx * 2.3) * 0.16;
+  if (animal.type === 'chicken') {
+    const bx = 18.85 + (idx % 2) * 0.95;
+    const by = 6.55 + Math.floor(idx / 3) * 0.32;
+    return { x: bx + swayX, y: by + swayY };
+  }
+  if (animal.type === 'pig') {
+    const bx = 17.75 + (idx % 2) * 0.95;
+    const by = 9.65 + Math.floor(idx / 4) * 0.25;
+    return { x: bx + swayX, y: by + swayY };
+  }
+  if (animal.type === 'sheep') {
+    const bx = 19.35 + (idx % 2) * 0.5;
+    const by = 9.05;
+    return { x: bx + swayX, y: by + swayY };
+  }
+  const bx = 18.55 + (idx % 2) * 1.05;
+  const by = 8.45 + Math.floor(idx / 4) * 0.35;
   return { x: bx + swayX, y: by + swayY };
 }
 
@@ -297,13 +335,14 @@ export function detectInteractTarget(
     const clampedX = Math.max(b.x1, Math.min(b.x2, avatar.x));
     const clampedY = Math.max(b.y1, Math.min(b.y2, avatar.y));
     const dist = Math.hypot(avatar.x - clampedX, avatar.y - clampedY);
-    if (b.id !== 'pen' && dist <= 0.92) {
+    if (b.id !== 'pen' && b.id !== 'coop' && dist <= 0.92) {
       const labelMap: Record<BuildingId, string> = {
         barn: 'Mở Xưởng & Kho',
         well: 'Múc Nước Giếng',
         merchant: 'Gặp Lái Buôn',
         board: 'Mở Sổ Tay',
-        pen: 'Quản Lý Chuồng',
+        pen: 'Vắt Sữa Chuồng Bò',
+        coop: 'Nhặt Trứng Chuồng Gà',
       };
       return {
         kind: 'building',
@@ -315,18 +354,20 @@ export function detectInteractTarget(
     }
   }
 
-  // 2. Check nearby livestock inside or just beside the pen
+  // 2. Check nearby livestock inside or just beside the pen / coop
   let bestAnimal: { id: string; label: string; dist: number; x: number; y: number } | null = null;
   state.livestock.forEach((an, idx) => {
-    const pos = getAnimalWorldPos(idx, nowSec);
+    const pos = getLivestockWorldPos(an, idx, nowSec);
     const dist = Math.hypot(avatar.x - pos.x, avatar.y - pos.y);
     if (dist <= 1.25 && (!bestAnimal || dist < bestAnimal.dist)) {
       const actionVerb = an.productReady
         ? an.type === 'chicken'
-          ? 'Nhặt Trứng'
+          ? 'Nhặt Trứng Gà'
           : an.type === 'cow'
-          ? 'Vắt Sữa'
-          : 'Xén Lông'
+          ? 'Vắt Sữa Bò'
+          : an.type === 'pig'
+          ? 'Tìm Nấm cùng Heo'
+          : 'Xén Lông Cừu'
         : !an.fedToday
         ? `Cho ${an.name} Ăn`
         : `Vuốt Ve ${an.name}`;

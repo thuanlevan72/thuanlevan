@@ -16,12 +16,14 @@ import {
   isCropMature,
   isTileInGreenhouse,
   isTileUnlocked,
+  ORCHARD_TREES,
   type CloudValleyGameState,
+  type OrchardTreeDef,
   type TileState,
 } from './cloudValleyEngine.ts';
-import { CloudValleySpriteAtlas, type FruitTreeKind } from './cloudValleySprites.ts';
+import { CloudValleySpriteAtlas } from './cloudValleySprites.ts';
 import {
-  getAnimalWorldPos,
+  getLivestockWorldPos,
   tileToWorldBounds,
   WORLD_COLS,
   WORLD_ROWS,
@@ -84,6 +86,8 @@ export class CloudValleyCanvasController {
   private popupCursor = 0;
   private cachedSkyKey = '';
   private cachedSkyGrad: CanvasGradient | null = null;
+  private camX = 10.85;
+  private camY = 8.85;
 
   constructor() {
     for (let i = 0; i < 40; i++) {
@@ -132,16 +136,46 @@ export class CloudValleyCanvasController {
   ): FarmViewportMetrics {
     const safeW = Math.max(320, width);
     const safeH = Math.max(260, height);
-    const baseTilePx = safeW < 640 ? 40 : Math.min(54, Math.max(42, Math.min(safeW / 24, safeH / 16)));
-    const tilePx = Math.max(32, Math.min(72, baseTilePx * zoom));
+    const fitW = (safeW - 14) / 22.8;
+    const fitH = Math.max(220, safeH - 138) / 13.8;
+    const baseTilePx =
+      safeW < 640
+        ? Math.max(30, Math.min(42, safeW / 10.2))
+        : Math.min(58, Math.max(30, Math.min(fitW, fitH)));
+    const tilePx = Math.max(26, Math.min(76, baseTilePx * zoom));
     const isoW = tilePx * 0.72;
     const isoH = tilePx * 0.37;
 
-    // Subtle camera tracking centered nicely around Avatar & isometric homestead
-    const camX = Math.max(4.5, Math.min(WORLD_COLS - 4.5, avatar.x * 0.72 + 2.4));
-    const camY = Math.max(3.5, Math.min(WORLD_ROWS - 3.5, avatar.y * 0.72 + 2.1));
+    // Fixed camera centered on the homestead when the whole island fits on screen (no dizzy background scrolling!)
+    const fixedCamX = 10.85;
+    const fixedCamY = 8.85;
 
-    return { width: safeW, height: safeH, tilePx, isoW, isoH, camX, camY };
+    if (safeW >= 640 && zoom <= 1.05) {
+      this.camX = fixedCamX;
+      this.camY = fixedCamY;
+    } else {
+      // Narrow mobile or zoomed-in: deadzone camera only nudges when player nears viewport edges
+      const sx = safeW * 0.5 + (avatar.x - this.camX - (avatar.y - this.camY)) * isoW;
+      const sy = safeH * 0.5 + (avatar.x - this.camX + (avatar.y - this.camY)) * isoH;
+      const padX = Math.min(110, safeW * 0.24);
+      const padTop = 125;
+      const padBot = 145;
+      let shiftScreenX = 0;
+      let shiftScreenY = 0;
+      if (sx < padX) shiftScreenX = sx - padX;
+      else if (sx > safeW - padX) shiftScreenX = sx - (safeW - padX);
+      if (sy < padTop) shiftScreenY = sy - padTop;
+      else if (sy > safeH - padBot) shiftScreenY = sy - (safeH - padBot);
+
+      if (shiftScreenX !== 0 || shiftScreenY !== 0) {
+        const da = shiftScreenX / isoW;
+        const db = shiftScreenY / isoH;
+        this.camX = Math.max(4.0, Math.min(WORLD_COLS - 4.0, this.camX + (da + db) * 0.5));
+        this.camY = Math.max(3.5, Math.min(WORLD_ROWS - 3.5, this.camY + (db - da) * 0.5));
+      }
+    }
+
+    return { width: safeW, height: safeH, tilePx, isoW, isoH, camX: this.camX, camY: this.camY };
   }
 
   public worldToScreen(wx: number, wy: number, m: FarmViewportMetrics): { x: number; y: number } {
@@ -312,7 +346,7 @@ export class CloudValleyCanvasController {
       this.drawSoilMoundBase(ctx, state, tile, m, nowSec, unlocked, isHighlighted, isTargetTile);
     }
 
-    // 4. Locked Zone Wooden Signposts
+    // 4. Locked Zone Wooden Signposts (standing cleanly on seamless meadow grass)
     for (const t of TERRACES) {
       if (state.unlockedTerraces.includes(t.id)) continue;
       const midRow = (t.rowStart + t.rowEnd) * 0.5;
@@ -320,9 +354,13 @@ export class CloudValleyCanvasController {
       const wb = tileToWorldBounds(midRow, midCol);
       const sp = this.worldToScreen(wb.cx, wb.cy, m);
       ctx.save();
-      const signW = Math.min(118, Math.max(88, m.tilePx * 2.1));
+      const signW = Math.min(118, Math.max(90, m.tilePx * 2.05));
       const signH = 26;
       const signX = Math.min(m.width - signW * 0.5 - 8, Math.max(signW * 0.5 + 8, sp.x));
+      ctx.fillStyle = 'rgba(0,0,0,0.22)';
+      ctx.beginPath();
+      ctx.ellipse(signX, sp.y + 23, 12, 4.5, 0, 0, Math.PI * 2);
+      ctx.fill();
       ctx.fillStyle = '#5C3A21';
       ctx.fillRect(signX - 4, sp.y + 8, 8, 16);
       ctx.strokeStyle = '#1E120A';
@@ -331,13 +369,13 @@ export class CloudValleyCanvasController {
       ctx.fillStyle = '#5C3418';
       this.roundRect(ctx, signX - signW * 0.5, sp.y - signH * 0.5, signW, signH, 6);
       ctx.fill();
-      ctx.strokeStyle = '#F6D38C';
+      ctx.strokeStyle = state.gold >= t.costGold && state.level >= t.minLevel ? '#FACC15' : '#F6D38C';
       ctx.lineWidth = 2;
       ctx.stroke();
       ctx.fillStyle = '#FEF3C7';
       ctx.font = `800 ${m.tilePx < 42 ? 10 : 11}px "Plus Jakarta Sans", sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillText(`Khu ${t.id} · ${t.costGold} Xu`, signX, sp.y + 4);
+      ctx.fillText(`Khu ${t.id} - ${t.costGold} Xu`, signX, sp.y + 4);
       ctx.restore();
     }
 
@@ -423,36 +461,68 @@ export class CloudValleyCanvasController {
       draw: () => this.drawDoghouse(ctx, 1.9, 4.35, m),
     });
 
-    // Livestock Pen Fences & Feed Trough
+    // Chicken Coop (Chuồng Gà) & Cow Dairy Barn (Chuồng Bò & Heo)
     drawList.push({
-      depth: 16.0 + 5.75,
+      depth: 16.0 + 5.4,
       draw: () => this.drawPenNorthWestFence(ctx, m),
     });
     drawList.push({
-      depth: 18.2 + 6.3,
+      depth: 17.45 + 5.95,
+      draw: () =>
+        this.drawChickenCoop(
+          ctx,
+          state,
+          m,
+          nowSec,
+          interactTarget?.kind === 'building' && interactTarget.buildingId === 'coop'
+        ),
+    });
+    drawList.push({
+      depth: 18.2 + 7.45,
+      draw: () => this.drawCoopDividerFence(ctx, m),
+    });
+    drawList.push({
+      depth: 17.1 + 8.5,
+      draw: () =>
+        this.drawCowShed(
+          ctx,
+          state,
+          m,
+          nowSec,
+          interactTarget?.kind === 'building' && interactTarget.buildingId === 'pen'
+        ),
+    });
+    drawList.push({
+      depth: 19.3 + 8.45,
       draw: () => this.drawFeedTrough(ctx, m),
     });
     drawList.push({
-      depth: 20.4 + 10.2,
+      depth: 20.5 + 10.45,
       draw: () => this.drawPenSouthEastFence(ctx, m),
     });
 
-    // Livestock animals
+    // Livestock animals (Chickens inside Chuồng Gà; Cows, Pigs & Sheep inside Chuồng Bò & Heo)
     state.livestock.forEach((an, idx) => {
-      const pos = getAnimalWorldPos(idx, nowSec);
+      const pos = getLivestockWorldPos(an, idx, nowSec);
       const isFocused = interactTarget?.kind === 'animal' && interactTarget.animalId === an.id;
+      const vxScreen =
+        Math.cos(nowSec * 0.85 + idx * 1.7) * 0.29 + Math.sin(nowSec * 0.65 + idx * 2.3) * 0.1;
+      const facingRight = vxScreen >= 0;
+      const walkPhase = nowSec * 4.4 + idx * 1.3;
       drawList.push({
         depth: pos.x + pos.y,
-        draw: () => this.drawLivestockAnimal(ctx, an, pos.x, pos.y, m, nowSec, isFocused),
+        draw: () =>
+          this.drawLivestockAnimal(ctx, an, pos.x, pos.y, m, nowSec, isFocused, facingRight, walkPhase),
       });
     });
 
-    // Loyal Guard Puppy trotting near the doghouse & yard entrance
+    // Loyal Guard Dog trotting near the doghouse & yard entrance
     const pupX = 2.65 + Math.sin(nowSec * 0.8) * 0.55;
     const pupY = 4.72 + Math.cos(nowSec * 1.1) * 0.22;
+    const dogScreenVx = Math.cos(nowSec * 0.8) * 0.44 + Math.sin(nowSec * 1.1) * 0.24;
     drawList.push({
       depth: pupX + pupY,
-      draw: () => this.drawPuppy(ctx, pupX, pupY, Math.cos(nowSec * 0.8) >= 0, m, nowSec),
+      draw: () => this.drawPuppy(ctx, pupX, pupY, dogScreenVx >= 0, m, nowSec),
     });
 
     // Earth Sprites hopping across garden beds
@@ -471,21 +541,11 @@ export class CloudValleyCanvasController {
       });
     });
 
-    // Fruit Trees along the farm fence perimeter (Khế, Táo, Đào) — kept clear of plot signs
-    const fruitTreeSpecs: [number, number, FruitTreeKind][] = [
-      [1.3, 2.5, 'starfruit'],
-      [1.2, 7.6, 'apple'],
-      [1.3, 12.8, 'peach'],
-      [3.5, 16.05, 'starfruit'],
-      [16.9, 2.7, 'peach'],
-      [19.9, 4.1, 'apple'],
-      [20.85, 6.9, 'starfruit'],
-      [9.4, 16.05, 'apple'],
-    ];
-    for (const [tx, ty, kind] of fruitTreeSpecs) {
+    // Interactive Fruit Trees along the farm perimeter (Cây Khế, Cây Táo, Cây Đào)
+    for (const tree of ORCHARD_TREES) {
       drawList.push({
-        depth: tx + ty,
-        draw: () => this.drawFruitTreeProp(ctx, tx, ty, m, season, kind),
+        depth: tree.wx + tree.wy,
+        draw: () => this.drawFruitTreeProp(ctx, state, tree, m, season, nowSec),
       });
     }
 
@@ -604,15 +664,17 @@ export class CloudValleyCanvasController {
 
   private drawSkyClouds(ctx: CanvasRenderingContext2D, m: FarmViewportMetrics, nowSec: number): void {
     ctx.save();
-    for (let i = 0; i < 7; i++) {
-      const cx = ((nowSec * 7 + i * 240) % (m.width + 260)) - 130;
-      const cy = 36 + (i % 4) * (m.height * 0.16);
-      ctx.fillStyle = 'rgba(255, 253, 249, 0.78)';
+    for (let i = 0; i < 10; i++) {
+      const speed = 4.6 + (i % 3) * 1.4;
+      const cx = ((nowSec * speed + i * 195) % (m.width + 280)) - 140;
+      const cy = 28 + (i % 5) * (m.height * 0.145);
+      const sc = i % 2 === 0 ? 1.05 : 0.82;
+      ctx.fillStyle = 'rgba(255, 253, 249, 0.84)';
       for (const [ox, oy, r] of [
-        [0, 0, 22],
-        [-18, 6, 15],
-        [18, 6, 16],
-        [34, 9, 11],
+        [0, 0, 22 * sc],
+        [-18 * sc, 6 * sc, 15 * sc],
+        [18 * sc, 6 * sc, 16 * sc],
+        [34 * sc, 9 * sc, 11 * sc],
       ]) {
         ctx.beginPath();
         ctx.arc(cx + ox, cy + oy, r, 0, Math.PI * 2);
@@ -707,14 +769,15 @@ export class CloudValleyCanvasController {
     drawIsoPath(8.55, 5.1, 9.45, 15.4);
     // Narrow horizontal garden cross-path
     drawIsoPath(3.0, 10.35, 14.0, 11.05);
-    // Short path to livestock pen gate
-    drawIsoPath(14.0, 7.55, 16.0, 8.45);
+    // Short path to livestock coop & cow barn gates
+    drawIsoPath(14.0, 6.2, 16.0, 7.0);
+    drawIsoPath(14.0, 8.1, 16.0, 9.0);
 
-    // 4. Livestock Pasture Turf
-    const penA = this.worldToScreen(16.0, 5.8, m);
-    const penB = this.worldToScreen(20.4, 5.8, m);
-    const penC = this.worldToScreen(20.4, 10.2, m);
-    const penD = this.worldToScreen(16.0, 10.2, m);
+    // 4. Livestock Pasture Turf (Chuồng Gà + Chuồng Bò)
+    const penA = this.worldToScreen(16.0, 5.5, m);
+    const penB = this.worldToScreen(20.5, 5.5, m);
+    const penC = this.worldToScreen(20.5, 10.35, m);
+    const penD = this.worldToScreen(16.0, 10.35, m);
     const pasturePat = this.atlas.getPasturePattern(ctx, season);
     ctx.beginPath();
     ctx.moveTo(penA.x, penA.y);
@@ -728,7 +791,7 @@ export class CloudValleyCanvasController {
     // 5. Oval Stone-Edged Fish Pond in Garden Corner (wx=17.0, wy=12.6)
     this.drawFishPond(ctx, 17.0, 12.6, m, nowSec);
 
-    // 6. Low Wooden Garden Fences around the 4 Garden Beds (with open garden gates facing paths)
+    // 6. Low Wooden Garden Fences ONLY around Unlocked Garden Zones (locked Khu 2/3/4 remain seamless meadow)
     const zoneFrames = [
       { id: 1, x1: 2.9, y1: 5.9, x2: 8.1, y2: 10.1, gateSide: 'right' as const },
       { id: 2, x1: 9.9, y1: 5.9, x2: 14.1, y2: 10.1, gateSide: 'left' as const },
@@ -736,8 +799,9 @@ export class CloudValleyCanvasController {
       { id: 4, x1: 9.9, y1: 11.3, x2: 14.1, y2: 15.5, gateSide: 'left' as const },
     ];
     for (const zf of zoneFrames) {
-      const unlocked = state.unlockedTerraces.includes(zf.id);
-      this.drawIsoFenceBox(ctx, zf.x1, zf.y1, zf.x2, zf.y2, m, unlocked, zf.gateSide);
+      if (state.unlockedTerraces.includes(zf.id)) {
+        this.drawIsoFenceBox(ctx, zf.x1, zf.y1, zf.x2, zf.y2, m, true, zf.gateSide);
+      }
     }
 
     ctx.restore();
@@ -916,19 +980,15 @@ export class CloudValleyCanvasController {
 
     ctx.save();
     if (!unlocked) {
-      ctx.beginPath();
-      ctx.moveTo(center.x, center.y - m.isoH * 0.85);
-      ctx.lineTo(center.x + m.isoW * 0.85, center.y);
-      ctx.lineTo(center.x, center.y + m.isoH * 0.85);
-      ctx.lineTo(center.x - m.isoW * 0.85, center.y);
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(254, 243, 199, 0.16)';
-      ctx.fill();
-      ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = 'rgba(92, 52, 20, 0.28)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.setLineDash([]);
+      // Seamless lush meadow with sparse tiny pixel wildflowers (no technical grid lines!)
+      if ((tile.row * 3 + tile.col * 5) % 4 === 0) {
+        ctx.fillStyle = (tile.row + tile.col) % 2 === 0 ? '#FEF08A' : '#FBCFE8';
+        ctx.beginPath();
+        ctx.arc(center.x - 4, center.y - 1, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#4D7C0F';
+        ctx.fillRect(center.x + 3, center.y + 2, 2.5, 2.5);
+      }
       ctx.restore();
       return;
     }
@@ -1246,10 +1306,82 @@ export class CloudValleyCanvasController {
     }
   }
 
+  private drawChickenCoop(
+    ctx: CanvasRenderingContext2D,
+    state: CloudValleyGameState,
+    m: FarmViewportMetrics,
+    nowSec: number,
+    focused: boolean
+  ): void {
+    const c = this.worldToScreen(17.45, 5.95, m);
+    const w = m.tilePx * 1.72;
+    const h = m.tilePx * 1.52;
+    const sprite = this.atlas.getChickenCoopSprite();
+    ctx.save();
+    if (sprite) {
+      ctx.drawImage(sprite, c.x - w * 0.5, c.y - h * 0.82, w, h);
+    }
+    if (focused) {
+      ctx.strokeStyle = '#FEF08A';
+      ctx.lineWidth = 2.4;
+      this.roundRect(ctx, c.x - w * 0.46, c.y - h * 0.78, w * 0.92, h * 0.76, 8);
+      ctx.stroke();
+    }
+    const eggsReady = state.livestock.some((a) => a.type === 'chicken' && a.productReady);
+    if (eggsReady) {
+      const bob = Math.sin(nowSec * 4.5) * 2.5;
+      ctx.fillStyle = '#FEF3C7';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.ellipse(c.x + w * 0.34, c.y - h * 0.62 + bob, 6.2, 7.6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    this.drawWorldPlaque(ctx, c.x, c.y + 8, 'Chuồng Gà', focused);
+    ctx.restore();
+  }
+
+  private drawCowShed(
+    ctx: CanvasRenderingContext2D,
+    state: CloudValleyGameState,
+    m: FarmViewportMetrics,
+    nowSec: number,
+    focused: boolean
+  ): void {
+    const c = this.worldToScreen(17.1, 8.5, m);
+    const w = m.tilePx * 1.86;
+    const h = m.tilePx * 1.58;
+    const sprite = this.atlas.getCowShedSprite();
+    ctx.save();
+    if (sprite) {
+      ctx.drawImage(sprite, c.x - w * 0.5, c.y - h * 0.82, w, h);
+    }
+    if (focused) {
+      ctx.strokeStyle = '#FEF08A';
+      ctx.lineWidth = 2.4;
+      this.roundRect(ctx, c.x - w * 0.46, c.y - h * 0.78, w * 0.92, h * 0.76, 8);
+      ctx.stroke();
+    }
+    const milkReady = state.livestock.some((a) => (a.type === 'cow' || a.type === 'sheep') && a.productReady);
+    if (milkReady) {
+      const bob = Math.sin(nowSec * 4.5 + 1.2) * 2.5;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.8;
+      this.roundRect(ctx, c.x + w * 0.32, c.y - h * 0.66 + bob, 10, 14, 2.5);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#38BDF8';
+      ctx.fillRect(c.x + w * 0.32 + 1.5, c.y - h * 0.66 + bob + 5, 7, 4.5);
+    }
+    ctx.restore();
+  }
+
   private drawFeedTrough(ctx: CanvasRenderingContext2D, m: FarmViewportMetrics): void {
-    const sp = this.worldToScreen(18.2, 6.22, m);
-    const tw = m.tilePx * 1.3;
-    const th = m.tilePx * 0.42;
+    const sp = this.worldToScreen(19.3, 8.45, m);
+    const tw = m.tilePx * 1.15;
+    const th = m.tilePx * 0.38;
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     this.roundRect(ctx, sp.x - tw * 0.5, sp.y + 3, tw, th, 4);
@@ -1266,17 +1398,21 @@ export class CloudValleyCanvasController {
     ctx.restore();
   }
 
+  private drawCoopDividerFence(ctx: CanvasRenderingContext2D, m: FarmViewportMetrics): void {
+    this.drawIsoFenceSegment(ctx, 16.0, 7.45, 20.5, 7.45, m, true);
+  }
+
   private drawPenNorthWestFence(ctx: CanvasRenderingContext2D, m: FarmViewportMetrics): void {
-    this.drawIsoFenceSegment(ctx, 15.85, 5.75, 20.5, 5.75, m, true);
-    this.drawIsoFenceSegment(ctx, 15.85, 5.75, 15.85, 7.1, m, true);
+    this.drawIsoFenceSegment(ctx, 15.85, 5.4, 20.5, 5.4, m, true);
+    this.drawIsoFenceSegment(ctx, 15.85, 5.4, 15.85, 6.1, m, true);
   }
 
   private drawPenSouthEastFence(ctx: CanvasRenderingContext2D, m: FarmViewportMetrics): void {
-    this.drawIsoFenceSegment(ctx, 15.85, 8.9, 15.85, 10.2, m, true);
-    this.drawIsoFenceSegment(ctx, 15.85, 10.2, 20.5, 10.2, m, true);
-    this.drawIsoFenceSegment(ctx, 20.5, 5.75, 20.5, 10.2, m, true);
-    const mid = this.worldToScreen(18.2, 10.2, m);
-    this.drawWorldPlaque(ctx, mid.x, mid.y + 14, 'Chuồng Trại', false);
+    this.drawIsoFenceSegment(ctx, 15.85, 9.35, 15.85, 10.45, m, true);
+    this.drawIsoFenceSegment(ctx, 15.85, 10.45, 20.5, 10.45, m, true);
+    this.drawIsoFenceSegment(ctx, 20.5, 5.4, 20.5, 10.45, m, true);
+    const mid = this.worldToScreen(18.55, 10.45, m);
+    this.drawWorldPlaque(ctx, mid.x, mid.y + 13, 'Chuồng Bò & Heo', false);
   }
 
   private drawLivestockAnimal(
@@ -1286,165 +1422,629 @@ export class CloudValleyCanvasController {
     wy: number,
     m: FarmViewportMetrics,
     nowSec: number,
-    focused: boolean
+    focused: boolean,
+    facingRight = true,
+    walkPhase = 0
   ): void {
     const sp = this.worldToScreen(wx, wy, m);
-    const s = m.tilePx * 0.45;
+    const s =
+      an.type === 'cow'
+        ? m.tilePx * 0.58
+        : an.type === 'pig'
+        ? m.tilePx * 0.52
+        : an.type === 'chicken'
+        ? m.tilePx * 0.48
+        : m.tilePx * 0.52;
+    const stride = Math.sin(walkPhase);
+    const bob = Math.abs(Math.cos(walkPhase)) * 1.6;
+
     ctx.save();
-    // Elliptical Drop Shadow
+    // Crisp elliptical ground shadow beneath hooves/claws
     ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
     ctx.beginPath();
-    ctx.ellipse(sp.x, sp.y + s * 0.48, s * 0.82, s * 0.32, 0, 0, Math.PI * 2);
+    ctx.ellipse(sp.x, sp.y + s * 0.5, s * 0.88, s * 0.3, 0, 0, Math.PI * 2);
     ctx.fill();
 
     if (focused) {
       ctx.strokeStyle = '#FEF08A';
       ctx.lineWidth = 2.6;
       ctx.beginPath();
-      ctx.arc(sp.x, sp.y, s * 1.25, 0, Math.PI * 2);
+      ctx.arc(sp.x, sp.y - s * 0.1, s * 1.25, 0, Math.PI * 2);
       ctx.stroke();
     }
 
+    // Orient animal smoothly along its walking direction
+    ctx.save();
+    ctx.translate(sp.x, sp.y - bob);
+    if (!facingRight) {
+      ctx.scale(-1, 1);
+    }
+
     if (an.type === 'chicken') {
-      const peck = Math.sin(nowSec * 3.5) * 1.5;
-      ctx.fillStyle = '#EA580C';
-      ctx.strokeStyle = '#1E120A';
-      ctx.lineWidth = 1.8;
-      ctx.beginPath();
-      ctx.moveTo(sp.x - s * 0.45, sp.y - s * 0.1);
-      ctx.lineTo(sp.x - s * 0.85, sp.y - s * 0.45);
-      ctx.lineTo(sp.x - s * 0.6, sp.y + s * 0.1);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
+      // Realistic Speckled Reddish-Amber Farm Hen
+      const peckCycle = Math.max(0, Math.sin(nowSec * 2.4 + (an.id.charCodeAt(0) % 5)));
+      const headDip = peckCycle > 0.72 ? (peckCycle - 0.72) * 14 : 0;
 
-      ctx.fillStyle = '#FDE047';
-      ctx.beginPath();
-      ctx.ellipse(sp.x, sp.y + peck * 0.3, s * 0.58, s * 0.44, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      // Two slender golden-amber legs with 3-toed claws touching ground
+      for (const [lx, phaseOff] of [
+        [-s * 0.12, stride * 3.0],
+        [s * 0.12, -stride * 3.0],
+      ] as const) {
+        const footX = lx + phaseOff;
+        const footY = s * 0.48;
+        ctx.strokeStyle = '#1E120A';
+        ctx.lineWidth = 3.2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(lx, s * 0.18);
+        ctx.lineTo(footX, footY);
+        ctx.stroke();
+        ctx.strokeStyle = '#F59E0B';
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+        // 3 toes
+        ctx.strokeStyle = '#D97706';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(footX - 3.5, footY + 1);
+        ctx.lineTo(footX, footY);
+        ctx.lineTo(footX + 4.5, footY + 0.5);
+        ctx.stroke();
+      }
 
+      // Layered fanned tail plumage (3 overlapping feathers)
+      const tailColors = ['#7C2D12', '#9A3412', '#C2410C'];
+      tailColors.forEach((col, ti) => {
+        ctx.fillStyle = col;
+        ctx.strokeStyle = '#1E120A';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(-s * 0.38, -s * 0.04);
+        ctx.quadraticCurveTo(-s * 0.85, -s * (0.28 + ti * 0.14), -s * (0.72 - ti * 0.08), -s * (0.54 - ti * 0.08));
+        ctx.quadraticCurveTo(-s * 0.55, -s * 0.18, -s * 0.25, s * 0.04);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      });
+
+      // Plump anatomical hen body (curved chest & rounded back)
       ctx.fillStyle = '#F59E0B';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.9;
       ctx.beginPath();
-      ctx.ellipse(sp.x - s * 0.08, sp.y + s * 0.08 + peck * 0.3, s * 0.3, s * 0.18, -0.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#EF4444';
-      ctx.beginPath();
-      ctx.arc(sp.x + s * 0.22, sp.y - s * 0.46 + peck, s * 0.18, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = '#1E120A';
-      ctx.beginPath();
-      ctx.arc(sp.x + s * 0.34, sp.y - s * 0.14 + peck, 2, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#F97316';
-      ctx.beginPath();
-      ctx.moveTo(sp.x + s * 0.52, sp.y - s * 0.12 + peck);
-      ctx.lineTo(sp.x + s * 0.84, sp.y + peck);
-      ctx.lineTo(sp.x + s * 0.52, sp.y + s * 0.12 + peck);
+      ctx.moveTo(-s * 0.46, -s * 0.06);
+      ctx.quadraticCurveTo(-s * 0.2, -s * 0.34, s * 0.22, -s * 0.22);
+      ctx.quadraticCurveTo(s * 0.52, -s * 0.06, s * 0.4, s * 0.18);
+      ctx.quadraticCurveTo(s * 0.08, s * 0.32, -s * 0.32, s * 0.2);
+      ctx.quadraticCurveTo(-s * 0.52, s * 0.1, -s * 0.46, -s * 0.06);
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
-    } else if (an.type === 'cow') {
-      ctx.fillStyle = '#4A3426';
-      ctx.fillRect(sp.x - s * 0.52, sp.y + s * 0.25, 4.5, s * 0.38);
-      ctx.fillRect(sp.x - s * 0.18, sp.y + s * 0.28, 4.5, s * 0.35);
-      ctx.fillRect(sp.x + s * 0.24, sp.y + s * 0.25, 4.5, s * 0.38);
 
-      ctx.fillStyle = '#FFFDF9';
+      // Warm cream speckled breast highlight
+      ctx.fillStyle = '#FEF3C7';
+      ctx.beginPath();
+      ctx.ellipse(s * 0.22, s * 0.04, s * 0.18, s * 0.16, -0.35, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Tucked feathered wing with scalloped tips
+      ctx.fillStyle = '#D97706';
       ctx.strokeStyle = '#1E120A';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.ellipse(sp.x - s * 0.08, sp.y, s * 0.84, s * 0.55, 0, 0, Math.PI * 2);
+      ctx.ellipse(-s * 0.08, s * 0.02, s * 0.28, s * 0.17, -0.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.strokeStyle = '#9A3412';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(-s * 0.12, s * 0.03, s * 0.12, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+
+      // Sculpted neck + head (nods down cleanly when pecking)
+      const hx = s * 0.34 + headDip * 0.35;
+      const hy = -s * 0.32 + headDip * 0.65;
+
+      // Neck ruff
+      ctx.fillStyle = '#FBBF24';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.7;
+      ctx.beginPath();
+      ctx.ellipse(s * 0.29, -s * 0.16 + headDip * 0.3, s * 0.17, s * 0.19, 0.25, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = '#3B281B';
+      // 3-lobed crimson comb
+      ctx.fillStyle = '#DC2626';
       ctx.beginPath();
-      ctx.arc(sp.x - s * 0.34, sp.y - s * 0.12, s * 0.24, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(sp.x + s * 0.06, sp.y + s * 0.14, s * 0.18, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#FACC15';
-      ctx.beginPath();
-      ctx.arc(sp.x + s * 0.45, sp.y + s * 0.15, 3.6, 0, Math.PI * 2);
+      ctx.arc(hx - s * 0.08, hy - s * 0.21, s * 0.08, 0, Math.PI * 2);
+      ctx.arc(hx, hy - s * 0.24, s * 0.095, 0, Math.PI * 2);
+      ctx.arc(hx + s * 0.08, hy - s * 0.19, s * 0.075, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
-      const hx = sp.x + s * 0.62;
-      const hy = sp.y - s * 0.18;
+      // Head
       ctx.fillStyle = '#FDE68A';
       ctx.beginPath();
-      ctx.arc(hx - s * 0.18, hy - s * 0.3, 3.8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(hx + s * 0.18, hy - s * 0.3, 3.8, 0, Math.PI * 2);
+      ctx.arc(hx, hy, s * 0.19, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = '#FFFDF9';
+      // Red wattle under chin
+      ctx.fillStyle = '#EF4444';
       ctx.beginPath();
-      ctx.arc(hx, hy, s * 0.39, 0, Math.PI * 2);
+      ctx.ellipse(hx + s * 0.09, hy + s * 0.17, s * 0.055, s * 0.085, 0.1, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
 
-      ctx.fillStyle = '#FBCFE8';
+      // Sharp golden beak (upper & lower mandible)
+      ctx.fillStyle = '#F97316';
       ctx.beginPath();
-      ctx.ellipse(hx, hy + s * 0.16, s * 0.28, s * 0.16, 0, 0, Math.PI * 2);
+      ctx.moveTo(hx + s * 0.14, hy - s * 0.05);
+      ctx.lineTo(hx + s * 0.34, hy + s * 0.02);
+      ctx.lineTo(hx + s * 0.14, hy + s * 0.07);
+      ctx.closePath();
       ctx.fill();
+      ctx.stroke();
 
+      // Glossy eye with cream ring
       ctx.fillStyle = '#1E120A';
       ctx.beginPath();
-      ctx.arc(hx - s * 0.13, hy - s * 0.06, 2.2, 0, Math.PI * 2);
+      ctx.arc(hx + s * 0.06, hy - s * 0.03, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(hx + s * 0.05, hy - s * 0.045, 0.85, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (an.type === 'cow') {
+      // Realistic Holstein Dairy Cow (3/4 anatomical side profile)
+      const chew = Math.sin(nowSec * 4.2) * 1.1;
+      const tailSwish = Math.sin(nowSec * 3.1) * 3.2;
+
+      // 1. Far-side legs (shaded warm gray-brown for depth)
+      const drawCowLeg = (hipX: number, hipY: number, stepOff: number, isFar: boolean) => {
+        const legColor = isFar ? '#D6CFC7' : '#FFFDF9';
+        const hoofY = s * 0.48;
+        ctx.fillStyle = legColor;
+        ctx.strokeStyle = '#1E120A';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(hipX - s * 0.09, hipY);
+        ctx.lineTo(hipX + stepOff - s * 0.055, hoofY - s * 0.07);
+        ctx.lineTo(hipX + stepOff + s * 0.055, hoofY - s * 0.07);
+        ctx.lineTo(hipX + s * 0.09, hipY);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Dark cloven hoof
+        ctx.fillStyle = '#292524';
+        ctx.beginPath();
+        ctx.roundRect(hipX + stepOff - s * 0.06, hoofY - s * 0.08, s * 0.12, s * 0.08, 2);
+        ctx.fill();
+        ctx.stroke();
+      };
+
+      drawCowLeg(-s * 0.42, s * 0.12, -stride * 3.5, true);
+      drawCowLeg(s * 0.25, s * 0.12, stride * 3.5, true);
+
+      // 2. Curved swishing tail + dark hair tassel
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 3.6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.68, -s * 0.14);
+      ctx.quadraticCurveTo(-s * 0.92, s * 0.04, -s * 0.84 + tailSwish * 0.5, s * 0.28);
+      ctx.stroke();
+      ctx.strokeStyle = '#FFFDF9';
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+      ctx.fillStyle = '#292524';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.84 + tailSwish * 0.5, s * 0.32, s * 0.065, s * 0.1, 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // 3. Pink dairy udder under rear belly
+      ctx.fillStyle = '#F9A8D4';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.22, s * 0.22, s * 0.17, s * 0.12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // 4. Anatomical cow torso + neck hump
+      const traceCowBody = () => {
+        ctx.beginPath();
+        ctx.moveTo(-s * 0.68, -s * 0.14); // tail base
+        ctx.quadraticCurveTo(-s * 0.45, -s * 0.34, -s * 0.05, -s * 0.3); // lower back
+        ctx.quadraticCurveTo(s * 0.26, -s * 0.37, s * 0.48, -s * 0.24); // shoulder crest
+        ctx.quadraticCurveTo(s * 0.6, -s * 0.05, s * 0.45, s * 0.18); // deep chest
+        ctx.quadraticCurveTo(s * 0.02, s * 0.28, -s * 0.5, s * 0.2); // belly
+        ctx.quadraticCurveTo(-s * 0.74, s * 0.08, -s * 0.68, -s * 0.14); // hindquarter
+        ctx.closePath();
+      };
+      traceCowBody();
+      ctx.fillStyle = '#FFFDF9';
+      ctx.fill();
+
+      // Clipped belly shading & organic Holstein patches
+      ctx.save();
+      traceCowBody();
+      ctx.clip();
+      ctx.fillStyle = '#EAE2D6';
+      ctx.fillRect(-s * 0.8, s * 0.1, s * 1.4, s * 0.22);
+      ctx.fillStyle = '#29201B';
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.36, -s * 0.14, s * 0.22, s * 0.16, 0.35, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(hx + s * 0.13, hy - s * 0.06, 2.2, 0, Math.PI * 2);
+      ctx.ellipse(s * 0.04, -s * 0.22, s * 0.17, s * 0.13, -0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(s * 0.28, s * 0.02, s * 0.14, s * 0.12, 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      traceCowBody();
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 5. Near-side legs
+      drawCowLeg(-s * 0.48, s * 0.13, stride * 3.5, false);
+      drawCowLeg(s * 0.2, s * 0.13, -stride * 3.5, false);
+
+      // 6. Red leather collar + brass cowbell
+      ctx.strokeStyle = '#DC2626';
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.moveTo(s * 0.34, -s * 0.24);
+      ctx.lineTo(s * 0.46, s * 0.06);
+      ctx.stroke();
+      ctx.fillStyle = '#FACC15';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(s * 0.42, s * 0.05);
+      ctx.lineTo(s * 0.51, s * 0.05);
+      ctx.lineTo(s * 0.53, s * 0.15);
+      ctx.lineTo(s * 0.4, s * 0.15);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // 7. Sculpted Cow Head, Horns, Floppy Ears & Broad Muzzle
+      const hx = s * 0.62;
+      const hy = -s * 0.22 + chew * 0.4;
+
+      // Drooping cow ears behind horns
+      for (const [eyOff, dir] of [
+        [-s * 0.11, -1],
+        [-s * 0.04, 1],
+      ] as const) {
+        ctx.fillStyle = dir === -1 ? '#29201B' : '#FFFDF9';
+        ctx.strokeStyle = '#1E120A';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(hx + dir * s * 0.2, hy + eyOff, s * 0.14, s * 0.065, dir * 0.42, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // Curved ivory horns
+      for (const dir of [-1, 1] as const) {
+        ctx.fillStyle = '#FDE68A';
+        ctx.strokeStyle = '#1E120A';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(hx + dir * s * 0.1, hy - s * 0.2);
+        ctx.quadraticCurveTo(hx + dir * s * 0.24, hy - s * 0.34, hx + dir * s * 0.16, hy - s * 0.39);
+        ctx.quadraticCurveTo(hx + dir * s * 0.12, hy - s * 0.29, hx + dir * s * 0.04, hy - s * 0.22);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      // Sculpted face (tapered forehead to broad jaw)
+      ctx.fillStyle = '#FFFDF9';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.9;
+      ctx.beginPath();
+      ctx.moveTo(hx - s * 0.2, hy - s * 0.14);
+      ctx.quadraticCurveTo(hx, hy - s * 0.29, hx + s * 0.22, hy - s * 0.12);
+      ctx.quadraticCurveTo(hx + s * 0.27, hy + s * 0.16, hx, hy + s * 0.24);
+      ctx.quadraticCurveTo(hx - s * 0.25, hy + s * 0.16, hx - s * 0.2, hy - s * 0.14);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Dark patch over left brow
+      ctx.fillStyle = '#29201B';
+      ctx.beginPath();
+      ctx.ellipse(hx - s * 0.08, hy - s * 0.09, s * 0.11, s * 0.09, -0.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Broad soft-pink cow snout muzzle + nostrils
+      ctx.fillStyle = '#FBCFE8';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.ellipse(hx + s * 0.03, hy + s * 0.15, s * 0.22, s * 0.135, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      // Nostrils & gentle smile
+      ctx.fillStyle = '#9D174D';
+      ctx.beginPath();
+      ctx.ellipse(hx - s * 0.05, hy + s * 0.13, 2.2, 1.4, -0.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(hx + s * 0.11, hy + s * 0.13, 2.2, 1.4, 0.35, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#9D174D';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.arc(hx + s * 0.03, hy + s * 0.18, 3.2, 0.2, Math.PI - 0.2);
+      ctx.stroke();
+
+      // Expressive cow eyes with white catchlight
+      for (const exOff of [-s * 0.09, s * 0.12]) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(hx + exOff, hy - s * 0.03, 3.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#1E120A';
+        ctx.beginPath();
+        ctx.arc(hx + exOff + 0.4, hy - s * 0.03, 2.3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(hx + exOff - 0.3, hy - s * 0.045, 0.9, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (an.type === 'pig') {
+      // Realistic Plump Rosy Farm Pig (Heo Hồng)
+      const snuffle = Math.max(0, Math.sin(nowSec * 2.7)) * 1.8;
+
+      const drawPigLeg = (lx: number, stepOff: number, isFar: boolean) => {
+        const legCol = isFar ? '#F472B6' : '#FBCFE8';
+        const hoofY = s * 0.48;
+        ctx.fillStyle = legCol;
+        ctx.strokeStyle = '#1E120A';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(lx - s * 0.08, s * 0.14);
+        ctx.lineTo(lx + stepOff - s * 0.05, hoofY - s * 0.07);
+        ctx.lineTo(lx + stepOff + s * 0.05, hoofY - s * 0.07);
+        ctx.lineTo(lx + s * 0.08, s * 0.14);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // Dark cloven pig trotter hoof
+        ctx.fillStyle = '#3F2E28';
+        ctx.beginPath();
+        ctx.roundRect(lx + stepOff - s * 0.055, hoofY - s * 0.075, s * 0.11, s * 0.075, 2);
+        ctx.fill();
+        ctx.stroke();
+      };
+
+      // Far legs
+      drawPigLeg(-s * 0.34, -stride * 3.0, true);
+      drawPigLeg(s * 0.22, stride * 3.0, true);
+
+      // Curly corkscrew pig tail
+      const tailBounce = Math.sin(nowSec * 6.5) * 1.8;
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 3.2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.56, -s * 0.08);
+      ctx.bezierCurveTo(
+        -s * 0.78,
+        -s * 0.24 + tailBounce,
+        -s * 0.65,
+        -s * 0.36 + tailBounce,
+        -s * 0.74,
+        -s * 0.14 + tailBounce
+      );
+      ctx.stroke();
+      ctx.strokeStyle = '#FB7185';
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+
+      // Plump anatomical pig torso
+      const tracePigBody = () => {
+        ctx.beginPath();
+        ctx.moveTo(-s * 0.58, -s * 0.04);
+        ctx.quadraticCurveTo(-s * 0.45, -s * 0.33, 0, -s * 0.31);
+        ctx.quadraticCurveTo(s * 0.42, -s * 0.28, s * 0.48, -s * 0.02);
+        ctx.quadraticCurveTo(s * 0.46, s * 0.24, 0, s * 0.25);
+        ctx.quadraticCurveTo(-s * 0.52, s * 0.24, -s * 0.58, -s * 0.04);
+        ctx.closePath();
+      };
+      tracePigBody();
+      ctx.fillStyle = '#FDA4AF';
+      ctx.fill();
+
+      ctx.save();
+      tracePigBody();
+      ctx.clip();
+      // Warm soft back highlight & rosy underbelly shading
+      ctx.fillStyle = '#FFE4E6';
+      ctx.beginPath();
+      ctx.ellipse(-s * 0.05, -s * 0.22, s * 0.42, s * 0.12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#F472B6';
+      ctx.fillRect(-s * 0.65, s * 0.12, s * 1.25, s * 0.18);
+      ctx.restore();
+
+      tracePigBody();
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.9;
+      ctx.stroke();
+
+      // Near legs
+      drawPigLeg(-s * 0.4, stride * 3.0, false);
+      drawPigLeg(s * 0.18, -stride * 3.0, false);
+
+      // Detailed Pig Head & Upturned Snout
+      const hx = s * 0.48;
+      const hy = -s * 0.1 + snuffle * 0.55;
+
+      // Back ear
+      ctx.fillStyle = '#FB7185';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(hx - s * 0.04, hy - s * 0.2);
+      ctx.lineTo(hx + s * 0.08, hy - s * 0.42);
+      ctx.lineTo(hx + s * 0.18, hy - s * 0.18);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      // Round pig head with jowls
+      ctx.fillStyle = '#FBCFE8';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.9;
+      ctx.beginPath();
+      ctx.arc(hx, hy, s * 0.27, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Front floppy-tipped ear
+      ctx.fillStyle = '#FB7185';
+      ctx.beginPath();
+      ctx.moveTo(hx - s * 0.18, hy - s * 0.16);
+      ctx.quadraticCurveTo(hx - s * 0.22, hy - s * 0.42, hx - s * 0.02, hy - s * 0.28);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#FFE4E6';
+      ctx.beginPath();
+      ctx.ellipse(hx - s * 0.12, hy - s * 0.25, s * 0.04, s * 0.07, 0.3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Upturned flat-disk snout + 2 dark oval nostrils
+      ctx.fillStyle = '#F472B6';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.ellipse(hx + s * 0.22, hy + s * 0.05, s * 0.145, s * 0.115, 0.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#831843';
+      ctx.beginPath();
+      ctx.ellipse(hx + s * 0.18, hy + s * 0.05, 1.8, 3.0, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(hx + s * 0.27, hy + s * 0.05, 1.8, 3.0, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Glossy eye & rosy cheek
+      ctx.fillStyle = 'rgba(244, 63, 94, 0.28)';
+      ctx.beginPath();
+      ctx.arc(hx + s * 0.02, hy + s * 0.12, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1E120A';
+      ctx.beginPath();
+      ctx.arc(hx + s * 0.08, hy - s * 0.05, 2.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(hx + s * 0.07, hy - s * 0.065, 0.85, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      ctx.fillStyle = '#475569';
-      ctx.fillRect(sp.x - s * 0.35, sp.y + s * 0.25, 4, s * 0.32);
-      ctx.fillRect(sp.x + s * 0.2, sp.y + s * 0.25, 4, s * 0.32);
+      // Realistic Fluffy Cloud Sheep (4 jointed legs, shaded fleece, drooping ears, nose)
+      for (const [lx, stepOff] of [
+        [-s * 0.34, -stride * 2.8],
+        [s * 0.2, stride * 2.8],
+        [-s * 0.26, stride * 2.8],
+        [s * 0.28, -stride * 2.8],
+      ] as const) {
+        ctx.fillStyle = '#334155';
+        ctx.strokeStyle = '#1E120A';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.roundRect(lx + stepOff - 2.5, s * 0.15, 5, s * 0.33, 2);
+        ctx.fill();
+        ctx.stroke();
+      }
+
       const puffs: [number, number, number][] = [
-        [sp.x, sp.y, s * 0.6],
-        [sp.x - s * 0.34, sp.y + s * 0.06, s * 0.42],
-        [sp.x + s * 0.3, sp.y + s * 0.06, s * 0.42],
+        [-s * 0.32, s * 0.04, s * 0.32],
+        [s * 0.28, s * 0.02, s * 0.3],
+        [-s * 0.12, -s * 0.16, s * 0.34],
+        [s * 0.14, -s * 0.14, s * 0.32],
+        [0, s * 0.05, s * 0.38],
       ];
       ctx.fillStyle = '#1E120A';
       for (const [wx2, wy2, wr] of puffs) {
         ctx.beginPath();
-        ctx.arc(wx2, wy2, wr + 1.8, 0, Math.PI * 2);
+        ctx.arc(wx2, wy2, wr + 2.0, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.fillStyle = '#F8F5EE';
+      ctx.fillStyle = '#E2E8F0';
+      for (const [wx2, wy2, wr] of puffs) {
+        ctx.beginPath();
+        ctx.arc(wx2, wy2 + 2.5, wr, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#FFFDF9';
       for (const [wx2, wy2, wr] of puffs) {
         ctx.beginPath();
         ctx.arc(wx2, wy2, wr, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.fillStyle = '#53453B';
-      ctx.beginPath();
-      ctx.arc(sp.x + s * 0.5, sp.y - s * 0.08, s * 0.28, 0, Math.PI * 2);
-      ctx.fill();
+
+      const shx = s * 0.44;
+      const shy = -s * 0.08;
+      // Drooping dark ears
+      ctx.fillStyle = '#3E332C';
       ctx.strokeStyle = '#1E120A';
-      ctx.lineWidth = 1.6;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.ellipse(shx - s * 0.16, shy + s * 0.02, s * 0.13, s * 0.06, -0.5, 0, Math.PI * 2);
+      ctx.fill();
       ctx.stroke();
+
+      ctx.fillStyle = '#4A3D34';
+      ctx.beginPath();
+      ctx.ellipse(shx, shy, s * 0.24, s * 0.21, 0.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Wool forelock tuft
+      ctx.fillStyle = '#FFFDF9';
+      ctx.beginPath();
+      ctx.arc(shx - s * 0.03, shy - s * 0.18, s * 0.12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.arc(sp.x + s * 0.56, sp.y - s * 0.12, 2, 0, Math.PI * 2);
+      ctx.arc(shx + s * 0.08, shy - s * 0.03, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1E120A';
+      ctx.beginPath();
+      ctx.arc(shx + s * 0.09, shy - s * 0.03, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#F472B6';
+      ctx.beginPath();
+      ctx.arc(shx + s * 0.2, shy + s * 0.05, 1.9, 0, Math.PI * 2);
       ctx.fill();
     }
 
+    ctx.restore();
+
+    // Upright Product Ready / Hungry Indicator above animal
     if (an.productReady) {
-      const bob = Math.sin(nowSec * 4.5) * 2.5;
+      const pBob = Math.sin(nowSec * 4.5) * 2.5;
       ctx.fillStyle = '#FACC15';
       ctx.beginPath();
-      ctx.arc(sp.x, sp.y - s * 1.15 + bob, 7.2, 0, Math.PI * 2);
+      ctx.arc(sp.x, sp.y - s * 1.08 + pBob, 7.2, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#1E120A';
       ctx.lineWidth = 1.8;
@@ -1452,7 +2052,7 @@ export class CloudValleyCanvasController {
     } else if (!an.fedToday) {
       ctx.fillStyle = '#FB7185';
       ctx.beginPath();
-      ctx.arc(sp.x, sp.y - s * 1.1, 5.4, 0, Math.PI * 2);
+      ctx.arc(sp.x, sp.y - s * 1.05, 5.4, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#1E120A';
       ctx.lineWidth = 1.4;
@@ -1471,54 +2071,195 @@ export class CloudValleyCanvasController {
     nowSec: number
   ): void {
     const sp = this.worldToScreen(wx, wy, m);
-    const dir = facingRight ? 1 : -1;
-    const hop = Math.abs(Math.sin(nowSec * 6)) * 2.5;
+    const s = m.tilePx * 0.56;
+    const trot = Math.sin(nowSec * 7.5);
+    const hop = Math.abs(Math.cos(nowSec * 7.5)) * 2.2;
+    const wag = Math.sin(nowSec * 13) * 4.2;
+
     ctx.save();
+    // Ground drop shadow
     ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
     ctx.beginPath();
-    ctx.ellipse(sp.x, sp.y + 7, 13, 5, 0, 0, Math.PI * 2);
+    ctx.ellipse(sp.x, sp.y + s * 0.46, s * 0.78, s * 0.28, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    ctx.save();
+    ctx.translate(sp.x, sp.y - hop);
+    if (!facingRight) {
+      ctx.scale(-1, 1);
+    }
+
+    const drawDogLeg = (lx: number, stepOff: number, isFar: boolean) => {
+      const legCol = isFar ? '#B45309' : '#E08E26';
+      const pawY = s * 0.44;
+      ctx.fillStyle = legCol;
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(lx - s * 0.065, s * 0.12);
+      ctx.lineTo(lx + stepOff - s * 0.045, pawY - s * 0.07);
+      ctx.lineTo(lx + stepOff + s * 0.045, pawY - s * 0.07);
+      ctx.lineTo(lx + s * 0.065, s * 0.12);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      // White sock paw
+      ctx.fillStyle = '#FFFDF9';
+      ctx.beginPath();
+      ctx.ellipse(lx + stepOff + s * 0.015, pawY - s * 0.035, s * 0.065, s * 0.045, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    };
+
+    // 1. Far-side trotting legs
+    drawDogLeg(-s * 0.3, -trot * 3.8, true);
+    drawDogLeg(s * 0.18, trot * 3.8, true);
+
+    // 2. Wagging curved brush tail with cream tip
     ctx.strokeStyle = '#1E120A';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 5.4;
+    ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(sp.x - dir * 8, sp.y - 1 - hop);
-    ctx.lineTo(sp.x - dir * 15, sp.y - 8 - hop + Math.sin(nowSec * 14) * 3.5);
+    ctx.moveTo(-s * 0.42, -s * 0.05);
+    ctx.quadraticCurveTo(-s * 0.72, -s * 0.25 + wag * 0.5, -s * 0.62, -s * 0.46 + wag);
     ctx.stroke();
     ctx.strokeStyle = '#D97706';
-    ctx.lineWidth = 2.2;
+    ctx.lineWidth = 3.2;
     ctx.stroke();
+    ctx.fillStyle = '#FEF3C7';
+    ctx.beginPath();
+    ctx.arc(-s * 0.62, -s * 0.46 + wag, 2.6, 0, Math.PI * 2);
+    ctx.fill();
 
-    ctx.fillStyle = '#D97706';
+    // 3. Athletic golden-tan dog body + cream chest
+    const traceDogBody = () => {
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.46, -s * 0.04);
+      ctx.quadraticCurveTo(-s * 0.28, -s * 0.24, s * 0.1, -s * 0.21);
+      ctx.quadraticCurveTo(s * 0.42, -s * 0.18, s * 0.4, s * 0.08);
+      ctx.quadraticCurveTo(s * 0.12, s * 0.24, -s * 0.32, s * 0.16);
+      ctx.quadraticCurveTo(-s * 0.5, s * 0.1, -s * 0.46, -s * 0.04);
+      ctx.closePath();
+    };
+    traceDogBody();
+    ctx.fillStyle = '#E08E26';
+    ctx.fill();
+
+    ctx.save();
+    traceDogBody();
+    ctx.clip();
+    // Cream chest & belly fur
+    ctx.fillStyle = '#FEF3C7';
+    ctx.beginPath();
+    ctx.ellipse(s * 0.25, s * 0.07, s * 0.2, s * 0.18, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(-s * 0.08, s * 0.18, s * 0.3, s * 0.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    traceDogBody();
     ctx.strokeStyle = '#1E120A';
-    ctx.lineWidth = 1.8;
+    ctx.lineWidth = 1.9;
+    ctx.stroke();
+
+    // 4. Near-side trotting legs
+    drawDogLeg(-s * 0.35, trot * 3.8, false);
+    drawDogLeg(s * 0.14, -trot * 3.8, false);
+
+    // 5. Red collar + shiny gold dog tag
+    ctx.strokeStyle = '#DC2626';
+    ctx.lineWidth = 3.2;
     ctx.beginPath();
-    ctx.ellipse(sp.x, sp.y - hop, 10.5, 6.8, 0, 0, Math.PI * 2);
+    ctx.moveTo(s * 0.24, -s * 0.2);
+    ctx.lineTo(s * 0.36, s * 0.04);
+    ctx.stroke();
+    ctx.fillStyle = '#FACC15';
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(s * 0.37, s * 0.06, 2.8, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = '#DC2626';
-    ctx.fillRect(sp.x + dir * 3, sp.y - 5.5 - hop, 3.6, 6.5);
+    // 6. Sculpted Dog Head, Perked Ears, Cream Muzzle & Panting Tongue
+    const hx = s * 0.42;
+    const hy = -s * 0.24;
 
+    // Far pointed ear
+    ctx.fillStyle = '#92400E';
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(hx - s * 0.02, hy - s * 0.16);
+    ctx.lineTo(hx + s * 0.08, hy - s * 0.39);
+    ctx.lineTo(hx + s * 0.16, hy - s * 0.14);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Main golden head
     ctx.fillStyle = '#F59E0B';
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.9;
     ctx.beginPath();
-    ctx.arc(sp.x + dir * 9, sp.y - 5.8 - hop, 6.8, 0, Math.PI * 2);
+    ctx.arc(hx, hy, s * 0.24, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
+    // Cream cheek & snout bridge
+    ctx.fillStyle = '#FEF3C7';
+    ctx.beginPath();
+    ctx.ellipse(hx + s * 0.14, hy + s * 0.07, s * 0.17, s * 0.115, 0.08, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    // Happy pink tongue panting slightly
+    ctx.fillStyle = '#FB7185';
+    ctx.beginPath();
+    ctx.ellipse(hx + s * 0.17, hy + s * 0.18 + Math.sin(nowSec * 10) * 0.7, 2.2, 3.6, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Glossy wet nose
     ctx.fillStyle = '#1E120A';
     ctx.beginPath();
-    ctx.arc(sp.x + dir * 11.5, sp.y - 7 - hop, 1.7, 0, Math.PI * 2);
+    ctx.ellipse(hx + s * 0.29, hy + s * 0.03, 3.1, 2.3, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
-    ctx.arc(sp.x + dir * 14.8, sp.y - 4.4 - hop, 1.8, 0, Math.PI * 2);
+    ctx.arc(hx + s * 0.28, hy + s * 0.02, 0.85, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = '#78350F';
+    // Near perked/floppy-tipped ear
+    ctx.fillStyle = '#92400E';
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.6;
     ctx.beginPath();
-    ctx.ellipse(sp.x + dir * 6, sp.y - 5 - hop, 2.8, 5, 0.25, 0, Math.PI * 2);
+    ctx.moveTo(hx - s * 0.16, hy - s * 0.12);
+    ctx.lineTo(hx - s * 0.18, hy - s * 0.37);
+    ctx.lineTo(hx - s * 0.01, hy - s * 0.2);
+    ctx.closePath();
     ctx.fill();
     ctx.stroke();
+
+    // Cute Vietnamese "chó bốn mắt" cream eyebrow spot + glossy dark eye
+    ctx.fillStyle = '#FEF3C7';
+    ctx.beginPath();
+    ctx.arc(hx + s * 0.05, hy - s * 0.12, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#1E120A';
+    ctx.beginPath();
+    ctx.arc(hx + s * 0.07, hy - s * 0.05, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.arc(hx + s * 0.06, hy - s * 0.065, 0.95, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
     ctx.restore();
   }
 
@@ -1534,7 +2275,7 @@ export class CloudValleyCanvasController {
     nowSec: number
   ): void {
     const sp = this.worldToScreen(avatar.x, avatar.y, m);
-    const s = m.tilePx * 0.86; // ~2x larger classic TeaMobi Chibi presence!
+    const s = m.tilePx * 1.18; // Bold 1.37x enlarged classic TeaMobi Chibi presence!
     const isMoving = Math.hypot(avatar.vx, avatar.vy) > 0.2;
     const stride = isMoving ? Math.sin(avatar.walkPhase) : 0;
     const bob = isMoving ? Math.abs(Math.cos(avatar.walkPhase)) * 3.5 : Math.sin(nowSec * 2.2) * 1.2;
@@ -1783,22 +2524,7 @@ export class CloudValleyCanvasController {
       ctx.stroke();
     }
 
-    // 9. Crisp Farmer Name Tag below boots
-    ctx.font = '800 11px "Plus Jakarta Sans", sans-serif';
-    ctx.textAlign = 'center';
-    const farmerName = state.farmerProfile?.name || 'Nông Dân Mây';
-    const nw = Math.min(136, ctx.measureText(farmerName).width + 14);
-    const ny = footY + 7;
-    ctx.fillStyle = 'rgba(28, 18, 10, 0.84)';
-    this.roundRect(ctx, sp.x - nw * 0.5, ny, nw, 17, 5);
-    ctx.fill();
-    ctx.strokeStyle = '#F6D38C';
-    ctx.lineWidth = 1.1;
-    ctx.stroke();
-    ctx.fillStyle = '#FEF3C7';
-    ctx.fillText(farmerName, sp.x, ny + 12.2, nw - 8);
-
-    // 10. Avatar Speech Bubble
+    // 9. Avatar Speech Bubble (foot name tag omitted so it never overlaps world plaques!)
     if (avatar.speechText && avatar.speechTimer > 0) {
       ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
       const tw = Math.min(210, ctx.measureText(avatar.speechText).width + 18);
@@ -1819,18 +2545,36 @@ export class CloudValleyCanvasController {
 
   private drawFruitTreeProp(
     ctx: CanvasRenderingContext2D,
-    wx: number,
-    wy: number,
+    state: CloudValleyGameState,
+    tree: OrchardTreeDef,
     m: FarmViewportMetrics,
     season: ReturnType<typeof getSeasonId>,
-    kind: FruitTreeKind
+    nowSec: number
   ): void {
-    const sp = this.worldToScreen(wx, wy, m);
-    const sprite = this.atlas.getFruitTreeSprite(kind, season);
+    const sp = this.worldToScreen(tree.wx, tree.wy, m);
+    const sprite = this.atlas.getFruitTreeSprite(tree.kind, season);
     const w = m.tilePx * 2.15;
     const h = m.tilePx * 2.6;
     if (sprite) {
       ctx.drawImage(sprite, sp.x - w * 0.5, sp.y - h * 0.88, w, h);
+    }
+    if (tree.fruitItemId && (state.orchardCooldowns?.[tree.id] ?? 0) <= 0) {
+      const bob = Math.sin(nowSec * 3.8 + tree.wx) * 2.5;
+      const bx = sp.x + w * 0.24;
+      const by = sp.y - h * 0.72 + bob;
+      ctx.save();
+      ctx.fillStyle = tree.kind === 'apple' ? '#EF4444' : '#FACC15';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(bx, by, 6.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(bx - 1.8, by - 1.8, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
   }
 
@@ -2074,6 +2818,60 @@ export class CloudValleyCanvasController {
           ctx.beginPath();
           ctx.arc(cx + ox - 1 + sway * 0.6, baseY + oy - 1, 1.8, 0, Math.PI * 2);
           ctx.fill();
+        }
+      } else if (def.id === 'tao_do' || def.id === 'khe_ngot') {
+        // Mini-tree trunk + lush rounded canopy + glossy Red Apples (Táo) or 5-pointed Starfruits (Khế)
+        ctx.fillStyle = '#78441E';
+        ctx.fillRect(cx - 3.2, baseY - s * 0.45, 6.4, s * 0.52);
+        ctx.strokeRect(cx - 3.2, baseY - s * 0.45, 6.4, s * 0.52);
+
+        ctx.fillStyle = '#1E7A2D';
+        ctx.beginPath();
+        ctx.arc(cx + sway * 0.45, baseY - s * 0.72, s * 0.72, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#4ADE80';
+        ctx.beginPath();
+        ctx.arc(cx - 3 + sway * 0.5, baseY - s * 0.92, s * 0.36, 0, Math.PI * 2);
+        ctx.fill();
+
+        const fruitSpots: [number, number][] = [
+          [-6.5, -s * 0.92],
+          [6.5, -s * 0.68],
+          [-0.5, -s * 0.46],
+        ];
+        for (const [fx, fy] of fruitSpots) {
+          const sx = cx + fx + sway * 0.6;
+          const sy = baseY + fy;
+          if (def.id === 'khe_ngot') {
+            ctx.fillStyle = '#FACC15';
+            ctx.beginPath();
+            for (let k = 0; k < 10; k++) {
+              const r = k % 2 === 0 ? 5.2 : 2.3;
+              const ang = -Math.PI * 0.5 + (k * Math.PI) / 5;
+              const px = sx + Math.cos(ang) * r;
+              const py = sy + Math.sin(ang) * r;
+              if (k === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          } else {
+            ctx.fillStyle = '#EF4444';
+            ctx.beginPath();
+            ctx.arc(sx, sy, 4.6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = '#4ADE80';
+            ctx.beginPath();
+            ctx.ellipse(sx + 2, sy - 4.4, 2.4, 1.2, -0.4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(sx - 1.4, sy - 1.4, 1.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       } else {
         ctx.fillStyle = '#1E7A2D';
