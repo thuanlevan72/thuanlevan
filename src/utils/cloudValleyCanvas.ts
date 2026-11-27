@@ -19,9 +19,8 @@ import {
   type CloudValleyGameState,
   type TileState,
 } from './cloudValleyEngine.ts';
-import { CloudValleySpriteAtlas } from './cloudValleySprites.ts';
+import { CloudValleySpriteAtlas, type FruitTreeKind } from './cloudValleySprites.ts';
 import {
-  FARM_BUILDINGS,
   getAnimalWorldPos,
   tileToWorldBounds,
   WORLD_COLS,
@@ -35,6 +34,8 @@ export interface FarmViewportMetrics {
   width: number;
   height: number;
   tilePx: number;
+  isoW: number;
+  isoH: number;
   camX: number; // world X at screen center
   camY: number; // world Y at screen center
 }
@@ -51,6 +52,8 @@ export interface ActionParticle {
   color: string;
 }
 
+export type PopupIconKind = 'coin' | 'xp' | 'crop' | 'milk' | 'egg' | 'wool' | 'water' | 'hybrid' | 'none';
+
 export interface FloatingPopup {
   active: boolean;
   x: number;
@@ -60,6 +63,7 @@ export interface FloatingPopup {
   maxLife: number;
   text: string;
   color: string;
+  icon: PopupIconKind;
 }
 
 interface WeatherMote {
@@ -82,7 +86,7 @@ export class CloudValleyCanvasController {
   private cachedSkyGrad: CanvasGradient | null = null;
 
   constructor() {
-    for (let i = 0; i < 42; i++) {
+    for (let i = 0; i < 40; i++) {
       this.weatherPool.push({
         x: Math.random(),
         y: Math.random(),
@@ -110,11 +114,12 @@ export class CloudValleyCanvasController {
         active: false,
         x: 0,
         y: 0,
-        vy: -1.1,
+        vy: -1.3,
         life: 0,
-        maxLife: 1.2,
+        maxLife: 1.45,
         text: '',
         color: '#FFFFFF',
+        icon: 'none',
       });
     }
   }
@@ -127,45 +132,33 @@ export class CloudValleyCanvasController {
   ): FarmViewportMetrics {
     const safeW = Math.max(320, width);
     const safeH = Math.max(260, height);
-    const baseTilePx = safeW < 640 ? 48 : Math.min(62, Math.max(48, Math.min(safeW / 21, safeH / 14.5)));
-    const tilePx = Math.max(38, Math.min(80, baseTilePx * zoom));
+    const baseTilePx = safeW < 640 ? 40 : Math.min(54, Math.max(42, Math.min(safeW / 24, safeH / 16)));
+    const tilePx = Math.max(32, Math.min(72, baseTilePx * zoom));
+    const isoW = tilePx * 0.72;
+    const isoH = tilePx * 0.37;
 
-    const halfViewW = (safeW / tilePx) * 0.5;
-    const halfViewH = (safeH / tilePx) * 0.5;
+    // Subtle camera tracking centered nicely around Avatar & isometric homestead
+    const camX = Math.max(4.5, Math.min(WORLD_COLS - 4.5, avatar.x * 0.72 + 2.4));
+    const camY = Math.max(3.5, Math.min(WORLD_ROWS - 3.5, avatar.y * 0.72 + 2.1));
 
-    let camX = avatar.x;
-    let camY = avatar.y + 0.35;
-
-    if (halfViewW * 2 >= WORLD_COLS) {
-      camX = WORLD_COLS * 0.5;
-    } else {
-      camX = Math.max(halfViewW, Math.min(WORLD_COLS - halfViewW, camX));
-    }
-
-    // Reserve sky headroom behind the top HUD so Barn & Merchant Stall aren't tucked underneath at spawn
-    const topHudWorldPad = safeW < 640 ? 2.1 : 1.15;
-    const minCamY = halfViewH - topHudWorldPad;
-    const maxCamY = WORLD_ROWS - halfViewH + 1.2;
-    if (minCamY >= maxCamY) {
-      camY = WORLD_ROWS * 0.5;
-    } else {
-      camY = Math.max(minCamY, Math.min(maxCamY, camY));
-    }
-
-    return { width: safeW, height: safeH, tilePx, camX, camY };
+    return { width: safeW, height: safeH, tilePx, isoW, isoH, camX, camY };
   }
 
   public worldToScreen(wx: number, wy: number, m: FarmViewportMetrics): { x: number; y: number } {
+    const dx = wx - m.camX;
+    const dy = wy - m.camY;
     return {
-      x: m.width * 0.5 + (wx - m.camX) * m.tilePx,
-      y: m.height * 0.5 + (wy - m.camY) * m.tilePx,
+      x: m.width * 0.5 + (dx - dy) * m.isoW,
+      y: m.height * 0.5 + (dx + dy) * m.isoH,
     };
   }
 
   public screenToWorld(px: number, py: number, m: FarmViewportMetrics): { wx: number; wy: number } {
+    const a = (px - m.width * 0.5) / m.isoW;
+    const b = (py - m.height * 0.5) / m.isoH;
     return {
-      wx: m.camX + (px - m.width * 0.5) / m.tilePx,
-      wy: m.camY + (py - m.height * 0.5) / m.tilePx,
+      wx: m.camX + (a + b) * 0.5,
+      wy: m.camY + (b - a) * 0.5,
     };
   }
 
@@ -179,36 +172,43 @@ export class CloudValleyCanvasController {
       const p = this.actionPool[this.actionCursor];
       this.actionCursor = (this.actionCursor + 1) % this.actionPool.length;
       const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.45;
-      const speed = 0.8 + Math.random() * 1.4;
+      const speed = 0.7 + Math.random() * 1.3;
       p.active = true;
       p.x = wx;
       p.y = wy - 0.15;
       p.vx = Math.cos(angle) * speed;
-      p.vy = Math.sin(angle) * speed * 0.7 - 0.9;
+      p.vy = Math.sin(angle) * speed * 0.7 - 0.85;
       p.life = 0;
-      p.maxLife = 0.48 + Math.random() * 0.22;
-      p.size = 2.6 + Math.random() * 2.2;
+      p.maxLife = 0.5 + Math.random() * 0.22;
+      p.size = 2.8 + Math.random() * 2.2;
       p.color = color;
     }
   }
 
-  public spawnPopupWorld(wx: number, wy: number, text: string, color = '#FFFBEB'): void {
+  public spawnPopupWorld(
+    wx: number,
+    wy: number,
+    text: string,
+    color = '#FFFBEB',
+    icon: PopupIconKind = 'none'
+  ): void {
     const pop = this.popupPool[this.popupCursor];
     this.popupCursor = (this.popupCursor + 1) % this.popupPool.length;
     pop.active = true;
     pop.x = wx;
-    pop.y = wy - 0.5;
-    pop.vy = -1.05;
+    pop.y = wy - 0.9;
+    pop.vy = -1.25;
     pop.life = 0;
-    pop.maxLife = 1.25;
+    pop.maxLife = 1.45;
     pop.text = text;
     pop.color = color;
+    pop.icon = icon;
   }
 
   public stepEffects(dt: number, state: CloudValleyGameState): void {
     const season = getSeasonId(state);
     for (const w of this.weatherPool) {
-      const speedMult = state.weather === 'drizzle' ? 2.4 : season === 'winter' ? 0.85 : 0.62;
+      const speedMult = state.weather === 'drizzle' ? 2.2 : season === 'winter' ? 0.85 : 0.62;
       w.x += (w.vx + (state.weather === 'drizzle' ? -0.05 : 0.015)) * dt * speedMult;
       w.y += w.vy * dt * speedMult;
       if (w.y > 1.05) {
@@ -254,27 +254,29 @@ export class CloudValleyCanvasController {
     const meta = SEASON_META[season];
     const dayRatio = state.timeInDaySeconds / DAY_DURATION_SECONDS;
 
-    // 1. Sky / Valley Backdrop
+    // 1. Sky Valley Backdrop & Drifting Clouds ("Thung Lũng Mây")
     const duskMix = dayRatio > 0.72 ? Math.min(1, (dayRatio - 0.72) / 0.25) : 0;
-    const topColor = duskMix > 0.25 ? '#485A84' : meta.skyTop;
-    const botColor = duskMix > 0.25 ? '#E69F74' : meta.grassLight;
+    const topColor = duskMix > 0.25 ? '#485A84' : '#7BC7F2';
+    const botColor = duskMix > 0.25 ? '#E69F74' : '#D9F1FC';
     const skyKey = `${topColor}_${botColor}_${m.height}`;
     if (this.cachedSkyKey !== skyKey || !this.cachedSkyGrad) {
       const grad = ctx.createLinearGradient(0, 0, 0, m.height);
       grad.addColorStop(0, topColor);
-      grad.addColorStop(0.24, '#CFE8F7');
-      grad.addColorStop(0.32, meta.grassLight);
-      grad.addColorStop(1, meta.grassDark);
+      grad.addColorStop(0.55, botColor);
+      grad.addColorStop(1, '#BDE5FA');
       this.cachedSkyGrad = grad;
       this.cachedSkyKey = skyKey;
     }
     ctx.fillStyle = this.cachedSkyGrad;
     ctx.fillRect(0, 0, m.width, m.height);
 
-    // 2. Textured Meadow, Distant Hills, Cobblestone Plaza & Garden Fences
-    this.drawWorldGround(ctx, state, m, meta, season, nowSec);
+    // Fluffy floating valley clouds around the island
+    this.drawSkyClouds(ctx, m, nowSec);
 
-    // 3. Soil Beds & Crops (72 tiles across 4 fenced TeaMobi garden plots)
+    // 2. Isometric Floating Homestead Plateau, Vivid Grass, Packed-Earth Footpaths, Pond & Garden Fences
+    this.drawIsometricWorldBase(ctx, state, m, meta, season, nowSec);
+
+    // 3. Seamless Rounded Isometric Soil Mounds & Crops (72 tiles)
     const activeToolForArea: ToolId = activeMode === 'auto' ? 'harvest' : activeMode;
     const hoverOffsets =
       hoverTile && activeToolForArea !== 'build' && activeToolForArea !== 'inspect'
@@ -292,16 +294,22 @@ export class CloudValleyCanvasController {
       }
     }
 
+    // Draw soil pads in isometric painter order (increasing row + col)
+    const tilesOrdered: TileState[] = [];
     for (let row = 0; row < GRID_ROWS; row++) {
       for (let col = 0; col < GRID_COLS; col++) {
         const tile = state.tiles[getTileIndex(row, col)];
-        if (!tile) continue;
-        const unlocked = isTileUnlocked(state, tile);
-        const isHighlighted = highlightedSet.has(`${row},${col}`);
-        const isTargetTile =
-          interactTarget?.kind === 'tile' && interactTarget.row === row && interactTarget.col === col;
-        this.drawSoilTile(ctx, state, tile, m, nowSec, unlocked, isHighlighted, isTargetTile);
+        if (tile) tilesOrdered.push(tile);
       }
+    }
+    tilesOrdered.sort((a, b) => a.row + a.col - (b.row + b.col));
+
+    for (const tile of tilesOrdered) {
+      const unlocked = isTileUnlocked(state, tile);
+      const isHighlighted = highlightedSet.has(`${tile.row},${tile.col}`);
+      const isTargetTile =
+        interactTarget?.kind === 'tile' && interactTarget.row === tile.row && interactTarget.col === tile.col;
+      this.drawSoilMoundBase(ctx, state, tile, m, nowSec, unlocked, isHighlighted, isTargetTile);
     }
 
     // 4. Locked Zone Wooden Signposts
@@ -312,38 +320,59 @@ export class CloudValleyCanvasController {
       const wb = tileToWorldBounds(midRow, midCol);
       const sp = this.worldToScreen(wb.cx, wb.cy, m);
       ctx.save();
-      ctx.fillStyle = 'rgba(255, 253, 249, 0.30)';
-      ctx.beginPath();
-      ctx.ellipse(sp.x, sp.y + 4, m.tilePx * 1.38, m.tilePx * 0.78, 0, 0, Math.PI * 2);
-      ctx.fill();
-      const signW = Math.min(126, Math.max(94, m.tilePx * 2.25));
+      const signW = Math.min(118, Math.max(88, m.tilePx * 2.1));
       const signH = 26;
       const signX = Math.min(m.width - signW * 0.5 - 8, Math.max(signW * 0.5 + 8, sp.x));
       ctx.fillStyle = '#5C3A21';
       ctx.fillRect(signX - 4, sp.y + 8, 8, 16);
-      ctx.strokeStyle = '#331D0F';
-      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.4;
       ctx.strokeRect(signX - 4, sp.y + 8, 8, 16);
-      ctx.fillStyle = '#4A2E1A';
+      ctx.fillStyle = '#5C3418';
       this.roundRect(ctx, signX - signW * 0.5, sp.y - signH * 0.5, signW, signH, 6);
       ctx.fill();
       ctx.strokeStyle = '#F6D38C';
-      ctx.lineWidth = 1.6;
+      ctx.lineWidth = 2;
       ctx.stroke();
       ctx.fillStyle = '#FEF3C7';
-      ctx.font = `700 ${m.tilePx < 45 ? 10 : 11.5}px "Plus Jakarta Sans", sans-serif`;
+      ctx.font = `800 ${m.tilePx < 42 ? 10 : 11}px "Plus Jakarta Sans", sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillText(`Khu ${t.id} · ${t.costGold}g`, signX, sp.y + 4);
+      ctx.fillText(`Khu ${t.id} · ${t.costGold} Xu`, signX, sp.y + 4);
       ctx.restore();
     }
 
-    // 5. Y-Sorted World Props, Buildings, Livestock, Puppy, Sprites, Trees & Farmer Avatar
-    const drawList: { sortY: number; draw: () => void }[] = [];
+    // 5. True Isometric Depth-Sorted World Entities (sortKey = wx + wy)
+    const drawList: { depth: number; draw: () => void }[] = [];
 
+    // Crops & tile structures sorted with characters/buildings so tall Avatar walks cleanly behind/in front!
+    for (const tile of tilesOrdered) {
+      if (!isTileUnlocked(state, tile)) continue;
+      if (!tile.structure && !tile.hasWeed && !tile.wildMushroom && !tile.crop) continue;
+      const wb = tileToWorldBounds(tile.row, tile.col);
+      drawList.push({
+        depth: wb.cx + wb.cy,
+        draw: () => {
+          const center = this.worldToScreen(wb.cx, wb.cy, m);
+          const sSize = m.tilePx * 0.92;
+          if (tile.structure) {
+            this.drawStructure(ctx, tile.structure, center.x, center.y, sSize, nowSec);
+          }
+          if (tile.hasWeed) {
+            this.drawWeed(ctx, center.x, center.y, sSize);
+          } else if (tile.wildMushroom) {
+            this.drawMushroom(ctx, center.x, center.y, sSize, nowSec);
+          } else if (tile.crop) {
+            this.drawCrop(ctx, tile, center.x, center.y, sSize, nowSec);
+          }
+        },
+      });
+    }
+
+    // Farmhouse (Wooden Tile-Roof Vietnamese Farmhouse)
     drawList.push({
-      sortY: 3.55,
+      depth: 4.0 + 2.8,
       draw: () =>
-        this.drawBarnAndWindmill(
+        this.drawFarmhouse(
           ctx,
           state,
           m,
@@ -351,8 +380,10 @@ export class CloudValleyCanvasController {
           interactTarget?.kind === 'building' && interactTarget.buildingId === 'barn'
         ),
     });
+
+    // Stone Wishing Well
     drawList.push({
-      sortY: 3.55,
+      depth: 7.8 + 2.9,
       draw: () =>
         this.drawStoneWell(
           ctx,
@@ -361,8 +392,10 @@ export class CloudValleyCanvasController {
           interactTarget?.kind === 'building' && interactTarget.buildingId === 'well'
         ),
     });
+
+    // Merchant Stall & Bác Lái Buôn
     drawList.push({
-      sortY: 3.55,
+      depth: 11.6 + 2.75,
       draw: () =>
         this.drawMerchantStall(
           ctx,
@@ -372,8 +405,10 @@ export class CloudValleyCanvasController {
           interactTarget?.kind === 'building' && interactTarget.buildingId === 'merchant'
         ),
     });
+
+    // Almanac Notice Board
     drawList.push({
-      sortY: 3.55,
+      depth: 15.0 + 2.9,
       draw: () =>
         this.drawNoticeBoard(
           ctx,
@@ -382,38 +417,45 @@ export class CloudValleyCanvasController {
         ),
     });
 
-    // Pen picket fences & feed trough
+    // Wooden Doghouse beside entrance gate
     drawList.push({
-      sortY: 5.75,
-      draw: () => this.drawPenNorthFence(ctx, m),
+      depth: 1.9 + 4.35,
+      draw: () => this.drawDoghouse(ctx, 1.9, 4.35, m),
+    });
+
+    // Livestock Pen Fences & Feed Trough
+    drawList.push({
+      depth: 16.0 + 5.75,
+      draw: () => this.drawPenNorthWestFence(ctx, m),
     });
     drawList.push({
-      sortY: 6.1,
+      depth: 18.2 + 6.3,
       draw: () => this.drawFeedTrough(ctx, m),
     });
     drawList.push({
-      sortY: 10.25,
-      draw: () => this.drawPenSouthFence(ctx, m),
+      depth: 20.4 + 10.2,
+      draw: () => this.drawPenSouthEastFence(ctx, m),
     });
 
+    // Livestock animals
     state.livestock.forEach((an, idx) => {
       const pos = getAnimalWorldPos(idx, nowSec);
       const isFocused = interactTarget?.kind === 'animal' && interactTarget.animalId === an.id;
       drawList.push({
-        sortY: pos.y,
+        depth: pos.x + pos.y,
         draw: () => this.drawLivestockAnimal(ctx, an, pos.x, pos.y, m, nowSec, isFocused),
       });
     });
 
-    // Loyal Farm Puppy
-    const pupX = 6.2 + Math.sin(nowSec * 0.7) * 1.1;
-    const pupY = 4.65 + Math.cos(nowSec * 1.1) * 0.3;
+    // Loyal Guard Puppy trotting near the doghouse & yard entrance
+    const pupX = 2.65 + Math.sin(nowSec * 0.8) * 0.55;
+    const pupY = 4.72 + Math.cos(nowSec * 1.1) * 0.22;
     drawList.push({
-      sortY: pupY,
-      draw: () => this.drawPuppy(ctx, pupX, pupY, Math.cos(nowSec * 0.7) >= 0, m, nowSec),
+      depth: pupX + pupY,
+      draw: () => this.drawPuppy(ctx, pupX, pupY, Math.cos(nowSec * 0.8) >= 0, m, nowSec),
     });
 
-    // Earth Sprites hopping across unlocked beds
+    // Earth Sprites hopping across garden beds
     state.sprites.forEach((sprite, idx) => {
       const targetRow = 1 + ((idx * 2 + Math.floor(nowSec * 0.35)) % 3);
       const targetCol = 1 + ((idx * 3 + Math.floor(nowSec * 0.55)) % 4);
@@ -424,38 +466,36 @@ export class CloudValleyCanvasController {
       const sx = b1.cx + (b2.cx - b1.cx) * frac;
       const sy = b1.cy + (b2.cy - b1.cy) * frac;
       drawList.push({
-        sortY: sy,
+        depth: sx + sy,
         draw: () => this.drawEarthSprite(ctx, sx, sy, m, sprite.energy > 5, nowSec, idx),
       });
     });
 
-    // Lush TeaMobi Trees framing the farmstead
-    const treeSpecs: [number, number, 'oak' | 'pine'][] = [
-      [0.85, 2.3, 'oak'],
-      [0.75, 6.4, 'pine'],
-      [0.85, 10.6, 'oak'],
-      [0.75, 14.6, 'pine'],
-      [17.8, 2.5, 'oak'],
-      [20.2, 3.2, 'pine'],
-      [21.0, 12.2, 'oak'],
-      [20.9, 15.1, 'pine'],
-      [16.8, 13.7, 'oak'],
-      [18.8, 15.0, 'pine'],
+    // Fruit Trees along the farm fence perimeter (Khế, Táo, Đào) — kept clear of plot signs
+    const fruitTreeSpecs: [number, number, FruitTreeKind][] = [
+      [1.3, 2.5, 'starfruit'],
+      [1.2, 7.6, 'apple'],
+      [1.3, 12.8, 'peach'],
+      [3.5, 16.05, 'starfruit'],
+      [16.9, 2.7, 'peach'],
+      [19.9, 4.1, 'apple'],
+      [20.85, 6.9, 'starfruit'],
+      [9.4, 16.05, 'apple'],
     ];
-    for (const [tx, ty, variant] of treeSpecs) {
+    for (const [tx, ty, kind] of fruitTreeSpecs) {
       drawList.push({
-        sortY: ty,
-        draw: () => this.drawTreeProp(ctx, tx, ty, m, season, variant),
+        depth: tx + ty,
+        draw: () => this.drawFruitTreeProp(ctx, tx, ty, m, season, kind),
       });
     }
 
-    // Farmer Avatar Character
+    // 2x-2.5x Chibi Farmer Avatar
     drawList.push({
-      sortY: avatar.y,
+      depth: avatar.x + avatar.y,
       draw: () => this.drawFarmerAvatar(ctx, state, avatar, m, nowSec),
     });
 
-    drawList.sort((a, b) => a.sortY - b.sortY);
+    drawList.sort((a, b) => a.depth - b.depth);
     for (const item of drawList) {
       item.draw();
     }
@@ -463,7 +503,7 @@ export class CloudValleyCanvasController {
     // 6. Weather Overlay
     this.drawWeatherOverlay(ctx, state, m, nowSec);
 
-    // 7. World Action Particles & Floating Gold/XP Popups
+    // 7. World Action Particles & Floating Avatar Feedback (Icon + +EXP +Xu)
     for (const p of this.actionPool) {
       if (!p.active) continue;
       const sp = this.worldToScreen(p.x, p.y, m);
@@ -472,26 +512,117 @@ export class CloudValleyCanvasController {
       ctx.beginPath();
       ctx.arc(sp.x, sp.y, p.size, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1;
+      ctx.stroke();
     }
     ctx.globalAlpha = 1;
 
     for (const pop of this.popupPool) {
       if (!pop.active) continue;
       const sp = this.worldToScreen(pop.x, pop.y, m);
+      const liftPx = pop.life * 32;
+      const py = sp.y - liftPx;
       ctx.save();
-      ctx.globalAlpha = Math.max(0, 1 - pop.life / pop.maxLife);
-      ctx.font = '700 13px "Plus Jakarta Sans", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.lineWidth = 3.2;
-      ctx.strokeStyle = 'rgba(30, 22, 16, 0.88)';
-      ctx.strokeText(pop.text, sp.x, sp.y);
+      ctx.globalAlpha = Math.max(0, 1 - Math.pow(pop.life / pop.maxLife, 1.8));
+      ctx.font = '800 13.5px "Plus Jakarta Sans", sans-serif';
+      const tw = ctx.measureText(pop.text).width;
+      const hasIcon = pop.icon !== 'none';
+      const startX = sp.x - (hasIcon ? (tw + 18) * 0.5 : tw * 0.5);
+
+      if (hasIcon) {
+        this.drawPopupIcon(ctx, pop.icon, startX + 7, py - 4);
+      }
+
+      ctx.textAlign = 'left';
+      ctx.lineWidth = 3.8;
+      ctx.strokeStyle = '#1A1008';
+      const textX = hasIcon ? startX + 18 : startX;
+      ctx.strokeText(pop.text, textX, py);
       ctx.fillStyle = pop.color;
-      ctx.fillText(pop.text, sp.x, sp.y);
+      ctx.fillText(pop.text, textX, py);
       ctx.restore();
     }
   }
 
-  private drawWorldGround(
+  private drawPopupIcon(ctx: CanvasRenderingContext2D, icon: PopupIconKind, x: number, y: number): void {
+    ctx.save();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#1A1008';
+    if (icon === 'coin') {
+      ctx.fillStyle = '#FACC15';
+      ctx.beginPath();
+      ctx.arc(x, y, 6.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#854D0E';
+      ctx.fillRect(x - 1, y - 3, 2, 6);
+    } else if (icon === 'crop' || icon === 'hybrid') {
+      ctx.fillStyle = icon === 'hybrid' ? '#C084FC' : '#EF4444';
+      ctx.beginPath();
+      ctx.arc(x, y + 1, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#4ADE80';
+      ctx.beginPath();
+      ctx.ellipse(x + 2, y - 5, 3.5, 1.8, -0.4, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (icon === 'milk') {
+      ctx.fillStyle = '#FFFFFF';
+      this.roundRect(ctx, x - 4, y - 6, 8, 12, 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#38BDF8';
+      ctx.fillRect(x - 3, y - 2, 6, 4);
+    } else if (icon === 'egg') {
+      ctx.fillStyle = '#FEF3C7';
+      ctx.beginPath();
+      ctx.ellipse(x, y, 4.8, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (icon === 'wool') {
+      ctx.fillStyle = '#F8FAFC';
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (icon === 'water') {
+      ctx.fillStyle = '#38BDF8';
+      ctx.beginPath();
+      ctx.arc(x, y + 1, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = '#4ADE80';
+      ctx.beginPath();
+      ctx.arc(x, y, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  private drawSkyClouds(ctx: CanvasRenderingContext2D, m: FarmViewportMetrics, nowSec: number): void {
+    ctx.save();
+    for (let i = 0; i < 7; i++) {
+      const cx = ((nowSec * 7 + i * 240) % (m.width + 260)) - 130;
+      const cy = 36 + (i % 4) * (m.height * 0.16);
+      ctx.fillStyle = 'rgba(255, 253, 249, 0.78)';
+      for (const [ox, oy, r] of [
+        [0, 0, 22],
+        [-18, 6, 15],
+        [18, 6, 16],
+        [34, 9, 11],
+      ]) {
+        ctx.beginPath();
+        ctx.arc(cx + ox, cy + oy, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  private drawIsometricWorldBase(
     ctx: CanvasRenderingContext2D,
     state: CloudValleyGameState,
     m: FarmViewportMetrics,
@@ -499,127 +630,274 @@ export class CloudValleyCanvasController {
     season: ReturnType<typeof getSeasonId>,
     nowSec: number
   ): void {
-    // 1. Sky Horizon + Rolling Hills + Soft Multi-puff Clouds above y=1.55
-    const skyBot = this.worldToScreen(0, 1.55, m);
-    if (skyBot.y > 0) {
-      ctx.fillStyle = meta.skyTop;
-      ctx.fillRect(0, 0, m.width, skyBot.y);
+    // Isometric Island Bounds: wx [0.3..21.4], wy [0.6..16.5]
+    const pN = this.worldToScreen(0.3, 0.6, m);
+    const pE = this.worldToScreen(21.4, 0.6, m);
+    const pS = this.worldToScreen(21.4, 16.5, m);
+    const pW = this.worldToScreen(0.3, 16.5, m);
+    const cliffH = m.tilePx * 0.58;
 
-      // Rolling distant green hills silhouette
-      ctx.fillStyle = season === 'winter' ? '#B9D3E3' : season === 'autumn' ? '#95A45B' : '#7BC062';
-      ctx.beginPath();
-      ctx.moveTo(0, skyBot.y);
-      for (let x = 0; x <= m.width + 60; x += 60) {
-        const hy = skyBot.y - 12 - Math.sin(x * 0.012) * 10;
-        ctx.lineTo(x, hy);
-      }
-      ctx.lineTo(m.width, skyBot.y);
-      ctx.closePath();
-      ctx.fill();
+    // 1. Extruded 2.5D Earthen Cliff Rim along bottom edges of floating valley island
+    ctx.save();
+    // Bottom-left cliff face (W -> S)
+    ctx.fillStyle = '#6B4226';
+    ctx.beginPath();
+    ctx.moveTo(pW.x, pW.y);
+    ctx.lineTo(pS.x, pS.y);
+    ctx.lineTo(pS.x, pS.y + cliffH);
+    ctx.lineTo(pW.x, pW.y + cliffH);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
-      // Sunlit drifting clouds
-      for (let i = 0; i < 5; i++) {
-        const cx = ((nowSec * 9 + i * 280) % (m.width + 200)) - 100;
-        const cy = Math.max(22, skyBot.y * 0.42 + (i % 2) * 10);
-        ctx.fillStyle = 'rgba(255, 253, 249, 0.84)';
-        ctx.beginPath();
-        ctx.arc(cx, cy, 17, 0, Math.PI * 2);
-        ctx.arc(cx - 15, cy + 4, 12, 0, Math.PI * 2);
-        ctx.arc(cx + 16, cy + 4, 13, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
+    // Bottom-right cliff face (S -> E)
+    ctx.fillStyle = '#54321B';
+    ctx.beginPath();
+    ctx.moveTo(pS.x, pS.y);
+    ctx.lineTo(pE.x, pE.y);
+    ctx.lineTo(pE.x, pE.y + cliffH);
+    ctx.lineTo(pS.x, pS.y + cliffH);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
 
-    // 2. Textured Lush Meadow Ground across the entire lower viewport
-    const meadowTop = Math.max(0, skyBot.y);
+    // 2. Meadow Grass Island Top Face (clipped cleanly)
+    ctx.beginPath();
+    ctx.moveTo(pN.x, pN.y);
+    ctx.lineTo(pE.x, pE.y);
+    ctx.lineTo(pS.x, pS.y);
+    ctx.lineTo(pW.x, pW.y);
+    ctx.closePath();
     const grassPat = this.atlas.getGrassPattern(ctx, season);
     ctx.fillStyle = grassPat ?? meta.grassLight;
-    ctx.fillRect(0, meadowTop, m.width, m.height - meadowTop);
+    ctx.fill();
+    ctx.strokeStyle = '#2B6E1C';
+    ctx.lineWidth = 2.4;
+    ctx.stroke();
+    ctx.clip();
 
-    // Subtle meadow edge hedge / border fence across top yard edge
-    const hedgeL = this.worldToScreen(1.2, 1.55, m);
-    const hedgeR = this.worldToScreen(20.6, 1.55, m);
-    ctx.fillStyle = season === 'winter' ? '#64748B' : '#2C6E31';
-    ctx.fillRect(hedgeL.x, hedgeL.y - 6, hedgeR.x - hedgeL.x, 12);
-
-    // 3. Textured Cobblestone Avatar Plaza & Walkways
-    const cobblePat = this.atlas.getCobblePattern(ctx);
-    const drawCobbleRect = (x1: number, y1: number, x2: number, y2: number) => {
-      const a = this.worldToScreen(x1, y1, m);
-      const b = this.worldToScreen(x2, y2, m);
+    // 3. Narrow Natural Packed-Earth Footpaths with Grassy Soft Edges
+    const dirtPat = this.atlas.getDirtPathPattern(ctx);
+    const drawIsoPath = (x1: number, y1: number, x2: number, y2: number) => {
+      const c1 = this.worldToScreen(x1, y1, m);
+      const c2 = this.worldToScreen(x2, y1, m);
+      const c3 = this.worldToScreen(x2, y2, m);
+      const c4 = this.worldToScreen(x1, y2, m);
       ctx.save();
-      // Drop bevel
-      ctx.fillStyle = '#8C6E4B';
-      this.roundRect(ctx, a.x - 2, a.y - 2, b.x - a.x + 4, b.y - a.y + 5, 10);
-      ctx.fill();
-      ctx.fillStyle = cobblePat ?? '#E7D7BE';
-      this.roundRect(ctx, a.x, a.y, b.x - a.x, b.y - a.y, 8);
-      ctx.fill();
-      ctx.strokeStyle = '#9C7B53';
-      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(c1.x, c1.y);
+      ctx.lineTo(c2.x, c2.y);
+      ctx.lineTo(c3.x, c3.y);
+      ctx.lineTo(c4.x, c4.y);
+      ctx.closePath();
+      // Soft grassy dirt rim
+      ctx.strokeStyle = '#8F6230';
+      ctx.lineWidth = 3.5;
       ctx.stroke();
+      ctx.fillStyle = dirtPat ?? '#D9AA6C';
+      ctx.fill();
       ctx.restore();
     };
 
-    // Main horizontal promenade
-    drawCobbleRect(2.1, 3.75, 16.2, 5.75);
-    // Vertical center alley between Zone 1/3 and Zone 2/4
-    drawCobbleRect(8.2, 5.5, 9.8, 15.5);
-    // Horizontal alley between north and south plots
-    drawCobbleRect(2.8, 10.15, 14.3, 11.25);
-    // Walkway to livestock gate
-    drawCobbleRect(14.1, 7.25, 16.2, 8.75);
+    // Narrow front yard footpath
+    drawIsoPath(2.2, 4.15, 16.0, 5.15);
+    // Narrow center footpath between garden plots
+    drawIsoPath(8.55, 5.1, 9.45, 15.4);
+    // Narrow horizontal garden cross-path
+    drawIsoPath(3.0, 10.35, 14.0, 11.05);
+    // Short path to livestock pen gate
+    drawIsoPath(14.0, 7.55, 16.0, 8.45);
 
-    // 4. Textured Livestock Pasture Turf
+    // 4. Livestock Pasture Turf
     const penA = this.worldToScreen(16.0, 5.8, m);
-    const penB = this.worldToScreen(20.4, 10.2, m);
+    const penB = this.worldToScreen(20.4, 5.8, m);
+    const penC = this.worldToScreen(20.4, 10.2, m);
+    const penD = this.worldToScreen(16.0, 10.2, m);
     const pasturePat = this.atlas.getPasturePattern(ctx, season);
-    ctx.fillStyle = pasturePat ?? '#96CC78';
-    ctx.fillRect(penA.x, penA.y, penB.x - penA.x, penB.y - penA.y);
+    ctx.beginPath();
+    ctx.moveTo(penA.x, penA.y);
+    ctx.lineTo(penB.x, penB.y);
+    ctx.lineTo(penC.x, penC.y);
+    ctx.lineTo(penD.x, penD.y);
+    ctx.closePath();
+    ctx.fillStyle = pasturePat ?? '#7AD449';
+    ctx.fill();
 
-    // 5. Wooden Picket Fences around the 4 Garden Beds
+    // 5. Oval Stone-Edged Fish Pond in Garden Corner (wx=17.0, wy=12.6)
+    this.drawFishPond(ctx, 17.0, 12.6, m, nowSec);
+
+    // 6. Low Wooden Garden Fences around the 4 Garden Beds (with open garden gates facing paths)
     const zoneFrames = [
-      { id: 1, x1: 2.88, y1: 5.88, x2: 8.12, y2: 10.12 },
-      { id: 2, x1: 9.88, y1: 5.88, x2: 14.12, y2: 10.12 },
-      { id: 3, x1: 2.88, y1: 11.28, x2: 8.12, y2: 15.52 },
-      { id: 4, x1: 9.88, y1: 11.28, x2: 14.12, y2: 15.52 },
+      { id: 1, x1: 2.9, y1: 5.9, x2: 8.1, y2: 10.1, gateSide: 'right' as const },
+      { id: 2, x1: 9.9, y1: 5.9, x2: 14.1, y2: 10.1, gateSide: 'left' as const },
+      { id: 3, x1: 2.9, y1: 11.3, x2: 8.1, y2: 15.5, gateSide: 'right' as const },
+      { id: 4, x1: 9.9, y1: 11.3, x2: 14.1, y2: 15.5, gateSide: 'left' as const },
     ];
     for (const zf of zoneFrames) {
       const unlocked = state.unlockedTerraces.includes(zf.id);
-      const a = this.worldToScreen(zf.x1, zf.y1, m);
-      const b = this.worldToScreen(zf.x2, zf.y2, m);
-      ctx.save();
-      ctx.strokeStyle = unlocked ? '#6B4226' : 'rgba(148, 163, 184, 0.72)';
-      ctx.lineWidth = unlocked ? 3.5 : 2;
-      this.roundRect(ctx, a.x, a.y, b.x - a.x, b.y - a.y, 6);
-      ctx.stroke();
+      this.drawIsoFenceBox(ctx, zf.x1, zf.y1, zf.x2, zf.y2, m, unlocked, zf.gateSide);
+    }
 
-      if (unlocked) {
-        // Inner warm timber rail highlight + fence posts along sides
-        ctx.strokeStyle = '#B88352';
-        ctx.lineWidth = 1.4;
-        ctx.stroke();
+    ctx.restore();
+  }
 
-        const postStep = Math.max(26, m.tilePx * 0.9);
-        ctx.fillStyle = '#5C3418';
-        for (let px = a.x; px <= b.x + 1; px += postStep) {
-          ctx.fillRect(px - 3, a.y - 6, 6, 10);
-          ctx.fillRect(px - 3, b.y - 5, 6, 10);
-          ctx.fillStyle = '#B88352';
-          ctx.fillRect(px - 2, a.y - 5, 4, 3);
-          ctx.fillRect(px - 2, b.y - 4, 4, 3);
-          ctx.fillStyle = '#5C3418';
-        }
-        for (let py = a.y; py <= b.y + 1; py += postStep) {
-          ctx.fillRect(a.x - 3, py - 5, 6, 10);
-          ctx.fillRect(b.x - 3, py - 5, 6, 10);
-        }
+  private drawIsoFenceSegment(
+    ctx: CanvasRenderingContext2D,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    m: FarmViewportMetrics,
+    unlocked = true
+  ): void {
+    const a = this.worldToScreen(x1, y1, m);
+    const b = this.worldToScreen(x2, y2, m);
+    const postH = 11;
+    ctx.save();
+    ctx.lineCap = 'round';
+    // Dark outline pass
+    ctx.strokeStyle = unlocked ? '#1E120A' : 'rgba(100, 116, 139, 0.7)';
+    ctx.lineWidth = unlocked ? 6 : 3.5;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y - 5);
+    ctx.lineTo(b.x, b.y - 5);
+    ctx.stroke();
+    // Warm timber rail
+    ctx.strokeStyle = unlocked ? '#C4824E' : 'rgba(203, 213, 225, 0.8)';
+    ctx.lineWidth = unlocked ? 3.2 : 1.8;
+    ctx.stroke();
+
+    if (unlocked) {
+      const dist = Math.hypot(x2 - x1, y2 - y1);
+      const count = Math.max(2, Math.round(dist / 1.1));
+      for (let i = 0; i <= count; i++) {
+        const t = i / count;
+        const px = a.x + (b.x - a.x) * t;
+        const py = a.y + (b.y - a.y) * t;
+        ctx.fillStyle = '#8C5225';
+        ctx.strokeStyle = '#1E120A';
+        ctx.lineWidth = 1.6;
+        ctx.fillRect(px - 2.6, py - postH, 5.2, postH + 1);
+        ctx.strokeRect(px - 2.6, py - postH, 5.2, postH + 1);
       }
-      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  private drawIsoFenceBox(
+    ctx: CanvasRenderingContext2D,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    m: FarmViewportMetrics,
+    unlocked: boolean,
+    gateSide: 'left' | 'right' = 'right'
+  ): void {
+    const midY = (y1 + y2) * 0.5;
+    this.drawIsoFenceSegment(ctx, x1, y1, x2, y1, m, unlocked);
+    this.drawIsoFenceSegment(ctx, x1, y2, x2, y2, m, unlocked);
+    if (gateSide === 'right') {
+      this.drawIsoFenceSegment(ctx, x1, y1, x1, y2, m, unlocked);
+      this.drawIsoFenceSegment(ctx, x2, y1, x2, midY - 0.7, m, unlocked);
+      this.drawIsoFenceSegment(ctx, x2, midY + 0.7, x2, y2, m, unlocked);
+    } else {
+      this.drawIsoFenceSegment(ctx, x2, y1, x2, y2, m, unlocked);
+      this.drawIsoFenceSegment(ctx, x1, y1, x1, midY - 0.7, m, unlocked);
+      this.drawIsoFenceSegment(ctx, x1, midY + 0.7, x1, y2, m, unlocked);
     }
   }
 
-  private drawSoilTile(
+  private drawFishPond(
+    ctx: CanvasRenderingContext2D,
+    wx: number,
+    wy: number,
+    m: FarmViewportMetrics,
+    nowSec: number
+  ): void {
+    const c = this.worldToScreen(wx, wy, m);
+    const rx = m.isoW * 2.05;
+    const ry = m.isoH * 2.05;
+
+    ctx.save();
+    // Outer drop shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y + 4, rx + 6, ry + 4.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Smooth Overlapping Cobblestone Border along pond bank
+    const stoneCount = 22;
+    for (let i = 0; i < stoneCount; i++) {
+      const ang = (i / stoneCount) * Math.PI * 2;
+      const sx = c.x + Math.cos(ang) * (rx - 1);
+      const sy = c.y + Math.sin(ang) * (ry - 1);
+      ctx.fillStyle = i % 3 === 0 ? '#94A3B8' : i % 3 === 1 ? '#CBD5E1' : '#A8B3C4';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, 6.8, 4.6, ang + Math.PI * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Sparkling Cerulean Water
+    ctx.fillStyle = '#0284C7';
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y, rx - 4, ry - 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    ctx.fillStyle = '#38BDF8';
+    ctx.beginPath();
+    ctx.ellipse(c.x - 4, c.y - 2, rx * 0.72, ry * 0.65, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Gentle expanding water ripple rings
+    const rPhase = (nowSec * 0.55) % 1;
+    ctx.strokeStyle = `rgba(224, 242, 254, ${0.65 * (1 - rPhase)})`;
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.ellipse(c.x - 8, c.y + 2, 6 + rPhase * 18, 3 + rPhase * 9, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Animated Koi Fish swimming
+    for (let f = 0; f < 2; f++) {
+      const ang = nowSec * (0.9 + f * 0.35) + f * Math.PI;
+      const fx = c.x + Math.cos(ang) * rx * 0.44;
+      const fy = c.y + Math.sin(ang) * ry * 0.42;
+      ctx.fillStyle = f === 0 ? '#F97316' : '#FFFFFF';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.ellipse(fx, fy, 5.2, 2.5, ang + Math.PI * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Green Lily Pad + Pink Lotus Blossom
+    ctx.fillStyle = '#22C55E';
+    ctx.strokeStyle = '#14532D';
+    ctx.lineWidth = 1.3;
+    ctx.beginPath();
+    ctx.ellipse(c.x + rx * 0.36, c.y + ry * 0.12, 9, 5.5, 0.2, 0.2, Math.PI * 1.9);
+    ctx.lineTo(c.x + rx * 0.36, c.y + ry * 0.12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#F472B6';
+    ctx.beginPath();
+    ctx.arc(c.x + rx * 0.36, c.y + ry * 0.12 - 2, 3.8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  private drawSoilMoundBase(
     ctx: CanvasRenderingContext2D,
     state: CloudValleyGameState,
     tile: TileState,
@@ -630,21 +908,27 @@ export class CloudValleyCanvasController {
     isTargetTile: boolean
   ): void {
     const wb = tileToWorldBounds(tile.row, tile.col);
-    const tl = this.worldToScreen(wb.x1, wb.y1, m);
     const center = this.worldToScreen(wb.cx, wb.cy, m);
-    const pad = Math.max(1.5, m.tilePx * 0.04);
-    const size = m.tilePx - pad * 2;
+    const sw = m.isoW * 2.02;
+    const sh = m.isoH * 2.22;
     const season = getSeasonId(state);
     const inGreenhouse = isTileInGreenhouse(state, tile.row, tile.col);
 
     ctx.save();
     if (!unlocked) {
-      this.roundRect(ctx, tl.x + pad, tl.y + pad, size, size, 6);
-      ctx.fillStyle = 'rgba(226, 232, 240, 0.42)';
+      ctx.beginPath();
+      ctx.moveTo(center.x, center.y - m.isoH * 0.85);
+      ctx.lineTo(center.x + m.isoW * 0.85, center.y);
+      ctx.lineTo(center.x, center.y + m.isoH * 0.85);
+      ctx.lineTo(center.x - m.isoW * 0.85, center.y);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(254, 243, 199, 0.16)';
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.52)';
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = 'rgba(92, 52, 20, 0.28)';
       ctx.lineWidth = 1;
       ctx.stroke();
+      ctx.setLineDash([]);
       ctx.restore();
       return;
     }
@@ -660,116 +944,88 @@ export class CloudValleyCanvasController {
 
     const sprite = this.atlas.getSoilTileSprite(tile.tilled, bucket, season, (tile.row + tile.col) % 2 === 0);
     if (sprite) {
-      ctx.drawImage(sprite, tl.x + pad, tl.y + pad, size, size);
+      ctx.drawImage(sprite, center.x - sw * 0.5, center.y - sh * 0.5, sw, sh);
     }
 
-    if (tile.tilled && tile.fertility <= 10) {
-      this.roundRect(ctx, tl.x + pad, tl.y + pad, size, size, 6);
-      ctx.strokeStyle = '#F59E0B';
-      ctx.lineWidth = 2;
+    const drawIsoHighlight = (strokeColor: string, width: number, fillCol?: string) => {
+      ctx.beginPath();
+      ctx.moveTo(center.x, center.y - m.isoH * 0.9);
+      ctx.lineTo(center.x + m.isoW * 0.9, center.y);
+      ctx.lineTo(center.x, center.y + m.isoH * 0.9);
+      ctx.lineTo(center.x - m.isoW * 0.9, center.y);
+      ctx.closePath();
+      if (fillCol) {
+        ctx.fillStyle = fillCol;
+        ctx.fill();
+      }
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = width;
       ctx.stroke();
+    };
+
+    if (tile.tilled && tile.fertility <= 10) {
+      drawIsoHighlight('#F59E0B', 2);
     }
 
     if (getTileAuraBonus(state, tile.row, tile.col) > 0) {
-      this.roundRect(ctx, tl.x + pad, tl.y + pad, size, size, 6);
-      ctx.strokeStyle = `rgba(168, 85, 247, ${0.46 + Math.sin(nowSec * 3) * 0.16})`;
-      ctx.lineWidth = 2.2;
-      ctx.stroke();
+      drawIsoHighlight(`rgba(168, 85, 247, ${0.5 + Math.sin(nowSec * 3) * 0.16})`, 2.2);
     }
 
     if (tile.mutagenApplied && !tile.crop) {
       ctx.fillStyle = '#C084FC';
       ctx.beginPath();
-      ctx.arc(center.x - 6, center.y - 4 + Math.sin(nowSec * 4) * 2, 2.5, 0, Math.PI * 2);
+      ctx.arc(center.x - 6, center.y - 3 + Math.sin(nowSec * 4) * 2, 2.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(center.x + 6, center.y + 3 + Math.cos(nowSec * 4) * 2, 2.3, 0, Math.PI * 2);
+      ctx.arc(center.x + 6, center.y + 2 + Math.cos(nowSec * 4) * 2, 2.3, 0, Math.PI * 2);
       ctx.fill();
     }
 
     if (inGreenhouse && tile.structure !== 'greenhouse') {
-      this.roundRect(ctx, tl.x + pad, tl.y + pad, size, size, 6);
-      ctx.strokeStyle = 'rgba(125, 211, 252, 0.85)';
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      drawIsoHighlight('rgba(125, 211, 252, 0.85)', 2);
     }
 
     if (highlighted) {
-      this.roundRect(ctx, tl.x + pad, tl.y + pad, size, size, 6);
-      ctx.fillStyle = 'rgba(254, 240, 138, 0.25)';
-      ctx.fill();
-      ctx.strokeStyle = '#FACC15';
-      ctx.lineWidth = 2.2;
-      ctx.stroke();
+      drawIsoHighlight('#FACC15', 2.4, 'rgba(254, 240, 138, 0.25)');
     }
 
-    if (tile.structure) {
-      this.drawStructure(ctx, tile.structure, center.x, center.y, size, nowSec);
-    }
-
-    if (tile.hasWeed) {
-      this.drawWeed(ctx, center.x, center.y, size);
-    } else if (tile.wildMushroom) {
-      this.drawMushroom(ctx, center.x, center.y, size, nowSec);
-    } else if (tile.crop) {
-      this.drawCrop(ctx, tile, center.x, center.y, size, nowSec);
-    }
-
-    // Classic Avatar pulsing corner brackets on active face-target tile
     if (isTargetTile) {
-      const b = size * 0.52;
-      const len = size * 0.22;
-      ctx.strokeStyle = '#FEF08A';
-      ctx.lineWidth = 2.8;
-      ctx.beginPath();
-      ctx.moveTo(center.x - b, center.y - b + len);
-      ctx.lineTo(center.x - b, center.y - b);
-      ctx.lineTo(center.x - b + len, center.y - b);
-      ctx.moveTo(center.x + b - len, center.y - b);
-      ctx.lineTo(center.x + b, center.y - b);
-      ctx.lineTo(center.x + b, center.y - b + len);
-      ctx.moveTo(center.x + b, center.y + b - len);
-      ctx.lineTo(center.x + b, center.y + b);
-      ctx.lineTo(center.x + b - len, center.y + b);
-      ctx.moveTo(center.x - b + len, center.y + b);
-      ctx.lineTo(center.x - b, center.y + b);
-      ctx.lineTo(center.x - b, center.y + b - len);
-      ctx.stroke();
+      drawIsoHighlight('#FEF08A', 2.6);
     }
 
     ctx.restore();
   }
 
-  private drawBarnAndWindmill(
+  private drawFarmhouse(
     ctx: CanvasRenderingContext2D,
     state: CloudValleyGameState,
     m: FarmViewportMetrics,
     nowSec: number,
     focused: boolean
   ): void {
-    const tl = this.worldToScreen(2.15, 0.85, m);
-    const br = this.worldToScreen(5.95, 3.68, m);
-    const w = br.x - tl.x;
-    const h = br.y - tl.y;
-    const cx = tl.x + w * 0.44;
+    const c = this.worldToScreen(4.0, 2.75, m);
+    const w = m.tilePx * 3.5;
+    const h = m.tilePx * 2.9;
+    const x = c.x - w * 0.5;
+    const y = c.y - h * 0.84;
 
     ctx.save();
-    const sprite = this.atlas.getBarnSprite();
+    const sprite = this.atlas.getFarmhouseSprite();
     if (sprite) {
-      ctx.drawImage(sprite, tl.x, tl.y, w, h);
+      ctx.drawImage(sprite, x, y, w, h);
     }
 
-    // Spinning windmill sails mounted on silo hub
-    const hubX = tl.x + w * (213 / 260);
-    const hubY = tl.y + h * (56 / 210);
-    const sailLen = w * 0.25;
+    // Spinning wooden windmill sails on right mill tower
+    const hubX = x + w * (222 / 268);
+    const hubY = y + h * (72 / 224);
+    const sailLen = w * 0.2;
     ctx.save();
     ctx.translate(hubX, hubY);
     ctx.rotate(nowSec * 1.1);
     for (let i = 0; i < 4; i++) {
       ctx.rotate(Math.PI / 2);
-      ctx.fillStyle = '#FFF9E8';
-      ctx.strokeStyle = '#5C3418';
+      ctx.fillStyle = '#FFFDF5';
+      ctx.strokeStyle = '#1E120A';
       ctx.lineWidth = 1.6;
       ctx.fillRect(2, -sailLen, sailLen * 0.26, sailLen * 0.78);
       ctx.strokeRect(2, -sailLen, sailLen * 0.26, sailLen * 0.78);
@@ -778,21 +1034,23 @@ export class CloudValleyCanvasController {
       ctx.lineTo(0, -sailLen);
       ctx.stroke();
     }
-    ctx.fillStyle = '#7C2D12';
+    ctx.fillStyle = '#D93829';
     ctx.beginPath();
     ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
     ctx.fill();
+    ctx.strokeStyle = '#1E120A';
+    ctx.stroke();
     ctx.restore();
 
     // Gentle chimney smoke
     if (state.artisanQueue.length > 0 || Math.sin(nowSec) > -0.8) {
-      const chX = tl.x + w * (63 / 260);
-      const chY = tl.y + h * (20 / 210);
+      const chX = x + w * (58 / 268);
+      const chY = y + h * (26 / 224);
       for (let i = 0; i < 3; i++) {
         const t = (nowSec * 0.45 + i * 0.33) % 1;
-        ctx.fillStyle = `rgba(255, 251, 240, ${0.68 * (1 - t)})`;
+        ctx.fillStyle = `rgba(255, 251, 240, ${0.72 * (1 - t)})`;
         ctx.beginPath();
-        ctx.arc(chX + Math.sin(nowSec * 2 + i) * 4, chY - t * 24, 3.5 + t * 5.5, 0, Math.PI * 2);
+        ctx.arc(chX + Math.sin(nowSec * 2 + i) * 4, chY - t * 22, 3.5 + t * 5, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -800,11 +1058,11 @@ export class CloudValleyCanvasController {
     if (focused) {
       ctx.strokeStyle = '#FEF08A';
       ctx.lineWidth = 2.6;
-      this.roundRect(ctx, tl.x + 6, tl.y + 8, w - 12, h - 14, 10);
+      this.roundRect(ctx, x + 6, y + 6, w - 12, h - 12, 10);
       ctx.stroke();
     }
 
-    this.drawWorldPlaque(ctx, cx, br.y + 8, 'Xưởng & Kho', focused);
+    this.drawWorldPlaque(ctx, c.x, c.y + 12, 'Nhà Kho & Xưởng', focused);
     ctx.restore();
   }
 
@@ -815,10 +1073,10 @@ export class CloudValleyCanvasController {
     focused: boolean
   ): void {
     const c = this.worldToScreen(7.8, 2.95, m);
-    const w = m.tilePx * 1.75;
-    const h = m.tilePx * 2.0;
+    const w = m.tilePx * 1.85;
+    const h = m.tilePx * 2.15;
     const x = c.x - w * 0.5;
-    const y = c.y - h * 0.62;
+    const y = c.y - h * 0.82;
 
     ctx.save();
     const sprite = this.atlas.getWellSprite();
@@ -826,21 +1084,20 @@ export class CloudValleyCanvasController {
       ctx.drawImage(sprite, x, y, w, h);
     }
 
-    // Animated water glint inside well
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.78)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
     ctx.beginPath();
-    ctx.arc(c.x + Math.sin(nowSec * 2.4) * 5, y + h * (86 / 150), 2.2, 0, Math.PI * 2);
+    ctx.arc(c.x + Math.sin(nowSec * 2.4) * 5, y + h * (88 / 152), 2.2, 0, Math.PI * 2);
     ctx.fill();
 
     if (focused) {
       ctx.strokeStyle = '#FEF08A';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.arc(c.x, c.y - 4, w * 0.46, 0, Math.PI * 2);
+      ctx.arc(c.x, c.y - h * 0.25, w * 0.44, 0, Math.PI * 2);
       ctx.stroke();
     }
 
-    this.drawWorldPlaque(ctx, c.x, c.y + m.tilePx * 0.58, 'Giếng Nước', focused);
+    this.drawWorldPlaque(ctx, c.x, c.y + 10, 'Giếng Nước', focused);
     ctx.restore();
   }
 
@@ -851,61 +1108,57 @@ export class CloudValleyCanvasController {
     nowSec: number,
     focused: boolean
   ): void {
-    const tl = this.worldToScreen(9.85, 1.1, m);
-    const br = this.worldToScreen(13.35, 3.68, m);
-    const w = br.x - tl.x;
-    const h = br.y - tl.y;
-    const cx = (tl.x + br.x) * 0.5;
+    const c = this.worldToScreen(11.6, 2.75, m);
+    const w = m.tilePx * 3.1;
+    const h = m.tilePx * 2.45;
+    const x = c.x - w * 0.5;
+    const y = c.y - h * 0.84;
 
     ctx.save();
-    // Stall sprite (counter + produce baskets + striped awning)
     const sprite = this.atlas.getMerchantStallSprite();
     if (sprite) {
-      ctx.drawImage(sprite, tl.x, tl.y, w, h);
+      ctx.drawImage(sprite, x, y, w, h);
     }
 
-    // Draw animated Bác Lái Buôn cleanly behind counter & under awning
+    // Animated Bác Lái Buôn behind counter & under awning
     const bob = Math.sin(nowSec * 2.8) * 1.4;
-    const faceX = cx;
-    const faceY = tl.y + h * (81 / 176) + bob;
-    const headR = Math.max(9.5, w * 0.08);
-    // Blue merchant tunic + cream apron
+    const faceX = c.x;
+    const faceY = y + h * (81 / 178) + bob;
+    const headR = Math.max(9.5, w * 0.085);
+
     ctx.fillStyle = '#0369A1';
     ctx.beginPath();
-    ctx.ellipse(faceX, faceY + headR * 1.35, headR * 1.35, headR * 1.05, 0, Math.PI, 0);
+    ctx.ellipse(faceX, faceY + headR * 1.32, headR * 1.32, headR * 1.0, 0, Math.PI, 0);
     ctx.fill();
-    ctx.strokeStyle = '#1E293B';
-    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.6;
     ctx.stroke();
     ctx.fillStyle = '#FEF3C7';
     ctx.fillRect(faceX - headR * 0.55, faceY + headR * 0.65, headR * 1.1, headR * 0.65);
 
-    // Friendly round head + warm hair + TeaMobi merchant cap
     ctx.fillStyle = '#FDE2C4';
     ctx.beginPath();
     ctx.arc(faceX, faceY, headR, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#4A311D';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.8;
     ctx.stroke();
 
-    // Brown cap & visor
+    // Cap & visor
     ctx.fillStyle = '#92400E';
     ctx.beginPath();
     ctx.arc(faceX, faceY - headR * 0.2, headR * 1.04, Math.PI * 1.02, Math.PI * 1.98);
     ctx.fill();
-    ctx.strokeStyle = '#451A03';
     ctx.stroke();
     ctx.fillStyle = '#78350F';
     ctx.beginPath();
     ctx.ellipse(faceX, faceY - headR * 0.22, headR * 1.18, headR * 0.25, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Glossy eyes with catchlights
     for (const side of [-1, 1]) {
       const ex = faceX + side * headR * 0.36;
       const ey = faceY + headR * 0.06;
-      ctx.fillStyle = '#1E293B';
+      ctx.fillStyle = '#1E120A';
       ctx.beginPath();
       ctx.arc(ex, ey, 2.2, 0, Math.PI * 2);
       ctx.fill();
@@ -915,7 +1168,6 @@ export class CloudValleyCanvasController {
       ctx.fill();
     }
 
-    // Rosy cheeks + friendly mustache & smile
     ctx.fillStyle = 'rgba(244, 114, 182, 0.45)';
     for (const side of [-1, 1]) {
       ctx.beginPath();
@@ -935,39 +1187,39 @@ export class CloudValleyCanvasController {
     ctx.arc(faceX, faceY + headR * 0.48, 2.6, 0.15, Math.PI - 0.15);
     ctx.stroke();
 
-    // Ready order alert badge
     const readyOrders = state.orders.filter((o) => (state.inventory[o.itemId] ?? 0) >= o.qty).length;
     if (readyOrders > 0) {
+      const by = y + 12 + Math.sin(nowSec * 5) * 2;
       ctx.fillStyle = '#16A34A';
       ctx.beginPath();
-      ctx.arc(br.x - 10, tl.y + 10 + Math.sin(nowSec * 5) * 2, 8.5, 0, Math.PI * 2);
+      ctx.arc(x + w - 12, by, 8.5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.6;
       ctx.stroke();
       ctx.fillStyle = '#FFFFFF';
-      ctx.font = '700 10.5px "Plus Jakarta Sans", sans-serif';
+      ctx.font = '800 11px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('!', br.x - 10, tl.y + 14 + Math.sin(nowSec * 5) * 2);
+      ctx.fillText('!', x + w - 12, by + 4);
     }
 
     if (focused) {
       ctx.strokeStyle = '#FEF08A';
       ctx.lineWidth = 2.6;
-      this.roundRect(ctx, tl.x + 6, tl.y + 6, w - 12, h - 10, 10);
+      this.roundRect(ctx, x + 6, y + 6, w - 12, h - 10, 10);
       ctx.stroke();
     }
 
-    this.drawWorldPlaque(ctx, cx, br.y + 8, 'Lái Buôn & Chợ', focused);
+    this.drawWorldPlaque(ctx, c.x, c.y + 12, 'Lái Buôn & Chợ', focused);
     ctx.restore();
   }
 
   private drawNoticeBoard(ctx: CanvasRenderingContext2D, m: FarmViewportMetrics, focused: boolean): void {
     const c = this.worldToScreen(15.0, 2.95, m);
-    const w = m.tilePx * 1.48;
-    const h = m.tilePx * 1.62;
+    const w = m.tilePx * 1.55;
+    const h = m.tilePx * 1.72;
     const x = c.x - w * 0.5;
-    const y = c.y - h * 0.58;
+    const y = c.y - h * 0.82;
 
     ctx.save();
     const sprite = this.atlas.getNoticeBoardSprite();
@@ -980,8 +1232,18 @@ export class CloudValleyCanvasController {
       this.roundRect(ctx, x + 4, y + 6, w - 8, h - 12, 8);
       ctx.stroke();
     }
-    this.drawWorldPlaque(ctx, c.x, c.y + m.tilePx * 0.58, 'Sổ Tay', focused);
+    this.drawWorldPlaque(ctx, c.x, c.y + 10, 'Sổ Tay', focused);
     ctx.restore();
+  }
+
+  private drawDoghouse(ctx: CanvasRenderingContext2D, wx: number, wy: number, m: FarmViewportMetrics): void {
+    const c = this.worldToScreen(wx, wy, m);
+    const w = m.tilePx * 1.32;
+    const h = m.tilePx * 1.32;
+    const sprite = this.atlas.getDoghouseSprite();
+    if (sprite) {
+      ctx.drawImage(sprite, c.x - w * 0.5, c.y - h * 0.82, w, h);
+    }
   }
 
   private drawFeedTrough(ctx: CanvasRenderingContext2D, m: FarmViewportMetrics): void {
@@ -989,14 +1251,14 @@ export class CloudValleyCanvasController {
     const tw = m.tilePx * 1.3;
     const th = m.tilePx * 0.42;
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
     this.roundRect(ctx, sp.x - tw * 0.5, sp.y + 3, tw, th, 4);
     ctx.fill();
-    ctx.fillStyle = '#7C4A28';
+    ctx.fillStyle = '#8C5225';
     this.roundRect(ctx, sp.x - tw * 0.5, sp.y, tw, th, 4);
     ctx.fill();
-    ctx.strokeStyle = '#432512';
-    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.8;
     ctx.stroke();
     ctx.fillStyle = '#FACC15';
     this.roundRect(ctx, sp.x - tw * 0.42, sp.y + 3, tw * 0.84, th * 0.55, 3);
@@ -1004,59 +1266,17 @@ export class CloudValleyCanvasController {
     ctx.restore();
   }
 
-  private drawPenNorthFence(ctx: CanvasRenderingContext2D, m: FarmViewportMetrics): void {
-    const a = this.worldToScreen(15.85, 5.75, m);
-    const b = this.worldToScreen(20.5, 10.2, m);
-    const gateTop = this.worldToScreen(15.9, 7.1, m);
-    ctx.save();
-    ctx.strokeStyle = '#5C3418';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(a.x, gateTop.y);
-    ctx.stroke();
-    ctx.strokeStyle = '#B88352';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Fence posts
-    const step = Math.max(26, m.tilePx * 0.9);
-    ctx.fillStyle = '#5C3418';
-    for (let px = a.x; px <= b.x + 1; px += step) {
-      ctx.fillRect(px - 3.5, a.y - 7, 7, 12);
-    }
-    for (let py = a.y; py <= b.y + 1; py += step) {
-      ctx.fillRect(b.x - 3.5, py - 6, 7, 12);
-    }
-    ctx.restore();
+  private drawPenNorthWestFence(ctx: CanvasRenderingContext2D, m: FarmViewportMetrics): void {
+    this.drawIsoFenceSegment(ctx, 15.85, 5.75, 20.5, 5.75, m, true);
+    this.drawIsoFenceSegment(ctx, 15.85, 5.75, 15.85, 7.1, m, true);
   }
 
-  private drawPenSouthFence(ctx: CanvasRenderingContext2D, m: FarmViewportMetrics): void {
-    const a = this.worldToScreen(15.85, 10.2, m);
-    const b = this.worldToScreen(20.5, 10.2, m);
-    const gateBot = this.worldToScreen(15.9, 8.9, m);
-    ctx.save();
-    ctx.strokeStyle = '#5C3418';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(a.x, gateBot.y);
-    ctx.lineTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-    ctx.strokeStyle = '#B88352';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    const step = Math.max(26, m.tilePx * 0.9);
-    ctx.fillStyle = '#5C3418';
-    for (let px = a.x; px <= b.x + 1; px += step) {
-      ctx.fillRect(px - 3.5, a.y - 7, 7, 12);
-    }
-    this.drawWorldPlaque(ctx, (a.x + b.x) * 0.5, a.y + 16, 'Chuồng Trại', false);
-    ctx.restore();
+  private drawPenSouthEastFence(ctx: CanvasRenderingContext2D, m: FarmViewportMetrics): void {
+    this.drawIsoFenceSegment(ctx, 15.85, 8.9, 15.85, 10.2, m, true);
+    this.drawIsoFenceSegment(ctx, 15.85, 10.2, 20.5, 10.2, m, true);
+    this.drawIsoFenceSegment(ctx, 20.5, 5.75, 20.5, 10.2, m, true);
+    const mid = this.worldToScreen(18.2, 10.2, m);
+    this.drawWorldPlaque(ctx, mid.x, mid.y + 14, 'Chuồng Trại', false);
   }
 
   private drawLivestockAnimal(
@@ -1069,56 +1289,57 @@ export class CloudValleyCanvasController {
     focused: boolean
   ): void {
     const sp = this.worldToScreen(wx, wy, m);
-    const s = m.tilePx * 0.36;
+    const s = m.tilePx * 0.45;
     ctx.save();
-    // Contact shadow
-    ctx.fillStyle = 'rgba(18, 28, 12, 0.22)';
+    // Elliptical Drop Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
     ctx.beginPath();
-    ctx.ellipse(sp.x, sp.y + s * 0.48, s * 0.78, s * 0.32, 0, 0, Math.PI * 2);
+    ctx.ellipse(sp.x, sp.y + s * 0.48, s * 0.82, s * 0.32, 0, 0, Math.PI * 2);
     ctx.fill();
 
     if (focused) {
       ctx.strokeStyle = '#FEF08A';
       ctx.lineWidth = 2.6;
       ctx.beginPath();
-      ctx.arc(sp.x, sp.y, s * 1.2, 0, Math.PI * 2);
+      ctx.arc(sp.x, sp.y, s * 1.25, 0, Math.PI * 2);
       ctx.stroke();
     }
 
     if (an.type === 'chicken') {
       const peck = Math.sin(nowSec * 3.5) * 1.5;
-      // Feathered tail
       ctx.fillStyle = '#EA580C';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.8;
       ctx.beginPath();
       ctx.moveTo(sp.x - s * 0.45, sp.y - s * 0.1);
       ctx.lineTo(sp.x - s * 0.85, sp.y - s * 0.45);
       ctx.lineTo(sp.x - s * 0.6, sp.y + s * 0.1);
       ctx.closePath();
       ctx.fill();
-      // Body
-      ctx.fillStyle = '#FDE68A';
+      ctx.stroke();
+
+      ctx.fillStyle = '#FDE047';
       ctx.beginPath();
       ctx.ellipse(sp.x, sp.y + peck * 0.3, s * 0.58, s * 0.44, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#78350F';
-      ctx.lineWidth = 1.5;
       ctx.stroke();
-      // Wing
+
       ctx.fillStyle = '#F59E0B';
       ctx.beginPath();
       ctx.ellipse(sp.x - s * 0.08, sp.y + s * 0.08 + peck * 0.3, s * 0.3, s * 0.18, -0.2, 0, Math.PI * 2);
       ctx.fill();
-      // Red comb & wattle
+
       ctx.fillStyle = '#EF4444';
       ctx.beginPath();
       ctx.arc(sp.x + s * 0.22, sp.y - s * 0.46 + peck, s * 0.18, 0, Math.PI * 2);
-      ctx.arc(sp.x + s * 0.38, sp.y - s * 0.4 + peck, s * 0.13, 0, Math.PI * 2);
       ctx.fill();
-      // Eye & beak
-      ctx.fillStyle = '#1E293B';
+      ctx.stroke();
+
+      ctx.fillStyle = '#1E120A';
       ctx.beginPath();
-      ctx.arc(sp.x + s * 0.34, sp.y - s * 0.14 + peck, 1.8, 0, Math.PI * 2);
+      ctx.arc(sp.x + s * 0.34, sp.y - s * 0.14 + peck, 2, 0, Math.PI * 2);
       ctx.fill();
+
       ctx.fillStyle = '#F97316';
       ctx.beginPath();
       ctx.moveTo(sp.x + s * 0.52, sp.y - s * 0.12 + peck);
@@ -1126,74 +1347,78 @@ export class CloudValleyCanvasController {
       ctx.lineTo(sp.x + s * 0.52, sp.y + s * 0.12 + peck);
       ctx.closePath();
       ctx.fill();
-    } else if (an.type === 'cow') {
-      // Shaded legs
-      ctx.fillStyle = '#4A3426';
-      ctx.fillRect(sp.x - s * 0.52, sp.y + s * 0.25, 4, s * 0.38);
-      ctx.fillRect(sp.x - s * 0.18, sp.y + s * 0.28, 4, s * 0.35);
-      ctx.fillRect(sp.x + s * 0.24, sp.y + s * 0.25, 4, s * 0.38);
-      // Rounded body
-      ctx.fillStyle = '#FFFDF9';
-      ctx.beginPath();
-      ctx.ellipse(sp.x - s * 0.08, sp.y, s * 0.82, s * 0.54, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#3B281B';
-      ctx.lineWidth = 1.7;
       ctx.stroke();
-      // Patches
-      ctx.fillStyle = '#432D1F';
+    } else if (an.type === 'cow') {
+      ctx.fillStyle = '#4A3426';
+      ctx.fillRect(sp.x - s * 0.52, sp.y + s * 0.25, 4.5, s * 0.38);
+      ctx.fillRect(sp.x - s * 0.18, sp.y + s * 0.28, 4.5, s * 0.35);
+      ctx.fillRect(sp.x + s * 0.24, sp.y + s * 0.25, 4.5, s * 0.38);
+
+      ctx.fillStyle = '#FFFDF9';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(sp.x - s * 0.08, sp.y, s * 0.84, s * 0.55, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#3B281B';
       ctx.beginPath();
       ctx.arc(sp.x - s * 0.34, sp.y - s * 0.12, s * 0.24, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
       ctx.arc(sp.x + s * 0.06, sp.y + s * 0.14, s * 0.18, 0, Math.PI * 2);
       ctx.fill();
-      // Gold bell collar
+
       ctx.fillStyle = '#FACC15';
       ctx.beginPath();
-      ctx.arc(sp.x + s * 0.45, sp.y + s * 0.15, 3.2, 0, Math.PI * 2);
+      ctx.arc(sp.x + s * 0.45, sp.y + s * 0.15, 3.6, 0, Math.PI * 2);
       ctx.fill();
-      // Head + ears + horns + pink snout
+      ctx.stroke();
+
       const hx = sp.x + s * 0.62;
       const hy = sp.y - s * 0.18;
       ctx.fillStyle = '#FDE68A';
       ctx.beginPath();
-      ctx.arc(hx - s * 0.18, hy - s * 0.3, 3.5, 0, Math.PI * 2);
+      ctx.arc(hx - s * 0.18, hy - s * 0.3, 3.8, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
       ctx.beginPath();
-      ctx.arc(hx + s * 0.18, hy - s * 0.3, 3.5, 0, Math.PI * 2);
+      ctx.arc(hx + s * 0.18, hy - s * 0.3, 3.8, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
+
       ctx.fillStyle = '#FFFDF9';
       ctx.beginPath();
-      ctx.arc(hx, hy, s * 0.38, 0, Math.PI * 2);
+      ctx.arc(hx, hy, s * 0.39, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#3B281B';
       ctx.stroke();
+
       ctx.fillStyle = '#FBCFE8';
       ctx.beginPath();
       ctx.ellipse(hx, hy + s * 0.16, s * 0.28, s * 0.16, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#1E293B';
+
+      ctx.fillStyle = '#1E120A';
       ctx.beginPath();
-      ctx.arc(hx - s * 0.13, hy - s * 0.06, 2, 0, Math.PI * 2);
+      ctx.arc(hx - s * 0.13, hy - s * 0.06, 2.2, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(hx + s * 0.13, hy - s * 0.06, 2, 0, Math.PI * 2);
+      ctx.arc(hx + s * 0.13, hy - s * 0.06, 2.2, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      // Fluffy Cloud Sheep
       ctx.fillStyle = '#475569';
-      ctx.fillRect(sp.x - s * 0.35, sp.y + s * 0.25, 3.5, s * 0.32);
-      ctx.fillRect(sp.x + s * 0.2, sp.y + s * 0.25, 3.5, s * 0.32);
+      ctx.fillRect(sp.x - s * 0.35, sp.y + s * 0.25, 4, s * 0.32);
+      ctx.fillRect(sp.x + s * 0.2, sp.y + s * 0.25, 4, s * 0.32);
       const puffs: [number, number, number][] = [
         [sp.x, sp.y, s * 0.6],
         [sp.x - s * 0.34, sp.y + s * 0.06, s * 0.42],
         [sp.x + s * 0.3, sp.y + s * 0.06, s * 0.42],
       ];
-      ctx.fillStyle = '#78716C';
+      ctx.fillStyle = '#1E120A';
       for (const [wx2, wy2, wr] of puffs) {
         ctx.beginPath();
-        ctx.arc(wx2, wy2, wr + 1.5, 0, Math.PI * 2);
+        ctx.arc(wx2, wy2, wr + 1.8, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.fillStyle = '#F8F5EE';
@@ -1206,9 +1431,12 @@ export class CloudValleyCanvasController {
       ctx.beginPath();
       ctx.arc(sp.x + s * 0.5, sp.y - s * 0.08, s * 0.28, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
-      ctx.arc(sp.x + s * 0.56, sp.y - s * 0.12, 1.8, 0, Math.PI * 2);
+      ctx.arc(sp.x + s * 0.56, sp.y - s * 0.12, 2, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -1216,16 +1444,19 @@ export class CloudValleyCanvasController {
       const bob = Math.sin(nowSec * 4.5) * 2.5;
       ctx.fillStyle = '#FACC15';
       ctx.beginPath();
-      ctx.arc(sp.x, sp.y - s * 1.15 + bob, 6.8, 0, Math.PI * 2);
+      ctx.arc(sp.x, sp.y - s * 1.15 + bob, 7.2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#78350F';
-      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.8;
       ctx.stroke();
     } else if (!an.fedToday) {
       ctx.fillStyle = '#FB7185';
       ctx.beginPath();
-      ctx.arc(sp.x, sp.y - s * 1.1, 5.2, 0, Math.PI * 2);
+      ctx.arc(sp.x, sp.y - s * 1.1, 5.4, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
     }
 
     ctx.restore();
@@ -1243,54 +1474,57 @@ export class CloudValleyCanvasController {
     const dir = facingRight ? 1 : -1;
     const hop = Math.abs(Math.sin(nowSec * 6)) * 2.5;
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
     ctx.beginPath();
-    ctx.ellipse(sp.x, sp.y + 6, 10, 4.2, 0, 0, Math.PI * 2);
+    ctx.ellipse(sp.x, sp.y + 7, 13, 5, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = '#B45309';
-    ctx.lineWidth = 2.8;
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(sp.x - dir * 7, sp.y - 1 - hop);
-    ctx.lineTo(sp.x - dir * 13, sp.y - 7 - hop + Math.sin(nowSec * 14) * 3.5);
+    ctx.moveTo(sp.x - dir * 8, sp.y - 1 - hop);
+    ctx.lineTo(sp.x - dir * 15, sp.y - 8 - hop + Math.sin(nowSec * 14) * 3.5);
+    ctx.stroke();
+    ctx.strokeStyle = '#D97706';
+    ctx.lineWidth = 2.2;
     ctx.stroke();
 
     ctx.fillStyle = '#D97706';
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.8;
     ctx.beginPath();
-    ctx.ellipse(sp.x, sp.y - hop, 9, 5.8, 0, 0, Math.PI * 2);
+    ctx.ellipse(sp.x, sp.y - hop, 10.5, 6.8, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#5C3418';
-    ctx.lineWidth = 1.3;
     ctx.stroke();
 
     ctx.fillStyle = '#DC2626';
-    ctx.fillRect(sp.x + dir * 2, sp.y - 4.5 - hop, 3.2, 5.5);
+    ctx.fillRect(sp.x + dir * 3, sp.y - 5.5 - hop, 3.6, 6.5);
 
     ctx.fillStyle = '#F59E0B';
     ctx.beginPath();
-    ctx.arc(sp.x + dir * 7.8, sp.y - 4.8 - hop, 5.8, 0, Math.PI * 2);
+    ctx.arc(sp.x + dir * 9, sp.y - 5.8 - hop, 6.8, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = '#1E293B';
+    ctx.fillStyle = '#1E120A';
     ctx.beginPath();
-    ctx.arc(sp.x + dir * 10, sp.y - 6 - hop, 1.4, 0, Math.PI * 2);
+    ctx.arc(sp.x + dir * 11.5, sp.y - 7 - hop, 1.7, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(sp.x + dir * 12.8, sp.y - 3.6 - hop, 1.6, 0, Math.PI * 2);
+    ctx.arc(sp.x + dir * 14.8, sp.y - 4.4 - hop, 1.8, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = '#78350F';
     ctx.beginPath();
-    ctx.ellipse(sp.x + dir * 5.2, sp.y - 4.2 - hop, 2.4, 4.4, 0.25, 0, Math.PI * 2);
+    ctx.ellipse(sp.x + dir * 6, sp.y - 5 - hop, 2.8, 5, 0.25, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
     ctx.restore();
   }
 
   /**
-   * Classic TeaMobi Avatar Chibi Character: crisp 1.5px dark silhouette outline,
-   * shaded overalls, expressive large glossy eyes with white catchlights,
-   * styled hair bangs, customizable hat & active tool swing!
+   * 2x-2.5x Scale Classic TeaMobi Avatar Chibi Character (~1.8 tiles tall, 1:1.5 head-to-body ratio)
+   * Thick 2px dark outlines, glossy anime eyes, cloud wings, overalls, hat & elliptical drop shadow!
    */
   private drawFarmerAvatar(
     ctx: CanvasRenderingContext2D,
@@ -1300,257 +1534,281 @@ export class CloudValleyCanvasController {
     nowSec: number
   ): void {
     const sp = this.worldToScreen(avatar.x, avatar.y, m);
-    const s = m.tilePx * 0.48;
+    const s = m.tilePx * 0.86; // ~2x larger classic TeaMobi Chibi presence!
     const isMoving = Math.hypot(avatar.vx, avatar.vy) > 0.2;
     const stride = isMoving ? Math.sin(avatar.walkPhase) : 0;
-    const bob = isMoving ? Math.abs(Math.cos(avatar.walkPhase)) * 3 : Math.sin(nowSec * 2.2) * 1.1;
+    const bob = isMoving ? Math.abs(Math.cos(avatar.walkPhase)) * 3.5 : Math.sin(nowSec * 2.2) * 1.2;
 
     ctx.save();
-    // 1. Soft ground shadow
-    ctx.fillStyle = 'rgba(18, 22, 12, 0.28)';
+    // 1. Crisp Elliptical Ground Drop Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
     ctx.beginPath();
-    ctx.ellipse(sp.x, sp.y + s * 0.42, s * 0.56, s * 0.24, 0, 0, Math.PI * 2);
+    ctx.ellipse(sp.x, sp.y + 4, s * 0.5, s * 0.2, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // 2. Stepping shoes & pant legs
-    ctx.fillStyle = '#3E2716';
-    ctx.strokeStyle = '#1C1109';
-    ctx.lineWidth = 1.4;
-    ctx.beginPath();
-    ctx.ellipse(sp.x - s * 0.19 + stride * 3.5, sp.y + s * 0.35, s * 0.17, s * 0.12, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.ellipse(sp.x + s * 0.19 - stride * 3.5, sp.y + s * 0.35, s * 0.17, s * 0.12, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    const yBody = sp.y - bob;
+    const footY = sp.y;
+    const yBody = footY - s * 0.34 - bob;
     const shirtColor = state.farmerProfile?.shirtColor ?? '#2E7D32';
 
-    // 3. Swinging Arms
+    // 2. Decorative Shimmering Cloud Wings (behind shoulders, Avatar style accessory!)
+    const wingFlap = Math.sin(nowSec * 3.5) * 0.08;
+    for (const side of [-1, 1]) {
+      ctx.save();
+      ctx.translate(sp.x + side * s * 0.24, yBody - s * 0.05);
+      ctx.rotate(side * (-0.28 + wingFlap));
+      ctx.fillStyle = '#FFFDF9';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.ellipse(side * s * 0.22, 0, s * 0.24, s * 0.12, side * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // 3. Stepping Boots
+    ctx.fillStyle = '#4A2B13';
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.ellipse(sp.x - s * 0.15 + stride * 4.5, footY - s * 0.04, s * 0.14, s * 0.09, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(sp.x + s * 0.15 - stride * 4.5, footY - s * 0.04, s * 0.14, s * 0.09, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // 4. Swinging Arms + Hands
     ctx.fillStyle = shirtColor;
-    ctx.strokeStyle = '#2C1D11';
-    ctx.lineWidth = 1.5;
-    // Left arm
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.8;
     ctx.beginPath();
-    ctx.ellipse(sp.x - s * 0.42, yBody + stride * 2.5, s * 0.12, s * 0.24, 0.2, 0, Math.PI * 2);
+    ctx.ellipse(sp.x - s * 0.33, yBody + stride * 3.2, s * 0.1, s * 0.2, 0.2, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    // Right arm
     ctx.beginPath();
-    ctx.ellipse(sp.x + s * 0.42, yBody - stride * 2.5, s * 0.12, s * 0.24, -0.2, 0, Math.PI * 2);
+    ctx.ellipse(sp.x + s * 0.33, yBody - stride * 3.2, s * 0.1, s * 0.2, -0.2, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    // Hands
+
     ctx.fillStyle = '#FDE2C4';
     ctx.beginPath();
-    ctx.arc(sp.x - s * 0.44, yBody + s * 0.18 + stride * 2.5, s * 0.09, 0, Math.PI * 2);
+    ctx.arc(sp.x - s * 0.35, yBody + s * 0.15 + stride * 3.2, s * 0.075, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
     ctx.beginPath();
-    ctx.arc(sp.x + s * 0.44, yBody + s * 0.18 - stride * 2.5, s * 0.09, 0, Math.PI * 2);
+    ctx.arc(sp.x + s * 0.35, yBody + s * 0.15 - stride * 3.2, s * 0.075, 0, Math.PI * 2);
     ctx.fill();
-
-    // 4. Shaded Shirt + Denim Overalls
-    ctx.fillStyle = shirtColor;
-    this.roundRect(ctx, sp.x - s * 0.35, yBody - s * 0.28, s * 0.7, s * 0.56, 7);
-    ctx.fill();
-    ctx.strokeStyle = '#2C1D11';
-    ctx.lineWidth = 1.6;
     ctx.stroke();
 
-    // Blue denim overalls bib & straps
-    ctx.fillStyle = '#2563EB';
-    this.roundRect(ctx, sp.x - s * 0.28, yBody - s * 0.04, s * 0.56, s * 0.32, 4);
+    // 5. Compact Chibi Body (Shirt + Blue Denim Overalls)
+    ctx.fillStyle = shirtColor;
+    this.roundRect(ctx, sp.x - s * 0.28, yBody - s * 0.24, s * 0.56, s * 0.48, 7);
     ctx.fill();
-    ctx.fillRect(sp.x - s * 0.24, yBody - s * 0.26, s * 0.11, s * 0.24);
-    ctx.fillRect(sp.x + s * 0.13, yBody - s * 0.26, s * 0.11, s * 0.24);
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = '#2563EB';
+    this.roundRect(ctx, sp.x - s * 0.22, yBody - s * 0.04, s * 0.44, s * 0.27, 4);
+    ctx.fill();
+    ctx.fillRect(sp.x - s * 0.2, yBody - s * 0.22, s * 0.09, s * 0.2);
+    ctx.fillRect(sp.x + s * 0.11, yBody - s * 0.22, s * 0.09, s * 0.2);
     ctx.fillStyle = '#FACC15';
     ctx.beginPath();
-    ctx.arc(sp.x - s * 0.185, yBody - s * 0.02, 1.7, 0, Math.PI * 2);
+    ctx.arc(sp.x - s * 0.155, yBody - s * 0.02, 2, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(sp.x + s * 0.185, yBody - s * 0.02, 1.7, 0, Math.PI * 2);
+    ctx.arc(sp.x + s * 0.155, yBody - s * 0.02, 2, 0, Math.PI * 2);
     ctx.fill();
 
-    // 5. Big TeaMobi Chibi Head
-    const headY = yBody - s * 0.66;
+    // 6. Big Classic 1:1.5 TeaMobi Chibi Head (nearly half character height!)
+    const headR = s * 0.44;
+    const headY = yBody - s * 0.62;
     ctx.fillStyle = '#FDE2C4';
     ctx.beginPath();
-    ctx.arc(sp.x, headY, s * 0.46, 0, Math.PI * 2);
+    ctx.arc(sp.x, headY, headR, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#2C1D11';
-    ctx.lineWidth = 1.7;
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 2.2;
     ctx.stroke();
 
     // Ears
     ctx.fillStyle = '#FBD5AC';
     ctx.beginPath();
-    ctx.arc(sp.x - s * 0.45, headY + s * 0.04, s * 0.1, 0, Math.PI * 2);
+    ctx.arc(sp.x - headR * 0.96, headY + s * 0.04, s * 0.09, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
     ctx.beginPath();
-    ctx.arc(sp.x + s * 0.45, headY + s * 0.04, s * 0.1, 0, Math.PI * 2);
+    ctx.arc(sp.x + headR * 0.96, headY + s * 0.04, s * 0.09, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
 
     if (avatar.facing !== 'up') {
-      const lookX = avatar.facing === 'left' ? -s * 0.14 : avatar.facing === 'right' ? s * 0.14 : 0;
-      // Hair Bangs framing forehead
+      const lookX = avatar.facing === 'left' ? -s * 0.11 : avatar.facing === 'right' ? s * 0.11 : 0;
+      // Chestnut Hair Bangs
       ctx.fillStyle = '#4A2E1A';
       ctx.beginPath();
-      ctx.arc(sp.x, headY - s * 0.04, s * 0.46, Math.PI * 1.06, Math.PI * 1.94);
-      ctx.lineTo(sp.x + s * 0.2, headY - s * 0.14);
-      ctx.lineTo(sp.x, headY - s * 0.08);
-      ctx.lineTo(sp.x - s * 0.2, headY - s * 0.14);
+      ctx.arc(sp.x, headY - s * 0.03, headR, Math.PI * 1.05, Math.PI * 1.95);
+      ctx.lineTo(sp.x + s * 0.18, headY - s * 0.12);
+      ctx.lineTo(sp.x, headY - s * 0.06);
+      ctx.lineTo(sp.x - s * 0.18, headY - s * 0.12);
       ctx.closePath();
       ctx.fill();
+      ctx.stroke();
 
       // Big Expressive TeaMobi Glossy Eyes with Catchlights
       const blink = Math.sin(nowSec * 1.4) > 0.96;
-      const eyeY = headY + s * 0.04;
+      const eyeY = headY + s * 0.05;
       if (blink) {
-        ctx.strokeStyle = '#1E293B';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#1E120A';
+        ctx.lineWidth = 2.2;
         ctx.beginPath();
-        ctx.moveTo(sp.x - s * 0.22 + lookX, eyeY);
-        ctx.lineTo(sp.x - s * 0.08 + lookX, eyeY);
-        ctx.moveTo(sp.x + s * 0.08 + lookX, eyeY);
-        ctx.lineTo(sp.x + s * 0.22 + lookX, eyeY);
+        ctx.moveTo(sp.x - s * 0.21 + lookX, eyeY);
+        ctx.lineTo(sp.x - s * 0.07 + lookX, eyeY);
+        ctx.moveTo(sp.x + s * 0.07 + lookX, eyeY);
+        ctx.lineTo(sp.x + s * 0.21 + lookX, eyeY);
         ctx.stroke();
       } else {
         for (const side of [-1, 1]) {
           const ex = sp.x + side * s * 0.16 + lookX;
           ctx.fillStyle = '#1E1B18';
           ctx.beginPath();
-          ctx.ellipse(ex, eyeY, s * 0.095, s * 0.125, 0, 0, Math.PI * 2);
+          ctx.ellipse(ex, eyeY, s * 0.09, s * 0.12, 0, 0, Math.PI * 2);
           ctx.fill();
-          // Warm amber/slate lower iris tint
-          ctx.fillStyle = '#475569';
+          ctx.fillStyle = '#334155';
           ctx.beginPath();
-          ctx.arc(ex, eyeY + s * 0.03, s * 0.06, 0, Math.PI * 2);
+          ctx.arc(ex, eyeY + s * 0.03, s * 0.055, 0, Math.PI * 2);
           ctx.fill();
-          // Bright specular anime catchlight dot
           ctx.fillStyle = '#FFFFFF';
           ctx.beginPath();
-          ctx.arc(ex - s * 0.03, eyeY - s * 0.04, s * 0.038, 0, Math.PI * 2);
+          ctx.arc(ex - s * 0.028, eyeY - s * 0.04, s * 0.036, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(ex + s * 0.025, eyeY + s * 0.04, s * 0.018, 0, Math.PI * 2);
           ctx.fill();
         }
       }
 
-      // Rosy cheeks & gentle smile
-      ctx.fillStyle = 'rgba(244, 114, 182, 0.45)';
+      // Rosy cheeks & cheerful smile
+      ctx.fillStyle = 'rgba(244, 114, 182, 0.48)';
       ctx.beginPath();
-      ctx.ellipse(sp.x - s * 0.26 + lookX, headY + s * 0.18, s * 0.09, s * 0.055, 0, 0, Math.PI * 2);
+      ctx.ellipse(sp.x - s * 0.26 + lookX, headY + s * 0.18, s * 0.085, s * 0.05, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.ellipse(sp.x + s * 0.26 + lookX, headY + s * 0.18, s * 0.09, s * 0.055, 0, 0, Math.PI * 2);
+      ctx.ellipse(sp.x + s * 0.26 + lookX, headY + s * 0.18, s * 0.085, s * 0.05, 0, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.strokeStyle = '#9A3412';
-      ctx.lineWidth = 1.4;
+      ctx.lineWidth = 1.6;
       ctx.beginPath();
-      ctx.arc(sp.x + lookX, headY + s * 0.22, s * 0.08, 0.2, Math.PI - 0.2);
+      ctx.arc(sp.x + lookX, headY + s * 0.21, s * 0.075, 0.2, Math.PI - 0.2);
       ctx.stroke();
     } else {
-      // Back of head hair
       ctx.fillStyle = '#4A2E1A';
       ctx.beginPath();
-      ctx.arc(sp.x, headY - s * 0.02, s * 0.46, Math.PI * 0.85, Math.PI * 2.15);
+      ctx.arc(sp.x, headY - s * 0.02, headR, Math.PI * 0.85, Math.PI * 2.15);
       ctx.fill();
+      ctx.stroke();
     }
 
-    // 6. Detailed Customizable Hat
+    // 7. Customizable Hat
     const hat = state.farmerProfile?.hat ?? 'straw';
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.8;
     if (hat === 'straw') {
       ctx.fillStyle = '#FACC15';
       ctx.beginPath();
-      ctx.ellipse(sp.x, headY - s * 0.34, s * 0.72, s * 0.21, 0, 0, Math.PI * 2);
+      ctx.ellipse(sp.x, headY - s * 0.32, s * 0.68, s * 0.2, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#78350F';
-      ctx.lineWidth = 1.5;
       ctx.stroke();
       ctx.fillStyle = '#EAB308';
       ctx.beginPath();
-      ctx.arc(sp.x, headY - s * 0.4, s * 0.38, Math.PI, 0);
+      ctx.arc(sp.x, headY - s * 0.37, s * 0.36, Math.PI, 0);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = '#DC2626';
-      ctx.fillRect(sp.x - s * 0.37, headY - s * 0.44, s * 0.74, s * 0.09);
+      ctx.fillRect(sp.x - s * 0.35, headY - s * 0.41, s * 0.7, s * 0.08);
     } else if (hat === 'bandana') {
       ctx.fillStyle = '#DC2626';
       ctx.beginPath();
-      ctx.arc(sp.x, headY - s * 0.14, s * 0.48, Math.PI, 0);
+      ctx.arc(sp.x, headY - s * 0.12, headR * 1.03, Math.PI, 0);
       ctx.fill();
-      ctx.strokeStyle = '#7F1D1D';
-      ctx.lineWidth = 1.5;
       ctx.stroke();
-      // Trailing scarf tails
       ctx.fillStyle = '#EF4444';
       ctx.beginPath();
-      ctx.moveTo(sp.x + s * 0.44, headY - s * 0.22);
-      ctx.lineTo(sp.x + s * 0.65, headY - s * 0.08);
-      ctx.lineTo(sp.x + s * 0.46, headY - s * 0.06);
+      ctx.moveTo(sp.x + s * 0.42, headY - s * 0.2);
+      ctx.lineTo(sp.x + s * 0.62, headY - s * 0.06);
+      ctx.lineTo(sp.x + s * 0.44, headY - s * 0.04);
       ctx.closePath();
       ctx.fill();
+      ctx.stroke();
     } else {
       for (const side of [-1, 1]) {
         ctx.fillStyle = '#FFFDF9';
-        ctx.strokeStyle = '#EC4899';
-        ctx.lineWidth = 1.6;
+        ctx.strokeStyle = '#1E120A';
         ctx.beginPath();
-        ctx.ellipse(sp.x + side * s * 0.2, headY - s * 0.66, s * 0.13, s * 0.34, side * 0.16, 0, Math.PI * 2);
+        ctx.ellipse(sp.x + side * s * 0.18, headY - s * 0.64, s * 0.12, s * 0.32, side * 0.16, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
         ctx.fillStyle = '#FBCFE8';
         ctx.beginPath();
-        ctx.ellipse(sp.x + side * s * 0.2, headY - s * 0.65, s * 0.06, s * 0.22, side * 0.16, 0, Math.PI * 2);
+        ctx.ellipse(sp.x + side * s * 0.18, headY - s * 0.63, s * 0.055, s * 0.2, side * 0.16, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
-    // 7. Active Tool Swing Visual
+    // 8. Active Tool Swing
     if (avatar.actionTimer > 0) {
       const swing = Math.sin((1 - avatar.actionTimer / 0.28) * Math.PI);
-      const dirX = avatar.facing === 'left' ? -1 : avatar.facing === 'right' ? 1 : 0.6;
-      const tipX = sp.x + dirX * (s * 0.86 + swing * 9);
-      const tipY = yBody + swing * 10 - s * 0.24;
-      ctx.strokeStyle = '#6B4226';
-      ctx.lineWidth = 3.2;
+      const dirX = avatar.facing === 'left' ? -1 : avatar.facing === 'right' ? 1 : 0.7;
+      const tipX = sp.x + dirX * (s * 0.72 + swing * 12);
+      const tipY = yBody + swing * 12 - s * 0.18;
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 4.6;
       ctx.beginPath();
-      ctx.moveTo(sp.x + dirX * s * 0.25, yBody - s * 0.08);
+      ctx.moveTo(sp.x + dirX * s * 0.22, yBody - s * 0.05);
       ctx.lineTo(tipX, tipY);
       ctx.stroke();
-      ctx.fillStyle = avatar.actionTool === 'water' ? '#38BDF8' : avatar.actionTool === 'hoe' ? '#94A3B8' : '#FACC15';
+      ctx.strokeStyle = '#8C5225';
+      ctx.lineWidth = 2.4;
+      ctx.stroke();
+      ctx.fillStyle = avatar.actionTool === 'water' ? '#38BDF8' : avatar.actionTool === 'hoe' ? '#CBD5E1' : '#FACC15';
       ctx.beginPath();
-      ctx.arc(tipX, tipY, 5, 0, Math.PI * 2);
+      ctx.arc(tipX, tipY, 6, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#1E293B';
-      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.6;
       ctx.stroke();
     }
 
-    // 8. Farmer Name Tag cleanly below boots
-    ctx.font = '700 10.5px "Plus Jakarta Sans", sans-serif';
+    // 9. Crisp Farmer Name Tag below boots
+    ctx.font = '800 11px "Plus Jakarta Sans", sans-serif';
     ctx.textAlign = 'center';
     const farmerName = state.farmerProfile?.name || 'Nông Dân Mây';
-    const nw = Math.min(130, ctx.measureText(farmerName).width + 12);
-    const ny = sp.y + s * 0.58;
-    ctx.fillStyle = 'rgba(28, 20, 14, 0.76)';
-    this.roundRect(ctx, sp.x - nw * 0.5, ny, nw, 15, 5);
+    const nw = Math.min(136, ctx.measureText(farmerName).width + 14);
+    const ny = footY + 7;
+    ctx.fillStyle = 'rgba(28, 18, 10, 0.84)';
+    this.roundRect(ctx, sp.x - nw * 0.5, ny, nw, 17, 5);
     ctx.fill();
-    ctx.fillStyle = '#FEF9C3';
-    ctx.fillText(farmerName, sp.x, ny + 11, nw - 8);
+    ctx.strokeStyle = '#F6D38C';
+    ctx.lineWidth = 1.1;
+    ctx.stroke();
+    ctx.fillStyle = '#FEF3C7';
+    ctx.fillText(farmerName, sp.x, ny + 12.2, nw - 8);
 
-    // 9. Avatar Chat Speech Bubble
+    // 10. Avatar Speech Bubble
     if (avatar.speechText && avatar.speechTimer > 0) {
       ctx.font = '700 11px "Plus Jakarta Sans", sans-serif';
-      const tw = Math.min(205, ctx.measureText(avatar.speechText).width + 18);
+      const tw = Math.min(210, ctx.measureText(avatar.speechText).width + 18);
       const bx = sp.x - tw * 0.5;
-      const by = headY - s * 1.38;
+      const by = headY - headR - 32;
       ctx.fillStyle = 'rgba(255, 253, 248, 0.97)';
       this.roundRect(ctx, bx, by, tw, 22, 8);
       ctx.fill();
-      ctx.strokeStyle = '#7C5230';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.6;
       ctx.stroke();
       ctx.fillStyle = '#2D1E12';
       ctx.fillText(avatar.speechText, sp.x, by + 14.5, tw - 10);
@@ -1559,18 +1817,18 @@ export class CloudValleyCanvasController {
     ctx.restore();
   }
 
-  private drawTreeProp(
+  private drawFruitTreeProp(
     ctx: CanvasRenderingContext2D,
     wx: number,
     wy: number,
     m: FarmViewportMetrics,
     season: ReturnType<typeof getSeasonId>,
-    variant: 'oak' | 'pine'
+    kind: FruitTreeKind
   ): void {
     const sp = this.worldToScreen(wx, wy, m);
-    const sprite = this.atlas.getTreeSprite(variant, season);
-    const w = m.tilePx * 2.1;
-    const h = m.tilePx * 2.55;
+    const sprite = this.atlas.getFruitTreeSprite(kind, season);
+    const w = m.tilePx * 2.15;
+    const h = m.tilePx * 2.6;
     if (sprite) {
       ctx.drawImage(sprite, sp.x - w * 0.5, sp.y - h * 0.88, w, h);
     }
@@ -1584,48 +1842,64 @@ export class CloudValleyCanvasController {
     size: number,
     nowSec: number
   ): void {
-    const s = size * 0.34;
+    const s = size * 0.36;
     ctx.save();
     if (id === 'sprinkler') {
       ctx.fillStyle = '#475569';
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.4;
       ctx.fillRect(cx - 3, cy - s * 0.85, 6, s * 0.9);
+      ctx.strokeRect(cx - 3, cy - s * 0.85, 6, s * 0.9);
       ctx.fillStyle = '#0284C7';
       ctx.beginPath();
       ctx.arc(cx, cy - s * 0.9, 5, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
       const ang = nowSec * 3.5;
       ctx.fillStyle = 'rgba(56, 189, 248, 0.9)';
       ctx.beginPath();
       ctx.arc(cx + Math.cos(ang) * 9, cy - s * 0.9 + Math.sin(ang) * 4.5, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
       ctx.arc(cx - Math.cos(ang) * 9, cy - s * 0.9 - Math.sin(ang) * 4.5, 2.2, 0, Math.PI * 2);
       ctx.fill();
     } else if (id === 'scarecrow') {
-      ctx.strokeStyle = '#6B4226';
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 4.2;
       ctx.beginPath();
-      ctx.moveTo(cx, cy + 5);
+      ctx.moveTo(cx, cy + 4);
       ctx.lineTo(cx, cy - s * 1.45);
       ctx.moveTo(cx - s * 0.7, cy - s * 0.9);
       ctx.lineTo(cx + s * 0.7, cy - s * 0.9);
       ctx.stroke();
+      ctx.strokeStyle = '#8C5225';
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
       ctx.fillStyle = '#EA580C';
       ctx.beginPath();
-      ctx.arc(cx, cy - s * 1.32, 5.5, 0, Math.PI * 2);
+      ctx.arc(cx, cy - s * 1.32, 6, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
       ctx.fillStyle = '#FACC15';
       ctx.beginPath();
-      ctx.ellipse(cx, cy - s * 1.56, 8, 2.5, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy - s * 1.56, 9, 2.8, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
     } else if (id === 'conveyor') {
       ctx.fillStyle = '#334155';
       this.roundRect(ctx, cx - s * 0.95, cy - 5, s * 1.9, 10, 3);
       ctx.fill();
+      ctx.strokeStyle = '#1E120A';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
       ctx.fillStyle = '#FACC15';
       const beltX = ((nowSec * 18) % (s * 1.4)) - s * 0.7;
       ctx.fillRect(cx + beltX, cy - 3.5, 5, 7);
     } else if (id === 'greenhouse') {
-      ctx.fillStyle = 'rgba(186, 230, 253, 0.5)';
-      ctx.strokeStyle = '#E0F2FE';
+      ctx.fillStyle = 'rgba(186, 230, 253, 0.55)';
+      ctx.strokeStyle = '#1E120A';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.moveTo(cx - s * 1.15, cy + 4);
@@ -1640,35 +1914,48 @@ export class CloudValleyCanvasController {
   }
 
   private drawWeed(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number): void {
-    const s = size * 0.24;
+    const s = size * 0.25;
     ctx.save();
-    // Leafy weed tuft
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 3, s * 0.7, s * 0.26, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = '#4D7C0F';
-    ctx.strokeStyle = '#2A4309';
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.4;
     for (const ang of [-0.55, 0, 0.55]) {
       ctx.beginPath();
-      ctx.ellipse(cx + Math.sin(ang) * s * 0.6, cy - s * 0.35, s * 0.32, s * 0.72, ang, 0, Math.PI * 2);
+      ctx.ellipse(cx + Math.sin(ang) * s * 0.6, cy - s * 0.35, s * 0.34, s * 0.74, ang, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     }
     ctx.fillStyle = '#FACC15';
     ctx.beginPath();
-    ctx.arc(cx, cy - s * 0.95, 2.4, 0, Math.PI * 2);
+    ctx.arc(cx, cy - s * 0.95, 2.8, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
     ctx.restore();
   }
 
   private drawMushroom(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number, nowSec: number): void {
-    const s = size * 0.28;
+    const s = size * 0.3;
     const bob = Math.sin(nowSec * 3) * 1.5;
     ctx.save();
-    ctx.fillStyle = '#F5E6D3';
-    ctx.fillRect(cx - 3, cy - s * 0.55 + bob, 6, s * 0.75);
-    ctx.fillStyle = '#B45309';
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
     ctx.beginPath();
-    ctx.arc(cx, cy - s * 0.55 + bob, s * 0.72, Math.PI, 0);
+    ctx.ellipse(cx, cy + 3, s * 0.65, s * 0.24, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = '#F5E6D3';
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.5;
+    ctx.fillRect(cx - 3.2, cy - s * 0.55 + bob, 6.4, s * 0.75);
+    ctx.strokeRect(cx - 3.2, cy - s * 0.55 + bob, 6.4, s * 0.75);
+    ctx.fillStyle = '#D93829';
+    ctx.beginPath();
+    ctx.arc(cx, cy - s * 0.55 + bob, s * 0.75, Math.PI, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
     ctx.fillStyle = '#FEF3C7';
     ctx.beginPath();
     ctx.arc(cx - 3, cy - s * 0.8 + bob, 1.8, 0, Math.PI * 2);
@@ -1694,63 +1981,67 @@ export class CloudValleyCanvasController {
     const mature = isCropMature(crop);
     const sway = Math.sin(nowSec * 2.4 + tile.row * 0.7 + tile.col * 0.5) * (mature ? 2.2 : 1.0);
     const bounce = mature ? Math.abs(Math.sin(nowSec * 3.4 + tile.col)) * 2.4 : 0;
-    const s = size * 0.36;
+    const s = size * 0.4;
 
     ctx.save();
-    // Contact shadow on tilled bed
-    ctx.fillStyle = 'rgba(22, 14, 6, 0.25)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
     ctx.beginPath();
-    ctx.ellipse(cx, cy + s * 0.42, s * 0.65, s * 0.24, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy + s * 0.28, s * 0.65, s * 0.24, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.5;
+
     if (ratio < 0.3) {
-      // Young sprout pair
       ctx.fillStyle = '#65A30D';
-      ctx.strokeStyle = '#365314';
-      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.ellipse(cx - 4 + sway * 0.3, cy, 4.5, 2.5, -0.4, 0, Math.PI * 2);
+      ctx.ellipse(cx - 4.5 + sway * 0.3, cy - 2, 5, 2.8, -0.4, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.beginPath();
-      ctx.ellipse(cx + 4 + sway * 0.3, cy, 4.5, 2.5, 0.4, 0, Math.PI * 2);
+      ctx.ellipse(cx + 4.5 + sway * 0.3, cy - 2, 5, 2.8, 0.4, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     } else if (ratio < 0.75) {
-      // Leafy growing bush with highlighted top crown
       ctx.fillStyle = '#2E7D32';
-      ctx.beginPath();
-      ctx.arc(cx + sway * 0.4, cy - s * 0.25, s * 0.58, 0, Math.PI * 2);
-      ctx.arc(cx - s * 0.36 + sway * 0.4, cy - s * 0.05, s * 0.4, 0, Math.PI * 2);
-      ctx.arc(cx + s * 0.36 + sway * 0.4, cy - s * 0.05, s * 0.4, 0, Math.PI * 2);
-      ctx.fill();
+      for (const [ox, oy, or] of [
+        [0, -s * 0.3, s * 0.54],
+        [-s * 0.34, -s * 0.1, s * 0.38],
+        [s * 0.34, -s * 0.1, s * 0.38],
+      ]) {
+        ctx.beginPath();
+        ctx.arc(cx + ox + sway * 0.4, cy + oy, or, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      }
       ctx.fillStyle = '#4ADE80';
       ctx.beginPath();
-      ctx.arc(cx - s * 0.1 + sway * 0.4, cy - s * 0.38, s * 0.3, 0, Math.PI * 2);
+      ctx.arc(cx - s * 0.1 + sway * 0.4, cy - s * 0.42, s * 0.28, 0, Math.PI * 2);
       ctx.fill();
     } else {
-      const baseY = cy + s * 0.36 - bounce;
+      const baseY = cy + s * 0.22 - bounce;
       if (def.id === 'lua_mi' || def.id === 'lua_mach_tim') {
         const earCol = def.id === 'lua_mach_tim' ? '#A855F7' : '#FACC15';
-        ctx.strokeStyle = '#65A30D';
-        ctx.lineWidth = 2.2;
         for (let i = -2; i <= 2; i++) {
           const tx = cx + i * 4.2 + sway * 1.3;
-          const ty = baseY - s * 1.45;
+          const ty = baseY - s * 1.35;
+          ctx.strokeStyle = '#65A30D';
+          ctx.lineWidth = 2.4;
           ctx.beginPath();
           ctx.moveTo(cx + i * 3.2, baseY);
           ctx.quadraticCurveTo(cx + i * 3.6 + sway, baseY - s * 0.75, tx, ty);
           ctx.stroke();
           ctx.fillStyle = earCol;
+          ctx.strokeStyle = '#1E120A';
+          ctx.lineWidth = 1.4;
           ctx.beginPath();
-          ctx.ellipse(tx, ty, 2.5, 5, 0.2, 0, Math.PI * 2);
+          ctx.ellipse(tx, ty, 2.8, 5.2, 0.2, 0, Math.PI * 2);
           ctx.fill();
+          ctx.stroke();
         }
       } else if (def.id === 'bi_ngo' || def.id === 'bi_khong_lo') {
-        const pScale = def.id === 'bi_khong_lo' ? 1.32 : 0.96;
+        const pScale = def.id === 'bi_khong_lo' ? 1.3 : 0.96;
         ctx.fillStyle = '#EA580C';
-        ctx.strokeStyle = '#7C2D12';
-        ctx.lineWidth = 1.4;
         ctx.beginPath();
         ctx.ellipse(cx, baseY - s * 0.42 * pScale, s * 0.8 * pScale, s * 0.56 * pScale, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -1766,6 +2057,7 @@ export class CloudValleyCanvasController {
         ctx.beginPath();
         ctx.arc(cx + sway * 0.4, baseY - s * 0.4, s * 0.56, 0, Math.PI * 2);
         ctx.fill();
+        ctx.stroke();
         const petalCol = def.id === 'hoa_hong' ? '#E11D48' : '#8B5CF6';
         const centerCol = def.id === 'hoa_hong' ? '#FDA4AF' : '#DDD6FE';
         for (const [ox, oy] of [
@@ -1775,39 +2067,36 @@ export class CloudValleyCanvasController {
         ]) {
           ctx.fillStyle = petalCol;
           ctx.beginPath();
-          ctx.arc(cx + ox + sway * 0.6, baseY + oy, 4.4, 0, Math.PI * 2);
+          ctx.arc(cx + ox + sway * 0.6, baseY + oy, 4.6, 0, Math.PI * 2);
           ctx.fill();
+          ctx.stroke();
           ctx.fillStyle = centerCol;
           ctx.beginPath();
           ctx.arc(cx + ox - 1 + sway * 0.6, baseY + oy - 1, 1.8, 0, Math.PI * 2);
           ctx.fill();
         }
       } else {
-        // Bushy staked vine with shaded glossy fruits (Tomato, Fire Tomato, Starfruit, Chili, Strawberry, Grape)
-        ctx.fillStyle = '#1E6B2D';
+        ctx.fillStyle = '#1E7A2D';
         ctx.beginPath();
-        ctx.arc(cx + sway * 0.45, baseY - s * 0.5, s * 0.66, 0, Math.PI * 2);
+        ctx.arc(cx + sway * 0.45, baseY - s * 0.48, s * 0.64, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = '#2E9141';
+        ctx.stroke();
+        ctx.fillStyle = '#38A849';
         ctx.beginPath();
-        ctx.arc(cx - 2 + sway * 0.5, baseY - s * 0.65, s * 0.46, 0, Math.PI * 2);
+        ctx.arc(cx - 2 + sway * 0.5, baseY - s * 0.62, s * 0.42, 0, Math.PI * 2);
         ctx.fill();
 
-        const fruits: [number, number][] = [
-          [-5.5, -s * 0.78],
-          [5.5, -s * 0.5],
-          [-0.5, -s * 0.28],
-        ];
-        for (const [fx, fy] of fruits) {
+        for (const [fx, fy] of [
+          [-5.5, -s * 0.76],
+          [5.5, -s * 0.48],
+          [-0.5, -s * 0.26],
+        ]) {
           ctx.fillStyle = def.colorPrimary;
           ctx.beginPath();
-          ctx.arc(cx + fx + sway * 0.6, baseY + fy, 4.2, 0, Math.PI * 2);
+          ctx.arc(cx + fx + sway * 0.6, baseY + fy, 4.5, 0, Math.PI * 2);
           ctx.fill();
-          ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-          ctx.lineWidth = 1;
           ctx.stroke();
-          // Glossy fruit highlight dot
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+          ctx.fillStyle = '#FFFFFF';
           ctx.beginPath();
           ctx.arc(cx + fx - 1.3 + sway * 0.6, baseY + fy - 1.3, 1.3, 0, Math.PI * 2);
           ctx.fill();
@@ -1815,13 +2104,10 @@ export class CloudValleyCanvasController {
       }
 
       if (mature) {
-        // Harvest-ready shimmering star badge
         ctx.fillStyle = crop.quality === 'gold' ? '#FDE047' : '#FFFFFF';
         ctx.beginPath();
-        ctx.arc(cx + s * 0.65, baseY - s * 1.22, 3.8, 0, Math.PI * 2);
+        ctx.arc(cx + s * 0.65, baseY - s * 1.18, 4.2, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = '#78350F';
-        ctx.lineWidth = 1;
         ctx.stroke();
       }
     }
@@ -1829,15 +2115,17 @@ export class CloudValleyCanvasController {
     if (tile.hasPest) {
       ctx.fillStyle = '#EF4444';
       ctx.beginPath();
-      ctx.arc(cx + Math.sin(nowSec * 9) * 5, cy - s * 0.75, 3, 0, Math.PI * 2);
+      ctx.arc(cx + Math.sin(nowSec * 9) * 5, cy - s * 0.75, 3.2, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
     }
 
     if (tile.moisture < 20 && !def.selfHydrating) {
       ctx.fillStyle = '#F59E0B';
       ctx.beginPath();
-      ctx.arc(cx - s * 0.65, cy - s * 0.65, 3.2, 0, Math.PI * 2);
+      ctx.arc(cx - s * 0.65, cy - s * 0.65, 3.4, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -1853,25 +2141,29 @@ export class CloudValleyCanvasController {
   ): void {
     const sp = this.worldToScreen(wx, wy, m);
     const hop = Math.abs(Math.sin(nowSec * 4.5 + idx)) * 6;
-    const r = m.tilePx * 0.2;
+    const r = m.tilePx * 0.24;
     ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath();
+    ctx.ellipse(sp.x, sp.y + 4, r, r * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.fillStyle = active ? '#86EFAC' : '#94A3B8';
     ctx.beginPath();
     ctx.arc(sp.x, sp.y - hop, r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#14532D';
-    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = '#1E120A';
+    ctx.lineWidth = 1.8;
     ctx.stroke();
     ctx.fillStyle = '#15803D';
     ctx.beginPath();
     ctx.ellipse(sp.x + 2, sp.y - r - hop, r * 0.75, r * 0.38, -0.3, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#1E293B';
+    ctx.fillStyle = '#1E120A';
     ctx.beginPath();
-    ctx.arc(sp.x - 2.6, sp.y - 1 - hop, 1.5, 0, Math.PI * 2);
+    ctx.arc(sp.x - 2.8, sp.y - 1 - hop, 1.7, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(sp.x + 2.6, sp.y - 1 - hop, 1.5, 0, Math.PI * 2);
+    ctx.arc(sp.x + 2.8, sp.y - 1 - hop, 1.7, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -1884,13 +2176,13 @@ export class CloudValleyCanvasController {
     focused: boolean
   ): void {
     ctx.save();
-    ctx.font = '700 10.5px "Plus Jakarta Sans", sans-serif';
+    ctx.font = '800 10.5px "Plus Jakarta Sans", sans-serif';
     const pw = ctx.measureText(text).width + 14;
-    ctx.fillStyle = focused ? '#166534' : 'rgba(54, 34, 20, 0.9)';
+    ctx.fillStyle = focused ? '#166534' : '#5C3418';
     this.roundRect(ctx, cx - pw * 0.5, cy - 9, pw, 18, 5);
     ctx.fill();
-    ctx.strokeStyle = focused ? '#FEF08A' : '#E5C691';
-    ctx.lineWidth = focused ? 1.8 : 1.1;
+    ctx.strokeStyle = focused ? '#FEF08A' : '#F6D38C';
+    ctx.lineWidth = focused ? 2 : 1.4;
     ctx.stroke();
     ctx.fillStyle = '#FFFDF9';
     ctx.textAlign = 'center';
@@ -1911,7 +2203,7 @@ export class CloudValleyCanvasController {
       const py = w.y * m.height;
       if (state.weather === 'drizzle') {
         ctx.strokeStyle = 'rgba(186, 230, 253, 0.55)';
-        ctx.lineWidth = 1.3;
+        ctx.lineWidth = 1.4;
         ctx.beginPath();
         ctx.moveTo(px, py);
         ctx.lineTo(px - 3, py + 11);
@@ -1932,7 +2224,7 @@ export class CloudValleyCanvasController {
         ctx.arc(px, py, w.size * 0.7, 0, Math.PI * 2);
         ctx.fill();
       } else {
-        ctx.fillStyle = 'rgba(254, 240, 138, 0.3)';
+        ctx.fillStyle = 'rgba(254, 240, 138, 0.35)';
         ctx.beginPath();
         ctx.arc(px, py, w.size * 0.55, 0, Math.PI * 2);
         ctx.fill();

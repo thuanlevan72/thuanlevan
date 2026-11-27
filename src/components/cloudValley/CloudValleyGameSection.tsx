@@ -90,7 +90,7 @@ import {
   type BuildingId,
   type FarmerAvatarState,
 } from '../../utils/cloudValleyWorld.ts';
-import { CloudValleyTitleLockup, ToolSvgIcon } from './CloudValleyIcons.tsx';
+import { CloudValleyTitleLockup, FarmerPortraitSvg, ToolSvgIcon } from './CloudValleyIcons.tsx';
 import { CloudValleyModals, type CloudValleyModalId } from './CloudValleyModals.tsx';
 
 type GamePhase = 'title' | 'playing' | 'paused';
@@ -331,22 +331,38 @@ export function CloudValleyGameSection({
           renderer.spawnBurstWorld(posWb.cx, posWb.cy, burstColor, 7);
         }
         if (feedback.hybridUnlocked) {
-          renderer.spawnPopupWorld(wb.cx, wb.cy, `Thu: ${feedback.hybridUnlocked}!`, '#E9D5FF');
+          renderer.spawnPopupWorld(
+            avatar.x,
+            avatar.y - 0.85,
+            `+${feedback.xpDelta ?? 20} EXP · +${feedback.goldDelta ?? 25} Xu (${feedback.hybridUnlocked})`,
+            '#FDE047',
+            'hybrid'
+          );
           avatar.speechText = `Tuyệt vời! ${feedback.hybridUnlocked}!`;
           avatar.speechTimer = 2.2;
           cloudValleyAudio.play('hybrid');
+          cloudValleyAudio.play('coin');
         } else if (tool === 'harvest') {
-          renderer.spawnPopupWorld(wb.cx, wb.cy, `+${feedback.affectedTiles.length} Thu hoạch!`, '#FEF08A');
-          avatar.speechText = 'Thu hoạch đầy giỏ!';
+          const xpTxt = feedback.xpDelta ? `+${feedback.xpDelta} EXP` : '+12 EXP';
+          const goldTxt = feedback.goldDelta ? `, +${feedback.goldDelta} Xu` : '';
+          renderer.spawnPopupWorld(
+            avatar.x,
+            avatar.y - 0.85,
+            `${xpTxt}${goldTxt}`,
+            '#FEF08A',
+            'crop'
+          );
+          avatar.speechText = feedback.harvestedLabel ? `Thu ${feedback.harvestedLabel}!` : 'Thu hoạch đầy giỏ!';
           avatar.speechTimer = 1.6;
           cloudValleyAudio.play('harvest');
+          cloudValleyAudio.play('coin');
         } else {
           if (tool === 'hoe') {
-            renderer.spawnPopupWorld(wb.cx, wb.cy, 'Xới đất!', '#FDE68A');
+            renderer.spawnPopupWorld(avatar.x, avatar.y - 0.8, '+3 EXP · Xới đất!', '#FDE68A', 'xp');
           } else if (tool === 'water') {
-            renderer.spawnPopupWorld(wb.cx, wb.cy, 'Tưới mát!', '#BAE6FD');
+            renderer.spawnPopupWorld(avatar.x, avatar.y - 0.8, 'Tưới mát!', '#BAE6FD', 'water');
           } else if (tool === 'seed') {
-            renderer.spawnPopupWorld(wb.cx, wb.cy, 'Gieo hạt!', '#BBF7D0');
+            renderer.spawnPopupWorld(avatar.x, avatar.y - 0.8, 'Gieo hạt!', '#BBF7D0', 'crop');
           }
           if (feedback.sound) cloudValleyAudio.play(feedback.sound);
         }
@@ -397,10 +413,24 @@ export function CloudValleyGameSection({
       avatar.actionTimer = 0.26;
       avatar.actionTool = 'animal';
       const res = tendLivestock(sim, animalId);
-      if (worldX !== undefined && worldY !== undefined) {
-        renderer.spawnBurstWorld(worldX, worldY, res.ok ? '#FDE047' : '#FCA5A5', 6);
-        if (res.ok) {
-          renderer.spawnPopupWorld(worldX, worldY, res.message, '#FEF08A');
+      const px = worldX ?? avatar.x;
+      const py = worldY ?? avatar.y;
+      renderer.spawnBurstWorld(px, py, res.ok ? '#FDE047' : '#FCA5A5', 6);
+      if (res.ok) {
+        const iconKind =
+          res.itemId === 'sua_bo'
+            ? 'milk'
+            : res.itemId === 'trung_ga'
+            ? 'egg'
+            : res.itemId === 'long_cuu'
+            ? 'wool'
+            : 'xp';
+        const popLabel = res.goldDelta
+          ? `+${res.xpDelta ?? 16} EXP, +${res.goldDelta} Xu`
+          : `+${res.xpDelta ?? 6} EXP · Cho ăn!`;
+        renderer.spawnPopupWorld(avatar.x, avatar.y - 0.85, popLabel, '#FEF08A', iconKind);
+        if (res.goldDelta) {
+          cloudValleyAudio.play('coin');
         }
       }
       cloudValleyAudio.play(res.ok ? 'animal' : 'error');
@@ -515,14 +545,18 @@ export function CloudValleyGameSection({
       const avatar = avatarRef.current;
 
       if (phaseRef.current === 'playing' && activeModalRef.current === null) {
-        // 1. Resolve directional input (Keyboard + D-Pad OR Click-to-Walk)
+        // 1. Resolve directional input (Screen-aligned Isometric Keyboard + Mobile D-Pad OR Click-to-Walk)
         const keys = keysPressedRef.current;
-        let ix = dpadVecRef.current.x;
-        let iy = dpadVecRef.current.y;
-        if (keys.has('KeyA') || keys.has('ArrowLeft')) ix -= 1;
-        if (keys.has('KeyD') || keys.has('ArrowRight')) ix += 1;
-        if (keys.has('KeyW') || keys.has('ArrowUp')) iy -= 1;
-        if (keys.has('KeyS') || keys.has('ArrowDown')) iy += 1;
+        let sx = dpadVecRef.current.x;
+        let sy = dpadVecRef.current.y;
+        if (keys.has('KeyA') || keys.has('ArrowLeft')) sx -= 1;
+        if (keys.has('KeyD') || keys.has('ArrowRight')) sx += 1;
+        if (keys.has('KeyW') || keys.has('ArrowUp')) sy -= 1;
+        if (keys.has('KeyS') || keys.has('ArrowDown')) sy += 1;
+
+        // Convert screen direction (sx, sy) into isometric world space (ix, iy)
+        let ix = sx * 1.05 + sy * 0.95;
+        let iy = -sx * 0.95 + sy * 1.05;
 
         if (Math.hypot(ix, iy) > 0.05) {
           walkGoalRef.current = null;
@@ -724,6 +758,21 @@ export function CloudValleyGameSection({
             return;
           }
         }
+        // Check click on Oval Fish Pond (wx=17.4, wy=13.0)
+        if (Math.hypot(wx - 17.4, wy - 13.0) <= 1.7) {
+          walkGoalRef.current = {
+            wx: 15.6,
+            wy: 13.0,
+            onArrive: () => {
+              renderer.spawnBurstWorld(17.4, 13.0, '#38BDF8', 8);
+              renderer.spawnPopupWorld(avatar.x, avatar.y - 0.8, 'Ao cá Koi trong xanh!', '#BAE6FD', 'water');
+              cloudValleyAudio.play('well');
+              avatar.speechText = 'Cá bơi tung tăng quá!';
+              avatar.speechTimer = 2.0;
+            },
+          };
+          return;
+        }
       }
 
       // 2. Check click/drag on a soil plot
@@ -891,7 +940,7 @@ export function CloudValleyGameSection({
       data-state={phase}
       className={containerHeightClass}
     >
-      {/* Isolated Canvas Mount */}
+      {/* Isolated Canvas Mount with crisp pixel rendering */}
       <div ref={mountRef} className="absolute inset-0">
         <canvas
           ref={canvasRef}
@@ -902,6 +951,7 @@ export function CloudValleyGameSection({
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
           onWheel={handleWheel}
+          style={{ imageRendering: 'pixelated' }}
           className="block w-full h-full touch-none cursor-pointer outline-none"
         />
       </div>
@@ -949,63 +999,83 @@ export function CloudValleyGameSection({
         </div>
       )}
 
-      {/* PLAYING HUD OVERLAY */}
+      {/* PLAYING AVATAR WOOD-BEVELED GAME HUD OVERLAY */}
       {phase !== 'title' && (
-        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between p-2.5 sm:p-3.5">
-          {/* TOP BAR: Left Farmer Stats + Right Menu Buttons */}
+        <div className="absolute inset-0 z-20 pointer-events-none flex flex-col justify-between p-2 sm:p-3">
+          {/* TOP BAR: Classic Avatar Character Portrait + Embossed Xu/Lượng Bars + Wooden Menu Planks */}
           <div className="flex flex-wrap items-start justify-between gap-2">
-            {/* Top-Left Farmer Status */}
-            <div className="pointer-events-auto w-full sm:w-auto flex flex-wrap items-center justify-between sm:justify-start gap-x-2.5 gap-y-1.5 px-3 py-2 rounded-xl border-2 border-[#7C5230] bg-[#FDF7EC]/95 shadow-md text-[#2D1E12]">
-              <div className="flex items-center gap-1.5 pr-2 border-r border-[#D6BE96]">
-                <Coins className="w-4 h-4 text-[#D97706]" />
-                <div>
-                  <span className="block text-[9px] font-bold uppercase tracking-wider text-[#7C5230]">Vàng</span>
-                  <span data-testid="cv-gold-value" className="text-sm sm:text-base font-extrabold tabular-nums">
-                    {Math.round(sim.gold)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1.5 pr-2 border-r border-[#D6BE96]">
-                <Award className="w-4 h-4 text-[#0284C7]" />
-                <div>
-                  <span className="block text-[9px] font-bold uppercase tracking-wider text-[#7C5230]">Huy Hiệu</span>
-                  <span className="text-sm sm:text-base font-extrabold tabular-nums">{sim.badges}</span>
-                </div>
-              </div>
-
-              <div className="sm:pr-2 sm:border-r sm:border-[#D6BE96]">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-bold uppercase text-[#2E7D32]">Cấp {sim.level}</span>
-                  <span className="text-[10px] font-semibold text-[#7C5230] tabular-nums">
-                    {Math.round(sim.xp)}/{xpNeeded}
-                  </span>
-                </div>
-                <div className="w-20 h-1.5 rounded-full bg-[#E5D5B8] overflow-hidden mt-1">
-                  <div
-                    className="h-full bg-[#2E7D32] transition-all duration-200"
-                    style={{ width: `${Math.min(100, (sim.xp / xpNeeded) * 100)}%` }}
+            {/* Top-Left Character Portrait + Level Circle + 2 Embossed Brown/Gold Bars */}
+            <div className="pointer-events-auto flex flex-wrap items-center gap-1.5 sm:gap-2 max-w-full">
+              <div className="flex items-center">
+                {/* Portrait Frame with overlapping Level Circle */}
+                <button
+                  type="button"
+                  title="Tùy chỉnh nhân vật"
+                  onClick={() => setActiveModal('settings')}
+                  className="relative z-10 w-12 h-12 sm:w-14 sm:h-14 rounded-full p-0.5 bg-gradient-to-b from-[#FACC15] to-[#B45309] border-2 border-[#291506] shadow-[0_3px_0_#1E120A] cursor-pointer shrink-0"
+                >
+                  <FarmerPortraitSvg
+                    hat={sim.farmerProfile?.hat ?? 'straw'}
+                    shirtColor={sim.farmerProfile?.shirtColor ?? '#2E7D32'}
+                    className="w-full h-full"
                   />
+                  <span
+                    title={`Cấp ${sim.level} (${Math.round(sim.xp)}/${xpNeeded} EXP)`}
+                    className="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-gradient-to-b from-[#4ADE80] to-[#15803D] border-2 border-[#1E120A] text-white text-[10px] font-black flex items-center justify-center shadow"
+                  >
+                    {sim.level}
+                  </span>
+                </button>
+
+                {/* Two Embossed Brown/Gold Stat Bars Joined to Portrait */}
+                <div className="-ml-2.5 pl-3.5 sm:pl-4 pr-2 sm:pr-2.5 py-1 rounded-r-xl border-2 border-[#291506] bg-gradient-to-b from-[#7E4B1E] to-[#562F0E] shadow-[inset_0_1px_0_rgba(253,230,138,0.45),0_3px_0_#1E120A] flex flex-col gap-0.5 sm:gap-1">
+                  <div className="flex items-center gap-1 min-w-[82px] sm:min-w-[98px] px-1.5 sm:px-2 py-0.5 rounded-md border border-[#F6D38C] bg-[#3E2009]/90 shadow-inner">
+                    <Coins className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#FACC15] shrink-0" />
+                    <span className="text-[9.5px] sm:text-[10px] font-bold text-[#FDE68A]">Xu:</span>
+                    <span data-testid="cv-gold-value" className="text-[11px] sm:text-xs font-black text-white tabular-nums ml-auto">
+                      {Math.round(sim.gold)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 min-w-[82px] sm:min-w-[98px] px-1.5 sm:px-2 py-0.5 rounded-md border border-[#F6D38C] bg-[#3E2009]/90 shadow-inner">
+                    <Award className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#38BDF8] shrink-0" />
+                    <span className="text-[9.5px] sm:text-[10px] font-bold text-[#BAE6FD]">Lượng:</span>
+                    <span className="text-[11px] sm:text-xs font-black text-white tabular-nums ml-auto">{sim.badges}</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              {/* Compact Wooden Season, EXP & Sleep Strip */}
+              <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl border-2 border-[#291506] bg-gradient-to-b from-[#F5DFB5] to-[#DFC08A] shadow-[inset_0_1px_0_#FFF8EB,0_3px_0_#1E120A] text-[#291506]">
                 <div>
-                  <span className="block text-[10px] font-bold text-[#9A3412]">
-                    {seasonMeta.shortName} · Ngày {sim.day}/7
-                  </span>
-                  <span className="block text-[11px] font-semibold text-[#5C3A21] tabular-nums">
-                    {WEATHER_LABELS[sim.weather]} · {Math.round((sim.timeInDaySeconds / DAY_DURATION_SECONDS) * 100)}%
-                  </span>
+                  <div className="flex items-center gap-1 text-[9.5px] sm:text-[10px] font-extrabold text-[#7C2D12] whitespace-nowrap">
+                    <span>
+                      {seasonMeta.shortName} · N{sim.day}/7
+                    </span>
+                    <span className="hidden sm:inline text-[#5C3414]">
+                      ({WEATHER_LABELS[sim.weather]} {Math.round((sim.timeInDaySeconds / DAY_DURATION_SECONDS) * 100)}%)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    <div className="w-14 sm:w-20 h-2 rounded-sm border border-[#3E2009] bg-[#5C3414] overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-[#4ADE80] to-[#16A34A] transition-all duration-200"
+                        style={{ width: `${Math.min(100, (sim.xp / xpNeeded) * 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-[9px] sm:text-[9.5px] font-extrabold text-[#451A03] tabular-nums whitespace-nowrap">
+                      {Math.round(sim.xp)}/{xpNeeded}
+                    </span>
+                  </div>
                 </div>
+
                 <button
                   type="button"
                   title="Tốc độ 1x / 2x"
                   onClick={() => setSpeedMultiplier((s) => (s === 1 ? 2 : 1))}
-                  className={`px-2 py-1 rounded-lg border text-[11px] font-bold cursor-pointer ${
+                  className={`px-1.5 sm:px-2 py-1 rounded-lg border-2 border-[#291506] text-[10px] sm:text-[11px] font-black shadow-[0_2px_0_#1E120A] active:translate-y-0.5 cursor-pointer shrink-0 ${
                     speedMultiplier === 2
-                      ? 'bg-[#D97706] text-white border-[#B45309]'
-                      : 'bg-[#F3E6CE] text-[#5C3A21] border-[#C7AC82]'
+                      ? 'bg-[#D97706] text-white'
+                      : 'bg-[#8C5225] text-[#FEF3C7] hover:bg-[#74431A]'
                   }`}
                 >
                   <FastForward className="w-3 h-3 inline mr-0.5" />
@@ -1016,26 +1086,26 @@ export function CloudValleyGameSection({
                   data-testid="cv-sleep-btn"
                   title="Đi ngủ sang sáng hôm sau"
                   onClick={handleSleepNextDay}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#4A311D] hover:bg-[#2D1E12] text-[#FEF3C7] text-[11px] font-bold cursor-pointer"
+                  className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-1 rounded-lg border-2 border-[#291506] bg-[#4A2B13] hover:bg-[#2E1A0B] text-[#FDE68A] text-[10px] sm:text-[11px] font-black shadow-[0_2px_0_#1E120A] active:translate-y-0.5 cursor-pointer shrink-0"
                 >
                   <Moon className="w-3 h-3" />
-                  <span className="hidden sm:inline">Đi Ngủ</span>
+                  <span className="hidden sm:inline">Ngủ</span>
                 </button>
               </div>
             </div>
 
-            {/* Top-Right Menu & Utility Controls */}
+            {/* Top-Right Wooden Menu Planks */}
             <div className="pointer-events-auto flex flex-wrap items-center gap-1.5">
               <button
                 type="button"
                 data-testid="cv-open-orders"
                 onClick={() => setActiveModal('orders')}
-                className="relative inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl border-2 border-[#7C5230] bg-[#FDF7EC]/95 hover:bg-[#F3E6CE] text-[#2D1E12] text-xs font-bold shadow-md cursor-pointer"
+                className="relative inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border-2 border-[#291506] bg-gradient-to-b from-[#9C6230] to-[#6E3F18] hover:brightness-110 text-[#FEF3C7] text-xs font-extrabold shadow-[inset_0_1px_0_rgba(253,230,138,0.4),0_3px_0_#1E120A] active:translate-y-0.5 cursor-pointer"
               >
-                <ShoppingBag className="w-4 h-4 text-[#B45309]" />
-                <span className="hidden md:inline">Lái Buôn & Hạt</span>
+                <ShoppingBag className="w-4 h-4 text-[#FDE047]" />
+                <span className="hidden md:inline">Lái Buôn</span>
                 {readyOrderCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-[#2E7D32] text-white text-[10px] font-bold tabular-nums">
+                  <span className="px-1.5 py-0.2 rounded-full bg-[#16A34A] border border-[#1E120A] text-white text-[10px] font-black tabular-nums">
                     {readyOrderCount}
                   </span>
                 )}
@@ -1045,12 +1115,12 @@ export function CloudValleyGameSection({
                 type="button"
                 data-testid="cv-open-workshop"
                 onClick={() => setActiveModal('workshop')}
-                className="relative inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl border-2 border-[#7C5230] bg-[#FDF7EC]/95 hover:bg-[#F3E6CE] text-[#2D1E12] text-xs font-bold shadow-md cursor-pointer"
+                className="relative inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border-2 border-[#291506] bg-gradient-to-b from-[#9C6230] to-[#6E3F18] hover:brightness-110 text-[#FEF3C7] text-xs font-extrabold shadow-[inset_0_1px_0_rgba(253,230,138,0.4),0_3px_0_#1E120A] active:translate-y-0.5 cursor-pointer"
               >
-                <Factory className="w-4 h-4 text-[#9A3412]" />
-                <span className="hidden md:inline">Xưởng 3 Tầng</span>
+                <Factory className="w-4 h-4 text-[#FDBA74]" />
+                <span className="hidden md:inline">Xưởng</span>
                 {readyArtisanCount > 0 && (
-                  <span className="px-1.5 py-0.2 rounded-full bg-[#D97706] text-white text-[10px] font-bold tabular-nums">
+                  <span className="px-1.5 py-0.2 rounded-full bg-[#D97706] border border-[#1E120A] text-white text-[10px] font-black tabular-nums">
                     {readyArtisanCount}
                   </span>
                 )}
@@ -1060,9 +1130,9 @@ export function CloudValleyGameSection({
                 type="button"
                 data-testid="cv-open-almanac"
                 onClick={() => setActiveModal('almanac')}
-                className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl border-2 border-[#7C5230] bg-[#FDF7EC]/95 hover:bg-[#F3E6CE] text-[#2D1E12] text-xs font-bold shadow-md cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border-2 border-[#291506] bg-gradient-to-b from-[#9C6230] to-[#6E3F18] hover:brightness-110 text-[#FEF3C7] text-xs font-extrabold shadow-[inset_0_1px_0_rgba(253,230,138,0.4),0_3px_0_#1E120A] active:translate-y-0.5 cursor-pointer"
               >
-                <BookOpen className="w-4 h-4 text-[#2E7D32]" />
+                <BookOpen className="w-4 h-4 text-[#86EFAC]" />
                 <span className="hidden md:inline">Sổ Tay</span>
               </button>
 
@@ -1070,10 +1140,10 @@ export function CloudValleyGameSection({
                 type="button"
                 data-testid="cv-open-automation"
                 onClick={() => setActiveModal('automation')}
-                className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-xl border-2 border-[#7C5230] bg-[#FDF7EC]/95 hover:bg-[#F3E6CE] text-[#2D1E12] text-xs font-bold shadow-md cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border-2 border-[#291506] bg-gradient-to-b from-[#9C6230] to-[#6E3F18] hover:brightness-110 text-[#FEF3C7] text-xs font-extrabold shadow-[inset_0_1px_0_rgba(253,230,138,0.4),0_3px_0_#1E120A] active:translate-y-0.5 cursor-pointer"
               >
-                <Hammer className="w-4 h-4 text-[#0284C7]" />
-                <span className="hidden md:inline">Chuồng & Tự Động</span>
+                <Hammer className="w-4 h-4 text-[#7DD3FC]" />
+                <span className="hidden md:inline">Chuồng</span>
               </button>
 
               <button
@@ -1081,7 +1151,7 @@ export function CloudValleyGameSection({
                 data-testid="cv-open-settings"
                 title="Nhân Vật, Lưu File JSON & Hướng Dẫn"
                 onClick={() => setActiveModal('settings')}
-                className="w-9 h-9 rounded-xl border-2 border-[#7C5230] bg-[#FDF7EC]/95 hover:bg-[#F3E6CE] text-[#2D1E12] flex items-center justify-center shadow-md cursor-pointer"
+                className="w-8 h-8 rounded-xl border-2 border-[#291506] bg-gradient-to-b from-[#9C6230] to-[#6E3F18] hover:brightness-110 text-[#FEF3C7] flex items-center justify-center shadow-[0_3px_0_#1E120A] cursor-pointer"
               >
                 <Settings className="w-4 h-4" />
               </button>
@@ -1094,9 +1164,9 @@ export function CloudValleyGameSection({
                   e.currentTarget.blur();
                   handleToggleMute();
                 }}
-                className="w-9 h-9 rounded-xl border-2 border-[#7C5230] bg-[#FDF7EC]/95 hover:bg-[#F3E6CE] text-[#2D1E12] flex items-center justify-center shadow-md cursor-pointer"
+                className="w-8 h-8 rounded-xl border-2 border-[#291506] bg-gradient-to-b from-[#9C6230] to-[#6E3F18] hover:brightness-110 text-[#FEF3C7] flex items-center justify-center shadow-[0_3px_0_#1E120A] cursor-pointer"
               >
-                {muted ? <VolumeX className="w-4 h-4 text-rose-700" /> : <Volume2 className="w-4 h-4" />}
+                {muted ? <VolumeX className="w-4 h-4 text-rose-300" /> : <Volume2 className="w-4 h-4" />}
               </button>
 
               <button
@@ -1107,7 +1177,7 @@ export function CloudValleyGameSection({
                   e.currentTarget.blur();
                   setPhase((p) => (p === 'playing' ? 'paused' : 'playing'));
                 }}
-                className="w-9 h-9 rounded-xl border-2 border-[#7C5230] bg-[#FDF7EC]/95 hover:bg-[#F3E6CE] text-[#2D1E12] flex items-center justify-center shadow-md cursor-pointer"
+                className="w-8 h-8 rounded-xl border-2 border-[#291506] bg-gradient-to-b from-[#9C6230] to-[#6E3F18] hover:brightness-110 text-[#FEF3C7] flex items-center justify-center shadow-[0_3px_0_#1E120A] cursor-pointer"
               >
                 <Pause className="w-4 h-4" />
               </button>
@@ -1121,7 +1191,7 @@ export function CloudValleyGameSection({
                     e.currentTarget.blur();
                     onToggleFullscreen();
                   }}
-                  className="w-9 h-9 rounded-xl border-2 border-[#7C5230] bg-[#FDF7EC]/95 hover:bg-[#F3E6CE] text-[#2D1E12] flex items-center justify-center shadow-md cursor-pointer"
+                  className="w-8 h-8 rounded-xl border-2 border-[#291506] bg-gradient-to-b from-[#9C6230] to-[#6E3F18] hover:brightness-110 text-[#FEF3C7] flex items-center justify-center shadow-[0_3px_0_#1E120A] cursor-pointer"
                 >
                   {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                 </button>
@@ -1131,18 +1201,18 @@ export function CloudValleyGameSection({
 
           {/* CENTER TOAST */}
           {toastText && (
-            <div className="self-center px-4 py-1.5 rounded-xl bg-[#2D1E12]/90 text-[#FEF3C7] text-xs font-bold shadow-lg border border-[#F6D38C]/50">
+            <div className="self-center px-4 py-1.5 rounded-xl bg-[#3E2009]/95 text-[#FEF3C7] text-xs font-extrabold shadow-lg border-2 border-[#F6D38C]">
               {toastText}
             </div>
           )}
 
-          {/* BOTTOM CONTROLS: D-PAD (Left) + TOOL BAR (Center) + AVATAR ACTION OK BUTTON (Right) */}
+          {/* BOTTOM WOODEN GAME DOCK: PARCHMENT SEED STRIP + WOODEN TOOL BAR (No D-pad on PC!) */}
           <div className="flex flex-col gap-1.5">
-            {/* Contextual Seed / Blueprint Picker OR Tile Hover Info */}
+            {/* Contextual Seed / Blueprint Parchment Bar */}
             <div className="flex justify-center">
               {(activeMode === 'seed' || activeMode === 'auto') && (
-                <div className="pointer-events-auto max-w-[95vw] overflow-x-auto no-scrollbar flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-[#7C5230] bg-[#FDF7EC]/94 shadow-md">
-                  <span className="text-[10px] font-bold text-[#7C5230] uppercase whitespace-nowrap shrink-0">Hạt:</span>
+                <div className="pointer-events-auto max-w-[96vw] overflow-x-auto no-scrollbar flex items-center gap-1.5 px-2.5 py-1 rounded-xl border-2 border-[#3E2009] bg-gradient-to-b from-[#F6E3B8] to-[#DFBF85] shadow-[inset_0_1px_0_#FFF8EB,0_3px_0_#1E120A]">
+                  <span className="text-[10px] font-black text-[#5C3414] uppercase whitespace-nowrap shrink-0">Hạt:</span>
                   {Object.values(CROPS)
                     .filter(
                       (c) =>
@@ -1161,15 +1231,15 @@ export function CloudValleyGameSection({
                           type="button"
                           disabled={locked}
                           onClick={() => setSelectedSeedId(crop.id)}
-                          className={`px-2 py-0.5 rounded-lg border text-[11px] font-bold whitespace-nowrap cursor-pointer ${
+                          className={`px-2 py-0.5 rounded-lg border-2 text-[11px] font-extrabold whitespace-nowrap cursor-pointer ${
                             selected
-                              ? 'bg-[#2E7D32] text-white border-[#14532D]'
+                              ? 'bg-[#2E7D32] text-white border-[#1E120A] shadow-[0_2px_0_#14532D]'
                               : locked
-                              ? 'bg-[#E5DCCB] text-[#78716C] border-[#D6BE96] opacity-55'
-                              : 'bg-[#FFFDF8] text-[#2D1E12] border-[#D6BE96] hover:bg-[#F3E6CE]'
+                              ? 'bg-[#D6BE96] text-[#78716C] border-[#8C6239] opacity-60'
+                              : 'bg-[#FFF5DD] text-[#291506] border-[#6E421F] hover:bg-[#FDE68A]'
                           }`}
                         >
-                          {crop.name} {inBag > 0 ? `(Túi ${inBag})` : locked ? `(Cấp ${crop.unlockLevel})` : `(${crop.seedPrice}g)`}
+                          {crop.name} {inBag > 0 ? `(Túi ${inBag})` : locked ? `(Cấp ${crop.unlockLevel})` : `(${crop.seedPrice} Xu)`}
                         </button>
                       );
                     })}
@@ -1177,7 +1247,7 @@ export function CloudValleyGameSection({
               )}
 
               {activeMode === 'build' && (
-                <div className="pointer-events-auto max-w-full overflow-x-auto no-scrollbar flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-[#7C5230] bg-[#FDF7EC]/92 shadow-md">
+                <div className="pointer-events-auto max-w-full overflow-x-auto no-scrollbar flex items-center gap-1.5 px-2.5 py-1 rounded-xl border-2 border-[#3E2009] bg-gradient-to-b from-[#F6E3B8] to-[#DFBF85] shadow-[0_3px_0_#1E120A]">
                   {Object.values(AUTOMATION_BLUEPRINTS).map((bp) => {
                     const selected = selectedStructureId === bp.id;
                     return (
@@ -1185,13 +1255,13 @@ export function CloudValleyGameSection({
                         key={bp.id}
                         type="button"
                         onClick={() => setSelectedStructureId(bp.id)}
-                        className={`px-2.5 py-0.5 rounded-lg border text-[11px] font-bold whitespace-nowrap cursor-pointer ${
+                        className={`px-2.5 py-0.5 rounded-lg border-2 text-[11px] font-extrabold whitespace-nowrap cursor-pointer ${
                           selected
-                            ? 'bg-[#0284C7] text-white border-[#0369A1]'
-                            : 'bg-[#FFFDF8] text-[#2D1E12] border-[#D6BE96]'
+                            ? 'bg-[#0284C7] text-white border-[#1E120A]'
+                            : 'bg-[#FFF5DD] text-[#291506] border-[#6E421F]'
                         }`}
                       >
-                        {bp.name} ({bp.goldCost}g · {bp.badgeCost}HH)
+                        {bp.name} ({bp.goldCost} Xu · {bp.badgeCost} Lượng)
                       </button>
                     );
                   })}
@@ -1200,7 +1270,7 @@ export function CloudValleyGameSection({
             </div>
 
             {hoveredTile && isTileUnlocked(sim, hoveredTile) && activeMode !== 'build' && (
-              <div className="self-center px-3 py-0.5 rounded-lg bg-[#2D1E12]/85 text-[#FFFDF8] text-[11px] font-semibold tabular-nums shadow">
+              <div className="self-center px-3 py-0.5 rounded-lg border border-[#F6D38C] bg-[#3E2009]/90 text-[#FEF3C7] text-[11px] font-bold tabular-nums shadow">
                 Ô ({hoveredTile.row + 1},{hoveredTile.col + 1}) · Ẩm {Math.round(hoveredTile.moisture)}% · Màu mỡ{' '}
                 {Math.round(hoveredTile.fertility)}%
                 {isTileInGreenhouse(sim, hoveredTile.row, hoveredTile.col) ? ' · Nhà Kính' : ''}
@@ -1220,78 +1290,78 @@ export function CloudValleyGameSection({
               </div>
             )}
 
-            {/* Bottom Play Dock Row */}
-            <div className="flex items-end justify-between gap-1.5 sm:gap-2">
-              {/* Classic TeaMobi Virtual D-Pad (Bottom-Left) */}
-              <div
-                aria-label="Phím điều hướng"
-                className="pointer-events-auto grid grid-cols-3 gap-0.5 p-0.5 sm:p-1 rounded-2xl border-2 border-[#7C5230] bg-[#FDF7EC]/92 shadow-lg shrink-0"
+            {/* Mobile-only Virtual D-Pad positioned cleanly above left edge of bottom dock */}
+            <div
+              aria-label="Phím điều hướng"
+              className="pointer-events-auto self-start md:hidden grid grid-cols-3 gap-0.5 p-1 rounded-xl border-2 border-[#291506] bg-gradient-to-b from-[#9C6230]/95 to-[#6E3F18]/95 shadow-[0_3px_0_#1E120A]"
+            >
+              <div />
+              <button
+                type="button"
+                aria-label="Đi lên"
+                onPointerDown={() => setDpadDir(0, -1)}
+                onPointerUp={() => setDpadDir(0, 0)}
+                onPointerLeave={() => setDpadDir(0, 0)}
+                onPointerCancel={() => setDpadDir(0, 0)}
+                className="w-7 h-7 rounded-md bg-[#F6E3B8] border border-[#3E2009] active:bg-[#FACC15] flex items-center justify-center text-[#291506] cursor-pointer"
               >
-                <div />
-                <button
-                  type="button"
-                  aria-label="Đi lên"
-                  onPointerDown={() => setDpadDir(0, -1)}
-                  onPointerUp={() => setDpadDir(0, 0)}
-                  onPointerLeave={() => setDpadDir(0, 0)}
-                  onPointerCancel={() => setDpadDir(0, 0)}
-                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#EFE2CB] active:bg-[#D97706] active:text-white flex items-center justify-center text-[#4A311D] cursor-pointer"
-                >
-                  <ArrowUp className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
-                <div />
-                <button
-                  type="button"
-                  aria-label="Sang trái"
-                  onPointerDown={() => setDpadDir(-1, 0)}
-                  onPointerUp={() => setDpadDir(0, 0)}
-                  onPointerLeave={() => setDpadDir(0, 0)}
-                  onPointerCancel={() => setDpadDir(0, 0)}
-                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#EFE2CB] active:bg-[#D97706] active:text-white flex items-center justify-center text-[#4A311D] cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#E4D1B1]/60" />
-                <button
-                  type="button"
-                  aria-label="Sang phải"
-                  onPointerDown={() => setDpadDir(1, 0)}
-                  onPointerUp={() => setDpadDir(0, 0)}
-                  onPointerLeave={() => setDpadDir(0, 0)}
-                  onPointerCancel={() => setDpadDir(0, 0)}
-                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#EFE2CB] active:bg-[#D97706] active:text-white flex items-center justify-center text-[#4A311D] cursor-pointer"
-                >
-                  <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
-                <div />
-                <button
-                  type="button"
-                  aria-label="Đi xuống"
-                  onPointerDown={() => setDpadDir(0, 1)}
-                  onPointerUp={() => setDpadDir(0, 0)}
-                  onPointerLeave={() => setDpadDir(0, 0)}
-                  onPointerCancel={() => setDpadDir(0, 0)}
-                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-[#EFE2CB] active:bg-[#D97706] active:text-white flex items-center justify-center text-[#4A311D] cursor-pointer"
-                >
-                  <ArrowDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
-                <div />
-              </div>
+                <ArrowUp className="w-3.5 h-3.5" />
+              </button>
+              <div />
+              <button
+                type="button"
+                aria-label="Sang trái"
+                onPointerDown={() => setDpadDir(-1, 0)}
+                onPointerUp={() => setDpadDir(0, 0)}
+                onPointerLeave={() => setDpadDir(0, 0)}
+                onPointerCancel={() => setDpadDir(0, 0)}
+                className="w-7 h-7 rounded-md bg-[#F6E3B8] border border-[#3E2009] active:bg-[#FACC15] flex items-center justify-center text-[#291506] cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+              </button>
+              <div className="w-7 h-7 rounded-md bg-[#4A2B13]/60" />
+              <button
+                type="button"
+                aria-label="Sang phải"
+                onPointerDown={() => setDpadDir(1, 0)}
+                onPointerUp={() => setDpadDir(0, 0)}
+                onPointerLeave={() => setDpadDir(0, 0)}
+                onPointerCancel={() => setDpadDir(0, 0)}
+                className="w-7 h-7 rounded-md bg-[#F6E3B8] border border-[#3E2009] active:bg-[#FACC15] flex items-center justify-center text-[#291506] cursor-pointer"
+              >
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+              <div />
+              <button
+                type="button"
+                aria-label="Đi xuống"
+                onPointerDown={() => setDpadDir(0, 1)}
+                onPointerUp={() => setDpadDir(0, 0)}
+                onPointerLeave={() => setDpadDir(0, 0)}
+                onPointerCancel={() => setDpadDir(0, 0)}
+                className="w-7 h-7 rounded-md bg-[#F6E3B8] border border-[#3E2009] active:bg-[#FACC15] flex items-center justify-center text-[#291506] cursor-pointer"
+              >
+                <ArrowDown className="w-3.5 h-3.5" />
+              </button>
+              <div />
+            </div>
 
-              {/* Center Tool & Smart Mode Bar */}
-              <div className="pointer-events-auto flex-1 sm:flex-initial min-w-0 max-w-full overflow-x-auto no-scrollbar flex items-center gap-1 px-1.5 sm:px-2 py-1 sm:py-1.5 rounded-2xl border-2 border-[#7C5230] bg-[#FDF7EC]/95 shadow-xl">
+            {/* Bottom Play Dock Row: Full-width wooden tool bar + Action button */}
+            <div className="flex items-end justify-between md:justify-center gap-1.5 sm:gap-2 relative">
+              {/* Center Warm Wooden Plank Tool Bar */}
+              <div className="pointer-events-auto flex-1 md:flex-initial min-w-0 max-w-full overflow-x-auto no-scrollbar flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-2xl border-2 border-[#291506] bg-gradient-to-b from-[#9C6230] via-[#7E4B1E] to-[#5E3511] shadow-[inset_0_2px_0_rgba(253,230,138,0.4),0_4px_0_#1E120A]">
                 <button
                   type="button"
                   data-testid="cv-tool-auto"
                   title="Chế độ Thông Minh tự chọn công cụ [Q / 0]"
                   onClick={() => setActiveMode('auto')}
-                  className={`flex items-center gap-1 px-2 py-1.5 rounded-xl border text-[11px] font-bold whitespace-nowrap cursor-pointer shrink-0 ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border-2 text-[11px] font-extrabold whitespace-nowrap cursor-pointer shrink-0 transition-transform active:translate-y-0.5 ${
                     activeMode === 'auto'
-                      ? 'bg-[#2E7D32] text-white border-[#14532D] shadow-sm'
-                      : 'bg-[#FFFDF8] text-[#2D1E12] border-[#D6BE96] hover:bg-[#F3E6CE]'
+                      ? 'bg-gradient-to-b from-[#4ADE80] to-[#16A34A] text-white border-[#1E120A] shadow-[0_2px_0_#14532D]'
+                      : 'bg-gradient-to-b from-[#FDF2D6] to-[#E8CB94] text-[#291506] border-[#3E2009] hover:brightness-105'
                   }`}
                 >
-                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <ToolSvgIcon tool="auto" className="w-5 h-5 shrink-0" />
                   <span className="hidden md:inline">Thông Minh</span>
                 </button>
 
@@ -1304,32 +1374,34 @@ export function CloudValleyGameSection({
                       data-testid={`cv-tool-${tb.id}`}
                       title={`${tb.label} [${tb.keyHint}]`}
                       onClick={() => setActiveMode(tb.id)}
-                      className={`flex items-center gap-1 px-2 py-1.5 rounded-xl border text-[11px] font-bold whitespace-nowrap cursor-pointer shrink-0 ${
+                      className={`flex items-center gap-1.5 px-2 py-1.5 rounded-xl border-2 text-[11px] font-extrabold whitespace-nowrap cursor-pointer shrink-0 transition-transform active:translate-y-0.5 ${
                         active
-                          ? 'bg-[#6E4726] text-white border-[#451A03] shadow-sm'
-                          : 'bg-[#FFFDF8] text-[#2D1E12] border-[#D6BE96] hover:bg-[#F3E6CE]'
+                          ? 'bg-gradient-to-b from-[#FACC15] to-[#D97706] text-[#1E120A] border-[#1E120A] shadow-[0_2px_0_#451A03]'
+                          : 'bg-gradient-to-b from-[#FDF2D6] to-[#E8CB94] text-[#291506] border-[#3E2009] hover:brightness-105'
                       }`}
                     >
-                      <ToolSvgIcon tool={tb.id} className="w-4 h-4 shrink-0" />
+                      <ToolSvgIcon tool={tb.id} className="w-5 h-5 shrink-0" />
                       <span className="hidden lg:inline">{tb.label}</span>
                     </button>
                   );
                 })}
 
-                <div className="hidden sm:block pl-1.5 border-l border-[#D6BE96] text-[10px] font-bold text-[#7C5230] whitespace-nowrap">
+                <div className="hidden sm:block pl-2 border-l-2 border-[#4A2B13] text-[10px] font-black text-[#FDE68A] whitespace-nowrap">
                   {sim.toolTier === 'iron' ? 'Cọ 3×3' : sim.toolTier === 'copper' ? 'Cọ 1×3' : 'Cọ 1×1'}
                 </div>
               </div>
 
-              {/* TeaMobi Avatar Action OK Button (Bottom-Right) */}
+              {/* TeaMobi Avatar Action OK Button */}
               <button
                 type="button"
                 data-testid="cv-action-btn"
                 onClick={triggerAvatarContextAction}
-                className="pointer-events-auto shrink-0 flex flex-col items-center justify-center min-w-[68px] sm:min-w-[116px] px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-2xl border-2 border-[#14532D] bg-[#2E7D32] hover:bg-[#1B5E20] active:scale-95 text-white shadow-xl cursor-pointer transition-transform"
+                className="pointer-events-auto shrink-0 flex flex-col items-center justify-center min-w-[70px] sm:min-w-[116px] px-3 py-2 rounded-2xl border-2 border-[#1E120A] bg-gradient-to-b from-[#4ADE80] to-[#15803D] hover:brightness-110 active:translate-y-0.5 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.4),0_4px_0_#0B3B1C] cursor-pointer"
               >
-                <span className="text-[11px] sm:text-xs font-extrabold leading-tight truncate max-w-[80px] sm:max-w-[110px]">{actionButtonLabel}</span>
-                <span className="hidden sm:inline text-[10px] font-semibold text-emerald-100 mt-0.5">[Space]</span>
+                <span className="text-[11px] sm:text-xs font-black leading-tight truncate max-w-[82px] sm:max-w-[110px] drop-shadow">
+                  {actionButtonLabel}
+                </span>
+                <span className="hidden sm:inline text-[10px] font-bold text-emerald-100 mt-0.5">[Space]</span>
               </button>
             </div>
           </div>

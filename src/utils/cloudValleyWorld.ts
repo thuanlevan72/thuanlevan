@@ -123,8 +123,8 @@ const SOLID_RECTS: readonly { x1: number; y1: number; x2: number; y2: number }[]
 
 export function createInitialAvatarState(): FarmerAvatarState {
   return {
-    x: 9.0,
-    y: 4.85,
+    x: 8.9,
+    y: 5.75,
     vx: 0,
     vy: 0,
     facing: 'down',

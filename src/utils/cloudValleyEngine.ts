@@ -159,6 +159,8 @@ export interface ToolActionFeedback {
   sound?: 'hoe' | 'water' | 'seed' | 'harvest' | 'compost' | 'build' | 'error';
   goldDelta?: number;
   xpDelta?: number;
+  harvestedLabel?: string;
+  harvestedQty?: number;
   hybridUnlocked?: string;
   affectedTiles: { row: number; col: number }[];
 }
@@ -535,6 +537,9 @@ export function applyToolAction(
   const affectedTiles: { row: number; col: number }[] = [];
   let changed = false;
   let totalXp = 0;
+  let totalGold = 0;
+  let totalQty = 0;
+  let lastHarvestLabel: string | undefined;
   let lastSound: ToolActionFeedback['sound'];
   let message: string | undefined;
   let hybridUnlocked: string | undefined;
@@ -655,6 +660,15 @@ export function applyToolAction(
         changed = true;
         lastSound = 'harvest';
         affectedTiles.push({ row: r, col: c });
+        totalXp += res.xp ?? 0;
+        totalQty += res.qty ?? 1;
+        if (res.itemId) {
+          const itemDef = ITEMS[res.itemId];
+          lastHarvestLabel = itemDef?.name ?? CROPS[res.itemId]?.name;
+          const coinBonus = Math.max(8, Math.round((itemDef?.sellPrice ?? 15) * 0.45));
+          grantXpAndGold(state, 0, coinBonus);
+          totalGold += coinBonus;
+        }
         if (res.hybridBonus && res.itemId) {
           hybridUnlocked = CROPS[res.itemId]?.name;
         }
@@ -754,7 +768,10 @@ export function applyToolAction(
     changed,
     message,
     sound: lastSound,
+    goldDelta: totalGold,
     xpDelta: totalXp,
+    harvestedLabel: lastHarvestLabel,
+    harvestedQty: totalQty,
     hybridUnlocked,
     affectedTiles,
   };
@@ -1446,15 +1463,25 @@ export function buyLivestock(state: CloudValleyGameState, type: LivestockType): 
   return { ok: true, message: `Đã đón ${label} về chuồng!` };
 }
 
-export function tendLivestock(state: CloudValleyGameState, animalId: string): { ok: boolean; message: string } {
+export function tendLivestock(
+  state: CloudValleyGameState,
+  animalId: string
+): { ok: boolean; message: string; xpDelta?: number; goldDelta?: number; itemId?: string } {
   const animal = state.livestock.find((a) => a.id === animalId);
   if (!animal) return { ok: false, message: 'Không tìm thấy vật nuôi.' };
   if (animal.productReady) {
     animal.productReady = false;
     const prodId = animal.type === 'chicken' ? 'trung_ga' : animal.type === 'cow' ? 'sua_bo' : 'long_cuu';
     addInventory(state, prodId, 1);
-    grantXpAndGold(state, 16, 0);
-    return { ok: true, message: `Thu hoạch 1 ${ITEMS[prodId].name}!` };
+    const goldBonus = animal.type === 'cow' ? 30 : animal.type === 'sheep' ? 35 : 20;
+    grantXpAndGold(state, 16, goldBonus);
+    return {
+      ok: true,
+      message: `Thu hoạch 1 ${ITEMS[prodId].name}!`,
+      xpDelta: 16,
+      goldDelta: goldBonus,
+      itemId: prodId,
+    };
   }
   if (!animal.fedToday) {
     if (!consumeInventory(state, 'co_kho', 1)) {
@@ -1462,7 +1489,8 @@ export function tendLivestock(state: CloudValleyGameState, animalId: string): { 
     }
     animal.fedToday = true;
     animal.happiness = Math.min(100, animal.happiness + 10);
-    return { ok: true, message: `Đã cho ${animal.name} ăn no!` };
+    grantXpAndGold(state, 6, 0);
+    return { ok: true, message: `Đã cho ${animal.name} ăn no!`, xpDelta: 6 };
   }
   return { ok: false, message: `${animal.name} đã ăn no hôm nay, ngày mai sẽ có sản phẩm.` };
 }
