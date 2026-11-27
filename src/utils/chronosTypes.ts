@@ -1,11 +1,14 @@
 export type NavSection =
   | 'planner'
+  | 'kanban'
   | 'goals'
   | 'studio'
   | 'analytics'
   | 'team'
   | 'rituals'
   | 'roadmap';
+
+export type KanbanColumnId = 'todo' | 'in_progress' | 'done';
 
 export type CognitiveLoad = 'high' | 'medium' | 'low';
 export type EisenhowerQuadrant = 'q1_do' | 'q2_plan' | 'q3_delegate' | 'q4_eliminate';
@@ -50,6 +53,7 @@ export interface ChronosTask {
   deadlineTime?: string; // e.g. "2026-11-23T17:00" or "17:00" on target day
   deadlineDayOffset?: number; // 0 = today, 1 = tomorrow, etc.
   status: 'inbox' | 'scheduled' | 'in_progress' | 'done';
+  boardOrder?: number;
   isMit?: boolean;
   assigneeId: string;
   subtasks: SubTask[];

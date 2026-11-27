@@ -23,6 +23,7 @@ import {
   getEisenhowerQuadrant,
   getQuadrantMeta,
 } from '../../utils/chronosEngine.ts';
+import { KanbanBoardView } from './KanbanBoardView.tsx';
 
 interface GoalsTasksViewProps {
   db: ChronosDatabase;
@@ -35,7 +36,7 @@ export const GoalsTasksView: React.FC<GoalsTasksViewProps> = ({
   onUpdateDb,
   onStartFocusTask,
 }) => {
-  const [mode, setMode] = useState<'hierarchy' | 'eisenhower'>('hierarchy');
+  const [mode, setMode] = useState<'hierarchy' | 'eisenhower' | 'kanban'>('hierarchy');
   const [expandedOkrs, setExpandedOkrs] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(db.okrs.map((o) => [o.id, true]))
   );
@@ -182,28 +183,40 @@ export const GoalsTasksView: React.FC<GoalsTasksViewProps> = ({
       {/* Header Controls & Quick Add Task Bar */}
       <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#111827] p-4 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-0.5">
+          <div className="inline-flex max-w-full overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 p-0.5">
             <button
               type="button"
               onClick={() => setMode('hierarchy')}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
                 mode === 'hierarchy'
                   ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-xs'
                   : 'text-slate-500 dark:text-slate-400'
               }`}
             >
-              Cây phân cấp 4 tầng (OKR → Dự án → Việc → Việc nhỏ)
+              Cây OKR 4 tầng
             </button>
             <button
               type="button"
               onClick={() => setMode('eisenhower')}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              className={`rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
                 mode === 'eisenhower'
                   ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-xs'
                   : 'text-slate-500 dark:text-slate-400'
               }`}
             >
-              Ma trận Eisenhower &amp; Tải trí lực
+              Ma trận Eisenhower
+            </button>
+            <button
+              type="button"
+              data-testid="goals-tab-kanban"
+              onClick={() => setMode('kanban')}
+              className={`rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+                mode === 'kanban'
+                  ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-xs'
+                  : 'text-slate-500 dark:text-slate-400'
+              }`}
+            >
+              Bảng Kanban (Kéo thả)
             </button>
           </div>
 
@@ -613,8 +626,14 @@ export const GoalsTasksView: React.FC<GoalsTasksViewProps> = ({
             );
           })()}
         </div>
+      ) : mode === 'kanban' ? (
+        <KanbanBoardView
+          db={db}
+          onUpdateDb={onUpdateDb}
+          onStartFocusTask={onStartFocusTask}
+        />
       ) : (
-        /* Mode 2: Eisenhower 4 Quadrants */
+        /* Mode 3: Eisenhower 4 Quadrants */
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {quadrants.map((q) => {
             const meta = getQuadrantMeta(q);

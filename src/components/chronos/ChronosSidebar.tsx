@@ -16,6 +16,7 @@ import {
   X,
   UserPlus,
   RefreshCw,
+  FolderKanban,
 } from 'lucide-react';
 import type {
   ChronosDatabase,
@@ -44,6 +45,7 @@ interface ChronosSidebarProps {
 
 const NAV_ITEMS: Array<{ id: NavSection; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: 'planner', label: 'Lịch & Time-Blocking', icon: CalendarClock },
+  { id: 'kanban', label: 'Bảng Kanban (Kéo thả)', icon: FolderKanban },
   { id: 'goals', label: 'Mục Tiêu & Công Việc', icon: Layers3 },
   { id: 'studio', label: 'Deep Work Studio', icon: Flame },
   { id: 'analytics', label: 'Phân Tích & Chấm Công', icon: BarChart3 },
@@ -74,6 +76,7 @@ export const ChronosSidebar: React.FC<ChronosSidebarProps> = ({
   const [newUserRole, setNewUserRole] = useState('');
 
   const inboxCount = db.tasks.filter((t) => t.status === 'inbox').length;
+  const inProgressCount = db.tasks.filter((t) => t.status === 'in_progress').length;
   const savedTimeStr = db.lastSavedAt
     ? new Date(db.lastSavedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     : '--:--';
@@ -213,6 +216,11 @@ export const ChronosSidebar: React.FC<ChronosSidebarProps> = ({
                   <Icon className="h-4 w-4 shrink-0" />
                   <span>{item.label}</span>
                 </span>
+                {item.id === 'kanban' && inProgressCount > 0 && (
+                  <span className="font-mono text-[11px] tabular-nums text-blue-600 dark:text-blue-400">
+                    {inProgressCount}
+                  </span>
+                )}
                 {item.id === 'goals' && inboxCount > 0 && (
                   <span className="font-mono text-[11px] tabular-nums text-slate-500 dark:text-slate-400">
                     {inboxCount}

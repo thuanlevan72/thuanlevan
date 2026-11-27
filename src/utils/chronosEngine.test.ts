@@ -8,7 +8,10 @@ import {
   computeMemberLoadPct,
   computeTaskPriorityScore,
   findSmartMeetingSlots,
+  getKanbanColumnForTask,
+  getTasksForKanbanColumn,
   insertUrgentInterruption,
+  moveKanbanTaskInDb,
   parseQuickCaptureInput,
   rollOverUnfinishedBlocksToTomorrow,
   runAutoReschedule,
@@ -133,4 +136,43 @@ test('createInitialChronosDatabase produces completely blank workspace data with
   assert.equal(custom.userRole, 'Staff Engineer');
   assert.equal(custom.tasks.length, 0);
 });
+
+test('Kanban board transitions map todo -> in_progress -> done, preserve order, and sync TimeBlocks', () => {
+  const db = createChronosTestFixture();
+  const targetTask = db.tasks.find((t) => t.id === 'tsk-1')!;
+  assert.equal(getKanbanColumnForTask(targetTask), 'todo');
+
+  // 1. Move Mới tạo (scheduled) -> Đang làm (in_progress)
+  const step1 = moveKanbanTaskInDb(db, 'tsk-1', 'in_progress', 0, '2026-11-26T10:00:00.000Z');
+  const tAfterStep1 = step1.tasks.find((t) => t.id === 'tsk-1')!;
+  assert.equal(tAfterStep1.status, 'in_progress');
+  assert.equal(getKanbanColumnForTask(tAfterStep1), 'in_progress');
+  assert.equal(tAfterStep1.completedAt, undefined);
+
+  // 2. Move Đang làm -> Hoàn thành (done)
+  const step2 = moveKanbanTaskInDb(step1, 'tsk-1', 'done', 0, '2026-11-26T12:00:00.000Z');
+  const tAfterStep2 = step2.tasks.find((t) => t.id === 'tsk-1')!;
+  assert.equal(tAfterStep2.status, 'done');
+  assert.equal(tAfterStep2.completedAt, '2026-11-26T12:00:00.000Z');
+  assert.ok(tAfterStep2.actualMinutes > 0);
+  const linkedBlockDone = step2.blocks.find((b) => b.taskId === 'tsk-1');
+  assert.equal(linkedBlockDone?.completed, true);
+
+  // 3. Move Hoàn thành -> Mới tạo (todo) restores scheduled if block exists & unmarks block
+  const step3 = moveKanbanTaskInDb(step2, 'tsk-1', 'todo', 0, '2026-11-26T13:00:00.000Z');
+  const tAfterStep3 = step3.tasks.find((t) => t.id === 'tsk-1')!;
+  assert.equal(tAfterStep3.status, 'scheduled');
+  assert.equal(tAfterStep3.completedAt, undefined);
+  const linkedBlockRestored = step3.blocks.find((b) => b.taskId === 'tsk-1');
+  assert.equal(linkedBlockRestored?.completed, false);
+
+  // 4. Reorder within 'todo' column deterministically
+  const todoBefore = getTasksForKanbanColumn(step3.tasks, 'todo');
+  assert.ok(todoBefore.length >= 2);
+  const lastId = todoBefore[todoBefore.length - 1].id;
+  const reordered = moveKanbanTaskInDb(step3, lastId, 'todo', 0);
+  const todoAfter = getTasksForKanbanColumn(reordered.tasks, 'todo');
+  assert.equal(todoAfter[0].id, lastId);
+});
+
 

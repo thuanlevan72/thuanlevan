@@ -12,6 +12,7 @@ import {
   buildCanonicalUrl,
   buildCvPlainText,
   buildStructuredDataGraph,
+  computeLightboxImageMetrics,
   CV_TEMPLATE_OPTIONS,
   executeCliCommand,
   filterGalleryItems,
@@ -25,11 +26,13 @@ import {
   getRouteSeoMeta,
   parseAppRoute,
   PROFILE_TEMPLATE_OPTIONS,
+  resolveFullResArtworkSrc,
   resolveInitialTheme,
   resolveNextTheme,
   resolveTemplateSelection,
   searchAndFilterGalleryItems,
   SHOWCASE_TEMPLATE_IDS,
+  stepLightboxZoom,
 } from './portfolioLogic.ts';
 
 test('resolveInitialTheme and resolveNextTheme manage theme transitions cleanly', () => {
@@ -255,3 +258,77 @@ test('buildStructuredDataGraph outputs valid Schema.org Brand logo, BreadcrumbLi
   assert.ok(collectionPage);
   assert.equal(collectionPage.url, 'https://thuanlevan.vercel.app/trien-lam');
 });
+
+test('resolveFullResArtworkSrc prefers originalSrc for images and preserves video src', () => {
+  assert.equal(
+    resolveFullResArtworkSrc({
+      mediaType: 'image',
+      src: '/assets/gallery/thumb.webp',
+      originalSrc: '/assets/gallery/full-original.png',
+    }),
+    '/assets/gallery/full-original.png'
+  );
+  assert.equal(
+    resolveFullResArtworkSrc({
+      mediaType: 'image',
+      src: '/assets/gallery/nang-tho-hoa-dao.webp',
+    }),
+    '/assets/gallery/nang-tho-hoa-dao.webp'
+  );
+  assert.equal(
+    resolveFullResArtworkSrc({
+      mediaType: 'video',
+      src: '/assets/gallery/timelapse-coding.mp4',
+      originalSrc: '/assets/gallery/ignored.png',
+    }),
+    '/assets/gallery/timelapse-coding.mp4'
+  );
+});
+
+test('computeLightboxImageMetrics renders exact 1:1 native pixels in original mode without downscaling', () => {
+  const portraitOriginal = computeLightboxImageMetrics({
+    naturalWidth: 901,
+    naturalHeight: 1200,
+    stageWidth: 960,
+    stageHeight: 680,
+    mode: 'original',
+  });
+  assert.equal(portraitOriginal.renderWidth, 901);
+  assert.equal(portraitOriginal.renderHeight, 1200);
+  assert.equal(portraitOriginal.percentage, 100);
+  assert.equal(portraitOriginal.isNativeOneToOne, true);
+  assert.equal(portraitOriginal.isDownscaledInFit, true);
+  assert.equal(portraitOriginal.overflowsStage, true);
+
+  const portraitFit = computeLightboxImageMetrics({
+    naturalWidth: 901,
+    naturalHeight: 1200,
+    stageWidth: 960,
+    stageHeight: 680,
+    mode: 'fit',
+  });
+  assert.equal(portraitFit.renderHeight, 680);
+  assert.equal(portraitFit.renderWidth, 511);
+  assert.equal(portraitFit.overflowsStage, false);
+
+  const smallImageFit = computeLightboxImageMetrics({
+    naturalWidth: 472,
+    naturalHeight: 709,
+    stageWidth: 1200,
+    stageHeight: 900,
+    mode: 'fit',
+  });
+  assert.equal(smallImageFit.fitScale, 1);
+  assert.equal(smallImageFit.renderWidth, 472);
+  assert.equal(smallImageFit.renderHeight, 709);
+  assert.equal(smallImageFit.isDownscaledInFit, false);
+});
+
+test('stepLightboxZoom steps cleanly through 100% and respects zoom bounds', () => {
+  assert.equal(stepLightboxZoom(0.75, 'in'), 1);
+  assert.equal(stepLightboxZoom(1, 'in'), 1.25);
+  assert.equal(stepLightboxZoom(1.25, 'out'), 1);
+  assert.equal(stepLightboxZoom(3, 'in'), 3);
+  assert.equal(stepLightboxZoom(0.25, 'out'), 0.25);
+});
+

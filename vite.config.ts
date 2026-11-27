@@ -1,12 +1,24 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import crypto from 'node:crypto';
 import fs from 'fs';
 import path from 'path';
 import {defineConfig} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
 
-export default defineConfig(() => {
+export default defineConfig(({command}) => {
+  const isBuild = command === 'build';
+  const builtAt =
+    (!isBuild && process.env.CHRONOS_DEV_BUILT_AT) || new Date().toISOString();
+  const buildId = isBuild
+    ? `build-${Date.now().toString(36)}-${crypto.randomBytes(3).toString('hex')}`
+    : process.env.CHRONOS_DEV_BUILD_ID || `dev-${Date.now().toString(36)}`;
+
   return {
+    define: {
+      __APP_BUILD_ID__: JSON.stringify(buildId),
+      __APP_BUILD_TIME__: JSON.stringify(builtAt),
+    },
     plugins: [
       react(),
       tailwindcss(),
@@ -54,16 +66,42 @@ export default defineConfig(() => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          globIgnores: ['**/version.json'],
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
           cleanupOutdatedCaches: true,
           skipWaiting: true,
           clientsClaim: true,
-          navigateFallbackDenylist: [/^\/api\//, /^\/src\//, /^\/@/, /^\/node_modules\//],
+          navigateFallbackDenylist: [
+            /^\/api\//,
+            /^\/src\//,
+            /^\/@/,
+            /^\/node_modules\//,
+            /^\/version\.json/,
+          ],
         },
         devOptions: {
           enabled: false,
         },
       }),
+      {
+        name: 'emit-build-version-manifest',
+        apply: 'build',
+        generateBundle(): void {
+          this.emitFile({
+            type: 'asset',
+            fileName: 'version.json',
+            source: JSON.stringify(
+              {
+                buildId,
+                builtAt,
+                mode: 'production',
+              },
+              null,
+              2
+            ),
+          });
+        },
+      },
       // Copies src/assets into dist/ so root-relative URLs like
       // "/src/assets/images/..." (e.g. generate_image output) still resolve
       // in production builds. Do not remove.

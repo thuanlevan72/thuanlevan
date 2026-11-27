@@ -14,6 +14,8 @@ import { SkillsSection } from './components/SkillsSection.tsx';
 import { GameHubSection } from './components/GameHubSection.tsx';
 import { TopBarAndHeader } from './components/TopBarAndHeader.tsx';
 import { OfflineIndicator } from './components/PwaInstallControls.tsx';
+import { AppUpdateBanner, AppUpdateModal } from './components/AppUpdateControls.tsx';
+import { useAppUpdater } from './hooks/useAppUpdater.ts';
 import { lazyWithRetry } from './utils/lazyWithRetry.ts';
 
 const CvPdfSection = lazyWithRetry(() =>
@@ -65,6 +67,8 @@ const THEME_STORAGE_KEY = 'thuanle-portfolio-theme';
 const PROFILE_TEMPLATE_KEY = 'thuanle-profile-template';
 
 export default function App() {
+  const updater = useAppUpdater();
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
   const [theme, setTheme] = useState<ThemeMode>(() => {
     try {
       return resolveInitialTheme(localStorage.getItem(THEME_STORAGE_KEY));
@@ -243,17 +247,26 @@ export default function App() {
 
   if (activeRoute === 'cloud_valley') {
     return (
-      <LazyLoadErrorBoundary resetKey={activeRoute} label="Thung Lũng Mây">
-        <Suspense
-          fallback={
-            <div className="w-full h-[100dvh] flex items-center justify-center bg-[#FBF4E6] text-sm font-semibold text-[#5C3A21]">
-              Đang mở Thung Lũng Mây...
-            </div>
-          }
-        >
-          <CloudValleyGameSection fullViewport />
-        </Suspense>
-      </LazyLoadErrorBoundary>
+      <>
+        <LazyLoadErrorBoundary resetKey={activeRoute} label="Thung Lũng Mây">
+          <Suspense
+            fallback={
+              <div className="w-full h-[100dvh] flex items-center justify-center bg-[#FBF4E6] text-sm font-semibold text-[#5C3A21]">
+                Đang mở Thung Lũng Mây...
+              </div>
+            }
+          >
+            <CloudValleyGameSection fullViewport />
+          </Suspense>
+        </LazyLoadErrorBoundary>
+        <AppUpdateBanner
+          visible={updater.updateAvailable && !updater.isBannerDismissed && !isUpdateModalOpen}
+          isUpdating={updater.status === 'updating'}
+          remoteBuild={updater.remoteBuild}
+          onApplyUpdate={() => void updater.applyWebUpdate()}
+          onDismiss={updater.dismissBanner}
+        />
+      </>
     );
   }
 
@@ -341,6 +354,11 @@ export default function App() {
         theme={theme}
         onToggleTheme={handleToggleTheme}
         onNavigate={handleNavigate}
+        hasWebUpdate={updater.updateAvailable}
+        onOpenWebUpdate={() => {
+          setIsUpdateModalOpen(true);
+          void updater.checkForUpdates(true);
+        }}
       />
 
       <LightboxModal
@@ -352,6 +370,26 @@ export default function App() {
         onPrev={handlePrevArtwork}
         onNext={handleNextArtwork}
         onSelectIndex={handleSelectLightboxIndex}
+      />
+      <AppUpdateBanner
+        visible={updater.updateAvailable && !updater.isBannerDismissed && !isUpdateModalOpen}
+        isUpdating={updater.status === 'updating'}
+        remoteBuild={updater.remoteBuild}
+        onApplyUpdate={() => void updater.applyWebUpdate()}
+        onDismiss={updater.dismissBanner}
+      />
+      <AppUpdateModal
+        open={isUpdateModalOpen}
+        currentBuild={updater.currentBuild}
+        remoteBuild={updater.remoteBuild}
+        updateAvailable={updater.updateAvailable}
+        swPending={updater.swPending}
+        status={updater.status}
+        lastCheckedAt={updater.lastCheckedAt}
+        errorMessage={updater.errorMessage}
+        onClose={() => setIsUpdateModalOpen(false)}
+        onCheckUpdates={() => void updater.checkForUpdates(true)}
+        onApplyUpdate={() => void updater.applyWebUpdate()}
       />
       <OfflineIndicator />
     </div>

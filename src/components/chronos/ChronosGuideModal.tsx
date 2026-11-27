@@ -286,16 +286,20 @@ export const ChronosGuideModal: React.FC<ChronosGuideModalProps> = ({
                 <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 p-4 space-y-2">
                   <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                     <Layers3 className="h-4 w-4 text-blue-600" />
-                    <span>Cấu trúc 4 tầng từ chiến lược tới hành động</span>
+                    <span>Bảng Kanban Kéo Thả &amp; Cấu trúc 4 tầng</span>
                   </h4>
+                  <p>
+                    Trong <strong className="text-slate-900 dark:text-slate-100">Bảng Kanban</strong>, bạn có thể kéo-thả trực tiếp thẻ công việc qua 3 cột:{' '}
+                    <strong className="text-slate-900 dark:text-slate-100">Mới tạo → Đang làm → Hoàn thành</strong> (giống Jira / Trello), sắp xếp lại thứ tự ưu tiên hoặc bấm nút chuyển nhanh trên từng thẻ.
+                  </p>
                   <p>
                     <strong className="text-slate-900 dark:text-slate-100">OKR Quý</strong> (Mục tiêu lớn) →{' '}
                     <strong className="text-slate-900 dark:text-slate-100">Dự án</strong> (Nhóm triển khai) →{' '}
                     <strong className="text-slate-900 dark:text-slate-100">Đầu việc</strong> (Có ước lượng phút, tải trí lực) →{' '}
-                    <strong className="text-slate-900 dark:text-slate-100">Việc nhỏ (Checklist)</strong>. Tiến độ OKR tự động tính theo tỷ lệ hoàn thành các đầu việc bên dưới.
+                    <strong className="text-slate-900 dark:text-slate-100">Việc nhỏ (Checklist)</strong>. Tiến độ OKR tự động cập nhật ngay khi bạn kéo thẻ qua cột Hoàn thành.
                   </p>
                   <p>
-                    Nếu bạn chưa muốn tạo OKR, các đầu việc tạo bằng Quick Capture hoặc form thêm nhanh sẽ nằm gọn trong mục <strong>Đầu việc độc lập (Hộp thư đến)</strong> để bạn dùng ngay.
+                    Nếu bạn chưa muốn tạo OKR, các đầu việc tạo bằng Quick Capture hoặc trực tiếp trên cột Mới tạo sẽ sẵn sàng để bạn kéo-thả và theo dõi ngay.
                   </p>
                 </div>
 
@@ -436,6 +440,15 @@ export const ChronosGuideModal: React.FC<ChronosGuideModalProps> = ({
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Mở Nhập nhanh (⌘K)</span>
+                </button>
+                <button
+                  type="button"
+                  data-testid="guide-action-kanban"
+                  onClick={() => jumpToSection('kanban')}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  <Layers3 className="h-3.5 w-3.5 text-blue-600" />
+                  <span>Đi tới Bảng Kanban</span>
                 </button>
                 <button
                   type="button"

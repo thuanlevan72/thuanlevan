@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "userId": "usr-tguvp4-rlt4",
+  "workspaceName": "ChronosFlow · Không gian của Người dùng mới",
+  "userName": "Người dùng mới",
+  "userRole": "Cá nhân",
+  "baseDateISO": "2026-11-27",
+  "lastSavedAt": "2026-11-27T03:43:22.231Z",
+  "okrs": [],
+  "projects": [],
+  "tasks": [],
+  "blocks": [],
+  "calendarAccounts": [],
+  "energyProfile": {
+    "chronotype": "balanced",
+    "peakStartMin": 510,
+    "peakEndMin": 690,
+    "troughStartMin": 810,
+    "troughEndMin": 930,
+    "workdayStartMin": 480,
+    "workdayEndMin": 1080,
+    "shutdownMin": 1080
+  },
+  "teamMembers": [],
+  "focusShield": {
+    "enabled": false,
+    "blockedSites": [],
+    "autoDndApps": {
+      "slack": false,
+      "teams": false,
+      "zalo": false
+    },
+    "activeDndMessage": "Đang tập trung sâu — Không làm phiền"
+  },
+  "focusLogs": [],
+  "rpg": {
+    "level": 1,
+    "xp": 0,
+    "crystals": 0,
+    "totalDeepMinutes": 0,
+    "streakDays": 0,
+    "streakFreezeTokens": 0,
+    "streakFreezeActiveToday": false,
+    "upgrades": {
+      "desk": 1,
+      "lamp": 1,
+      "bookshelf": 1,
+      "windowView": 1,
+      "bonsai": 1
+    }
+  },
+  "rituals": {
+    "morningBriefingCompletedDate": null,
+    "shutdownCompletedDate": null,
+    "isShutdownLocked": false,
+    "todayReflection": "",
+    "mitTaskIds": []
+  }
+}

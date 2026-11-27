@@ -5,6 +5,7 @@ import type {
   EisenhowerQuadrant,
   EnergyProfile,
   FocusPresetId,
+  KanbanColumnId,
   OKR,
   Project,
   RescheduleChange,
@@ -718,4 +719,121 @@ export function parseIcsEvents(icsText: string, baseDateISO: string): TimeBlock[
   }
 
   return events;
+}
+
+export const KANBAN_COLUMNS: Array<{
+  id: KanbanColumnId;
+  title: string;
+  subtitle: string;
+}> = [
+  {
+    id: 'todo',
+    title: 'Mới tạo',
+    subtitle: 'Đầu việc mới & chờ triển khai',
+  },
+  {
+    id: 'in_progress',
+    title: 'Đang làm',
+    subtitle: 'Đang thực hiện ưu tiên',
+  },
+  {
+    id: 'done',
+    title: 'Hoàn thành',
+    subtitle: 'Đã xong & nghiệm thu',
+  },
+];
+
+export function getKanbanColumnForTask(task: Pick<ChronosTask, 'status'>): KanbanColumnId {
+  if (task.status === 'done') return 'done';
+  if (task.status === 'in_progress') return 'in_progress';
+  return 'todo';
+}
+
+export function getTasksForKanbanColumn(
+  tasks: ChronosTask[],
+  columnId: KanbanColumnId
+): ChronosTask[] {
+  return tasks
+    .filter((t) => getKanbanColumnForTask(t) === columnId)
+    .sort((a, b) => {
+      const orderA = a.boardOrder;
+      const orderB = b.boardOrder;
+      if (orderA !== undefined && orderB !== undefined && orderA !== orderB) {
+        return orderA - orderB;
+      }
+      if (orderA !== undefined && orderB === undefined) return -1;
+      if (orderA === undefined && orderB !== undefined) return 1;
+      return computeTaskPriorityScore(b) - computeTaskPriorityScore(a);
+    });
+}
+
+/**
+ * Pure Jira/Trello-style Kanban transition:
+ * Moves a task between 'todo' (Mới tạo), 'in_progress' (Đang làm), and 'done' (Hoàn thành),
+ * updates boardOrder deterministically inside the target column, and keeps linked TimeBlocks in sync.
+ */
+export function moveKanbanTaskInDb(
+  db: ChronosDatabase,
+  taskId: string,
+  targetColumn: KanbanColumnId,
+  targetIndex?: number,
+  nowISO: string = new Date().toISOString()
+): ChronosDatabase {
+  const movingTask = db.tasks.find((t) => t.id === taskId);
+  if (!movingTask) return db;
+
+  const hasScheduledBlock = db.blocks.some((b) => b.taskId === taskId);
+  let nextStatus: ChronosTask['status'];
+  if (targetColumn === 'done') {
+    nextStatus = 'done';
+  } else if (targetColumn === 'in_progress') {
+    nextStatus = 'in_progress';
+  } else {
+    nextStatus = hasScheduledBlock ? 'scheduled' : 'inbox';
+  }
+
+  const updatedMovingTask: ChronosTask = {
+    ...movingTask,
+    status: nextStatus,
+    completedAt: targetColumn === 'done' ? movingTask.completedAt ?? nowISO : undefined,
+    actualMinutes:
+      targetColumn === 'done' && movingTask.actualMinutes === 0
+        ? movingTask.estimatedMinutes
+        : movingTask.actualMinutes,
+  };
+
+  const columnTasksWithoutMoving = getTasksForKanbanColumn(
+    db.tasks.filter((t) => t.id !== taskId),
+    targetColumn
+  );
+
+  const clampedIndex =
+    targetIndex === undefined
+      ? columnTasksWithoutMoving.length
+      : Math.max(0, Math.min(columnTasksWithoutMoving.length, targetIndex));
+
+  const reorderedColumn = [
+    ...columnTasksWithoutMoving.slice(0, clampedIndex),
+    updatedMovingTask,
+    ...columnTasksWithoutMoving.slice(clampedIndex),
+  ].map((task, idx) => ({
+    ...task,
+    boardOrder: idx,
+  }));
+
+  const orderOverrides = new Map(reorderedColumn.map((t) => [t.id, t]));
+
+  const nextTasks = db.tasks.map((t) => orderOverrides.get(t.id) ?? t);
+
+  const nextBlocks = db.blocks.map((b) => {
+    if (b.taskId !== taskId) return b;
+    if (targetColumn === 'done') return { ...b, completed: true };
+    return { ...b, completed: false };
+  });
+
+  return {
+    ...db,
+    tasks: nextTasks,
+    blocks: nextBlocks,
+  };
 }

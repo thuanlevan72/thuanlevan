@@ -104,6 +104,7 @@ export interface ArtworkItem {
   categoryLabel: string;
   mediaType?: 'image' | 'video';
   posterSrc?: string;
+  originalSrc?: string;
   objectPosition?: 'top' | 'center';
   title: string;
   subtitle: string;
@@ -887,3 +888,97 @@ export function buildStructuredDataGraph(origin: string, route: AppRoute) {
     ],
   };
 }
+
+export type LightboxScaleMode = 'original' | 'fit' | 'custom';
+
+export const LIGHTBOX_MIN_ZOOM = 0.25;
+export const LIGHTBOX_MAX_ZOOM = 3;
+const LIGHTBOX_ZOOM_STEPS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5, 2, 2.5, 3] as const;
+
+export function resolveFullResArtworkSrc(
+  artwork: Pick<ArtworkItem, 'src' | 'originalSrc' | 'mediaType'>
+): string {
+  if (artwork.mediaType === 'video') {
+    return artwork.src;
+  }
+  return artwork.originalSrc || artwork.src;
+}
+
+export function clampLightboxZoom(
+  zoom: number,
+  minZoom = LIGHTBOX_MIN_ZOOM,
+  maxZoom = LIGHTBOX_MAX_ZOOM
+): number {
+  if (!Number.isFinite(zoom) || zoom <= 0) return 1;
+  return Math.min(maxZoom, Math.max(minZoom, zoom));
+}
+
+export function stepLightboxZoom(
+  currentScale: number,
+  direction: 'in' | 'out',
+  minZoom = LIGHTBOX_MIN_ZOOM,
+  maxZoom = LIGHTBOX_MAX_ZOOM
+): number {
+  const safeCurrent = clampLightboxZoom(currentScale, minZoom, maxZoom);
+  const epsilon = 0.015;
+  if (direction === 'in') {
+    const next = LIGHTBOX_ZOOM_STEPS.find((step) => step > safeCurrent + epsilon);
+    return clampLightboxZoom(next ?? maxZoom, minZoom, maxZoom);
+  }
+  const reversed = [...LIGHTBOX_ZOOM_STEPS].reverse();
+  const prev = reversed.find((step) => step < safeCurrent - epsilon);
+  return clampLightboxZoom(prev ?? minZoom, minZoom, maxZoom);
+}
+
+export interface LightboxImageMetrics {
+  fitScale: number;
+  activeScale: number;
+  renderWidth: number;
+  renderHeight: number;
+  percentage: number;
+  isNativeOneToOne: boolean;
+  isDownscaledInFit: boolean;
+  overflowsStage: boolean;
+}
+
+export function computeLightboxImageMetrics(params: {
+  naturalWidth: number;
+  naturalHeight: number;
+  stageWidth: number;
+  stageHeight: number;
+  mode: LightboxScaleMode;
+  customZoom?: number;
+}): LightboxImageMetrics {
+  const naturalW = Math.max(1, Math.round(params.naturalWidth));
+  const naturalH = Math.max(1, Math.round(params.naturalHeight));
+  const stageW = Math.max(1, params.stageWidth);
+  const stageH = Math.max(1, params.stageHeight);
+
+  const rawFit = Math.min(1, stageW / naturalW, stageH / naturalH);
+  const fitScale = Number.isFinite(rawFit) && rawFit > 0 ? rawFit : 1;
+
+  let activeScale = 1;
+  if (params.mode === 'fit') {
+    activeScale = fitScale;
+  } else if (params.mode === 'custom') {
+    activeScale = clampLightboxZoom(params.customZoom ?? 1);
+  } else {
+    activeScale = 1;
+  }
+
+  const renderWidth = Math.max(1, Math.round(naturalW * activeScale));
+  const renderHeight = Math.max(1, Math.round(naturalH * activeScale));
+  const percentage = Math.max(1, Math.round(activeScale * 100));
+
+  return {
+    fitScale,
+    activeScale,
+    renderWidth,
+    renderHeight,
+    percentage,
+    isNativeOneToOne: Math.abs(activeScale - 1) < 0.005,
+    isDownscaledInFit: fitScale < 0.995,
+    overflowsStage: renderWidth > stageW + 1 || renderHeight > stageH + 1,
+  };
+}
+

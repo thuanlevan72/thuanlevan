@@ -170,7 +170,71 @@ function csvEscape(value: string | number): string {
   return s;
 }
 
+const DEV_BOOT_BUILT_AT = new Date().toISOString();
+const DEV_BOOT_BUILD_ID = `dev-${Date.now().toString(36)}`;
+
+function applyNoCacheHeaders(res: express.Response): void {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+}
+
+function readServerBuildInfo(distDir: string): {
+  buildId: string;
+  builtAt: string;
+  mode: 'production' | 'development';
+} {
+  if (process.env.NODE_ENV === 'production') {
+    const versionFile = path.join(distDir, 'version.json');
+    try {
+      if (fs.existsSync(versionFile)) {
+        const parsed = JSON.parse(fs.readFileSync(versionFile, 'utf8')) as {
+          buildId?: string;
+          builtAt?: string;
+        };
+        if (typeof parsed.buildId === 'string' && parsed.buildId.trim()) {
+          return {
+            buildId: parsed.buildId.trim(),
+            builtAt:
+              typeof parsed.builtAt === 'string' && parsed.builtAt.trim()
+                ? parsed.builtAt.trim()
+                : DEV_BOOT_BUILT_AT,
+            mode: 'production',
+          };
+        }
+      }
+      const indexFile = path.join(distDir, 'index.html');
+      if (fs.existsSync(indexFile)) {
+        const stat = fs.statSync(indexFile);
+        return {
+          buildId: `prod-${Math.floor(stat.mtimeMs).toString(36)}`,
+          builtAt: stat.mtime.toISOString(),
+          mode: 'production',
+        };
+      }
+    } catch {
+      // Fallback to boot id
+    }
+    return {
+      buildId: DEV_BOOT_BUILD_ID,
+      builtAt: DEV_BOOT_BUILT_AT,
+      mode: 'production',
+    };
+  }
+
+  return {
+    buildId: process.env.CHRONOS_DEV_BUILD_ID || DEV_BOOT_BUILD_ID,
+    builtAt: process.env.CHRONOS_DEV_BUILT_AT || DEV_BOOT_BUILT_AT,
+    mode: 'development',
+  };
+}
+
 async function startServer() {
+  if (process.env.NODE_ENV !== 'production') {
+    process.env.CHRONOS_DEV_BUILD_ID ||= DEV_BOOT_BUILD_ID;
+    process.env.CHRONOS_DEV_BUILT_AT ||= DEV_BOOT_BUILT_AT;
+  }
+
   // Clean up old shared single-user DB if present so every user operates isolated under data/users/
   ensureDataDir();
   if (fs.existsSync(LEGACY_DB_FILE)) {
@@ -181,8 +245,21 @@ async function startServer() {
     }
   }
 
+  const distDir = path.resolve(process.cwd(), 'dist');
   const app = express();
   app.use(express.json({ limit: '4mb' }));
+
+  app.get('/api/version', (_req, res) => {
+    applyNoCacheHeaders(res);
+    res.json(readServerBuildInfo(distDir));
+  });
+
+  if (process.env.NODE_ENV !== 'production') {
+    app.get('/version.json', (_req, res) => {
+      applyNoCacheHeaders(res);
+      res.json(readServerBuildInfo(distDir));
+    });
+  }
 
   app.get('/api/health', (_req, res) => {
     res.json({
@@ -409,9 +486,26 @@ ${scheduleSummary || '(Chưa có khối thời gian nào)'}`,
     });
     app.use(vite.middlewares);
   } else {
-    const distDir = path.resolve(process.cwd(), 'dist');
-    app.use(express.static(distDir));
+    app.use(
+      express.static(distDir, {
+        setHeaders: (res, filePath) => {
+          const base = path.basename(filePath);
+          if (
+            base === 'index.html' ||
+            base === 'sw.js' ||
+            base === 'registerSW.js' ||
+            base === 'manifest.webmanifest' ||
+            base === 'version.json'
+          ) {
+            applyNoCacheHeaders(res);
+          } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          }
+        },
+      })
+    );
     app.get('*', (_req, res) => {
+      applyNoCacheHeaders(res);
       res.sendFile(path.join(distDir, 'index.html'));
     });
   }

@@ -18,6 +18,7 @@ import { ChronosSidebar } from './ChronosSidebar.tsx';
 import { QuickCapturePalette } from './QuickCapturePalette.tsx';
 import { ChronosGuideModal } from './ChronosGuideModal.tsx';
 import { PlannerTimelineView } from './PlannerTimelineView.tsx';
+import { KanbanBoardView } from './KanbanBoardView.tsx';
 import { GoalsTasksView } from './GoalsTasksView.tsx';
 import { DeepWorkStudioView } from './DeepWorkStudioView.tsx';
 import { AnalyticsTeamView } from './AnalyticsTeamView.tsx';
@@ -48,6 +49,10 @@ const SECTION_TITLES: Record<NavSection, { title: string; subtitle: string }> = 
   planner: {
     title: 'Lịch & Smart Time-Blocking',
     subtitle: 'Kéo-thả công việc vào khung giờ sinh học và tự động tái cấu trúc khi có biến cố',
+  },
+  kanban: {
+    title: 'Bảng Kanban Kéo Thả (Mới tạo → Đang làm → Hoàn thành)',
+    subtitle: 'Điều phối trực quan trạng thái công việc theo luồng Jira & Trello và đồng bộ tiến độ OKR',
   },
   goals: {
     title: 'Mục Tiêu OKRs & Công Việc 4 Tầng',
@@ -486,7 +491,7 @@ export const ChronosAppView: React.FC<ChronosAppViewProps> = ({ theme, onToggleT
           </div>
         </header>
 
-        <div className="flex-1 p-4 sm:p-5 space-y-4 overflow-y-auto">
+        <div className="flex-1 p-4 sm:p-5 pb-16 lg:pb-5 space-y-4 overflow-y-auto">
           {loadError && (
             <div className="rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3.5 py-2 text-xs text-amber-800 dark:text-amber-300">
               {loadError}
@@ -556,6 +561,14 @@ export const ChronosAppView: React.FC<ChronosAppViewProps> = ({ theme, onToggleT
               onStartFocusTask={handleStartFocusTask}
               onOpenQuickCapture={() => setQuickCaptureOpen(true)}
               onOpenGuide={() => setGuideOpen(true)}
+            />
+          )}
+
+          {activeSection === 'kanban' && (
+            <KanbanBoardView
+              db={db}
+              onUpdateDb={updateDb}
+              onStartFocusTask={handleStartFocusTask}
             />
           )}
 

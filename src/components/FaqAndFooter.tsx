@@ -1,4 +1,4 @@
-import { ChevronDown, Mail, Moon, Phone, Sun } from 'lucide-react';
+import { ChevronDown, Mail, Moon, Phone, RefreshCw, Sun } from 'lucide-react';
 import { useState } from 'react';
 import { FAQ_ITEMS, PORTFOLIO_PROFILE } from '../data/portfolioData.ts';
 import { AppRoute, ThemeMode } from '../utils/portfolioLogic.ts';
@@ -137,9 +137,17 @@ interface GlobalFooterProps {
   theme: ThemeMode;
   onToggleTheme: () => void;
   onNavigate: (route: AppRoute, sectionId?: string) => void;
+  hasWebUpdate?: boolean;
+  onOpenWebUpdate?: () => void;
 }
 
-export function GlobalFooter({ theme, onToggleTheme, onNavigate }: GlobalFooterProps) {
+export function GlobalFooter({
+  theme,
+  onToggleTheme,
+  onNavigate,
+  hasWebUpdate = false,
+  onOpenWebUpdate,
+}: GlobalFooterProps) {
   return (
     <footer className="border-t border-[#DCE6F2] dark:border-[#182740] py-8 mt-10 transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-[#475569] dark:text-[#94A3B8]">
@@ -213,6 +221,24 @@ export function GlobalFooter({ theme, onToggleTheme, onNavigate }: GlobalFooterP
           >
             Sitemap XML
           </a>
+          {onOpenWebUpdate && (
+            <>
+              <span aria-hidden="true">·</span>
+              <button
+                id="footer-web-update-btn"
+                type="button"
+                onClick={onOpenWebUpdate}
+                className={`inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                  hasWebUpdate
+                    ? 'text-[#0284C7] dark:text-[#38BDF8] font-semibold'
+                    : 'hover:text-[#070B14] dark:hover:text-[#F1F5F9]'
+                }`}
+              >
+                <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>{hasWebUpdate ? 'Có Bản Mới · Cập Nhật' : 'Cập Nhật Web'}</span>
+              </button>
+            </>
+          )}
           <span aria-hidden="true">·</span>
           <button
             id="footer-theme-toggle"
