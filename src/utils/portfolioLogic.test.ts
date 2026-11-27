@@ -50,6 +50,8 @@ test('parseAppRoute, getRoutePath, and getRouteSeoMeta separate profile, cv, and
   assert.equal(parseAppRoute('/game'), 'game');
   assert.equal(parseAppRoute('/co-tuong'), 'game');
   assert.equal(parseAppRoute('/xiangqi/'), 'game');
+  assert.equal(parseAppRoute('/co-vua'), 'game');
+  assert.equal(parseAppRoute('/chess/'), 'game');
   assert.equal(parseAppRoute('/studio'), 'studio');
   assert.equal(parseAppRoute('/sang-tac/'), 'studio');
   assert.equal(parseAppRoute('/', '#studio'), 'studio');

@@ -5,8 +5,8 @@ import {
   ChevronUp,
   Code2,
   Cpu,
+  Crown,
   FileSearch,
-  Flame,
   Gamepad2,
   Ghost,
   Gift,
@@ -52,10 +52,8 @@ const TrafficRouterGameSection = lazyWithRetry(() =>
 const XiangqiGameSection = lazyWithRetry(() =>
   import('./XiangqiGameSection.tsx').then((m) => ({ default: m.XiangqiGameSection }))
 );
-const LuongCuocDuongGameSection = lazyWithRetry(() =>
-  import('./LuongCuocDuongGameSection.tsx').then((m) => ({
-    default: m.LuongCuocDuongGameSection,
-  }))
+const ChessGameSection = lazyWithRetry(() =>
+  import('./ChessGameSection.tsx').then((m) => ({ default: m.ChessGameSection }))
 );
 const ThanhMinhGameSection = lazyWithRetry(() =>
   import('./ThanhMinhGameSection.tsx').then((m) => ({
@@ -71,8 +69,8 @@ const CloudValleyGameSection = lazyWithRetry(() =>
 type GameId =
   | 'cloud_valley'
   | 'xiangqi'
+  | 'chess'
   | 'anomaly'
-  | 'luong_cuoc_duong'
   | 'thanh_minh'
   | 'asmr_organizer'
   | 'blind_box'
@@ -151,6 +149,16 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     gameKey: 'xiangqi',
   },
   {
+    id: 'chess',
+    category: 'strategy',
+    title: 'Cờ Vua AI',
+    shortTitle: 'Cờ Vua',
+    subtitle: '2D Canvas · Chuẩn FIDE · 10 Cấp AI (Tân Binh → Kỳ Vương) & 2 Người Chơi',
+    badge: '10 Cấp · 2P',
+    playable: true,
+    gameKey: 'chess',
+  },
+  {
     id: 'prism-td',
     category: 'strategy',
     title: 'Thủ Thành Pháo Đài',
@@ -179,16 +187,6 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     badge: '12 Ngày · 3 Chế Độ',
     playable: true,
     gameKey: 'anomaly',
-  },
-  {
-    id: 'luong-cuoc-duong',
-    category: 'casual',
-    title: 'Lưỡng Cước Dương (两脚羊)',
-    shortTitle: 'Lưỡng Cước Dương',
-    subtitle: '3D First-Person Horror · Cân tiểu ly, bàn tính & thành Tuy Dương 757 SCN (30 Ngày)',
-    badge: '3D Kinh Dị · 30 Ngày',
-    playable: true,
-    gameKey: 'luong_cuoc_duong',
   },
   {
     id: 'thanh-minh',
@@ -306,11 +304,11 @@ function renderGameIcon(gameKey: GameId | undefined, isSelected: boolean) {
       />
     );
   }
-  if (gameKey === 'luong_cuoc_duong') {
+  if (gameKey === 'chess') {
     return (
-      <Flame
+      <Crown
         className={`w-3.5 h-3.5 shrink-0 ${
-          isSelected ? 'text-amber-300' : 'text-red-600 dark:text-red-400'
+          isSelected ? 'text-amber-300' : 'text-amber-600 dark:text-amber-400'
         }`}
         aria-hidden="true"
       />
@@ -414,13 +412,12 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       }
       if (playParam === 'anomaly') return 'anomaly';
       if (
-        playParam === 'luongcuocduong' ||
-        playParam === 'luong-cuoc-duong' ||
-        playParam === 'luong_cuoc_duong' ||
-        playParam === 'suiyang' ||
-        playParam === 'tuydong'
+        playParam === 'chess' ||
+        playParam === 'covua' ||
+        playParam === 'co-vua' ||
+        playParam === 'co_vua'
       ) {
-        return 'luong_cuoc_duong';
+        return 'chess';
       }
       if (
         playParam === 'thanhminh' ||
@@ -808,7 +805,6 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
           activeGame !== 'prism_td' &&
           activeGame !== 'traffic_router' &&
           activeGame !== 'cat_finder' &&
-          activeGame !== 'luong_cuoc_duong' &&
           activeGame !== 'thanh_minh' &&
           activeGame !== 'cloud_valley' && (
           <button
@@ -846,6 +842,7 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
                 />
               )}
               {activeGame === 'xiangqi' && <XiangqiGameSection theme={theme} onToggleTheme={onToggleTheme} />}
+              {activeGame === 'chess' && <ChessGameSection theme={theme} onToggleTheme={onToggleTheme} />}
               {activeGame === 'cat_finder' && (
                 <CatFinderGameSection
                   theme={theme}
@@ -856,15 +853,6 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
                 />
               )}
               {activeGame === 'anomaly' && <AnomalyGameSection theme={theme} onToggleTheme={onToggleTheme} />}
-              {activeGame === 'luong_cuoc_duong' && (
-                <LuongCuocDuongGameSection
-                  theme={theme}
-                  onToggleTheme={onToggleTheme}
-                  isFullscreen={isFullscreen}
-                  onToggleFullscreen={toggleFullscreen}
-                  onExitFullscreen={exitFullscreen}
-                />
-              )}
               {activeGame === 'thanh_minh' && (
                 <ThanhMinhGameSection
                   theme={theme}

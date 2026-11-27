@@ -185,8 +185,11 @@ export function parseAppRoute(pathname: string, hash = ''): AppRoute {
     cleanPath === '/tro-choi' ||
     cleanPath === '/co-tuong' ||
     cleanPath === '/xiangqi' ||
+    cleanPath === '/co-vua' ||
+    cleanPath === '/chess' ||
     cleanHash === 'game' ||
-    cleanHash === 'co-tuong'
+    cleanHash === 'co-tuong' ||
+    cleanHash === 'co-vua'
   ) {
     return 'game';
   }
@@ -291,13 +294,13 @@ export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
   }
   if (route === 'game') {
     return {
-      title: 'Khu Trò Chơi 2D & 3D — Thung Lũng Mây, Cờ Tướng, Pháo Đài',
+      title: 'Khu Trò Chơi 2D & 3D — Thung Lũng Mây, Cờ Tướng, Cờ Vua',
       description:
-        'Chơi 12 game web: Thung Lũng Mây, Cờ Tướng AI, Pháo Đài, Tìm Mèo, Hồ Sơ Dị Biệt, Lưỡng Cước Dương 3D, Học Viện Cô Sơn 2.5D, Chuẩn OCD, Túi Mù & FE.',
+        'Chơi 12 game web: Thung Lũng Mây, Cờ Tướng AI, Cờ Vua AI, Pháo Đài, Tìm Mèo, Hồ Sơ Dị Biệt, Học Viện Cô Sơn 2.5D, Chuẩn OCD, Túi Mù & FE.',
       keywords:
-        'Game Web, Thung Lũng Mây, Cloud Valley Homestead, Cờ Tướng AI, Thủ Thành Pháo Đài, Tìm Mèo, Lưỡng Cước Dương 3D, Thanh Minh Học Viện Cô Sơn, Hồ Sơ Dị Biệt, Sắp Xếp OCD, Tiệm Xé Túi Mù, Ubuntu CLI, Thuận Lê',
+        'Game Web, Thung Lũng Mây, Cloud Valley Homestead, Cờ Tướng AI, Cờ Vua AI, Thủ Thành Pháo Đài, Tìm Mèo, Thanh Minh Học Viện Cô Sơn, Hồ Sơ Dị Biệt, Sắp Xếp OCD, Tiệm Xé Túi Mù, Ubuntu CLI, Thuận Lê',
       ogType: 'website',
-      ogImageAlt: 'Khu Trò Chơi 2D & 3D gồm Thung Lũng Mây, Cờ Tướng AI, Thủ Thành Pháo Đài và các game web',
+      ogImageAlt: 'Khu Trò Chơi 2D & 3D gồm Thung Lũng Mây, Cờ Tướng AI, Cờ Vua AI và các game web',
       path: '/game',
     };
   }
