@@ -65,18 +65,25 @@ export default defineConfig(({command}) => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-          globIgnores: ['**/version.json'],
+          globPatterns: ['**/*.{js,css,ico,png,svg,woff2}'],
+          globIgnores: ['**/version.json', '**/index.html'],
+          navigateFallback: null,
           maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
           cleanupOutdatedCaches: true,
           skipWaiting: true,
           clientsClaim: true,
-          navigateFallbackDenylist: [
-            /^\/api\//,
-            /^\/src\//,
-            /^\/@/,
-            /^\/node_modules\//,
-            /^\/version\.json/,
+          runtimeCaching: [
+            {
+              urlPattern: ({ request }) => request.mode === 'navigate',
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'html-navigation-cache',
+                networkTimeoutSeconds: 3,
+                cacheableResponse: {
+                  statuses: [200],
+                },
+              },
+            },
           ],
         },
         devOptions: {

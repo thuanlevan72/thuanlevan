@@ -107,16 +107,27 @@ export function stripCacheBustParam(href: string): string | null {
   }
 }
 
-export function stripCacheBustParamFromWindow(): void {
-  if (typeof window === 'undefined') return;
+let justUpdatedFlag = false;
+
+export function consumeJustUpdatedFlag(): boolean {
+  const val = justUpdatedFlag;
+  justUpdatedFlag = false;
+  return val;
+}
+
+export function stripCacheBustParamFromWindow(): boolean {
+  if (typeof window === 'undefined') return false;
   const cleanUrl = stripCacheBustParam(window.location.href);
-  if (cleanUrl && window.history?.replaceState) {
+  if (!cleanUrl) return false;
+  justUpdatedFlag = true;
+  if (window.history?.replaceState) {
     try {
       window.history.replaceState(window.history.state, '', cleanUrl);
     } catch {
       // Ignore history replace errors
     }
   }
+  return true;
 }
 
 export function formatShortBuildId(buildId: string): string {
@@ -284,7 +295,28 @@ export async function performHardWebUpdate(deps: HardUpdateDeps = {}): Promise<s
     }
   }
 
-  // 4. Perform cache-busted navigation reload to bypass browser HTTP cache
+  // 4. Clear lazy-chunk reload guards & prime browser HTTP cache with fresh HTML
+  if (!deps.reloadWithUrl && typeof window !== 'undefined') {
+    try {
+      window.sessionStorage?.removeItem('thuanle-lazy-chunk-reload');
+    } catch {
+      // Ignore sessionStorage restriction
+    }
+    try {
+      const cleanHref = stripCacheBustParam(currentHref) ?? currentHref;
+      await fetch(cleanHref, {
+        cache: 'reload',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      });
+    } catch {
+      // Continue with navigation reload
+    }
+  }
+
+  // 5. Perform cache-busted navigation reload to bypass browser HTTP cache
   const nextUrl = buildCacheBustReloadUrl(currentHref, now);
   if (deps.reloadWithUrl) {
     deps.reloadWithUrl(nextUrl);

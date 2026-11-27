@@ -9,7 +9,6 @@ import {
   FileSearch,
   Gamepad2,
   Ghost,
-  Gift,
   Grid3X3,
   Layers,
   LayoutGrid,
@@ -30,9 +29,6 @@ const AnomalyGameSection = lazyWithRetry(() =>
 );
 const AsmrOrganizerGameSection = lazyWithRetry(() =>
   import('./AsmrOrganizerGameSection.tsx').then((m) => ({ default: m.AsmrOrganizerGameSection }))
-);
-const BlindBoxMergeGameSection = lazyWithRetry(() =>
-  import('./BlindBoxMergeGameSection.tsx').then((m) => ({ default: m.BlindBoxMergeGameSection }))
 );
 const CatFinderGameSection = lazyWithRetry(() =>
   import('./CatFinderGameSection.tsx').then((m) => ({ default: m.CatFinderGameSection }))
@@ -73,7 +69,6 @@ type GameId =
   | 'anomaly'
   | 'thanh_minh'
   | 'asmr_organizer'
-  | 'blind_box'
   | 'cat_finder'
   | 'prism_td'
   | 'linux_hacker'
@@ -209,16 +204,6 @@ export const GAME_CATALOG: readonly GameCatalogItem[] = [
     gameKey: 'asmr_organizer',
   },
   {
-    id: 'blind-box-merge',
-    category: 'casual',
-    title: 'Tiệm Xé Túi Mù',
-    shortTitle: 'Túi Mù',
-    subtitle: 'Blind-Box Squishy Merge · Hợp nhất thú bông ASMR · Vuốt xé túi mù · Decor Phòng Mini',
-    badge: 'Mochi & Phòng',
-    playable: true,
-    gameKey: 'blind_box',
-  },
-  {
     id: 'fe-academy',
     category: 'tech',
     title: 'Học Viện FE 5-in-1',
@@ -334,16 +319,6 @@ function renderGameIcon(gameKey: GameId | undefined, isSelected: boolean) {
       />
     );
   }
-  if (gameKey === 'blind_box') {
-    return (
-      <Gift
-        className={`w-3.5 h-3.5 shrink-0 ${
-          isSelected ? 'text-pink-200' : 'text-pink-600 dark:text-pink-400'
-        }`}
-        aria-hidden="true"
-      />
-    );
-  }
   if (gameKey === 'prism_td') {
     return (
       <Zap
@@ -429,9 +404,6 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
       }
       if (playParam === 'asmr' || playParam === 'ocd' || playParam === 'organizer') {
         return 'asmr_organizer';
-      }
-      if (playParam === 'blindbox' || playParam === 'squishy' || playParam === 'tuimu') {
-        return 'blind_box';
       }
       if (
         playParam === 'prism' ||
@@ -864,9 +836,6 @@ export function GameHubSection({ theme, onToggleTheme }: GameHubSectionProps) {
               )}
               {activeGame === 'asmr_organizer' && (
                 <AsmrOrganizerGameSection theme={theme} onToggleTheme={onToggleTheme} />
-              )}
-              {activeGame === 'blind_box' && (
-                <BlindBoxMergeGameSection theme={theme} onToggleTheme={onToggleTheme} />
               )}
               {activeGame === 'prism_td' && (
                 <PrismTdGameSection

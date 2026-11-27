@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildCacheBustReloadUrl,
+  consumeJustUpdatedFlag,
   formatBuildTimestamp,
   formatShortBuildId,
   isBuildUpdateAvailable,
@@ -55,6 +56,7 @@ test('buildCacheBustReloadUrl and stripCacheBustParam preserve route, query, and
     'https://example.com/trien-lam?tab=portrait#top'
   );
   assert.equal(stripCacheBustParam('https://example.com/trien-lam'), null);
+  assert.equal(consumeJustUpdatedFlag(), false);
 });
 
 test('formatShortBuildId and formatBuildTimestamp produce clean readable labels', () => {

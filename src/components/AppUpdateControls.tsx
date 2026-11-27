@@ -258,11 +258,57 @@ export function AppUpdateModal({
               {isUpdating
                 ? 'Đang làm mới...'
                 : updateAvailable
-                ? 'Cập Nhật Bản Mới Ngay'
+                ? 'Cập Nhật & Làm Mới Ngay'
                 : 'Xóa Cache & Tải Lại'}
             </span>
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+interface AppUpdateSuccessToastProps {
+  visible: boolean;
+  buildId: string;
+  onDismiss: () => void;
+}
+
+export function AppUpdateSuccessToast({
+  visible,
+  buildId,
+  onDismiss,
+}: AppUpdateSuccessToastProps) {
+  if (!visible) return null;
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      data-testid="web-update-success-toast"
+      style={{ bottom: 'max(1rem, env(safe-area-inset-bottom, 0px))' }}
+      className="fixed right-4 left-4 sm:left-auto sm:max-w-sm z-[77] rounded-2xl border border-emerald-500/45 bg-white/96 dark:bg-[#0B1222]/96 text-[#070B14] dark:text-[#F1F5F9] p-3.5 shadow-[0_16px_40px_-14px_rgba(16,185,129,0.35)] backdrop-blur-md"
+    >
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+          <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-[#070B14] dark:text-white">
+            Đã cập nhật phiên bản mới nhất
+          </p>
+          <p className="text-[11px] font-mono text-[#475569] dark:text-[#94A3B8] truncate">
+            Build: {formatShortBuildId(buildId)}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Đóng thông báo đã cập nhật"
+          className="p-1 rounded-lg text-[#64748B] hover:text-[#070B14] dark:hover:text-white cursor-pointer"
+        >
+          <X className="w-4 h-4" aria-hidden="true" />
+        </button>
       </div>
     </div>
   );

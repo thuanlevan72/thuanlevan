@@ -9,6 +9,10 @@ import {
   computeDeepVsShallowStats,
   formatMinToHHMM,
 } from './src/utils/chronosEngine.ts';
+import {
+  isViteClientModuleId,
+  patchViteClientWithoutHmr,
+} from './src/utils/viteClientPatch.ts';
 
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -479,10 +483,53 @@ ${scheduleSummary || '(Chưa có khối thời gian nào)'}`,
   });
 
   if (process.env.NODE_ENV !== 'production') {
+    app.get('/sw.js', (_req, res) => {
+      applyNoCacheHeaders(res);
+      res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+      res.send(
+        `self.addEventListener('install', () => { self.skipWaiting(); });
+self.addEventListener('activate', (event) => {
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.map((k) => caches.delete(k)));
+    await self.registration.unregister();
+  })());
+});`
+      );
+    });
+
+    app.use((req, res, next) => {
+      if (
+        req.method === 'GET' &&
+        (req.headers.accept?.includes('text/html') || req.path === '/' || !path.extname(req.path))
+      ) {
+        applyNoCacheHeaders(res);
+      }
+      next();
+    });
+
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+        ws: false,
+      },
       appType: 'spa',
+      plugins: [
+        {
+          name: 'disable-vite-client-ws-when-hmr-off',
+          enforce: 'post',
+          transform(code, id) {
+            if (isViteClientModuleId(id)) {
+              return {
+                code: patchViteClientWithoutHmr(code),
+                map: null,
+              };
+            }
+          },
+        },
+      ],
     });
     app.use(vite.middlewares);
   } else {

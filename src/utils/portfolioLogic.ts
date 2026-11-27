@@ -297,9 +297,9 @@ export function getRouteSeoMeta(route: AppRoute): RouteSeoMeta {
     return {
       title: 'Khu Trò Chơi 2D & 3D — Thung Lũng Mây, Cờ Tướng, Cờ Vua',
       description:
-        'Chơi 12 game web: Thung Lũng Mây, Cờ Tướng AI, Cờ Vua AI, Pháo Đài, Tìm Mèo, Hồ Sơ Dị Biệt, Học Viện Cô Sơn 2.5D, Chuẩn OCD, Túi Mù & FE.',
+        'Chơi 11 game web: Thung Lũng Mây, Cờ Tướng AI, Cờ Vua AI, Pháo Đài, Tìm Mèo, Hồ Sơ Dị Biệt, Học Viện Cô Sơn 2.5D, Chuẩn OCD & Học Viện FE.',
       keywords:
-        'Game Web, Thung Lũng Mây, Cloud Valley Homestead, Cờ Tướng AI, Cờ Vua AI, Thủ Thành Pháo Đài, Tìm Mèo, Thanh Minh Học Viện Cô Sơn, Hồ Sơ Dị Biệt, Sắp Xếp OCD, Tiệm Xé Túi Mù, Ubuntu CLI, Thuận Lê',
+        'Game Web, Thung Lũng Mây, Cloud Valley Homestead, Cờ Tướng AI, Cờ Vua AI, Thủ Thành Pháo Đài, Tìm Mèo, Thanh Minh Học Viện Cô Sơn, Hồ Sơ Dị Biệt, Sắp Xếp OCD, Ubuntu CLI, Thuận Lê',
       ogType: 'website',
       ogImageAlt: 'Khu Trò Chơi 2D & 3D gồm Thung Lũng Mây, Cờ Tướng AI, Cờ Vua AI và các game web',
       path: '/game',

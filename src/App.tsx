@@ -14,7 +14,11 @@ import { SkillsSection } from './components/SkillsSection.tsx';
 import { GameHubSection } from './components/GameHubSection.tsx';
 import { TopBarAndHeader } from './components/TopBarAndHeader.tsx';
 import { OfflineIndicator } from './components/PwaInstallControls.tsx';
-import { AppUpdateBanner, AppUpdateModal } from './components/AppUpdateControls.tsx';
+import {
+  AppUpdateBanner,
+  AppUpdateModal,
+  AppUpdateSuccessToast,
+} from './components/AppUpdateControls.tsx';
 import { useAppUpdater } from './hooks/useAppUpdater.ts';
 import { lazyWithRetry } from './utils/lazyWithRetry.ts';
 
@@ -266,13 +270,26 @@ export default function App() {
           onApplyUpdate={() => void updater.applyWebUpdate()}
           onDismiss={updater.dismissBanner}
         />
+        <AppUpdateSuccessToast
+          visible={updater.justUpdated}
+          buildId={updater.currentBuild.buildId}
+          onDismiss={updater.dismissJustUpdated}
+        />
       </>
     );
   }
 
   return (
     <div className="min-h-screen editorial-grid-bg flex flex-col">
-      <TopBarAndHeader activeRoute={activeRoute} onNavigate={handleNavigate} />
+      <TopBarAndHeader
+        activeRoute={activeRoute}
+        onNavigate={handleNavigate}
+        hasWebUpdate={updater.updateAvailable}
+        onOpenWebUpdate={() => {
+          setIsUpdateModalOpen(true);
+          void updater.checkForUpdates(true);
+        }}
+      />
 
       <main
         className={`flex-1 mx-auto w-full ${
@@ -390,6 +407,11 @@ export default function App() {
         onClose={() => setIsUpdateModalOpen(false)}
         onCheckUpdates={() => void updater.checkForUpdates(true)}
         onApplyUpdate={() => void updater.applyWebUpdate()}
+      />
+      <AppUpdateSuccessToast
+        visible={updater.justUpdated}
+        buildId={updater.currentBuild.buildId}
+        onDismiss={updater.dismissJustUpdated}
       />
       <OfflineIndicator />
     </div>

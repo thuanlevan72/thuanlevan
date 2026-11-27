@@ -21,6 +21,12 @@ if (typeof window !== 'undefined') {
         }
       })
       .catch(() => {});
+    if ('caches' in window) {
+      void window.caches
+        .keys()
+        .then((keys) => Promise.all(keys.map((k) => window.caches.delete(k))))
+        .catch(() => {});
+    }
   } else if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     const updateSW = registerSW({
       immediate: true,

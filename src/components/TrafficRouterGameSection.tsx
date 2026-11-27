@@ -2070,8 +2070,115 @@ export function TrafficRouterGameSection({
       <section
         id="traffic-router-section"
         aria-label={`Thiết Kế Kiến Trúc Hệ Thống — ${TRAFFIC_LEVELS.length} Hoàn Cảnh & ${ARCH_MODES.length} Chế Độ Chơi`}
-        className="rounded-2xl border border-[#1E2E4A] bg-[#0B1320] text-[#F1F5F9] p-5 sm:p-7 mobile-ls:p-3 shadow-sm"
+        className="rounded-2xl border border-[#22395D] bg-gradient-to-b from-[#0A1324] via-[#0B1426] to-[#070E1C] text-[#F1F5F9] p-5 sm:p-7 mobile-ls:p-3 shadow-[0_24px_64px_-24px_rgba(2,132,199,0.28)]"
       >
+        {/* Bespoke Animated Architecture Blueprint Header Banner */}
+        <div className="mb-5 mobile-ls:mb-2 rounded-xl border border-[#1E3354] bg-[#060C18] p-3 sm:p-4 overflow-hidden relative">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+            <div className="flex items-center gap-2 text-[11px] font-mono text-sky-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="tracking-wider font-bold">DATACENTER TOPOLOGY STUDIO · 20 SERVICE NODES</span>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] font-mono tabular-nums text-slate-400">
+              <span className="text-cyan-300">SLA ≤ {effectiveConfig.targetSlaMs}ms</span>
+              <span>{effectiveConfig.waves.length} Đợt Traffic</span>
+              <span className="text-amber-300">Multi-DB Sharding</span>
+            </div>
+          </div>
+          <svg
+            viewBox="0 0 880 76"
+            className="w-full h-16 sm:h-20 block"
+            aria-hidden="true"
+          >
+            <defs>
+              <linearGradient id="trPreviewWire" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#38BDF8" stopOpacity="0.65" />
+                <stop offset="50%" stopColor="#22D3EE" stopOpacity="0.75" />
+                <stop offset="100%" stopColor="#F59E0B" stopOpacity="0.85" />
+              </linearGradient>
+              <path id="trPathTop" d="M 118 38 C 175 38, 185 18, 245 18 L 415 18 C 475 18, 490 38, 565 38 L 745 38" />
+              <path id="trPathBot" d="M 118 38 C 175 38, 185 58, 245 58 L 415 58 C 475 58, 490 38, 565 38 C 635 38, 665 18, 745 18" />
+            </defs>
+
+            {/* Subtle background grid ticks */}
+            <g stroke="#1E3354" strokeWidth="0.7" opacity="0.55">
+              <line x1="0" y1="38" x2="880" y2="38" strokeDasharray="3 5" />
+              <line x1="210" y1="4" x2="210" y2="72" strokeDasharray="2 4" />
+              <line x1="385" y1="4" x2="385" y2="72" strokeDasharray="2 4" />
+              <line x1="560" y1="4" x2="560" y2="72" strokeDasharray="2 4" />
+              <line x1="735" y1="4" x2="735" y2="72" strokeDasharray="2 4" />
+            </g>
+
+            {/* Fiber links */}
+            <use href="#trPathTop" fill="none" stroke="url(#trPreviewWire)" strokeWidth="2.2" />
+            <use href="#trPathBot" fill="none" stroke="url(#trPreviewWire)" strokeWidth="1.8" opacity="0.75" />
+
+            {/* Live packet pulses */}
+            <circle r="3.4" fill="#38BDF8">
+              <animateMotion dur="3.4s" repeatCount="indefinite">
+                <mpath href="#trPathTop" />
+              </animateMotion>
+            </circle>
+            <circle r="3.2" fill="#F59E0B">
+              <animateMotion dur="4.2s" begin="1.1s" repeatCount="indefinite">
+                <mpath href="#trPathBot" />
+              </animateMotion>
+            </circle>
+            <circle r="2.8" fill="#F472B6">
+              <animateMotion dur="3.8s" begin="2.2s" repeatCount="indefinite">
+                <mpath href="#trPathTop" />
+              </animateMotion>
+            </circle>
+
+            {/* Tier Rack Nodes */}
+            {[
+              { x: 24, y: 20, w: 96, h: 36, title: 'USERS', sub: 'INGRESS', color: '#38BDF8' },
+              { x: 200, y: 4, w: 102, h: 30, title: 'WAF · CDN', sub: 'EDGE SHIELD', color: '#FB7185' },
+              { x: 200, y: 42, w: 102, h: 30, title: 'REDIS CACHE', sub: 'HIT ≤ 6ms', color: '#22D3EE' },
+              { x: 374, y: 4, w: 104, h: 30, title: 'LOAD BAL', sub: 'ROUTING', color: '#34D399' },
+              { x: 374, y: 42, w: 104, h: 30, title: 'KAFKA MQ', sub: 'ASYNC BUF', color: '#F97316' },
+              { x: 548, y: 20, w: 102, h: 36, title: 'APP WORKER', sub: 'COMPUTE', color: '#A78BFA' },
+              { x: 744, y: 4, w: 112, h: 30, title: 'PRIMARY DB', sub: 'SHARD 01', color: '#F59E0B' },
+              { x: 744, y: 42, w: 112, h: 30, title: 'REPLICA · S3', sub: 'READ POOL', color: '#38BDF8' },
+            ].map((box) => (
+              <g key={box.title}>
+                <rect
+                  x={box.x}
+                  y={box.y}
+                  width={box.w}
+                  height={box.h}
+                  rx="6"
+                  fill="#0F1C33"
+                  stroke={box.color}
+                  strokeOpacity="0.65"
+                  strokeWidth="1.2"
+                />
+                <rect x={box.x} y={box.y} width={box.w} height="3" rx="2" fill={box.color} />
+                <circle cx={box.x + box.w - 8} cy={box.y + 10} r="2" fill={box.color} />
+                <text
+                  x={box.x + 8}
+                  y={box.y + 14}
+                  fill="#F8FAFC"
+                  fontSize="9.5"
+                  fontWeight="700"
+                  fontFamily="ui-monospace, SFMono-Regular, monospace"
+                >
+                  {box.title}
+                </text>
+                <text
+                  x={box.x + 8}
+                  y={box.y + box.h - 6}
+                  fill="#94A3B8"
+                  fontSize="7.5"
+                  fontFamily="ui-monospace, SFMono-Regular, monospace"
+                >
+                  {box.sub}
+                </text>
+              </g>
+            ))}
+          </svg>
+        </div>
+
         <div className="grid grid-cols-1 mobile-ls:grid-cols-12 lg:grid-cols-12 gap-6 mobile-ls:gap-3 items-start">
           {/* Left 7 cols: Chapter tabs & 24-level catalog */}
           <div className="mobile-ls:col-span-7 lg:col-span-7 space-y-4 mobile-ls:space-y-2">
@@ -2107,7 +2214,7 @@ export function TrafficRouterGameSection({
                   onClick={() => setChapterFilter(tab.id)}
                   className={`px-2.5 py-1.5 mobile-ls:px-2 mobile-ls:py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                     chapterFilter === tab.id
-                      ? 'bg-sky-500 text-slate-950'
+                      ? 'bg-sky-500 text-slate-950 shadow-xs'
                       : 'bg-[#111C33] text-slate-300 border border-[#1E2E4A] hover:border-sky-400'
                   }`}
                 >
@@ -2134,13 +2241,19 @@ export function TrafficRouterGameSection({
                     type="button"
                     data-testid={`arch-level-${lvl.id}`}
                     onClick={() => setLevelIdx(idx)}
-                    className={`text-left px-3.5 py-2.5 rounded-xl border transition-colors cursor-pointer ${
+                    className={`relative text-left px-3.5 py-2.5 rounded-xl border transition-all cursor-pointer overflow-hidden ${
                       isSelected
-                        ? 'bg-sky-500/20 border-sky-400 text-white'
-                        : 'bg-[#111C33] border-[#1E2E4A] hover:border-sky-500/60 text-slate-200'
+                        ? 'bg-sky-500/18 border-sky-400 text-white shadow-[0_8px_24px_-12px_rgba(56,189,248,0.65)]'
+                        : 'bg-[#101B32] border-[#1E2E4A] hover:border-sky-500/60 text-slate-200'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                    <span
+                      aria-hidden="true"
+                      className={`absolute left-0 top-0 bottom-0 w-1 ${
+                        isSelected ? 'bg-sky-400' : savedGrade ? 'bg-emerald-400/75' : 'bg-[#263C61]'
+                      }`}
+                    />
+                    <div className="flex items-center justify-between gap-2 text-[11px] text-slate-400 pl-1">
                       <span className="font-mono">
                         {lvl.code} · {lvl.difficulty} · {clearedModesForLvl}/{ARCH_MODES.length} Chế độ
                       </span>
@@ -2152,8 +2265,8 @@ export function TrafficRouterGameSection({
                         </span>
                       )}
                     </div>
-                    <p className="text-sm font-semibold mt-0.5 truncate">{lvl.title}</p>
-                    <p className="text-[11px] text-slate-400 truncate">{lvl.domain}</p>
+                    <p className="text-sm font-semibold mt-0.5 truncate pl-1">{lvl.title}</p>
+                    <p className="text-[11px] text-slate-400 truncate pl-1">{lvl.domain}</p>
                   </button>
                 );
               })}
@@ -2165,7 +2278,7 @@ export function TrafficRouterGameSection({
                 data-start="true"
                 data-testid="traffic-start-btn"
                 onClick={() => startScenario(levelIdx)}
-                className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold text-sm transition-colors cursor-pointer"
+                className="min-h-[44px] inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-sky-400 to-cyan-400 hover:from-sky-300 hover:to-cyan-300 text-slate-950 font-bold text-sm shadow-[0_10px_28px_-10px_rgba(56,189,248,0.7)] transition-all cursor-pointer"
               >
                 <Play className="w-4 h-4" aria-hidden="true" />
                 <span>
@@ -2556,20 +2669,41 @@ export function TrafficRouterGameSection({
       <div className="mt-3 mobile-ls:mt-1.5 grid grid-cols-1 mobile-ls:grid-cols-[minmax(0,1fr)_270px] xl:grid-cols-12 gap-4 mobile-ls:gap-2.5 items-start">
         {/* Left/Center 8 Cols: Canvas + Telemetry + 20-Service Dock */}
         <div className="mobile-ls:min-w-0 xl:col-span-8 space-y-2.5 mobile-ls:space-y-2">
-          <div className="relative flex justify-center">
-            <canvas
-              ref={canvasRef}
-              width={CANVAS_W}
-              height={CANVAS_H}
-              onPointerMove={handleCanvasPointerMove}
-              onPointerLeave={() => {
-                simRef.current.hoverPos = null;
-              }}
-              onPointerDown={handleCanvasPointerDown}
-              data-testid="architecture-canvas"
-              className="w-full mobile-ls:max-w-[min(100%,calc((100dvh-145px)*1.84))] mobile-ls:mx-auto block aspect-[920/500] h-auto rounded-xl border border-[#1E2E4A] cursor-crosshair touch-none"
-              aria-label="Sơ đồ thiết kế kiến trúc hệ thống"
-            />
+          <div className="rounded-xl border border-[#243B61] bg-[#050A14] p-1.5 shadow-[0_18px_48px_-22px_rgba(14,165,233,0.35)]">
+            <div className="flex items-center justify-between px-2.5 pb-1 text-[10px] font-mono text-slate-400">
+              <span className="inline-flex items-center gap-1.5">
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    hud.simStage === 'SIMULATING'
+                      ? 'bg-emerald-400 animate-pulse'
+                      : 'bg-sky-400'
+                  }`}
+                />
+                <span className="text-slate-300 font-semibold">
+                  NOC BLUEPRINT VIEWPORT · {currentLevel.code}
+                </span>
+              </span>
+              <span className="tabular-nums">
+                {hud.simStage === 'SIMULATING'
+                  ? `LIVE TELEMETRY · ${speedMult}×`
+                  : 'DESIGN & WIRING MODE'}
+              </span>
+            </div>
+            <div className="relative flex justify-center">
+              <canvas
+                ref={canvasRef}
+                width={CANVAS_W}
+                height={CANVAS_H}
+                onPointerMove={handleCanvasPointerMove}
+                onPointerLeave={() => {
+                  simRef.current.hoverPos = null;
+                }}
+                onPointerDown={handleCanvasPointerDown}
+                data-testid="architecture-canvas"
+                className="w-full mobile-ls:max-w-[min(100%,calc((100dvh-145px)*1.84))] mobile-ls:mx-auto block aspect-[920/500] h-auto rounded-lg border border-[#182946] cursor-crosshair touch-none"
+                aria-label="Sơ đồ thiết kế kiến trúc hệ thống"
+              />
+            </div>
           </div>
 
           {/* Packet Legend + Telemetry Sparklines + Live Event Console */}
@@ -2884,13 +3018,18 @@ export function TrafficRouterGameSection({
                       simRef.current.wireSourceId = null;
                     }}
                     title={`${item.name} — ${item.pros}`}
-                    className={`shrink-0 min-w-[152px] sm:min-w-0 min-h-[46px] px-2.5 py-1.5 rounded-xl border text-left transition-colors cursor-pointer ${
+                    className={`relative overflow-hidden shrink-0 min-w-[152px] sm:min-w-0 min-h-[46px] px-2.5 py-1.5 rounded-xl border text-left transition-all cursor-pointer ${
                       active
-                        ? 'bg-sky-500/20 border-sky-400 text-white'
+                        ? 'bg-sky-500/20 border-sky-400 text-white shadow-[0_6px_18px_-8px_rgba(56,189,248,0.65)]'
                         : 'bg-[#111C33] border-[#1E2E4A] hover:border-sky-500/60 text-slate-200'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-1 text-[11px] font-semibold">
+                    <span
+                      aria-hidden="true"
+                      className="absolute left-0 top-0 bottom-0 w-1"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <div className="flex items-center justify-between gap-1 text-[11px] font-semibold pl-1">
                       <span className="whitespace-nowrap" style={{ color: active ? '#FFFFFF' : item.color }}>
                         [{item.hotkey}] {item.shortName}
                       </span>
@@ -2898,7 +3037,7 @@ export function TrafficRouterGameSection({
                         {item.isDbSink ? 'DB' : `T.${item.recommendedCols[0] + 1}`}
                       </span>
                     </div>
-                    <p className="text-[10px] text-slate-300 mt-0.5 leading-tight whitespace-normal">
+                    <p className="text-[10px] text-slate-300 mt-0.5 leading-tight whitespace-normal pl-1">
                       {item.roleSummary}
                     </p>
                   </button>

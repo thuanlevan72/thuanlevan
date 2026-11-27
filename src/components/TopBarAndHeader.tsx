@@ -1,3 +1,4 @@
+import { RefreshCw } from 'lucide-react';
 import { PORTFOLIO_PROFILE } from '../data/portfolioData.ts';
 import { AppRoute } from '../utils/portfolioLogic.ts';
 import { BrandLogo } from './BrandLogo.tsx';
@@ -5,9 +6,16 @@ import { BrandLogo } from './BrandLogo.tsx';
 interface TopBarAndHeaderProps {
   activeRoute: AppRoute;
   onNavigate: (route: AppRoute, sectionId?: string) => void;
+  hasWebUpdate?: boolean;
+  onOpenWebUpdate?: () => void;
 }
 
-export function TopBarAndHeader({ activeRoute, onNavigate }: TopBarAndHeaderProps) {
+export function TopBarAndHeader({
+  activeRoute,
+  onNavigate,
+  hasWebUpdate = false,
+  onOpenWebUpdate,
+}: TopBarAndHeaderProps) {
   const navLinkClass = (isActive: boolean) =>
     `relative py-1.5 whitespace-nowrap shrink-0 transition-colors duration-200 ${
       isActive
@@ -26,7 +34,7 @@ export function TopBarAndHeader({ activeRoute, onNavigate }: TopBarAndHeaderProp
       <div
         className={`max-w-7xl mx-auto px-2.5 sm:px-6 ${
           activeRoute === 'game' ? 'h-16 mobile-ls:h-11' : 'h-16'
-        } flex items-center justify-between gap-1.5 sm:gap-8`}
+        } flex items-center justify-between gap-1.5 sm:gap-6`}
       >
         {/* Zone 1: Brand monogram emblem + wordmark */}
         <a
@@ -45,10 +53,10 @@ export function TopBarAndHeader({ activeRoute, onNavigate }: TopBarAndHeaderProp
           <span>{PORTFOLIO_PROFILE.fullName}</span>
         </a>
 
-        {/* Zone 2: Clean 5-link single-line navigation */}
+        {/* Zone 2: Clean 6-link single-line navigation */}
         <nav
           aria-label="Điều hướng chính"
-          className="flex items-center gap-2 sm:gap-6 lg:gap-7 text-[11px] sm:text-sm font-medium"
+          className="flex items-center gap-2 sm:gap-5 lg:gap-7 text-[11px] sm:text-sm font-medium"
         >
           <a
             href="/"
@@ -126,8 +134,31 @@ export function TopBarAndHeader({ activeRoute, onNavigate }: TopBarAndHeaderProp
           </a>
         </nav>
 
-        {/* Zone 3: Single primary action */}
-        <div className="flex items-center shrink-0">
+        {/* Zone 3: Web Update check + Contact action */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {onOpenWebUpdate && (
+            <button
+              type="button"
+              data-testid="header-web-update-btn"
+              onClick={onOpenWebUpdate}
+              title="Kiểm tra và cập nhật phiên bản web mới nhất"
+              aria-label={hasWebUpdate ? 'Cập Nhật Web — Đã có bản mới' : 'Cập Nhật Web'}
+              className={`relative inline-flex items-center justify-center gap-1.5 h-7 w-7 sm:h-auto sm:w-auto sm:px-3 sm:py-2 rounded-lg sm:rounded-xl border text-[11px] sm:text-xs font-semibold transition-all duration-200 whitespace-nowrap shrink-0 cursor-pointer ${
+                hasWebUpdate
+                  ? 'border-[#0284C7] dark:border-[#38BDF8] bg-[#E0F2FE] dark:bg-[#0C2542] text-[#0369A1] dark:text-[#7DD3FC] shadow-xs'
+                  : 'border-[#DCE6F2] dark:border-[#1E355A] bg-white/90 dark:bg-[#0B1222] text-[#334155] dark:text-[#CBD5E1] hover:border-[#0284C7] dark:hover:border-[#38BDF8] hover:text-[#0284C7] dark:hover:text-[#38BDF8]'
+              }`}
+            >
+              <RefreshCw className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              <span className="hidden sm:inline">{hasWebUpdate ? 'Bản Mới' : 'Cập Nhật'}</span>
+              {hasWebUpdate && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#0284C7] dark:bg-[#38BDF8] ring-2 ring-[#F5F8FC] dark:ring-[#05080F]"
+                />
+              )}
+            </button>
+          )}
           <a
             href="/#contact"
             onClick={(e) => {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AppBuildVersionInfo,
+  consumeJustUpdatedFlag,
   fetchLatestBuildVersion,
   getEmbeddedBuildInfo,
   isBuildUpdateAvailable,
@@ -29,9 +30,22 @@ export function useAppUpdater() {
   const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
+  const [justUpdated, setJustUpdated] = useState<boolean>(() => consumeJustUpdatedFlag());
 
   const lastCheckTsRef = useRef(0);
   const isCheckingRef = useRef(false);
+
+  useEffect(() => {
+    if (!justUpdated) return;
+    const timer = window.setTimeout(() => {
+      setJustUpdated(false);
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [justUpdated]);
+
+  const dismissJustUpdated = useCallback(() => {
+    setJustUpdated(false);
+  }, []);
 
   const buildDiffAvailable = isBuildUpdateAvailable(currentBuild.buildId, remoteBuild);
   const updateAvailable = buildDiffAvailable || swPending;
@@ -74,7 +88,7 @@ export function useAppUpdater() {
 
         if (!latest && manual) {
           setStatus('error');
-          setErrorMessage('Không thể kiểm tra máy chủ lúc này. Bạn vẫn có thể làm mới cache trực tiếp.');
+          setErrorMessage('Không thể kiểm tra máy chủ lúc này. Bạn vẫn có thể cập nhật & xóa cache trực tiếp.');
           return false;
         }
 
@@ -150,6 +164,8 @@ export function useAppUpdater() {
     lastCheckedAt,
     errorMessage,
     isBannerDismissed,
+    justUpdated,
+    dismissJustUpdated,
     checkForUpdates,
     applyWebUpdate,
     dismissBanner,
